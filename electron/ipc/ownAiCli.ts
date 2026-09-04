@@ -1,7 +1,7 @@
 /**
  * "내 AI로 실행" — CLI 찾기·버전·로그인 상태(순수 로직, electron 비의존).
  *
- * 실행 경로 주입(spawnSync)을 받아 단위 테스트가 가능하게 둔다.
+ * 실행 경로 주입(run)을 받아 단위 테스트가 가능하게 둔다.
  * electron 특화(경로·창)는 호출자(`ownAiRunner.ts`·`ownAi.ts`)가 맡는다.
  * — `aiBridgeCore.ts` 가 쓰는 것과 같은 구조.
  *
@@ -24,12 +24,13 @@
  *    - codex:  `<npm>/node_modules/@openai/codex/bin/codex.js` — node 스크립트라
  *      `process.execPath` + `ELECTRON_RUN_AS_NODE=1` 로 돌린다(브릿지와 같은 방식).
  */
-import { spawnSync as nodeSpawnSync } from 'node:child_process';
+import { spawn as nodeSpawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import {
+  stripOwnAiEnv,
   parseCliVersion,
   isVersionSupported,
   supportedRangeLabel,
@@ -60,9 +61,22 @@ export interface OwnAiCliDeps {
   readonly isFile: (p: string) => boolean;
   /** node 스크립트를 돌릴 실행 파일. 앱에서는 electron 자신(`process.execPath`). */
   readonly nodePath: string;
-  /** `asNode` 면 `ELECTRON_RUN_AS_NODE=1` 을 붙여 Electron 을 node 로 쓴다. */
-  readonly run: (file: string, argv: readonly string[], asNode: boolean) => RunOutcome;
+  /**
+   * `asNode` 면 `ELECTRON_RUN_AS_NODE=1` 을 붙여 Electron 을 node 로 쓴다.
+   *
+   * ★앱에서는 **비동기**다. 실측(2026-09-05): claude `--version` 0.7초 + `auth status` 1.6초,
+   * codex 는 부하 중 4.4초 + 8.3초. 동기로 돌리면 그동안 앱 화면 전체가 멈춘다 —
+   * 앱을 켤 때, 설정 탭을 열 때, 창이 다시 앞으로 올 때마다. 테스트는 동기 값을 그대로 줘도 된다.
+   */
+  readonly run: (
+    file: string,
+    argv: readonly string[],
+    asNode: boolean,
+  ) => RunOutcome | Promise<RunOutcome>;
 }
+
+/** 확인 명령 하나가 이보다 오래 걸리면 "응답 없음"으로 본다 — 멈춘 CLI 가 확인을 영원히 붙들지 않게. */
+const CHECK_TIMEOUT_MS = 20_000;
 
 export function defaultCliDeps(): OwnAiCliDeps {
   return {
@@ -77,21 +91,53 @@ export function defaultCliDeps(): OwnAiCliDeps {
         return false;
       }
     },
-    run: (file, argv, asNode) => {
-      const r = nodeSpawnSync(file, [...argv], {
-        encoding: 'utf-8',
-        windowsHide: true,
-        // Electron 을 node 로 쓸 때만 켠다 — 앱 창이 뜨지 않게.
-        ...(asNode ? { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } } : {}),
-      });
-      const out: RunOutcome = {
-        status: r.status,
-        stdout: r.stdout ?? '',
-        stderr: r.stderr ?? '',
-      };
-      const code = (r.error as (Error & { code?: string }) | undefined)?.code;
-      return code === undefined ? out : { ...out, errorCode: code };
-    },
+    run: (file, argv, asNode) =>
+      new Promise<RunOutcome>((resolve) => {
+        let stdout = '';
+        let stderr = '';
+        let settled = false;
+        const done = (out: RunOutcome): void => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          resolve(out);
+        };
+        let child: ReturnType<typeof nodeSpawn>;
+        try {
+          child = nodeSpawn(file, [...argv], {
+            windowsHide: true,
+            // stdin 을 닫는다 — 열려 있으면 codex 는 기다린다(S0 실측).
+            stdio: ['ignore', 'pipe', 'pipe'],
+            // API 키는 빼고(구독 대신 키를 쓰게 되니까), Electron 을 node 로 쓸 때만 그 표시를 켠다.
+            env: {
+              ...stripOwnAiEnv(process.env),
+              ...(asNode ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
+            },
+          });
+        } catch (e) {
+          const code = (e as Error & { code?: string }).code;
+          done({ status: null, stdout: '', stderr: '', ...(code ? { errorCode: code } : {}) });
+          return;
+        }
+        const timer = setTimeout(() => {
+          try {
+            child.kill();
+          } catch {
+            /* 이미 죽었으면 무시 */
+          }
+          done({ status: null, stdout, stderr, errorCode: 'ETIMEDOUT' });
+        }, CHECK_TIMEOUT_MS);
+        child.stdout?.setEncoding('utf-8').on('data', (d: string) => {
+          stdout += d;
+        });
+        child.stderr?.setEncoding('utf-8').on('data', (d: string) => {
+          stderr += d;
+        });
+        child.on('error', (e: Error & { code?: string }) => {
+          done({ status: null, stdout, stderr, ...(e.code ? { errorCode: e.code } : {}) });
+        });
+        child.on('close', (status) => done({ status, stdout, stderr }));
+      }),
   };
 }
 
@@ -211,8 +257,8 @@ export function resolveCliLaunch(
 }
 
 /** `claude --version` / `codex --version` 을 읽는다. */
-export function readVersion(launch: OwnAiLaunch, deps: OwnAiCliDeps): string | null {
-  const r = deps.run(launch.file, [...launch.args, '--version'], launch.asNode);
+export async function readVersion(launch: OwnAiLaunch, deps: OwnAiCliDeps): Promise<string | null> {
+  const r = await deps.run(launch.file, [...launch.args, '--version'], launch.asNode);
   if (r.errorCode || (r.status ?? 1) !== 0) return null;
   return parseCliVersion(`${r.stdout}\n${r.stderr}`);
 }
@@ -231,12 +277,16 @@ export function logoutArgs(provider: OwnAiProviderId): readonly string[] {
 }
 
 /** 로그인돼 있는가. 종료 코드 0 이면 됐다고 본다(두 CLI 모두 그렇게 답한다). */
-export function isSignedIn(
+export async function isSignedIn(
   provider: OwnAiProviderId,
   launch: OwnAiLaunch,
   deps: OwnAiCliDeps,
-): boolean {
-  const r = deps.run(launch.file, [...launch.args, ...authStatusArgs(provider)], launch.asNode);
+): Promise<boolean> {
+  const r = await deps.run(
+    launch.file,
+    [...launch.args, ...authStatusArgs(provider)],
+    launch.asNode,
+  );
   return !r.errorCode && (r.status ?? 1) === 0;
 }
 
@@ -246,15 +296,15 @@ export function isSignedIn(
  * 판정 순서가 곧 안내 순서다 — 없으면 "설치", 있는데 버전이 낮으면 "업데이트",
  * 버전은 되는데 로그인이 없으면 "로그인".
  */
-export function inspectConnection(
+export async function inspectConnection(
   provider: OwnAiProviderId,
   model: string,
   deps: OwnAiCliDeps = defaultCliDeps(),
-): OwnAiConnection {
+): Promise<OwnAiConnection> {
   const launch = resolveCliLaunch(provider, deps);
   if (!launch) return { provider, state: 'not-installed' };
 
-  const version = readVersion(launch, deps);
+  const version = await readVersion(launch, deps);
   if (!version) return { provider, state: 'not-installed' };
 
   if (!isVersionSupported(provider, version)) {
@@ -265,6 +315,8 @@ export function inspectConnection(
       supportedRange: supportedRangeLabel(provider),
     };
   }
-  if (!isSignedIn(provider, launch, deps)) return { provider, state: 'not-signed-in', version };
+  if (!(await isSignedIn(provider, launch, deps))) {
+    return { provider, state: 'not-signed-in', version };
+  }
   return { provider, state: 'connected', version, model };
 }

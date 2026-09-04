@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   RECORD_AREA_LABELS,
@@ -27,6 +27,7 @@ import { useCurriculumStandards } from '@adapters/hooks/useCurriculumStandards';
 import { standardKeywords, standardsForCodes } from '@domain/rules/curriculumStandardRules';
 import { isClassified } from '@domain/rules/threadSuggest';
 import type { ObservationRecord } from '@domain/entities/Observation';
+import type { KeywordGroup } from '@domain/privacy/types';
 import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
 import { RecordEvidenceView } from '@adapters/components/RecordDraft/RecordEvidenceView';
 import {
@@ -35,14 +36,7 @@ import {
 } from '@adapters/components/RecordDraft/RecordDraftAiButton';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 
-/**
- * AI 에게 학생을 가리킬 때 쓰는 **별칭**. 실명은 나가지 않는다.
- *
- * ★한 번에 한 학생분만 보내므로 모두 같은 별칭이어도 헷갈리지 않는다 — 오히려 여러 학생을
- * 이어 만들 때 **학생끼리 이어 붙는 것을 막는다**(누가 누구인지 모델이 짝지을 수 없다).
- * 되돌리기는 `RecordDraftAiButton` 이 [반영] 직전에 한다.
- */
-export const DRAFT_STUDENT_ALIAS = '［이름1］';
+import { rosterFromAll } from '@domain/rules/redactOutbound';
 
 /** 작성주체(담임/교과) — 노출 영역 집합과 작성주체 결속을 결정. */
 type RecordContext = 'homeroom' | 'teaching';
@@ -181,6 +175,22 @@ export function RecordDraftView({
     return [...seen];
   }, [rubrics, progressEntries, classId]);
 
+  /**
+   * AI 로 나가는 글에서 실명·학번을 찾아 가릴 명단.
+   *
+   * ★이 화면의 학생만이 아니라 **근거 본문에 적힌 다른 학생**도 가려야 한다 — 관찰 기록에는
+   *   "김지훈과 박서연이 모둠에서…" 처럼 여러 이름이 적힌다. 같은 반 학생은 이 목록으로 잡힌다.
+   *   (다른 반 학생 이름은 못 잡는다 — 남은 위험으로 적어 둔다.)
+   */
+  const roster = useMemo(
+    () =>
+      rosterFromAll(
+        students.map((s) => ({ name: s.name, studentNumber: s.number })),
+        [],
+      ),
+    [students],
+  );
+
   const { data: standardsData } = useCurriculumStandards(level, standardCodes.length > 0);
   const standardTexts = useMemo(() => {
     if (!standardsData || standardCodes.length === 0) return undefined;
@@ -240,8 +250,26 @@ export function RecordDraftView({
     });
   };
 
+  /**
+   * AI 초안을 만드는 중인 학생 — 필터가 걸려 있어도 **행을 붙들어 둔다.**
+   *
+   * ★"미작성" 필터에서 "남은 학생 모두"를 누르면 첫 [반영] 순간 그 학생이 필터에서 빠져
+   *   행이 사라지고, 행 안의 버튼·큐가 함께 사라졌다(UltraQA P1). 실행이 끝날 때까지 붙든다.
+   */
+  const [aiActiveRefs, setAiActiveRefs] = useState<ReadonlySet<string>>(() => new Set());
+  const setAiActive = useCallback((studentRef: string, active: boolean) => {
+    setAiActiveRefs((prev) => {
+      if (prev.has(studentRef) === active) return prev;
+      const next = new Set(prev);
+      if (active) next.add(studentRef);
+      else next.delete(studentRef);
+      return next;
+    });
+  }, []);
+
   const visibleStudents = students.filter((s) => {
     if (filter === 'all') return true;
+    if (aiActiveRefs.has(s.studentRef)) return true; // 실행 중인 행은 필터를 무시하고 남긴다
     const d = draftFor(s.studentRef);
     if (filter === 'unwritten') return (d?.content ?? '').trim().length === 0;
     return d === undefined || d.status !== 'confirmed'; // unreviewed
@@ -522,7 +550,9 @@ export function RecordDraftView({
                     ? { standardKeywords: standardKeywordList }
                     : {})}
                   unwrittenStudents={unwrittenStudents}
+                  roster={roster}
                   onAiApply={applyAiDraft}
+                  onAiActive={setAiActive}
                   onJumpNext={() => focusRowTextarea(i + 1)}
                 />
               ))
@@ -561,7 +591,9 @@ function RecordDraftRow({
   standardTexts,
   standardKeywords: standardKeywordList,
   unwrittenStudents,
+  roster,
   onAiApply,
+  onAiActive,
   onJumpNext,
 }: {
   student: RecordDraftStudentRow;
@@ -578,8 +610,12 @@ function RecordDraftRow({
   standardKeywords?: readonly string[];
   /** 이 영역에 아직 초안이 없는 학생들("남은 학생 모두"의 대상). */
   unwrittenStudents: readonly RecordDraftStudentRow[];
+  /** 실명·학번을 가릴 명단 — AI 로 나가는 글 전부가 이걸 지난다. */
+  roster: readonly KeywordGroup[];
   /** AI 가 쓴 초안을 저장한다. 저장 자리는 부모가 안다(다른 학생 칸도 여기로 간다). */
   onAiApply: (studentRef: string, content: string) => Promise<void>;
+  /** 이 행의 AI 실행이 시작/끝났다 — 부모가 필터와 무관하게 행을 붙들어 두는 데 쓴다. */
+  onAiActive: (studentRef: string, active: boolean) => void;
   onJumpNext: () => void;
 }) {
   const upsert = useRecordDraftsStore((s) => s.upsert);
@@ -738,12 +774,17 @@ function RecordDraftRow({
   /**
    * [AI로 초안 쓰기]에 넘길 재료.
    *
-   * ★실명은 넣지 않는다 — 학생은 별칭으로만 간다. 되돌리기는 [반영] 직전에 한다.
+   * ★실명은 여기서 가리지 않는다 — 꾸러미(`recordDraftPack`)가 이름·근거·주제를 한 세션으로
+   *   가린다. 이 화면은 실명을 그대로 넘기고, 되돌리기는 [반영] 직전에 버튼이 한다.
    * ★주제를 골랐으면 **그 주제의 근거만** 보낸다. 안 골랐으면 이 영역 전체.
    * ★"AI 에 보내지 않기"로 표시한 근거와 기재 금지 항목이 든 근거는 꾸러미를 만드는
    *   `recordDraftPack` 이 뺀다 — 여기서 거르지 않는다(거르는 자리를 한 곳에 둔다).
    */
   const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
+  const onAiActiveChange = useCallback(
+    (active: boolean) => onAiActive(student.studentRef, active),
+    [onAiActive, student.studentRef],
+  );
 
   const aiTarget = useMemo<DraftTarget>(() => {
     const picked = pickedThreadId
@@ -753,7 +794,6 @@ function RecordDraftRow({
       : evidenceForArea;
     return {
       studentRef: student.studentRef,
-      studentAlias: DRAFT_STUDENT_ALIAS,
       displayName: student.name,
       evidences: picked,
       ...(standardKeywordList !== undefined ? { standardKeywords: standardKeywordList } : {}),
@@ -781,7 +821,6 @@ function RecordDraftRow({
         .filter((s) => s.studentRef !== student.studentRef)
         .map((s) => ({
           studentRef: s.studentRef,
-          studentAlias: DRAFT_STUDENT_ALIAS,
           displayName: s.name,
           evidences: evidenceRecords.filter(
             (e) => e.studentRef === s.studentRef && e.areas.includes(area),
@@ -925,10 +964,12 @@ function RecordDraftRow({
         {ownAiEnabled && (
           <RecordDraftAiButton
             areaLabel={RECORD_AREA_LABELS[area]}
+            roster={roster}
             {...(pickedThread ? { threadTitle: pickedThread.title } : {})}
             target={aiTarget}
             remaining={aiRemaining}
             onApply={onAiApply}
+            onActiveChange={onAiActiveChange}
           />
         )}
         {saveError !== null && (

@@ -51,6 +51,32 @@ export const OWN_AI_VERSION_FLOOR: Readonly<Record<OwnAiProviderId, string>> = {
   codex: '0.140.0',
 };
 
+/**
+ * 자식 프로세스 env 에서 **빼는** 변수.
+ *
+ * ★선생님 PC 에 이 변수가 있으면 CLI 는 구독 로그인 대신 그 키로 붙는다 — 그러면 "이미 내고
+ * 있는 구독"이 아니라 **종량제 API 로 따로 청구**된다. 쌤핀은 새 비용을 만들지 않기로 했다
+ * (오너 결정, ADR-082). 키를 읽지도 쓰지도 않고, 그냥 자식에게 보이지 않게 한다(UltraQA P2).
+ * 베드록·버텍스 전환 스위치도 같은 이유로 뺀다 — 구독이 아닌 다른 청구 경로다.
+ */
+export const OWN_AI_STRIPPED_ENV: readonly string[] = [
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_AUTH_TOKEN',
+  'ANTHROPIC_BASE_URL',
+  'CLAUDE_CODE_USE_BEDROCK',
+  'CLAUDE_CODE_USE_VERTEX',
+  'CLAUDE_CODE_USE_FOUNDRY',
+  'OPENAI_API_KEY',
+  'OPENAI_BASE_URL',
+];
+
+/** `env` 에서 위 변수를 뺀 사본. 원본은 건드리지 않는다. */
+export function stripOwnAiEnv<T extends Record<string, string | undefined>>(env: T): T {
+  const out = { ...env };
+  for (const k of OWN_AI_STRIPPED_ENV) delete out[k];
+  return out;
+}
+
 /** `--permission-prompts none` 을 붙일 수 있는 최소 버전(claude 전용). */
 export const CLAUDE_PERMISSION_PROMPTS_MIN = '2.1.259';
 

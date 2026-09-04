@@ -109,17 +109,21 @@ describe('★패널 질문 — 명령줄 어디에도 실명이 없다', () => {
 
 describe('★생기부 초안 — 꾸러미와 명령줄 어디에도 실명이 없다', () => {
   const pack = buildRecordDraftPack({
-    studentAlias: '［이름1］',
+    studentName: '김지훈',
+    roster: ROSTER,
     areaLabel: '교과 세부능력 및 특기사항',
+    threadTitle: '이도윤과의 공동 탐구',
     evidences: [
-      { id: 'e1', content: '모둠 토의에서 자료를 정리해 왔다.' },
+      // ★근거에 다른 학생 실명이 적혀 있다 — 이게 새는지가 핵심이다(UltraQA P0).
+      { id: 'e1', content: '박서연과 모둠 토의에서 자료를 정리해 왔다.' },
       { id: 'e2', content: '교내 수학경시대회에서 금상을 받았다.' },
     ],
   });
 
-  it('꾸러미는 별칭만 담는다', () => {
+  it('★꾸러미에는 이 학생도, 근거 속 다른 학생도, 주제 속 학생도 실명이 없다', () => {
     expectNoRealNames(pack.text);
-    expect(pack.text).toContain('［이름1］');
+    expect(pack.text).toContain('학생: ［이름1］');
+    expect(pack.text).toContain('［이름2］'); // 박서연 또는 이도윤 — 어느 쪽이든 별칭이다
   });
 
   it('기재 금지 항목은 아예 실리지 않는다 — 프롬프트로 막지 않고 빼서 막는다', () => {

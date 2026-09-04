@@ -10,7 +10,7 @@ import {
   type OwnAiRunnerDeps,
   type OwnAiRunRequest,
 } from './ownAiRunner';
-import { OWN_AI_ACTIVE_GRACE_MS } from '../../src/domain/rules/ownAiWriteGate';
+import { OWN_AI_ACTIVE_GRACE_MS, isOwnAiActive } from '../../src/domain/rules/ownAiWriteGate';
 import type { OwnAiRunEvent } from '../../src/domain/entities/OwnAiProvider';
 
 /** 가짜 자식 프로세스 — stdout/stderr 를 우리가 직접 밀어 넣는다. */
@@ -332,23 +332,36 @@ describe('취소와 앱 종료', () => {
     expect(h.killed).toEqual([]);
   });
 
-  it('★cancelAllSync 는 동기로 전부 죽이고 활성값을 즉시 내린다', () => {
+  it('★cancelAllSync 는 동기로 전부 죽이고 활성값을 **유예창**으로 내린다', () => {
     const h = harness();
     h.runner.start(panelReq());
     h.runner.start({ runId: 'd1', provider: 'claude', kind: 'draft', prompt: '초안' });
     h.runner.cancelAllSync();
     expect(h.killed).toHaveLength(2);
-    expect(h.runner.ownAiActiveUntil()).toBe(0);
+    // ★0 이 아니다. 이 함수는 uncaughtException 에서도 불리고 그때 앱은 안 죽을 수 있다 —
+    //   방금 죽인 자식이 보낸 늦은 쓰기가 15초 안에 오면 여전히 409 여야 한다(UltraQA P1).
+    expect(h.runner.ownAiActiveUntil()).toBe(h.now + OWN_AI_ACTIVE_GRACE_MS);
     expect(h.runner.hasActivePanelRun()).toBe(false);
   });
 
   it('cancelAllSync 뒤에 늦게 온 close 가 활성값을 되살리지 않는다', () => {
     const h = harness();
     h.runner.start(panelReq());
+    const at = h.now;
     h.runner.cancelAllSync();
     h.now = 9_000_000;
     h.children[0]?.close(null);
-    expect(h.runner.ownAiActiveUntil()).toBe(0);
+    expect(h.runner.ownAiActiveUntil()).toBe(at + OWN_AI_ACTIVE_GRACE_MS);
+  });
+
+  it('★cancelAllSync 직후 유예창 안의 쓰기는 아직 활성으로 본다', () => {
+    const h = harness();
+    h.runner.start(panelReq());
+    h.runner.cancelAllSync();
+    expect(isOwnAiActive(h.runner.ownAiActiveUntil(), h.now + 5_000)).toBe(true);
+    expect(isOwnAiActive(h.runner.ownAiActiveUntil(), h.now + OWN_AI_ACTIVE_GRACE_MS + 1)).toBe(
+      false,
+    );
   });
 });
 
@@ -391,5 +404,26 @@ describe('프로세스 트리 종료', () => {
     };
     expect(() => defaultKillTreeSync(1, 'win32', io)).not.toThrow();
     expect(() => defaultKillTreeSync(1, 'darwin', io)).not.toThrow();
+  });
+});
+
+describe('★자식 env 에서 API 키를 뺀다 — 있으면 구독 대신 키(종량제)로 붙는다', () => {
+  it('ANTHROPIC_API_KEY · OPENAI_API_KEY 가 부모 env 에 있어도 자식에게는 안 간다', () => {
+    const saved = { ...process.env };
+    process.env['ANTHROPIC_API_KEY'] = 'sk-ant-should-not-leak';
+    process.env['OPENAI_API_KEY'] = 'sk-should-not-leak';
+    try {
+      const h = harness();
+      h.runner.start(panelReq());
+      const env = (h.spawnOpts[0]?.['env'] ?? {}) as Record<string, string | undefined>;
+      expect(env['ANTHROPIC_API_KEY']).toBeUndefined();
+      expect(env['OPENAI_API_KEY']).toBeUndefined();
+      // 다른 변수는 그대로 물려받는다(PATH 등)
+      expect(env['PATH'] ?? env['Path']).toBeDefined();
+    } finally {
+      delete process.env['ANTHROPIC_API_KEY'];
+      delete process.env['OPENAI_API_KEY'];
+      Object.assign(process.env, saved);
+    }
   });
 });

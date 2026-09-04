@@ -12,7 +12,7 @@
  * ★`RecordDraftView.tsx` 는 다른 세션이 작업 중이라 건드리지 않는다 — 이 컴포넌트를 그 화면에
  *   한 줄로 꽂는 일은 통합 단계(T6)에 요청한다.
  */
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { fetchRecordPromptL1 } from '@adapters/di/container';
@@ -27,14 +27,17 @@ import {
   type DraftPackEvidence,
 } from '@domain/services/recordDraftPack';
 import type { OwnAiErrorKind, OwnAiRunEvent } from '@domain/entities/OwnAiProvider';
+import type { KeywordGroup, MaskMapping } from '@domain/privacy/types';
+import { restoreModelText } from '@domain/rules/redactOutbound';
 
 /** 한 학생분의 초안 재료. 화면(부모)이 이미 별칭 처리를 마친 값을 준다. */
 export interface DraftTarget {
   /** 저장할 때 쓰는 학생 키. */
   readonly studentRef: string;
-  /** 모델에게 보낼 **별칭**(실명 아님). */
-  readonly studentAlias: string;
-  /** 화면에 보여 줄 이름(모델에게는 안 나간다). */
+  /**
+   * 학생 이름(화면용). 모델에게는 **꾸러미가 별칭으로 바꿔서** 보낸다 —
+   * 이 컴포넌트가 별칭을 만들지 않는다(가리는 자리를 도메인 한 곳에 둔다).
+   */
   readonly displayName: string;
   readonly evidences: readonly DraftPackEvidence[];
   readonly standardKeywords?: readonly string[];
@@ -44,6 +47,8 @@ export interface DraftTarget {
 
 export interface RecordDraftAiButtonProps {
   readonly areaLabel: string;
+  /** 실명·학번을 찾아 가릴 명단(`rosterFromAll`). 근거 본문 속 **다른 학생** 이름도 이걸로 가린다. */
+  readonly roster: readonly KeywordGroup[];
   readonly threadTitle?: string;
   /** 지금 카드의 학생. */
   readonly target: DraftTarget;
@@ -53,6 +58,14 @@ export interface RecordDraftAiButtonProps {
   readonly teacherPrompt?: string;
   /** [반영] — 실제 저장은 부모가 한다(기존 upsert 경로를 그대로 쓴다). */
   readonly onApply: (studentRef: string, text: string) => Promise<void> | void;
+  /**
+   * 실행 중인지(누른 뒤 ~ 마지막 학생 반영/버리기 전) 부모에게 알린다.
+   *
+   * ★없으면 큐가 조용히 죽는다: "미작성" 필터를 켠 채 "남은 학생 모두"를 누르면, 첫 학생을
+   *   [반영]하는 순간 그 학생이 미작성이 아니게 되어 **행이 사라지고**, 행 안에 있던 이 버튼과
+   *   큐가 함께 없어진다 — 안내 한 줄 없이(UltraQA P1). 부모가 이 신호로 행을 붙들어 둔다.
+   */
+  readonly onActiveChange?: (active: boolean) => void;
 }
 
 type Phase =
@@ -70,6 +83,8 @@ type Phase =
       readonly name: string;
       readonly text: string;
       readonly excluded: string;
+      /** 별칭 ↔ 실명. [반영]·미리보기에서 되돌린다. 저장하지 않는다. */
+      readonly mappings: readonly MaskMapping[];
       /** 이어서 처리할 학생들(남은 학생 모두). */
       readonly queue: readonly DraftTarget[];
     }
@@ -103,14 +118,15 @@ function newRunId(): string {
 }
 
 /**
- * 모델이 쓴 별칭을 실제 이름으로 되돌린다.
+ * 모델이 쓴 별칭을 실제 이름으로 되돌린다 — 이 학생뿐 아니라 근거에 등장한 **다른 학생**도.
  *
  * ★지우지 않고 **되돌린다.** 세특 본문에는 보통 이름을 쓰지 않지만, 모델이 "［이름1］은 …"
  * 처럼 주어로 썼을 때 통째로 지우면 문장이 부서진다. 이름으로 되돌려 놓으면 선생님이
  * 보고 지울 수 있다 — 부서진 문장은 무엇이 없어졌는지도 모른다.
+ * 패널과 같은 함수(`restoreModelText`)를 쓴다 — 모델이 별칭을 살짝 다르게 써도 잡는다.
  */
-export function restoreAlias(text: string, alias: string, displayName: string): string {
-  return alias.length > 0 ? text.split(alias).join(displayName) : text;
+export function restoreAliases(text: string, mappings: readonly MaskMapping[]): string {
+  return restoreModelText(text, mappings);
 }
 
 /** CLI 를 한 번 돌려 초안 한 편을 받는다. 실패하면 갈래를 담아 던진다. */
@@ -156,13 +172,22 @@ async function askOnce(
 
 export function RecordDraftAiButton({
   areaLabel,
+  roster,
   threadTitle,
   target,
   remaining = [],
   teacherPrompt,
   onApply,
+  onActiveChange,
 }: RecordDraftAiButtonProps) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+
+  // 실행 중 여부를 부모에게 알린다. 언마운트되면 "끝"으로 알려 붙들림을 푼다.
+  const active = phase.kind !== 'idle';
+  useEffect(() => {
+    onActiveChange?.(active);
+  }, [active, onActiveChange]);
+  useEffect(() => () => onActiveChange?.(false), [onActiveChange]);
   const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
   const provider = useAssistStore((s) => s.provider);
   const connected = useConnectedOwnAiProviders();
@@ -179,14 +204,15 @@ export function RecordDraftAiButton({
   const buildPrompt = useCallback(
     (t: DraftTarget) =>
       buildRecordDraftPack({
-        studentAlias: t.studentAlias,
+        studentName: t.displayName,
+        roster,
         areaLabel,
         ...(threadTitle === undefined ? {} : { threadTitle }),
         evidences: t.evidences,
         ...(t.standardKeywords === undefined ? {} : { standardKeywords: t.standardKeywords }),
         ...(teacherPrompt === undefined ? {} : { teacherPrompt }),
       }),
-    [areaLabel, threadTitle, teacherPrompt],
+    [areaLabel, roster, threadTitle, teacherPrompt],
   );
 
   /** 큐를 하나씩 처리한다. 첫 결과가 나오면 미리보기에서 멈춰 선생님 판단을 기다린다. */
@@ -221,6 +247,7 @@ export function RecordDraftAiButton({
             name: t.displayName,
             text,
             excluded: summarizeExclusions(pack.exclusions),
+            mappings: pack.mappings,
             queue: queue.slice(i + 1),
           });
           return; // 미리보기에서 멈춘다 — [반영] 을 눌러야 다음으로 간다.
@@ -248,7 +275,7 @@ export function RecordDraftAiButton({
     if (phase.kind !== 'preview') return;
     const base = target.studentRef === phase.studentRef ? (target.existingText ?? '') : '';
     // 별칭을 실제 이름으로 되돌린 뒤에 저장한다 — 초안에 ［이름1］ 이 남으면 안 된다.
-    const restored = restoreAlias(phase.text, target.studentAlias, phase.name);
+    const restored = restoreAliases(phase.text, phase.mappings);
     const merged =
       mode === 'append' && base.trim().length > 0 ? `${base.trim()}\n${restored}` : restored;
     await onApply(phase.studentRef, merged);
@@ -340,7 +367,7 @@ export function RecordDraftAiButton({
           )}
           {/* 저장될 것과 **같은 글**을 보여 준다 — 미리보기와 저장이 다르면 미리보기가 아니다. */}
           <p className="mb-2 whitespace-pre-wrap text-[0.65rem] text-sp-text">
-            {restoreAlias(phase.text, target.studentAlias, phase.name)}
+            {restoreAliases(phase.text, phase.mappings)}
           </p>
           <div className="flex flex-wrap items-center gap-1">
             <button

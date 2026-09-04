@@ -16,7 +16,8 @@ import { cleanup, render, screen, fireEvent, act } from '@testing-library/react'
 const fetchRecordPromptL1 = vi.hoisted(() => vi.fn());
 vi.mock('@adapters/di/container', () => ({ fetchRecordPromptL1 }));
 
-import { RecordDraftAiButton, restoreAlias, type DraftTarget } from '../RecordDraftAiButton';
+import { RecordDraftAiButton, restoreAliases, type DraftTarget } from '../RecordDraftAiButton';
+import { rosterFromAll } from '@domain/rules/redactOutbound';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { useOwnAiStatusStore } from '@adapters/stores/useOwnAiStatusStore';
 import type { OwnAiConnection } from '@domain/entities/OwnAiProvider';
@@ -30,10 +31,18 @@ function connected(): OwnAiConnection {
   return { provider: 'claude', state: 'connected', version: '2.1.258', model: '' };
 }
 
+/** 이 반 명단 — 근거 본문의 다른 학생 이름(박서연)도 이걸로 가려진다. */
+const ROSTER = rosterFromAll(
+  [
+    { name: '김지훈', studentNumber: 1 },
+    { name: '박서연', studentNumber: 2 },
+  ],
+  [],
+);
+
 function target(over: Partial<DraftTarget> = {}): DraftTarget {
   return {
     studentRef: 's1',
-    studentAlias: '［이름1］',
     displayName: '김지훈',
     evidences: [{ id: 'e1', content: '모둠 활동에서 자료를 정리했다.' }],
     ...over,
@@ -89,7 +98,14 @@ async function startWith(name: RegExp | string): Promise<void> {
 
 describe('★구독이 없으면 요청을 보내지 않는다 (D2)', () => {
   it('연결 전에는 눌러도 안내만 하고 실행이 0회다', () => {
-    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
 
@@ -101,7 +117,14 @@ describe('★구독이 없으면 요청을 보내지 않는다 (D2)', () => {
 
   it('실험실 스위치만 켜고 연결이 없으면 여전히 실행 0회다', () => {
     useAssistStore.setState({ ownAiEnabled: true });
-    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
 
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
     expect(runCalls).toHaveLength(0);
@@ -115,7 +138,14 @@ describe('연결되면 단위를 고를 수 있다 (D8)', () => {
   });
 
   it('남은 학생이 없으면 "이 학생만"만 보인다', () => {
-    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
 
     expect(screen.getByRole('button', { name: '이 학생만' })).toBeTruthy();
@@ -126,6 +156,7 @@ describe('연결되면 단위를 고를 수 있다 (D8)', () => {
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target()}
         remaining={[target({ studentRef: 's2', displayName: '박서연' })]}
         onApply={() => {}}
@@ -146,6 +177,7 @@ describe('★보내는 꾸러미에 실명이 없고 기재 금지가 빠진다 
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target({
           evidences: [
             { id: 'e1', content: '교내 수학경시대회에서 금상을 받았다.' },
@@ -185,6 +217,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target()}
         onApply={(ref, text) => {
           applied.push({ ref, text });
@@ -204,6 +237,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target()}
         onApply={(ref, text) => {
           applied.push({ ref, text });
@@ -226,6 +260,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target({ existingText: '먼저 쓴 문장.' })}
         onApply={(ref, text) => {
           applied.push({ ref, text });
@@ -247,6 +282,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target()}
         remaining={[target({ studentRef: 's2', displayName: '박서연' })]}
         onApply={() => {}}
@@ -271,7 +307,14 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
   });
 
   it('받아 온 규정을 CLI 에 함께 보낸다 — 규정 없이 쓴 초안은 만들지 않는다', async () => {
-    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
     await startWith('이 학생만');
 
@@ -281,7 +324,14 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
 
   it('★규정을 못 받아 오면 실행이 0회다 — 초안을 만들지 않고 안내만 한다', async () => {
     fetchRecordPromptL1.mockResolvedValue(null);
-    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
     await startWith('이 학생만');
 
@@ -294,6 +344,7 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target()}
         remaining={[target({ studentRef: 's2', displayName: '박서연' })]}
         onApply={() => {}}
@@ -308,7 +359,12 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
   it('★규정 본문을 화면에 보여 주지 않는다 — 받아만 쓰고 흘리지 않는다', async () => {
     fetchRecordPromptL1.mockResolvedValue('절대로 화면에 뜨면 안 되는 규정 본문');
     const { container } = render(
-      <RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />,
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
     );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
     await startWith('이 학생만');
@@ -330,13 +386,43 @@ describe('★별칭을 실제 이름으로 되돌린 뒤 저장한다', () => {
   }
 
   it('되돌리기 자체 — 나온 만큼 전부 바꾼다', () => {
-    expect(restoreAlias('［이름1］은 ［이름1］답게 썼다.', '［이름1］', '김지훈')).toBe(
-      '김지훈은 김지훈답게 썼다.',
-    );
+    const m = [{ alias: '［이름1］', original: '김지훈', kind: 'keyword' as const }];
+    expect(restoreAliases('［이름1］은 ［이름1］답게 썼다.', m)).toBe('김지훈은 김지훈답게 썼다.');
   });
 
-  it('별칭이 없으면 글을 건드리지 않는다', () => {
-    expect(restoreAlias('주어 없이 쓴 문장.', '［이름1］', '김지훈')).toBe('주어 없이 쓴 문장.');
+  it('대응이 없으면 글을 건드리지 않는다', () => {
+    expect(restoreAliases('주어 없이 쓴 문장.', [])).toBe('주어 없이 쓴 문장.');
+  });
+
+  it('★근거에 적힌 다른 학생 이름도 나갈 때 가려지고 돌아올 때 되돌아온다', async () => {
+    const applied: { text: string }[] = [];
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target({
+          evidences: [{ id: 'e1', content: '박서연과 함께 모둠 발표를 준비했다.' }],
+        })}
+        onApply={(_ref, text) => {
+          applied.push({ text });
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith('이 학생만');
+
+    // 나가는 꾸러미: 박서연이 없다
+    const prompt = runCalls[0]?.prompt ?? '';
+    expect(prompt).not.toContain('박서연');
+    expect(prompt).not.toContain('김지훈');
+    expect(prompt).toContain('［이름2］');
+
+    // 모델이 별칭 그대로 써서 돌려주면 → 저장 전에 둘 다 되돌아온다
+    await finishWith('［이름1］은 ［이름2］와 협력했다.');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+    expect(applied[0]?.text).toBe('김지훈은 박서연와 협력했다.');
   });
 
   it('★초안에 ［이름1］ 이 남지 않는다 — 저장되는 글에서 확인', async () => {
@@ -344,6 +430,7 @@ describe('★별칭을 실제 이름으로 되돌린 뒤 저장한다', () => {
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target()}
         onApply={(ref, text) => {
           applied.push({ ref, text });
@@ -363,7 +450,14 @@ describe('★별칭을 실제 이름으로 되돌린 뒤 저장한다', () => {
   });
 
   it('미리보기에도 되돌린 글을 보여 준다 — 보이는 것과 저장되는 것이 같아야 한다', async () => {
-    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
     await startWith('이 학생만');
     await finishWith('［이름1］은 탐구 흐름을 이어 썼다.');
@@ -376,6 +470,7 @@ describe('★별칭을 실제 이름으로 되돌린 뒤 저장한다', () => {
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target({ existingText: '먼저 쓴 문장.' })}
         onApply={(ref, text) => {
           applied.push({ ref, text });
@@ -415,6 +510,7 @@ describe('★"남은 학생 모두" 중에는 어느 칸에 저장되는지 못 
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target()}
         remaining={[target({ studentRef: 's2', displayName: '박서연' })]}
         onApply={(ref) => {
@@ -442,6 +538,7 @@ describe('★"남은 학생 모두" 중에는 어느 칸에 저장되는지 못 
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
+        roster={ROSTER}
         target={target()}
         remaining={[target({ studentRef: 's2', displayName: '박서연' })]}
         onApply={(ref) => {

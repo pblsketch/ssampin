@@ -22,7 +22,6 @@ import {
   loginArgs,
   logoutArgs,
   resolveCliLaunch,
-  readVersion,
   type OwnAiCliDeps,
 } from './ownAiCli';
 import {
@@ -123,10 +122,7 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
 
   runner = createOwnAiRunner({
     launch: (p) => resolveCliLaunch(p, cliDeps),
-    version: (p) => {
-      const l = resolveCliLaunch(p, cliDeps);
-      return l ? readVersion(l, cliDeps) : null;
-    },
+    version: lastKnownVersion,
     cwd: runCwd(),
     emit,
     platform: process.platform,
@@ -146,12 +142,34 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
   const CHECK_CACHE_MS = 5_000;
   const checked = new Map<OwnAiProviderId, { at: number; connection: OwnAiConnection }>();
 
-  function connectionOf(provider: OwnAiProviderId, force = false): OwnAiConnection {
+  /** 같은 공급자를 동시에 두 번 묻지 않는다 — 첫 확인이 끝날 때까지 같은 약속을 돌려준다. */
+  const inFlight = new Map<OwnAiProviderId, Promise<OwnAiConnection>>();
+
+  async function connectionOf(provider: OwnAiProviderId, force = false): Promise<OwnAiConnection> {
     const hit = checked.get(provider);
     if (!force && hit && Date.now() - hit.at < CHECK_CACHE_MS) return hit.connection;
-    const connection = inspectConnection(provider, models.get(provider) ?? '', cliDeps);
-    checked.set(provider, { at: Date.now(), connection });
-    return connection;
+    const pending = inFlight.get(provider);
+    if (pending) return pending;
+    // Promise.resolve 로 감싼다 — 테스트 대역이 동기 값을 줘도 .then 이 있다.
+    const p = Promise.resolve(inspectConnection(provider, models.get(provider) ?? '', cliDeps))
+      .then((connection) => {
+        checked.set(provider, { at: Date.now(), connection });
+        return connection;
+      })
+      .finally(() => inFlight.delete(provider));
+    inFlight.set(provider, p);
+    return p;
+  }
+
+  /**
+   * 마지막으로 확인한 버전. 실행 직전에 CLI 를 또 띄우지 않으려고 캐시에서 읽는다.
+   *
+   * ★없으면 `null` — `--permission-prompts` 만 안 붙을 뿐 실행은 된다. 예전에는 실행마다
+   * `--version` 을 동기로 띄워 보내기 직전에 화면이 0.7~4초 멈췄다(실측).
+   */
+  function lastKnownVersion(provider: OwnAiProviderId): string | null {
+    const c = checked.get(provider)?.connection;
+    return c && 'version' in c ? c.version : null;
   }
 
   /** 로그인·로그아웃·모델 변경처럼 **방금 바뀐 것을 아는** 자리에서 부른다. */
@@ -161,12 +179,14 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
   }
 
   // 카드의 [다시 확인]은 방금 터미널에서 뭔가 했다는 뜻이라 캐시를 건너뛴다.
-  ipcMain.handle('ownAi:status', (_e, provider: OwnAiProviderId): OwnAiConnection => {
+  ipcMain.handle('ownAi:status', (_e, provider: OwnAiProviderId): Promise<OwnAiConnection> => {
     return connectionOf(provider, true);
   });
 
-  ipcMain.handle('ownAi:statusAll', (): OwnAiConnection[] =>
-    OWN_AI_PROVIDERS.map((p) => connectionOf(p)),
+  // 두 공급자를 **나란히** 묻는다 — 차례로 물으면 기다리는 시간이 더해진다.
+  ipcMain.handle(
+    'ownAi:statusAll',
+    (): Promise<OwnAiConnection[]> => Promise.all(OWN_AI_PROVIDERS.map((p) => connectionOf(p))),
   );
 
   ipcMain.handle('ownAi:setModel', (_e, provider: OwnAiProviderId, model: unknown): boolean => {

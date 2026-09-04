@@ -18,11 +18,14 @@ import {
   summarizeProhibited,
   type ProhibitedHit,
 } from '../rules/prohibitedRecordTerms';
+import { createMaskSession } from '../privacy/maskEngine';
+import type { KeywordGroup, MaskMapping } from '../privacy/types';
+import { redactQuestion } from '../rules/redactOutbound';
 
 /** 꾸러미에 넣을 근거 한 건(엔티티 전체가 아니라 필요한 것만 받는다). */
 export interface DraftPackEvidence {
   readonly id: string;
-  /** 이미 별칭 처리·비식별을 마친 본문이어야 한다. */
+  /** 근거 원문. **여기서** 가린다 — 부르는 쪽이 가려 줄 것이라 믿지 않는다(UltraQA P0). */
   readonly content: string;
   readonly date?: string;
   /** 선생님이 "AI 에 보내지 않기"로 표시한 근거. */
@@ -30,8 +33,16 @@ export interface DraftPackEvidence {
 }
 
 export interface DraftPackInput {
-  /** 학생을 가리키는 **별칭**. 실명을 넣지 않는다. */
-  readonly studentAlias: string;
+  /**
+   * 학생 **실명**. 꾸러미 안에서 별칭으로 바뀐다 — 이 값 자체는 절대 밖으로 나가지 않는다.
+   *
+   * ★예전에는 부르는 쪽이 별칭을 만들어 넘겼고 근거 본문은 그대로 실렸다. 그래서 근거에
+   *   적힌 "김지훈과 박서연이 모둠에서…" 같은 **다른 학생 실명**이 그대로 나갔다(UltraQA P0).
+   *   이제 이름·근거·주제·지시를 **한 세션으로 함께** 가린다 — 같은 학생은 같은 별칭이다.
+   */
+  readonly studentName: string;
+  /** 실명·학번을 찾아 가릴 명단(`rosterFromAll`). 이 학생도 여기 들어 있어야 한다. */
+  readonly roster: readonly KeywordGroup[];
   /** 영역 이름(교과 세특·행동특성 등). */
   readonly areaLabel: string;
   /** 고른 탐구 주제(없으면 전체 근거). */
@@ -66,8 +77,15 @@ export interface DraftPackExclusion {
 }
 
 export interface DraftPack {
-  /** 모델에게 보낼 사용자 턴 본문. */
+  /** 모델에게 보낼 사용자 턴 본문. 실명이 없다. */
   readonly text: string;
+  /** 이 학생을 가리키는 별칭(본문 첫 줄과 같다). */
+  readonly studentAlias: string;
+  /**
+   * 별칭 ↔ 실명. 답이 오면 되돌리는 데 쓴다.
+   * ★개인정보다 — 화면 상태나 파일에 저장하지 않고, 이 실행이 끝나면 버린다.
+   */
+  readonly mappings: readonly MaskMapping[];
   /** 실제로 실린 근거 수. */
   readonly includedCount: number;
   readonly exclusions: readonly DraftPackExclusion[];
@@ -100,18 +118,36 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   const exclusions: DraftPackExclusion[] = [];
   const lines: string[] = [];
   let usedChars = 0;
+  const mappings: MaskMapping[] = [];
+
+  // ★명단에 이 학생이 없으면(호출부 실수) 실명이 그대로 나간다 — 여기서 반드시 넣는다.
+  const name = input.studentName.trim();
+  const roster = input.roster.some((g) => g.values.includes(name))
+    ? input.roster
+    : [{ label: '이름', values: [name] }, ...input.roster];
+  const session = createMaskSession();
+  const mask = (text: string): string => {
+    const r = redactQuestion(text, roster, session);
+    mappings.push(...r.mappings);
+    return r.masked;
+  };
+
+  // 이 학생 이름을 **맨 먼저** 가린다 — 그래야 ［이름1］ 이 되고, 근거 안의 같은 이름도
+  // 같은 번호를 받는다(세션이 기억한다).
+  const studentAlias = mask(name);
 
   for (const e of input.evidences) {
     if (e.excludedFromAi === true) {
       exclusions.push({ evidenceId: e.id, reason: 'teacher' });
       continue;
     }
-    const content = e.content.trim();
-    if (content.length === 0) {
+    const raw = e.content.trim();
+    if (raw.length === 0) {
       exclusions.push({ evidenceId: e.id, reason: 'empty' });
       continue;
     }
-    const hits = detectProhibitedTerms(content);
+    // 기재 금지 검사는 **원문**으로 한다 — 가린 뒤에는 단어가 바뀌어 못 잡을 수 있다.
+    const hits = detectProhibitedTerms(raw);
     if (hits.length > 0) {
       exclusions.push({
         evidenceId: e.id,
@@ -120,6 +156,7 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
       });
       continue;
     }
+    const content = mask(raw);
     const line = e.date ? `- (${e.date}) ${content}` : `- ${content}`;
     if (usedChars + line.length > DRAFT_PACK_MAX_EVIDENCE_CHARS) {
       // 여기서 멈추지 않고 계속 도는 이유: 뒤에 짧은 근거가 있으면 그건 실을 수 있다.
@@ -131,9 +168,9 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   }
 
   const parts: string[] = [];
-  parts.push(`학생: ${input.studentAlias}`);
+  parts.push(`학생: ${studentAlias}`);
   parts.push(`영역: ${input.areaLabel}`);
-  if (input.threadTitle) parts.push(`주제: ${input.threadTitle}`);
+  if (input.threadTitle) parts.push(`주제: ${mask(input.threadTitle)}`);
   if (input.standardKeywords && input.standardKeywords.length > 0) {
     // 원문이 아니라 키워드만 — 성취기준 본문은 앱 밖으로 내보내지 않는다.
     parts.push(`성취기준 키워드: ${input.standardKeywords.join(', ')}`);
@@ -145,7 +182,7 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   if (input.teacherPrompt && input.teacherPrompt.trim().length > 0) {
     parts.push('');
     parts.push('선생님 지시:');
-    parts.push(input.teacherPrompt.trim());
+    parts.push(mask(input.teacherPrompt.trim()));
   }
 
   parts.push('');
@@ -155,7 +192,13 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
       '근거에 없는 내용은 쓰지 마세요.',
   );
 
-  return { text: parts.join('\n'), includedCount: lines.length, exclusions };
+  return {
+    text: parts.join('\n'),
+    studentAlias,
+    mappings,
+    includedCount: lines.length,
+    exclusions,
+  };
 }
 
 /** "제외됨 N건" 옆에 붙일 짧은 사유 요약. 빠진 게 없으면 빈 문자열. */

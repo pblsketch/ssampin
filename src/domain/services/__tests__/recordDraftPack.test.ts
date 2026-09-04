@@ -6,14 +6,24 @@ import {
   type DraftPackEvidence,
   type DraftPackInput,
 } from '@domain/services/recordDraftPack';
+import { rosterFromAll } from '@domain/rules/redactOutbound';
 
 function ev(p: Partial<DraftPackEvidence> & { id: string }): DraftPackEvidence {
   return { content: '수업에서 질문을 자주 했다.', ...p };
 }
 
+const ROSTER = rosterFromAll(
+  [
+    { name: '김지훈', studentNumber: 15 },
+    { name: '박서연', studentNumber: 3 },
+  ],
+  [],
+);
+
 function input(p: Partial<DraftPackInput> = {}): DraftPackInput {
   return {
-    studentAlias: '［이름1］',
+    studentName: '김지훈',
+    roster: ROSTER,
     areaLabel: '교과 세부능력 및 특기사항',
     evidences: [ev({ id: 'e1' })],
     ...p,
@@ -188,5 +198,68 @@ describe('★분량 상한 — 넘치면 실행 자체가 실패한다(윈도우
 
     expect(pack.includedCount).toBe(30);
     expect(pack.exclusions).toEqual([]);
+  });
+});
+
+describe('★실명은 꾸러미 안에서 가려진다 — 부르는 쪽을 믿지 않는다 (UltraQA P0)', () => {
+  it('학생 이름이 별칭으로 바뀌고 실명은 본문에 없다', () => {
+    const pack = buildRecordDraftPack(input());
+    expect(pack.studentAlias).toBe('［이름1］');
+    expect(pack.text).toContain('학생: ［이름1］');
+    expect(pack.text).not.toContain('김지훈');
+  });
+
+  it('★근거 본문에 적힌 다른 학생 이름도 가려진다', () => {
+    const pack = buildRecordDraftPack(
+      input({ evidences: [{ id: 'e1', content: '박서연과 함께 자료를 정리했다.' }] }),
+    );
+    expect(pack.text).not.toContain('박서연');
+    expect(pack.text).toContain('［이름2］');
+  });
+
+  it('근거 본문의 본인 이름은 첫 줄과 같은 별칭이다 — 세션 하나로 가리기 때문', () => {
+    const pack = buildRecordDraftPack(
+      input({ evidences: [{ id: 'e1', content: '김지훈이 발표를 맡았다.' }] }),
+    );
+    expect(pack.text).toContain('［이름1］이 발표를 맡았다');
+    expect(pack.text.split('［이름1］').length - 1).toBe(2); // 첫 줄 + 근거
+  });
+
+  it('주제 제목과 선생님 지시도 가려진다', () => {
+    const pack = buildRecordDraftPack(
+      input({ threadTitle: '박서연과의 공동 탐구', teacherPrompt: '김지훈 중심으로 써 주세요' }),
+    );
+    expect(pack.text).not.toContain('박서연');
+    expect(pack.text).not.toContain('김지훈');
+  });
+
+  it('학번(15번)도 가려진다', () => {
+    const pack = buildRecordDraftPack(
+      input({ evidences: [{ id: 'e1', content: '15번 학생이 질문을 만들었다.' }] }),
+    );
+    expect(pack.text).not.toContain('15번');
+  });
+
+  it('★명단에 이 학생이 빠져 있어도(호출부 실수) 실명은 안 나간다', () => {
+    const pack = buildRecordDraftPack(input({ roster: [] }));
+    expect(pack.text).not.toContain('김지훈');
+    expect(pack.studentAlias).toBe('［이름1］');
+  });
+
+  it('되돌릴 대응표를 돌려준다 — 저장 전에 이름으로 되돌리는 데 쓴다', () => {
+    const pack = buildRecordDraftPack(
+      input({ evidences: [{ id: 'e1', content: '박서연과 협력했다.' }] }),
+    );
+    expect(pack.mappings.map((m) => `${m.alias}=${m.original}`)).toEqual([
+      '［이름1］=김지훈',
+      '［이름2］=박서연',
+    ]);
+  });
+
+  it('기재 금지 검사는 가리기 전 원문으로 한다 — 가린 뒤엔 단어가 바뀔 수 있다', () => {
+    const pack = buildRecordDraftPack(
+      input({ evidences: [{ id: 'e1', content: '박서연이 교내 수학경시대회 금상.' }] }),
+    );
+    expect(pack.exclusions.map((x) => x.reason)).toEqual(['prohibited']);
   });
 });

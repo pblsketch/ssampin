@@ -187,7 +187,11 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
   // 학생을 등록하거나 명단을 한 번이라도 만지는 순간 자동 사라진다.
   // 디자인 §3.6 — 빨간 점(w-2 h-2) + transition-opacity duration-300.
   // 쌤핀 AI — 설정에서 켠 선생님에게만 진입점이 보인다(옵트인 기본 꺼짐).
-  const assistEnabled = useAssistStore((s) => s.enabled);
+  // ★쌤핀 AI(Solar) **또는** "내 AI로 실행" — 구독만 켠 선생님에게도 진입점이 있어야 한다.
+  //   스토어 `setOpen`·패널 `AssistDock` 과 같은 조건이다(UltraQA P0).
+  const assistSolarEnabled = useAssistStore((s) => s.enabled);
+  const assistOwnAiEnabled = useAssistStore((s) => s.ownAiEnabled);
+  const assistEnabled = assistSolarEnabled || assistOwnAiEnabled;
   const assistOpen = useAssistStore((s) => s.open);
   const setAssistOpen = useAssistStore((s) => s.setOpen);
   const toggleAssist = (): void => setAssistOpen(!assistOpen);

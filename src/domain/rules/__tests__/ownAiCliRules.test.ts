@@ -11,6 +11,7 @@ import {
   OWN_AI_ALLOWED_TOOLS,
   OWN_AI_ERROR_MESSAGES,
   OWN_AI_MODELS,
+  stripOwnAiEnv,
 } from '@domain/rules/ownAiCliRules';
 import { OWN_AI_PROVIDERS } from '@domain/entities/OwnAiProvider';
 
@@ -252,5 +253,26 @@ describe('★codex 도 규정·힌트를 함께 보낸다', () => {
     const argv = buildCodexArgv({ kind: 'draft', prompt: '학생: ［이름1］', cwd: 'E:\\run' });
 
     expect(argv[argv.length - 1]).toBe('학생: ［이름1］');
+  });
+});
+
+describe('★API 키 env 스트립 — 구독이 아닌 청구 경로를 자식에게 보이지 않게', () => {
+  it('키·베이스URL·클라우드 전환 스위치를 빼고 나머지는 남긴다', () => {
+    const out = stripOwnAiEnv({
+      PATH: 'C:\\bin',
+      ANTHROPIC_API_KEY: 'sk-ant',
+      ANTHROPIC_AUTH_TOKEN: 't',
+      ANTHROPIC_BASE_URL: 'https://proxy',
+      CLAUDE_CODE_USE_BEDROCK: '1',
+      OPENAI_API_KEY: 'sk',
+      HOME: 'C:\\Users\\t',
+    });
+    expect(out).toEqual({ PATH: 'C:\\bin', HOME: 'C:\\Users\\t' });
+  });
+
+  it('원본을 건드리지 않는다', () => {
+    const env = { ANTHROPIC_API_KEY: 'sk-ant' };
+    stripOwnAiEnv(env);
+    expect(env.ANTHROPIC_API_KEY).toBe('sk-ant');
   });
 });

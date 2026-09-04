@@ -13,7 +13,7 @@
  * 4. 이미 쓴 초안이 "남은 학생 모두"에 섞여 덮어써진다.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { areasForContext } from '@domain/entities/RecordDraft';
 
@@ -203,14 +203,13 @@ describe('학생별 재료가 섞이지 않는다', () => {
     expect(b.evidences.every((e) => e.studentRef === 'sB')).toBe(true);
   });
 
-  it('★모델에게는 실명 대신 별칭이 간다', () => {
+  it('★가릴 명단(roster)을 넘긴다 — 이 반 학생 전원의 이름이 들어 있다', () => {
     view();
 
     for (const p of buttonProps) {
-      const t = p['target'] as { studentAlias: string };
-      expect(t.studentAlias).not.toContain('김지훈');
-      expect(t.studentAlias).not.toContain('박서연');
-      expect(t.studentAlias).toContain('［이름');
+      const roster = p['roster'] as readonly { label: string; values: readonly string[] }[];
+      const names = roster.find((g) => g.label === '이름')?.values ?? [];
+      expect(names).toEqual(expect.arrayContaining(['김지훈', '박서연']));
     }
   });
 });
@@ -278,5 +277,51 @@ describe('★저장은 학생 키로 찾는다 — 목록 위치로 찾지 않�
     await onApply('없는학생', '아무 글');
 
     expect(upsertSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('★"미작성" 필터에서 실행 중인 행은 사라지지 않는다 (UltraQA P1)', () => {
+  const DRAFT_A = {
+    id: 'd-A',
+    area: 'subject',
+    studentRef: 'sA',
+    content: 'AI 가 쓴 초안',
+    status: 'draft',
+    basisObservationIds: [],
+    groundingFlags: [],
+    createdAt: 1,
+    updatedAt: 1,
+  };
+
+  it('실행 중이라고 알린 행은 초안이 생겨도 남고, 끝났다고 알리면 그제야 빠진다', async () => {
+    const r = view();
+    fireEvent.click(screen.getByRole('button', { name: '미작성' }));
+    expect(screen.getAllByTestId('ai-button')).toHaveLength(2);
+
+    // 김지훈 행의 버튼이 "실행 중"을 알린다(남은 학생 모두를 누른 상황)
+    const a = buttonProps.find(
+      (p) => (p['target'] as { displayName: string }).displayName === '김지훈',
+    );
+    const onActiveChange = a?.['onActiveChange'] as (active: boolean) => void;
+    await act(async () => onActiveChange(true));
+
+    // 첫 [반영] — 김지훈에게 초안이 생긴다 → 미작성 필터에서는 원래 빠질 학생
+    drafts.byRef = { sA: DRAFT_A };
+    r.rerender(
+      <RecordDraftView
+        context="teaching"
+        level="high"
+        students={STUDENTS}
+        classId="c1"
+        classSubject="수학"
+        className="2학년 4반"
+      />,
+    );
+    expect(screen.getByText('김지훈 AI 버튼')).toBeTruthy(); // ★붙들려 있다
+
+    // 실행이 끝났다 → 이제 필터대로 빠진다
+    await act(async () => onActiveChange(false));
+    expect(screen.queryByText('김지훈 AI 버튼')).toBeNull();
+    expect(screen.getByText('박서연 AI 버튼')).toBeTruthy();
   });
 });

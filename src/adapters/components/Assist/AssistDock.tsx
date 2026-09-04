@@ -113,7 +113,16 @@ function usePublishDockWidth(): (node: HTMLElement | null) => void {
 }
 
 export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
-  const enabled = useAssistStore((s) => s.enabled);
+  const solarEnabled = useAssistStore((s) => s.enabled);
+  const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
+  /**
+   * 패널을 쓸 수 있는가 = 쌤핀 AI(Solar)에 동의했거나 **"내 AI로 실행"을 켰거나**.
+   *
+   * ★둘 중 하나면 된다. 예전엔 Solar 동의만 봐서, 구독만 연결한 선생님은 스토어가 열어 줘도
+   *   패널이 `null` 을 그렸다 — 버튼을 눌러도 아무 일이 없는 것처럼 보였다(UltraQA P0).
+   *   스토어의 `setOpen` 이 이미 같은 조건으로 열어 준다 — 여기와 어긋나면 안 된다.
+   */
+  const enabled = solarEnabled || ownAiEnabled;
   const open = useAssistStore((s) => s.open);
   const turns = useAssistStore((s) => s.turns);
   const draft = useAssistStore((s) => s.draft);

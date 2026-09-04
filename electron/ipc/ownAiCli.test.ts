@@ -132,21 +132,40 @@ describe('어떻게 띄울지 찾기', () => {
 });
 
 describe('버전 읽기', () => {
-  it('두 CLI 의 실제 출력 형태를 읽는다', () => {
-    expect(readVersion(EXE, deps({ run: () => ok('2.1.258 (Claude Code)') }))).toBe('2.1.258');
-    expect(readVersion(EXE, deps({ run: () => ok('codex-cli 0.144.4') }))).toBe('0.144.4');
+  it('두 CLI 의 실제 출력 형태를 읽는다', async () => {
+    expect(await readVersion(EXE, deps({ run: () => ok('2.1.258 (Claude Code)') }))).toBe(
+      '2.1.258',
+    );
+    expect(await readVersion(EXE, deps({ run: () => ok('codex-cli 0.144.4') }))).toBe('0.144.4');
   });
 
-  it('실행이 실패하면 null', () => {
+  it('실행이 실패하면 null', async () => {
     expect(
-      readVersion(EXE, deps({ run: () => ({ status: 1, stdout: '', stderr: 'boom' }) })),
+      await readVersion(EXE, deps({ run: () => ({ status: 1, stdout: '', stderr: 'boom' }) })),
     ).toBeNull();
     expect(
-      readVersion(
+      await readVersion(
         EXE,
         deps({ run: () => ({ status: null, stdout: '', stderr: '', errorCode: 'ENOENT' }) }),
       ),
     ).toBeNull();
+  });
+});
+
+describe('★확인은 비동기다 — 앱 화면을 멈추지 않는다', () => {
+  it('run 이 약속(Promise)을 줘도 같은 결과다 — 앱은 이 모양으로 부른다', async () => {
+    const d = deps({ run: async () => ok('2.1.258 (Claude Code)') });
+    expect(await readVersion(EXE, d)).toBe('2.1.258');
+  });
+
+  it('둘을 나란히 물으면 기다리는 시간이 더해지지 않는다', async () => {
+    const slow = (ms: number) => () =>
+      new Promise<RunOutcome>((r) => setTimeout(() => r(ok('2.1.258 (Claude Code)')), ms));
+    const d = deps({ isFile: (p) => p.endsWith('claude.exe'), run: slow(120) });
+    const t0 = Date.now();
+    await Promise.all([inspectConnection('claude', '', d), inspectConnection('claude', '', d)]);
+    // 각 확인은 run 을 두 번 부른다(버전·로그인) = 240ms. 둘을 나란히 돌리면 ~240, 차례면 ~480.
+    expect(Date.now() - t0).toBeLessThan(420);
   });
 });
 
@@ -160,10 +179,10 @@ describe('로그인 명령은 CLI 마다 다르다', () => {
     expect(logoutArgs('codex')).toEqual(['logout']);
   });
 
-  it('종료 코드 0 이면 로그인된 것으로 본다', () => {
-    expect(isSignedIn('claude', EXE, deps({ run: () => ok('') }))).toBe(true);
+  it('종료 코드 0 이면 로그인된 것으로 본다', async () => {
+    expect(await isSignedIn('claude', EXE, deps({ run: () => ok('') }))).toBe(true);
     expect(
-      isSignedIn('claude', EXE, deps({ run: () => ({ status: 1, stdout: '', stderr: '' }) })),
+      await isSignedIn('claude', EXE, deps({ run: () => ({ status: 1, stdout: '', stderr: '' }) })),
     ).toBe(false);
   });
 });
@@ -178,26 +197,30 @@ describe('연결 상태 3종 — 판정 순서가 곧 안내 순서다', () => {
     });
   }
 
-  it('없으면 not-installed', () => {
-    expect(inspectConnection('claude', '', deps()).state).toBe('not-installed');
+  it('없으면 not-installed', async () => {
+    expect((await inspectConnection('claude', '', deps())).state).toBe('not-installed');
   });
 
-  it('버전을 못 읽어도 not-installed 로 본다(깨진 설치)', () => {
+  it('버전을 못 읽어도 not-installed 로 본다(깨진 설치)', async () => {
     const d = deps({
       isFile: (p) => p === found,
       run: () => ({ status: 1, stdout: '', stderr: '' }),
     });
-    expect(inspectConnection('claude', '', d).state).toBe('not-installed');
+    expect((await inspectConnection('claude', '', d)).state).toBe('not-installed');
   });
 
-  it('버전이 낮으면 version-unsupported 와 지원 범위를 함께 준다', () => {
-    const c = inspectConnection('claude', '', withRuns({ '--version': ok('2.0.1 (Claude Code)') }));
+  it('버전이 낮으면 version-unsupported 와 지원 범위를 함께 준다', async () => {
+    const c = await inspectConnection(
+      'claude',
+      '',
+      withRuns({ '--version': ok('2.0.1 (Claude Code)') }),
+    );
     expect(c.state).toBe('version-unsupported');
     if (c.state === 'version-unsupported') expect(c.supportedRange).toContain('이상');
   });
 
-  it('버전은 되는데 로그인이 없으면 not-signed-in', () => {
-    const c = inspectConnection(
+  it('버전은 되는데 로그인이 없으면 not-signed-in', async () => {
+    const c = await inspectConnection(
       'claude',
       '',
       withRuns({ '--version': ok('2.1.258 (Claude Code)') }),
@@ -205,8 +228,8 @@ describe('연결 상태 3종 — 판정 순서가 곧 안내 순서다', () => {
     expect(c.state).toBe('not-signed-in');
   });
 
-  it('둘 다 되면 connected 이고 고른 모델을 담는다', () => {
-    const c = inspectConnection(
+  it('둘 다 되면 connected 이고 고른 모델을 담는다', async () => {
+    const c = await inspectConnection(
       'claude',
       'sonnet',
       withRuns({ '--version': ok('2.1.258 (Claude Code)'), 'auth status': ok('Logged in') }),

@@ -21,6 +21,7 @@
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { graceUntil } from '../../src/domain/rules/ownAiWriteGate';
 import {
+  stripOwnAiEnv,
   buildClaudeArgv,
   buildCodexArgv,
   classifyOwnAiError,
@@ -200,9 +201,11 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
       child = deps.spawnChild(launch.file, [...launch.args, ...argv], {
         cwd: deps.cwd,
         // node 스크립트로 띄우는 경우에만 Electron 을 node 모드로 돌린다.
-        ...(launch.asNode
-          ? { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', MCP_TIMEOUT: '45000' } }
-          : {}),
+        // ★API 키는 뺀다 — 있으면 CLI 가 구독 대신 그 키로 붙어 따로 청구된다(UltraQA P2).
+        env: {
+          ...stripOwnAiEnv(process.env),
+          ...(launch.asNode ? { ELECTRON_RUN_AS_NODE: '1', MCP_TIMEOUT: '45000' } : {}),
+        },
         // ★stdin 을 닫는다. 안 닫으면 codex 는 영원히 기다린다(실측).
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -290,7 +293,10 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
       run.finalized = true;
       runs.delete(runId);
     }
-    activeUntil = 0;
+    // ★0 이 아니라 **유예창**이다. 이 함수는 앱 종료뿐 아니라 `uncaughtException` 에서도
+    //   불리는데, 그때 앱은 안 죽을 수 있다. 0 으로 두면 방금 죽인 자식이 보낸 늦은 쓰기가
+    //   다음 15초 안에 게이트를 그냥 지나간다(UltraQA P1). 종료 경로에서는 어차피 무해하다.
+    activeUntil = graceUntil(deps.now());
   }
 
   return { start, cancel, cancelAllSync, ownAiActiveUntil, hasActivePanelRun };
