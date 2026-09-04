@@ -13,6 +13,7 @@ import type {
   AssessmentPlanItem,
 } from '@domain/entities/GradeAnalysis';
 import type { SemesterGradeResult } from '@domain/entities/GradeAnalysis';
+import { hasProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import {
   submissionToEvidence,
   attachmentToEvidence,
@@ -44,6 +45,60 @@ describe('submissionToEvidence', () => {
     expect(ev.content).toContain('책을 읽고');
     expect(ev.content).toContain('감상문.pdf');
     expect(ev.content).not.toContain('482910'); // 파일 크기 숫자 미포함
+  });
+
+  it('제출 **파일의 본문**이 실린다 — 첨부로 올렸을 때와 같은 대우(T5)', () => {
+    const ev = submissionToEvidence(
+      { ...sub, extractedText: '주제를 정한 까닭과 실험 과정을 적었다' },
+      assignment,
+    );
+    expect(ev.content).toContain('주제를 정한 까닭과 실험 과정을 적었다');
+    expect(ev.content).toContain('감상문.pdf'); // 파일명은 그대로
+    expect(ev.content).not.toContain('본문 추출 안 됨');
+  });
+
+  it('지각 표시는 본문이 실려도 그대로 남는다', () => {
+    const ev = submissionToEvidence(
+      { ...sub, isLate: true, extractedText: '늦게 낸 보고서 본문' },
+      assignment,
+    );
+    expect(ev.content).toContain('늦게 낸 보고서 본문');
+    expect(ev.content).toContain('(지각 제출)');
+  });
+
+  it('사진 제출은 "추출 불가"를 남긴다 — 파일명만 남기면 아무도 이유를 모른다', () => {
+    const ev = submissionToEvidence(
+      { ...sub, fileName: '활동사진.jpg', extractedText: undefined },
+      assignment,
+    );
+    expect(ev.content).toContain('활동사진.jpg');
+    expect(ev.content).toContain('(사진 파일 — 본문 추출 불가)');
+  });
+
+  it('문서인데 본문을 못 뽑았으면 "본문 추출 안 됨"을 남긴다', () => {
+    const ev = submissionToEvidence({ ...sub, extractedText: undefined }, assignment);
+    expect(ev.content).toContain('(본문 추출 안 됨)');
+  });
+
+  it('텍스트만 낸 제출(파일 없음)에는 추출 관련 문구를 붙이지 않는다', () => {
+    const ev = submissionToEvidence({ ...sub, fileName: null }, assignment);
+    expect(ev.content).toContain('책을 읽고');
+    expect(ev.content).not.toContain('본문 추출');
+    expect(ev.content).not.toContain('제출 파일:');
+  });
+
+  it('기재 금지 항목이 **파일 본문**에 있어도 저장 관문이 잡는다(excludedFromAi 자동 표시)', () => {
+    // 근거 저장(useRecordEvidenceStore.add/addMany)은 content 에 hasProhibitedTerms 를 태워
+    // 걸리면 excludedFromAi:true 를 붙이고, 브릿지 get_record_evidence 가 그 근거를 내보내지
+    // 않는다(ADR-072 결정 5). 본문이 content 에 실리므로 그 관문이 본문에도 그대로 적용된다.
+    const clean = submissionToEvidence({ ...sub, extractedText: '실험 설계를 다시 고쳤다' });
+    expect(hasProhibitedTerms(clean.content)).toBe(false);
+
+    const dirty = submissionToEvidence({
+      ...sub,
+      extractedText: '교내 과학경진대회에서 최우수상을 받았다',
+    });
+    expect(hasProhibitedTerms(dirty.content)).toBe(true);
   });
 });
 

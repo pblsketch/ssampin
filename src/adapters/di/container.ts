@@ -157,6 +157,9 @@ import { GetAssignments } from '@usecases/assignment/GetAssignments';
 import { GetSubmissions } from '@usecases/assignment/GetSubmissions';
 import { DeleteAssignment } from '@usecases/assignment/DeleteAssignment';
 import { CopyMissingList } from '@usecases/assignment/CopyMissingList';
+import { ExtractSubmissionTexts } from '@usecases/assignment/ExtractSubmissionTexts';
+import { JsonSubmissionTextRepository } from '@adapters/repositories/JsonSubmissionTextRepository';
+import { SubmissionFileClient } from '@infrastructure/google/SubmissionFileClient';
 
 import { ManageRubrics } from '@usecases/rubric/ManageRubrics';
 import { ManageGradeAnalysis } from '@usecases/gradeAnalysis/ManageGradeAnalysis';
@@ -382,6 +385,25 @@ export const assignmentRepository: IAssignmentRepository = new JsonAssignmentRep
 export const assignmentSupabaseClient = new AssignmentSupabaseClient();
 
 export const assignmentServicePort: IAssignmentServicePort = assignmentSupabaseClient;
+
+/**
+ * 제출 파일 본문 추출기 — 뽑아 둔 본문을 **메모리에 들고 있으므로 하나만** 만든다
+ * (매번 새로 만들면 캐시가 매번 비어 같은 파일을 다시 내려받는다).
+ */
+let _extractSubmissionTexts: ExtractSubmissionTexts | null = null;
+
+export function getExtractSubmissionTexts(
+  getAccessToken: () => Promise<string>,
+): ExtractSubmissionTexts {
+  if (!_extractSubmissionTexts) {
+    _extractSubmissionTexts = new ExtractSubmissionTexts(
+      new JsonSubmissionTextRepository(storage),
+      new SubmissionFileClient(getAccessToken),
+      documentParserPort,
+    );
+  }
+  return _extractSubmissionTexts;
+}
 
 // === 서명받기 관련 ===
 

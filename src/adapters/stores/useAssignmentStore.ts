@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import type { Assignment } from '@domain/entities/Assignment';
+import type { Assignment, Submission } from '@domain/entities/Assignment';
 import type { CreateAssignmentParams } from '@usecases/assignment/CreateAssignment';
 import type { AssignmentWithStatus } from '@usecases/assignment/GetAssignments';
 import type { SubmissionDetail } from '@usecases/assignment/GetSubmissions';
+import type { ExtractSubmissionTexts } from '@usecases/assignment/ExtractSubmissionTexts';
 import {
   assignmentServicePort,
   assignmentSupabaseClient,
@@ -10,6 +11,7 @@ import {
   authenticateGoogle,
   shortLinkClient,
   assignmentRepository,
+  getExtractSubmissionTexts,
 } from '@adapters/di/container';
 
 interface AssignmentState {
@@ -47,6 +49,12 @@ interface AssignmentState {
 
   // 제출 현황 폴링 (30초 간격)
   startSubmissionPolling: (assignmentId: string) => () => void;
+
+  /**
+   * 본문을 못 뽑은 제출 파일을 다시 시도한다(교사가 부르는 경로).
+   * 이미 뽑아 둔 것은 건드리지 않으므로 눌러도 대역폭을 다시 쓰지 않는다.
+   */
+  retrySubmissionTexts: (assignmentId: string) => Promise<void>;
 
   // Google Drive 연결
   connectDrive: () => Promise<void>;
@@ -219,9 +227,77 @@ async function pushTeacherToken(
   }
 }
 
+/**
+ * 뽑아 둔 파일 본문을 제출 목록에 입힌다.
+ *
+ * ★제출 목록을 화면에 넣는 **모든 자리**에서 이걸 태워야 한다. 30초 폴링은 서버 응답으로
+ *  목록을 통째로 갈아 끼우는데(`set({ submissions: details })`), 여기서 다시 입히지 않으면
+ *  방금 채운 본문이 30초마다 사라지고 근거 창고 미리보기가 "(본문 추출 안 됨)"으로 깜빡인다.
+ */
+function withCachedTexts(
+  details: readonly SubmissionDetail[],
+  extractor: ExtractSubmissionTexts,
+): SubmissionDetail[] {
+  return details.map((detail) => {
+    if (!detail.submission) return detail;
+    const text = extractor.textFor(detail.submission);
+    if (text === undefined) return detail;
+    return { ...detail, submission: { ...detail.submission, extractedText: text } };
+  });
+}
+
+function submissionsOf(details: readonly SubmissionDetail[]): Submission[] {
+  return details.map((d) => d.submission).filter((s): s is Submission => s !== undefined);
+}
+
+/** 같은 과제에 대해 추출을 두 번 겹쳐 돌리지 않는다(화면 진입 + 폴링이 겹칠 수 있다). */
+const extractionInFlight = new Set<string>();
+
 export const useAssignmentStore = create<AssignmentState>((set, get) => {
   // 토큰 getter (기존 Google OAuth 인증 재사용)
   const getAccessToken = () => authenticateGoogle.getValidAccessToken();
+
+  /**
+   * 아직 본문이 없는 제출 파일을 내려받아 본문을 뽑는다.
+   *
+   * 화면을 막지 않는다(부르는 쪽이 기다리지 않는다). 한 건이 끝날 때마다 그 제출물만 갱신해
+   * 교사가 기다리는 동안 본문이 하나씩 채워진다. 인터넷이 없으면 조용히 대기한다.
+   */
+  async function runTextExtraction(
+    assignmentId: string,
+    details: readonly SubmissionDetail[],
+    force = false,
+  ): Promise<void> {
+    if (extractionInFlight.has(assignmentId)) return;
+    extractionInFlight.add(assignmentId);
+    try {
+      const extractor = getExtractSubmissionTexts(getAccessToken);
+      await extractor.run({
+        assignmentId,
+        submissions: submissionsOf(details),
+        knownAssignmentIds: get().assignments.map((a) => a.id),
+        force,
+        isStillWanted: () => get().selectedAssignmentId === assignmentId,
+        onExtracted: (submissionId, text) => {
+          if (text === undefined) return;
+          // 그 사이 교사가 다른 과제로 옮겼다면 남의 목록에 쓰지 않는다.
+          if (get().selectedAssignmentId !== assignmentId) return;
+          set((state) => ({
+            submissions: state.submissions.map((d) =>
+              d.submission?.id === submissionId
+                ? { ...d, submission: { ...d.submission, extractedText: text } }
+                : d,
+            ),
+          }));
+        },
+      });
+    } catch (err) {
+      // 본문 추출은 있으면 좋은 것이지 없으면 과제수합이 멈추는 것이 아니다.
+      console.warn('[Assignment] 제출 파일 본문을 뽑지 못했습니다:', err);
+    } finally {
+      extractionInFlight.delete(assignmentId);
+    }
+  }
 
   return {
     assignments: [],
@@ -362,11 +438,19 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
         const { assignments } = get();
         const current = assignments.find((a) => a.id === assignmentId) ?? null;
 
+        // 지난번에 뽑아 둔 파일 본문을 먼저 입히고(즉시), 아직 없는 것만 뒤에서 뽑는다.
+        const extractor = getExtractSubmissionTexts(getAccessToken);
+        await extractor.ready();
+        const withTexts = withCachedTexts(submissions, extractor);
+
         set({
           currentAssignment: current,
-          submissions,
+          submissions: withTexts,
           isLoading: false,
         });
+
+        // 화면 표시를 막지 않는다 — 본문은 준비되는 대로 하나씩 채워진다.
+        void runTextExtraction(assignmentId, withTexts);
       } catch (err) {
         const message = (err as Error).message;
         const isGoogleError = message.includes('Google 계정') || message.includes('Drive API');
@@ -383,6 +467,10 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
       try {
         const useCases = createAssignmentUseCases(getAccessToken);
         await useCases.deleteAssignment.execute(assignmentId);
+        // 과제를 지웠으면 그 과제로 뽑아 둔 학생 글도 함께 지운다(필요 없어진 원문을 남기지 않는다)
+        await getExtractSubmissionTexts(getAccessToken)
+          .purgeAssignment(assignmentId)
+          .catch(() => undefined);
         // 목록 새로고침
         await get().loadAssignments();
         set({ currentAssignment: null, submissions: [], isLoading: false });
@@ -441,7 +529,14 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
             }
             prevSubmissionCount = currentSubmittedCount;
 
-            set({ submissions: details });
+            // 서버 응답은 본문을 모른다 — 다시 입히지 않으면 방금 채운 본문이 여기서 지워진다.
+            const extractor = getExtractSubmissionTexts(getAccessToken);
+            await extractor.ready();
+            const withTexts = withCachedTexts(details, extractor);
+            set({ submissions: withTexts });
+
+            // 새로 들어온 제출물만 뽑는다(이미 뽑은 것은 캐시라 다시 내려받지 않는다).
+            void runTextExtraction(assignmentId, withTexts);
 
             // assignments 목록도 업데이트
             const { assignments } = get();
@@ -464,6 +559,10 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
       );
 
       return stopPolling;
+    },
+
+    retrySubmissionTexts: async (assignmentId) => {
+      await runTextExtraction(assignmentId, get().submissions, true);
     },
 
     connectDrive: async () => {

@@ -17,6 +17,8 @@ import type {
   PerformanceAssessmentResult,
   SemesterGradeResult,
 } from '@domain/entities/GradeAnalysis';
+import { extensionOf } from '@domain/rules/observationAttachmentRules';
+import { FILE_TYPE_EXTENSIONS } from '@domain/valueObjects/FileTypeRestriction';
 
 /** 변환 결과 — RecordEvidence add 입력의 부분집합(studentRef/areas/classId 는 호출자가 채움). */
 export interface ImportedEvidence {
@@ -42,13 +44,41 @@ function withDate(base: Omit<ImportedEvidence, 'date'>, date?: string): Imported
   return date !== undefined ? { ...base, date } : base;
 }
 
-/** 학생 제출 과제물 → 근거. 텍스트 제출 내용 + 파일명 참조(파일 본체·크기 숫자는 제외). */
+/**
+ * 파일 본문이 없을 때 남기는 한 줄.
+ *
+ * 조용히 파일명만 남기면 교사도 AI 도 "이 파일 안에 뭐가 있었는지"를 알 수 없고, 없는 내용을
+ * 있는 것처럼 지어낼 여지를 준다. 왜 없는지까지 적어야 교사가 다음 행동을 고른다
+ * (사진이면 눈으로 보고 관찰로 옮겨 적는 수밖에 없다).
+ */
+function missingBodyNote(fileName: string): string {
+  const ext = extensionOf(fileName);
+  return FILE_TYPE_EXTENSIONS.image.includes(ext)
+    ? '(사진 파일 — 본문 추출 불가)'
+    : '(본문 추출 안 됨)';
+}
+
+/**
+ * 학생 제출 과제물 → 근거. 텍스트 제출 내용 + **파일 본문** + 파일명 참조.
+ *
+ * 파일 본문(`extractedText`)은 과제 제출 파일을 내려받아 뽑아 둔 것이다(ExtractSubmissionTexts).
+ * 예전에는 파일명만 실려서, 같은 파일이라도 "관찰 첨부"로 올리면 본문이 들어오고 "과제수합"으로
+ * 내면 안 들어오는 비대칭이 있었다 — 그걸 없앤다.
+ *
+ * ⚠️ 파일 크기 숫자는 여전히 넣지 않는다. 다만 **본문은 학생이 쓴 글 그대로**이므로 그 안에
+ *    숫자가 있을 수 있다(첨부 `extractedText` 도 지금 같은 성질이다). 이 함수의 불가침 규칙은
+ *    "앱이 들고 있는 점수·배점 필드를 싣지 않는다"이지 "숫자가 한 글자도 없다"가 아니다.
+ */
 export function submissionToEvidence(sub: Submission, assignment?: Assignment): ImportedEvidence {
   const title = assignment?.title?.trim() || '과제';
   const parts: string[] = [`[과제: ${title}]`];
   const text = sub.textContent?.trim();
   if (text) parts.push(text);
-  if (sub.fileName) parts.push(`제출 파일: ${sub.fileName}`);
+  if (sub.fileName) {
+    parts.push(`제출 파일: ${sub.fileName}`);
+    const body = sub.extractedText?.trim();
+    parts.push(body ? body : missingBodyNote(sub.fileName));
+  }
   if (sub.isLate) parts.push('(지각 제출)');
   return withDate(
     { content: parts.join('\n'), sourceType: 'assignment', sourceId: sub.id },

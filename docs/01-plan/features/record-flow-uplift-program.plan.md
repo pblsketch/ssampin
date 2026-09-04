@@ -169,7 +169,57 @@ UI 변경은 프론트엔드 디자인 에이전트와 함께. 게이트 4종 �
 
 ## 6. 소유 밖 파일 요청 (세션들이 여기에 적는다)
 
-- (비어 있음)
+### T5 (과제수합 파일 본문 유입) — 2026-09-04
+
+**T5 가 직접 고친 소유 밖 파일 1개** (숨기지 않고 적는다):
+
+- `src/adapters/di/container.ts` — 추출기 조립 20줄 추가(import 3줄 + `getExtractSubmissionTexts`).
+  스토어에서 `await import('@infrastructure/...')` 로 우회하면 소유 밖 파일은 0개가 되지만
+  "adapters → infrastructure 금지"를 어기는 부채가 영구히 남는다(eslint 가 "DI 경유로 리팩터링 후
+  error 로 승격" 을 명시). **조립은 컨테이너에서만 가능**하므로 아키텍처 규칙을 택했다.
+  결과: 새 lint 경고 0건.
+
+**T5 가 새로 만든 파일** (소유권 표에 이름이 없어 여기 적는다 — "과제 제출 내려받기·추출 usecase" 의 구현체):
+
+- `src/domain/ports/ISubmissionFilePort.ts` · `src/domain/repositories/ISubmissionTextRepository.ts` ·
+  `src/infrastructure/google/SubmissionFileClient.ts` · `src/adapters/repositories/JsonSubmissionTextRepository.ts` ·
+  `src/usecases/assignment/ExtractSubmissionTexts.ts`(+테스트)
+
+**요청 (T6 가 처리)**
+
+1. **`submission-texts` 캐시를 학년도 전환에 함께 태울 것.** 새 저장 키(학생이 낸 글의 본문)를
+   `ARCHIVE_SCOPE_ITEMS`(`SchoolYearWizard/archiveScope.ts`)와 `YEAR_TRANSITION_FILES`
+   (`usecases/schoolYear/ExecuteYearTransition.ts`)에 **둘 다** 넣어야 한다 — 테스트가 두 목록의
+   키 집합 일치를 단언하므로 한쪽만 넣으면 게이트가 빨개진다. 지금은 T5 가 스스로 지운다(과제 삭제 시
+   동반 삭제 + 목록에 없는 과제 폐기 + 180일 만료)므로 무한 잔류는 아니지만, 학년이 바뀔 때
+   과제 본체만 보관함으로 내려가고 본문 캐시는 남는다.
+   ★**동기화(syncRegistry) 등록은 요청하지 않는다** — 학생이 쓴 원문을 기기 사이로 실어 나르는 것은
+   별개의 결정이다.
+2. **kordoc `SUPPORTED_EXTENSIONS` 에 `txt`·`md` 추가**(`electron/ipc/markdownConvert.ts`, 메인 1곳).
+   지금은 `.txt` 제출이 `unsupported` 다. **관찰 첨부로 올린 `.txt` 도 똑같이 본문이 안 들어온다**
+   (두 경로가 같은 확장자 목록을 쓴다) — 한 곳을 고치면 두 경로가 같이 낫는다. T5 는 "첨부와 같은
+   추출기를 재사용한다"는 §2 규칙을 지키려고 자기 경로에만 디코더를 넣지 않았다.
+3. **T2 — 근거 창고가 "마지막에 연 과제 1건"만 본다.** `RecordEvidenceView` 는
+   `useAssignmentStore.submissions` 를 읽는데 그 배열은 교사가 과제 상세를 연 그 과제 하나만 담는다
+   (T5 이전부터 있던 한계). 교사가 과제수합을 안 들르고 곧장 생기부로 가면 제출물 후보가 0건이다.
+4. **T2 — 본문이 없는 이유를 화면에 보여줄 것(선택).** T5 는 근거 본문 안에
+   `(본문 추출 안 됨)`·`(사진 파일 — 본문 추출 불가)` 를 남긴다. 후보 미리보기는 CSS 한 줄
+   말줄임이라 레이아웃은 안 깨지지만, 실패한 것을 교사가 다시 시도할 입구가 없다.
+   스토어에 `retrySubmissionTexts(assignmentId)` 를 만들어 뒀으니 단추만 붙이면 된다
+   (지금은 [새로고침]을 10분 뒤에 다시 누르면 재시도된다).
+5. **T2 — 기재 금지로 제외된 근거에 "왜 제외됐는지" 표시.** 파일 본문이 길어지면 학생 문장 하나
+   (예: "…대회에서 최우수상")로 근거 전체에 `excludedFromAi` 가 붙어 AI 경로에서 조용히 빠진다.
+   규칙대로 동작하는 것이지만 교사는 이유를 알 수 없다.
+
+**남기는 한계 (수용 기준 4 — 개인정보)**
+
+- 근거 창고 → 브릿지 경로는 `deidentify(content, roster)` 를 태운다. **명단(roster)에 있는 학생의
+  실명·학번은 가려지고**, 전화번호·주민번호·생일·이메일은 명단과 무관하게 형태로 가려진다.
+  그러나 **명단 밖 이름은 가리지 못한다** — 학생 글에는 다른 반 친구·가족·학원 이름이 흔하다.
+  이 한계는 첨부(`ObservationAttachment.extractedText`) 경로에 이미 있던 것과 같으며, T5 는 그
+  경로를 넓힌다. 또한 근거 본문은 **학생이 쓴 글 그대로**라 그 안에 숫자가 있을 수 있다 —
+  `evidenceImport` 의 불가침 규칙은 "앱이 들고 있는 점수·배점 필드를 싣지 않는다"이지 "숫자가 한
+  글자도 없다"가 아니다(회귀 가드는 그대로 통과).
 
 ## 7. 하지 않는 것 (이번 프로그램 밖)
 

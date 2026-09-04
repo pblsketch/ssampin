@@ -40,6 +40,43 @@
   `npm run test` 650 파일 8,564 통과(10 skipped) · `npm run regression-check` 55/55 ·
   브릿지 core 320·mcp 전부 통과.
 
+### ✅ T5 과제수합 파일 본문 유입 완료 (2026-09-04) — 병렬 세션
+
+학생이 **과제수합으로 낸 파일의 본문**이 생기부 근거 창고에 들어온다. 지금까지는 파일명만 실려서,
+같은 파일이라도 "관찰 첨부"로 올리면 본문이 들어오고 "과제수합"으로 내면 안 들어오는 비대칭이었다.
+
+- **추출기를 새로 만들지 않았다.** 첨부가 쓰는 `documentParserPort.parseBytes`(메인 kordoc) 그대로 →
+  hwp·hwpx·hwpml·pdf·xls·xlsx·docx. **IPC 변경 없음 → 재번들·재시작 불필요.**
+- 새 파일: `ISubmissionFilePort` · `ISubmissionTextRepository` · `SubmissionFileClient`(드라이브
+  `alt=media`, 기존 `driveRetry` 재사용) · `JsonSubmissionTextRepository`(`submission-texts`) ·
+  `ExtractSubmissionTexts`(+테스트 22건). 수정: `useAssignmentStore` · `evidenceImport` · `container.ts`(조립).
+- 언제 뽑나: 과제 상세를 열거나 새로고침할 때 **아직 안 뽑은 것만**. 내려받기 3개씩, **파싱은 한 건씩**
+  (kordoc 이 메인 프로세스 인라인이라 겹쳐 부르면 앱 전체가 느려진다). 화면을 막지 않고 하나씩 채워진다.
+- **리뷰(Architect·Critic)가 잡아낸 실제 결함 3건** — 코드를 읽어야만 보이는 것들:
+  1. **폴링이 30초마다 본문을 지운다.** `startSubmissionPolling` 은 `loadAssignmentDetail` 을 타지 않고
+     `set({ submissions: details })` 로 목록을 통째로 갈아 끼운다 → 제출 목록을 넣는 **두 자리 모두**에
+     캐시를 다시 입힌다.
+  2. **재제출은 `driveFileId` 가 안 바뀐다.** 서버가 같은 파일을 PATCH 로 덮어쓰고 `submitted_at` 만
+     새로 쓴다 → 캐시 열쇠 = `(submissionId, driveFileId, submittedAt, fileSize)`. 파일 id 만 봤으면
+     학생이 고쳐 낸 글이 옛 본문에 영원히 가렸다.
+  3. **확장자 금지 목록은 구멍이 크다.** 과제 형식 제한이 '전체'면 `.zip`·`.mp4` 도 제출된다 →
+     **허용 목록**(kordoc 지원 7종)으로 뒤집어, 사진·미지원·10MB 초과는 **내려받지도 않는다**.
+- 용량 상한 10MB — **서버가 제출을 10MB 로 자른다**(`submit-assignment` `MAX_FILE_SIZE`). 20MB(첨부 한도)는
+  존재할 수 없는 죽은 가드였다.
+- **못 하는 것은 실패가 아니라 대기**: 오프라인·데스크톱 아님(브라우저 `NOT_AVAILABLE`)은 시도 횟수를
+  올리지도 캐시에 남기지도 않는다. 안 그러면 한 번 오프라인이었던 제출물이 "실패"로 굳는다.
+  드라이브에서 사라진 파일(404)만 영구 확정. 실패는 즉시 1회 재시도 후 10분 쿨다운.
+- 캐시는 스스로 지운다(과제 삭제 시 동반 삭제 · 목록에 없는 과제 폐기 · 180일 만료).
+  ★**동기화 미등록**(학생 원문을 기기 사이로 옮기는 건 별개 결정) — 학년도 전환 등록은 §6 요청 1번.
+- `.txt` 는 `unsupported` 로 뒀다. kordoc 이 txt 를 못 읽는데 **첨부 경로도 똑같이 못 읽으므로**,
+  T5 경로에만 디코더를 넣으면 없애려던 비대칭이 방향만 바뀐다 → §6 요청 2번(메인 1곳 수정).
+  "텍스트 제출이 근거로 보인다"는 `Submission.textContent` 로 이미 충족돼 있다.
+- 게이트: `npx tsc --noEmit` 0 · `npm run lint` 0 error(경고 136 = 기존 그대로, **내 파일 0**) ·
+  `npm run regression-check` 55/55 · `npm run test` (아래 결과) · 소유 밖 파일·한계는 계획서 §6.
+- ★**실기기 확인 잔여**: 드라이브 `alt=media` 로 학생 제출 파일 1건 실제 내려받기. 서버가 데스크톱과
+  같은 구글 클라이언트로 토큰을 갱신하므로 `drive.file` 로 읽히는 게 맞지만(정적 확인), 이 가정이
+  틀리면 전부 404 가 된다.
+
 ## 🚀 v2.4.9 출시 완료 (2026-09-04)
 
 v2.4.8 이후 쌓인 7커밋을 한 번에 내보낸다. 기능 3건 + 수정 2건 + 계측 1건.
