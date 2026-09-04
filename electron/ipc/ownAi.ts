@@ -135,16 +135,44 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
     killTreeSync: (pid) => defaultKillTreeSync(pid),
   });
 
+  /**
+   * 방금 확인한 상태를 잠깐 들고 있는다.
+   *
+   * ★확인 한 번에 CLI 를 두 번 띄운다(버전·로그인). 그동안 앱 화면이 멈춘다.
+   * 화면 여러 곳이 같은 순간에 물어보면 그만큼 곱해지므로, 짧은 시간 안의 재질문은
+   * 방금 답을 그대로 준다. 5초는 "터미널에서 로그인하고 돌아오는 시간"보다 훨씬 짧아
+   * 로그인 직후 상태가 늦게 반영될 걱정은 없다.
+   */
+  const CHECK_CACHE_MS = 5_000;
+  const checked = new Map<OwnAiProviderId, { at: number; connection: OwnAiConnection }>();
+
+  function connectionOf(provider: OwnAiProviderId, force = false): OwnAiConnection {
+    const hit = checked.get(provider);
+    if (!force && hit && Date.now() - hit.at < CHECK_CACHE_MS) return hit.connection;
+    const connection = inspectConnection(provider, models.get(provider) ?? '', cliDeps);
+    checked.set(provider, { at: Date.now(), connection });
+    return connection;
+  }
+
+  /** 로그인·로그아웃·모델 변경처럼 **방금 바뀐 것을 아는** 자리에서 부른다. */
+  function forgetChecked(provider?: OwnAiProviderId): void {
+    if (provider) checked.delete(provider);
+    else checked.clear();
+  }
+
+  // 카드의 [다시 확인]은 방금 터미널에서 뭔가 했다는 뜻이라 캐시를 건너뛴다.
   ipcMain.handle('ownAi:status', (_e, provider: OwnAiProviderId): OwnAiConnection => {
-    return inspectConnection(provider, models.get(provider) ?? '', cliDeps);
+    return connectionOf(provider, true);
   });
 
   ipcMain.handle('ownAi:statusAll', (): OwnAiConnection[] =>
-    OWN_AI_PROVIDERS.map((p) => inspectConnection(p, models.get(p) ?? '', cliDeps)),
+    OWN_AI_PROVIDERS.map((p) => connectionOf(p)),
   );
 
   ipcMain.handle('ownAi:setModel', (_e, provider: OwnAiProviderId, model: unknown): boolean => {
     models.set(provider, typeof model === 'string' ? model : '');
+    // 상태에 고른 모델이 들어 있다 — 캐시를 두면 뱃지가 옛 모델을 계속 보여 준다.
+    forgetChecked(provider);
     return true;
   });
 
@@ -205,7 +233,8 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
         });
       });
     }
-    return inspectConnection(provider, models.get(provider) ?? '', cliDeps);
+    forgetChecked(provider);
+    return connectionOf(provider, true);
   });
 
   ipcMain.handle(
@@ -222,7 +251,8 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
           child.on('error', () => resolve());
         });
       }
-      return inspectConnection(provider, models.get(provider) ?? '', cliDeps);
+      forgetChecked(provider);
+      return connectionOf(provider, true);
     },
   );
 

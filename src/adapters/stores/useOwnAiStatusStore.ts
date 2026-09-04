@@ -61,6 +61,15 @@ export const useOwnAiStatusStore = create<OwnAiStatusState & OwnAiStatusActions>
     }
     set({ available: true, checking: true });
     try {
+      // ★고른 모델을 앱 쪽에 먼저 알린다.
+      //   모델 선택은 이 화면이 저장하지만(앱을 껐다 켜도 남는다), 실제로 CLI 를 띄우는
+      //   쪽은 그 값을 기억하지 않는다. 알려 주지 않으면 화면은 "Opus"라고 적혀 있는데
+      //   실제로는 기본 모델로 돌아가는, 눈으로는 못 잡는 어긋남이 생긴다.
+      const models = useAssistStore.getState().ownAiModels;
+      await Promise.all(
+        OWN_AI_PROVIDERS.map((p) => Promise.resolve(api.setModel(p, models[p])).catch(() => false)),
+      );
+
       const all = await api.statusAll();
       set((s) => {
         const next: Record<OwnAiProviderId, OwnAiConnection | null> = { ...s.connections };

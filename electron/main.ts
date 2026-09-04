@@ -6453,6 +6453,13 @@ process.on('uncaughtException', (err) => {
   } catch {
     /* 안전망 안에서 또 throw하면 의미 없음 */
   }
+  // ★"내 AI" 자식 프로세스도 같이 끊는다. 앱이 이 상태로 죽으면 CLI 만 살아남아
+  //   선생님 구독 사용량을 계속 먹는다 — 화면에는 아무것도 안 보이는 채로.
+  try {
+    cancelAllOwnAiRunsSync();
+  } catch {
+    /* same */
+  }
 });
 process.on('unhandledRejection', (reason) => {
   console.error('[desktopWidgetManager] unhandledRejection — native cleanup 실시:', reason);

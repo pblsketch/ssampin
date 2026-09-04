@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { MaskMapping } from '@domain/privacy/types';
-import { rosterFrom } from '@domain/rules/redactOutbound';
+import { redactQuestion, rosterFrom, rosterFromAll } from '@domain/rules/redactOutbound';
+import { createMaskSession } from '@domain/privacy/maskEngine';
 import {
   buildCorrelationHints,
   formatCorrelationHintBlock,
@@ -93,5 +94,44 @@ describe('별칭 ↔ 번호 대응 힌트', () => {
   it('힌트가 없으면 붙일 덩어리도 비어 있다', () => {
     expect(formatCorrelationHintBlock([])).toBe('');
     expect(formatCorrelationHintBlock(['［이름1］ = 담임 15번'])).toContain('［이름1］');
+  });
+});
+
+/**
+ * ★힌트를 만드는 자리와 실제로 질문을 가리는 자리가 **다르다**(화면 vs 스토어).
+ *
+ * 둘 다 "새 세션으로 질문부터 가린다"라서 별칭 번호가 맞아떨어지는데, 이건 눈에 안 보이는
+ * 약속이다. 깨지면 힌트가 **남의 학생 번호**를 가리키게 된다 — 화면에는 아무 표시도 없이.
+ * 그래서 그 약속 자체를 여기서 붙잡아 둔다.
+ */
+describe('★같은 질문·같은 명단이면 별칭이 똑같이 매겨진다', () => {
+  const roster = rosterFromAll(
+    [
+      { name: '김지훈', studentNumber: 15 },
+      { name: '박서연', studentNumber: 3 },
+    ],
+    [],
+  );
+
+  it('세션을 따로 만들어도 같은 별칭이 나온다', () => {
+    const a = redactQuestion('박서연이랑 김지훈 이번 주 어땠어?', roster, createMaskSession());
+    const b = redactQuestion('박서연이랑 김지훈 이번 주 어땠어?', roster, createMaskSession());
+
+    expect(a.masked).toBe(b.masked);
+    expect(a.mappings.map((m) => `${m.alias}=${m.original}`)).toEqual(
+      b.mappings.map((m) => `${m.alias}=${m.original}`),
+    );
+  });
+
+  it('그 별칭으로 만든 힌트가 실제 소속 번호를 가리킨다', () => {
+    const { mappings } = redactQuestion('김지훈 어땠어?', roster, createMaskSession());
+    const hints = buildCorrelationHints(mappings, (name) =>
+      name === '김지훈' ? [{ scope: '담임', number: 15 }] : [],
+    );
+
+    expect(hints).toHaveLength(1);
+    expect(hints[0]).toContain('담임 15번');
+    // 힌트에도 실명은 없다.
+    expect(hints[0]).not.toContain('김지훈');
   });
 });

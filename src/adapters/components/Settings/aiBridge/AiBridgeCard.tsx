@@ -155,6 +155,18 @@ export function AiBridgeCard() {
       setAllowGradeWrite(s.allowGradeWrite);
       setAllowRecordWrite(s.allowRecordWrite);
       setLiveServerRunning(s.running);
+      // ★"켰습니다"라고 말해 놓고 안 켜지면 안 된다. 쓰기를 켜려면 앱 안의 통로(서버)가
+      //   떠야 하는데, 포트가 막히면 못 뜬다. 그럴 때 앱은 **켜지 않고** 옛 상태를 돌려준다.
+      const notApplied = (Object.keys(partial) as (keyof CapPartial)[]).some(
+        (k) => partial[k] !== undefined && s[k] !== partial[k],
+      );
+      if (notApplied) {
+        showToast(
+          '설정을 켜지 못했습니다. 앱을 다시 켜거나, 다른 프로그램이 포트를 쓰고 있는지 확인해 주세요.',
+          'error',
+        );
+        return;
+      }
       showToast(successMsg, 'success');
     } catch (err) {
       showToast(`설정 실패: ${err instanceof Error ? err.message : String(err)}`, 'error');

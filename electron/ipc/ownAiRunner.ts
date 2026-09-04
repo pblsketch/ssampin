@@ -186,6 +186,9 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
             cwd: deps.cwd,
             ...(req.model === undefined ? {} : { model: req.model }),
             ...(req.bridge === undefined ? {} : { bridge: req.bridge }),
+            ...(req.appendSystemPrompt === undefined
+              ? {}
+              : { appendSystemPrompt: req.appendSystemPrompt }),
           });
 
     const prev = activeUntil;

@@ -113,6 +113,17 @@ export const OWN_AI_ERROR_MESSAGES: Readonly<
   },
 };
 
+/**
+ * 실패했을 때 쌤핀 AI 가 대신 답해도 되는가.
+ *
+ * ★`cancelled` 만 안 된다. 선생님이 [중단]을 눌렀는데 곧바로 다른 데로 같은 질문을 보내면,
+ * 그건 멈춘 게 아니라 **다른 곳으로 보낸** 것이다. 나머지(설치 안 됨·로그인 없음·한도 등)는
+ * "그래도 답은 받고 싶다"가 자연스러운 상황이라 넘긴다.
+ */
+export function canFallbackToSolar(kind: OwnAiErrorKind): boolean {
+  return kind !== 'cancelled';
+}
+
 /** "2.1.258 (Claude Code)" · "codex-cli 0.144.4" 처럼 섞여 오는 출력에서 첫 버전을 뽑는다. */
 export function parseCliVersion(output: string): string | null {
   const m = /(\d+)\.(\d+)\.(\d+)/.exec(output);
@@ -252,6 +263,14 @@ export interface CodexArgvOptions {
   readonly prompt: string;
   readonly cwd: string;
   readonly model?: string;
+  /**
+   * 시스템 프롬프트 뒤에 덧붙일 지시 + 대응 힌트.
+   *
+   * ★codex 에는 claude 의 `--append-system-prompt` 에 해당하는 옵션이 없다. 파일로 넘기는
+   * 길(`experimental_instructions_file`)은 있지만, 생기부 작성 규정을 디스크에 쓰지 않기로
+   * 했으므로(D7) 쓰지 않는다. 그래서 **프롬프트 맨 앞에 붙여** 보낸다.
+   */
+  readonly appendSystemPrompt?: string;
   /** 브릿지 실행 정보. `panel` 에서만 넘긴다. */
   readonly bridge?: {
     readonly command: string;
@@ -289,6 +308,8 @@ export function buildCodexArgv(o: CodexArgvOptions): readonly string[] {
     argv.push('-c', `${key}.args=[${args}]`);
     argv.push('-c', `${key}.env={${env}}`);
   }
-  argv.push(o.prompt);
+  // ★붙이는 자리가 맨 앞인 이유: 규정은 "이 조건으로 써라"라서 재료보다 먼저 와야 한다.
+  //   claude 는 시스템 자리에 들어가므로 이미 앞이다 — 두 CLI 의 순서를 맞춘다.
+  argv.push(o.appendSystemPrompt ? `${o.appendSystemPrompt}\n\n---\n\n${o.prompt}` : o.prompt);
   return argv;
 }

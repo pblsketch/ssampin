@@ -216,3 +216,41 @@ describe('문구와 모델 목록', () => {
     }
   });
 });
+
+describe('★codex 도 규정·힌트를 함께 보낸다', () => {
+  /**
+   * codex 에는 claude 의 `--append-system-prompt` 에 해당하는 옵션이 없다. 안 붙이고 두면
+   * **생기부 작성 규정이 통째로 빠진 채** 초안이 나간다 — codex 를 쓰는 선생님만 조용히
+   * 규정 없는 초안을 받게 된다. 그래서 프롬프트 앞에 붙여 보낸다.
+   */
+  it('규정을 프롬프트보다 **앞에** 붙인다', () => {
+    const argv = buildCodexArgv({
+      kind: 'draft',
+      prompt: '학생: ［이름1］',
+      cwd: 'E:\\run',
+      appendSystemPrompt: '[작성 규정]',
+    });
+    const last = argv[argv.length - 1] ?? '';
+
+    expect(last.indexOf('[작성 규정]')).toBeLessThan(last.indexOf('학생: ［이름1］'));
+  });
+
+  it('규정과 재료를 눈에 띄게 갈라 둔다 — 모델이 둘을 섞어 읽지 않게', () => {
+    const argv = buildCodexArgv({
+      kind: 'draft',
+      prompt: '학생: ［이름1］',
+      cwd: 'E:\\run',
+      appendSystemPrompt: '[작성 규정]',
+    });
+
+    expect(argv[argv.length - 1]).toBe(
+      '[작성 규정]' + '\n' + '\n' + '---' + '\n' + '\n' + '학생: ［이름1］',
+    );
+  });
+
+  it('붙일 게 없으면 프롬프트만 간다 — 빈 구분선을 만들지 않는다', () => {
+    const argv = buildCodexArgv({ kind: 'draft', prompt: '학생: ［이름1］', cwd: 'E:\\run' });
+
+    expect(argv[argv.length - 1]).toBe('학생: ［이름1］');
+  });
+});

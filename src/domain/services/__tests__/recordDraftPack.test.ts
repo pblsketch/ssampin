@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildRecordDraftPack,
   summarizeExclusions,
+  DRAFT_PACK_MAX_EVIDENCE_CHARS,
   type DraftPackEvidence,
   type DraftPackInput,
 } from '@domain/services/recordDraftPack';
@@ -147,5 +148,45 @@ describe('★꾸러미 어디에도 실명이 없다', () => {
     );
     for (const n of names) expect(pack.text).not.toContain(n);
     expect(pack.text).toContain('［이름1］');
+  });
+});
+
+describe('★분량 상한 — 넘치면 실행 자체가 실패한다(윈도우 명령줄 32,767자)', () => {
+  /** 두 개는 못 들어가는 길이 — 하나만 실리면 상한 안, 둘이면 넘는다. */
+  const huge = 'ㄱ'.repeat(Math.floor(DRAFT_PACK_MAX_EVIDENCE_CHARS * 0.6));
+
+  it('상한을 넘는 근거는 빼고, 뺐다고 말한다', () => {
+    const pack = buildRecordDraftPack(
+      input({ evidences: [ev({ id: 'e1', content: huge }), ev({ id: 'e2', content: huge })] }),
+    );
+
+    expect(pack.includedCount).toBe(1);
+    expect(pack.exclusions).toEqual([{ evidenceId: 'e2', reason: 'too-long' }]);
+    expect(summarizeExclusions(pack.exclusions)).toContain('분량');
+  });
+
+  it('★뒤에 있는 짧은 근거는 살린다 — 하나 길다고 나머지를 통째로 버리지 않는다', () => {
+    const pack = buildRecordDraftPack(
+      input({
+        evidences: [
+          ev({ id: 'e1', content: huge }),
+          ev({ id: 'e2', content: huge }),
+          ev({ id: 'e3', content: '모둠에서 자료를 정리했다.' }),
+        ],
+      }),
+    );
+
+    expect(pack.includedCount).toBe(2);
+    expect(pack.text).toContain('모둠에서 자료를 정리했다');
+  });
+
+  it('평범한 분량은 아무것도 빼지 않는다', () => {
+    const many = Array.from({ length: 30 }, (_, i) =>
+      ev({ id: `e${i}`, content: '수업에서 스스로 질문을 만들어 왔다.' }),
+    );
+    const pack = buildRecordDraftPack(input({ evidences: many }));
+
+    expect(pack.includedCount).toBe(30);
+    expect(pack.exclusions).toEqual([]);
   });
 });

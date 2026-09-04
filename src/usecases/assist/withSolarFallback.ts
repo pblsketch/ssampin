@@ -13,6 +13,20 @@
  */
 import type { AssistAnswer, AssistPort, AssistRequestPayload } from '@domain/ports/AssistPort';
 import { AssistBlockedError } from '@domain/ports/AssistPort';
+import { canFallbackToSolar } from '@domain/rules/ownAiCliRules';
+import type { OwnAiErrorKind } from '@domain/entities/OwnAiProvider';
+
+/**
+ * 오류가 "내 AI 실행 오류"면 그 갈래를 꺼낸다.
+ *
+ * ★`instanceof` 를 쓰지 않는 이유: 그 오류 클래스는 infrastructure 에 있고, 유스케이스는
+ * infrastructure 를 import 할 수 없다(아키텍처 규칙). 모양으로 알아본다.
+ */
+function ownAiErrorKind(error: unknown): OwnAiErrorKind | null {
+  const e = error as { name?: unknown; kind?: unknown } | null;
+  if (e?.name !== 'OwnAiRunError' || typeof e.kind !== 'string') return null;
+  return e.kind as OwnAiErrorKind;
+}
 
 export interface SolarFallbackOptions {
   /** 선생님이 쌤핀 AI 사용에 동의했는가(실험실 토글). */
@@ -39,6 +53,10 @@ export function withSolarFallback(
       } catch (error) {
         // 전송이 막힌 것(개인정보 등)은 폴백 대상이 아니다 — 다른 데로 보내도 똑같이 막혀야 한다.
         if (error instanceof AssistBlockedError) throw error;
+        // ★[중단]을 누른 것도 폴백하지 않는다 — 멈추라는 말을 "다른 데로 보내라"로
+        //   읽으면 안 된다.
+        const kind = ownAiErrorKind(error);
+        if (kind !== null && !canFallbackToSolar(kind)) throw error;
         if (!options.solarEnabled()) throw error;
 
         options.onFallback?.(error);

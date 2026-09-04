@@ -44,7 +44,19 @@ export interface DraftPackInput {
 }
 
 /** 왜 빠졌는지 — 화면이 "제외됨 N건"과 사유를 보여 준다. */
-export type DraftPackExclusionReason = 'teacher' | 'prohibited' | 'empty';
+export type DraftPackExclusionReason = 'teacher' | 'prohibited' | 'empty' | 'too-long';
+
+/**
+ * 근거를 실을 수 있는 글자 수 상한.
+ *
+ * ★윈도우는 프로그램에 넘기는 명령줄 전체가 32,767자를 넘으면 **실행 자체가 실패한다.**
+ * 꾸러미는 그 명령줄에 실려 가므로, 넘치면 "실행이 도중에 멈췄어요"라는 엉뚱한 안내가
+ * 뜨고 다시 눌러도 똑같이 실패한다. 그래서 넘칠 근거를 미리 빼고 **뺐다고 말한다.**
+ *
+ * 12,000자는 한 학생분 근거로는 넉넉하고(관찰 기록 수십 건), 나머지 20,000자를
+ * 작성 규정과 실행 옵션 몫으로 남긴다.
+ */
+export const DRAFT_PACK_MAX_EVIDENCE_CHARS = 12_000;
 
 export interface DraftPackExclusion {
   readonly evidenceId: string;
@@ -65,6 +77,7 @@ export const DRAFT_PACK_EXCLUSION_LABELS: Readonly<Record<DraftPackExclusionReas
   teacher: '선생님이 보내지 않기로 표시함',
   prohibited: '기재 금지 항목이 들어 있음',
   empty: '내용이 비어 있음',
+  'too-long': '한 번에 보낼 수 있는 분량을 넘음',
 };
 
 function hitsToCategories(hits: readonly ProhibitedHit[]): readonly string[] {
@@ -78,6 +91,7 @@ function hitsToCategories(hits: readonly ProhibitedHit[]): readonly string[] {
  * 1. 선생님이 직접 뺀 것
  * 2. 내용이 빈 것
  * 3. 기재 금지 항목이 들어 있는 것
+ * 4. 앞의 근거들로 이미 분량이 차 버린 것
  *
  * 문장 마지막에 **근거로 되짚기** 지시를 붙인다 — 실측에서 이 지시를 뒤쪽에 두었을 때만
  * 모델이 얇은 근거로 지어내기를 멈췄다(같은 분석 문서 §3-1, 최신성 효과).
@@ -85,6 +99,7 @@ function hitsToCategories(hits: readonly ProhibitedHit[]): readonly string[] {
 export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   const exclusions: DraftPackExclusion[] = [];
   const lines: string[] = [];
+  let usedChars = 0;
 
   for (const e of input.evidences) {
     if (e.excludedFromAi === true) {
@@ -105,7 +120,14 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
       });
       continue;
     }
-    lines.push(e.date ? `- (${e.date}) ${content}` : `- ${content}`);
+    const line = e.date ? `- (${e.date}) ${content}` : `- ${content}`;
+    if (usedChars + line.length > DRAFT_PACK_MAX_EVIDENCE_CHARS) {
+      // 여기서 멈추지 않고 계속 도는 이유: 뒤에 짧은 근거가 있으면 그건 실을 수 있다.
+      exclusions.push({ evidenceId: e.id, reason: 'too-long' });
+      continue;
+    }
+    usedChars += line.length + 1; // 줄바꿈 몫
+    lines.push(line);
   }
 
   const parts: string[] = [];

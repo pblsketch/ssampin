@@ -113,3 +113,42 @@ describe('폴백을 화면에 알린다', () => {
     expect(seen).toEqual([err]);
   });
 });
+
+describe('★[중단]을 누른 것은 폴백하지 않는다', () => {
+  /** 실행 오류의 모양만 흉내 낸다(유스케이스는 그 클래스를 import 하지 않는다). */
+  function runError(kind: string): Error & { kind: string } {
+    const e = new Error('own ai') as Error & { kind: string };
+    e.name = 'OwnAiRunError';
+    e.kind = kind;
+    return e;
+  }
+
+  it('중단이면 쌤핀 AI 로 다시 묻지 않는다 — 멈추라는 말을 옮겨 보내면 안 된다', async () => {
+    const solar = port(ok('solar'));
+    const composite = withSolarFallback(port(boom(runError('cancelled'))), solar, {
+      solarEnabled: () => true,
+    });
+
+    await expect(composite.ask(PAYLOAD)).rejects.toMatchObject({ kind: 'cancelled' });
+    expect(solar.calls).toBe(0);
+  });
+
+  it('한도에 닿은 것은 폴백한다 — "이어서 답할까요?"가 자연스러운 상황이다', async () => {
+    const solar = port(ok('solar'));
+    const composite = withSolarFallback(port(boom(runError('usage-limit'))), solar, {
+      solarEnabled: () => true,
+    });
+
+    await expect(composite.ask(PAYLOAD)).resolves.toMatchObject({ degraded: 'own-ai-fallback' });
+    expect(solar.calls).toBe(1);
+  });
+
+  it('갈래를 모르는 오류는 예전처럼 폴백한다', async () => {
+    const solar = port(ok('solar'));
+    const composite = withSolarFallback(port(boom(new Error('unknown'))), solar, {
+      solarEnabled: () => true,
+    });
+
+    await expect(composite.ask(PAYLOAD)).resolves.toMatchObject({ degraded: 'own-ai-fallback' });
+  });
+});

@@ -18,6 +18,8 @@ const h = vi.hoisted(() => ({
     applyWrite: null as
       | null
       | ((req: unknown) => Promise<{ ok: boolean; status?: number; ref?: string }>),
+    /** true 면 서버가 못 뜬다(포트 점유·권한 등 실제로 일어나는 상황). */
+    startFails: false,
   },
 }));
 
@@ -32,18 +34,20 @@ vi.mock('electron', () => ({
 // startLiveSyncServer mock — applyWrite 델리게이트를 캡처하고 가짜 핸들을 돌려준다.
 vi.mock('./aiBridgeLiveSync', () => ({
   startLiveSyncServer: async (opts: { applyWrite: (req: unknown) => Promise<unknown> }) => {
+    if (h.state.startFails) throw new Error('EADDRINUSE');
     h.state.applyWrite = opts.applyWrite as typeof h.state.applyWrite;
     return { port: 1234, token: 'tok', stop: async () => undefined };
   },
 }));
 
 import { registerLiveSyncHost } from './aiBridgeLiveSyncHost';
-import { writeCapability, type Capability } from './aiBridgeLiveSyncCore';
+import { readCapability, writeCapability, type Capability } from './aiBridgeLiveSyncCore';
 
 let dir: string;
 beforeEach(() => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sab-host-'));
   h.state.applyWrite = null;
+  h.state.startFails = false;
   h.ipcHandlers.clear();
   h.ipcListeners.clear();
 });
@@ -137,6 +141,75 @@ describe('registerLiveSyncHost — #7 호스트 멱등 dedup 내용 결합', () 
     expect(sends).toBe(1);
     await aw({ domain: 'todos', op: 'create', idempotencyKey: 'k', data: { text: 'B' } }); // 다른 내용 → 보냄(삼키지 않음)
     expect(sends).toBe(2);
+    await host.stop();
+  });
+});
+
+describe('★쓰기 토글은 서버가 실제로 뜬 뒤에만 기록된다', () => {
+  /** 설정 카드의 토글을 누른 것과 같다. */
+  async function setCapability(patch: Record<string, boolean>) {
+    const fn = h.ipcHandlers.get('aiBridge:setCapability');
+    expect(fn).toBeTruthy();
+    return (await fn!({}, patch)) as {
+      running: boolean;
+      allowWrite: boolean;
+      allowRecordWrite: boolean;
+    };
+  }
+
+  it('서버가 뜨면 켜진다', async () => {
+    const host = registerLiveSyncHost({ getMainWindow: () => null, dataDir: dir });
+
+    const status = await setCapability({ allowWrite: true });
+
+    expect(status).toMatchObject({ running: true, allowWrite: true });
+    expect(readCapability(dir).allowWrite).toBe(true);
+    await host.stop();
+  });
+
+  it('★서버가 못 뜨면 파일에 기록하지 않는다 — 브릿지가 직접 파일에 쓰는 창이 생기지 않게', async () => {
+    const host = registerLiveSyncHost({ getMainWindow: () => null, dataDir: dir });
+    h.state.startFails = true;
+
+    const status = await setCapability({ allowWrite: true });
+
+    expect(status).toMatchObject({ running: false, allowWrite: false });
+    // 이게 핵심이다 — 파일에 true 가 남으면 앱이 꺼진 것처럼 보여 브릿지가 그냥 쓴다.
+    expect(readCapability(dir).allowWrite).toBe(false);
+    await host.stop();
+  });
+
+  it('★생기부·채점 토글도 같은 규칙을 따른다', async () => {
+    const host = registerLiveSyncHost({ getMainWindow: () => null, dataDir: dir });
+    h.state.startFails = true;
+
+    await setCapability({ allowRecordWrite: true });
+    await setCapability({ allowGradeWrite: true });
+
+    expect(readCapability(dir).allowRecordWrite).toBe(false);
+    expect(readCapability(dir).allowGradeWrite).toBe(false);
+    await host.stop();
+  });
+
+  it('서버가 필요 없는 토글(읽기)은 서버 실패와 무관하게 켜진다', async () => {
+    const host = registerLiveSyncHost({ getMainWindow: () => null, dataDir: dir });
+    h.state.startFails = true;
+
+    await setCapability({ allowContent: true });
+
+    expect(readCapability(dir).allowContent).toBe(true);
+    await host.stop();
+  });
+
+  it('끄는 것은 언제나 통한다 — 안전한 방향은 막지 않는다', async () => {
+    writeCapability(dir, caps({ allowWrite: true }));
+    const host = registerLiveSyncHost({ getMainWindow: () => null, dataDir: dir });
+    await vi.waitFor(() => expect(h.state.applyWrite).not.toBeNull());
+
+    const status = await setCapability({ allowWrite: false });
+
+    expect(status).toMatchObject({ running: false, allowWrite: false });
+    expect(readCapability(dir).allowWrite).toBe(false);
     await host.stop();
   });
 });

@@ -231,12 +231,30 @@ export function registerLiveSyncHost(deps: LiveSyncHostDeps): LiveSyncHost {
     allowGradeWrite?: boolean;
     allowRecordWrite?: boolean;
   }): Promise<CapabilityStatus> {
-    // 부분 갱신 — 다른 기능의 토글(이 함수가 모르는 필드)도 보존(클로버 방지).
-    const next = mergeCapability(deps.dataDir, partial);
+    // 켠 뒤의 상태를 **먼저 계산만** 한다. 아직 파일에 쓰지 않는다.
+    const current = readCapability(deps.dataDir);
     // ★채점(allowGradeWrite)도 서버가 필요하다 — 채점 쓰기는 loopback 을 거치지 않고
     //   앱이 없을 때 파일에 직접 쓴다. 서버가 떠 있어야 브릿지가 거부한다.
-    if (next.allowWrite || next.allowRecordWrite || next.allowGradeWrite) await startServer();
-    else await stopServer();
+    const willNeedServer =
+      (partial.allowWrite ?? current.allowWrite) ||
+      (partial.allowRecordWrite ?? current.allowRecordWrite) ||
+      (partial.allowGradeWrite ?? current.allowGradeWrite);
+
+    if (willNeedServer) {
+      // ★순서가 안전을 만든다. 파일을 먼저 켜면, 서버가 못 뜬 그 사이에 브릿지는
+      //   "앱이 꺼졌다"고 보고 파일에 **직접** 쓴다 — 미리보기도 [실행] 도 없이.
+      //   그래서 서버가 실제로 떴는지 확인한 뒤에만 기록한다.
+      await startServer();
+      if (handle === null) {
+        console.error('[aiBridge] 서버를 못 띄워 쓰기 토글을 켜지 않았습니다');
+        return capabilityStatus();
+      }
+    }
+
+    // 부분 갱신 — 다른 기능의 토글(이 함수가 모르는 필드)도 보존(클로버 방지).
+    mergeCapability(deps.dataDir, partial);
+    // 끄는 쪽은 순서가 반대다 — 파일을 먼저 끄면 서버가 남아 있어도 브릿지가 거부한다.
+    if (!willNeedServer) await stopServer();
     return capabilityStatus();
   }
 
