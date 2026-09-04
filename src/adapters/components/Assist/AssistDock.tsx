@@ -27,6 +27,7 @@ import {
   useOwnAiStatusStore,
 } from '@adapters/stores/useOwnAiStatusStore';
 import { answererLabel } from './answererLabels';
+import { OwnAiProposalCards } from './OwnAiProposalCards';
 
 /**
  * 제안 칩 — **장식이 아니라 1층 방어**다.
@@ -255,6 +256,10 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
       ) : (
         <AssistThread turns={turns} onRunProposal={onRunProposal} onRunOne={onRunOne} />
       )}
+
+      {/* "내 AI" 실행 중 브릿지가 보낸 저장 요청 — [실행] 을 눌러야 저장된다.
+          입력부 바로 위에 둔다: 다음 질문을 치기 전에 반드시 눈에 들어와야 한다. */}
+      <OwnAiProposalCards />
 
       {/* 입력부 */}
       <div className="shrink-0 border-t border-sp-border p-3">

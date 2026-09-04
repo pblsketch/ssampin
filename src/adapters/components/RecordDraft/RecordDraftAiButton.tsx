@@ -15,6 +15,7 @@
 import { useCallback, useMemo, useState } from 'react';
 
 import { useAssistStore } from '@adapters/stores/useAssistStore';
+import { fetchRecordPromptL1 } from '@adapters/di/container';
 import {
   useConnectedOwnAiProviders,
   useOwnAiStatusStore,
@@ -106,6 +107,7 @@ async function askOnce(
   api: OwnAiRunApi,
   provider: 'claude' | 'codex',
   prompt: string,
+  appendSystemPrompt: string,
 ): Promise<string> {
   const runId = newRunId();
   return new Promise<string>((resolve, reject) => {
@@ -124,7 +126,7 @@ async function askOnce(
       }
     });
     void api
-      .run({ runId, provider, kind: 'draft', prompt })
+      .run({ runId, provider, kind: 'draft', prompt, appendSystemPrompt })
       .then((r) => {
         if (!r.ok && !settled) {
           settled = true;
@@ -154,6 +156,7 @@ export function RecordDraftAiButton({
   const provider = useAssistStore((s) => s.provider);
   const connected = useConnectedOwnAiProviders();
   const setUsage = useOwnAiStatusStore((s) => s.setUsage);
+  const installId = useAssistStore((s) => s.installId);
 
   /** 실제로 쓸 공급자 — 고른 것이 연결돼 있어야 한다. 아니면 연결된 첫 번째. */
   const runProvider = useMemo(() => {
@@ -182,13 +185,25 @@ export function RecordDraftAiButton({
       if (!api || !runProvider) return;
       const total = startedWith;
 
+      // ★규정(1층 프롬프트)을 먼저 받는다 — 없으면 초안을 만들지 않는다(D7).
+      //   본문은 여기 지역 변수에만 있고, 디스크에 쓰지 않는다.
+      const systemPrompt = await fetchRecordPromptL1(installId);
+      if (systemPrompt === null) {
+        setPhase({
+          kind: 'stopped',
+          message: OWN_AI_ERROR_MESSAGES['prompt-unavailable'].draft,
+          queue,
+        });
+        return;
+      }
+
       for (let i = 0; i < queue.length; i += 1) {
         const t = queue[i];
         if (!t) continue;
         setPhase({ kind: 'running', done: total - queue.length + i, total, name: t.displayName });
         const pack = buildPrompt(t);
         try {
-          const text = await askOnce(api, runProvider, pack.text);
+          const text = await askOnce(api, runProvider, pack.text, systemPrompt);
           setPhase({
             kind: 'preview',
             studentRef: t.studentRef,
@@ -210,7 +225,7 @@ export function RecordDraftAiButton({
       }
       setPhase({ kind: 'idle' });
     },
-    [buildPrompt, runProvider],
+    [buildPrompt, runProvider, installId],
   );
 
   const start = (targets: readonly DraftTarget[]): void => {
@@ -256,7 +271,7 @@ export function RecordDraftAiButton({
         <button
           type="button"
           onClick={() => setPhase({ kind: 'picking' })}
-          className="flex w-fit items-center gap-1 rounded-md bg-sp-accent/10 px-2 py-1 text-[0.6rem] font-medium text-sp-accent ring-1 ring-sp-accent/20 hover:bg-sp-accent/20"
+          className="flex w-fit items-center gap-1 rounded-md bg-sp-card px-2 py-1 text-[0.6rem] font-medium text-sp-accent ring-1 ring-sp-border hover:bg-sp-surface"
         >
           <span className="material-symbols-outlined text-[0.75rem]">auto_awesome</span>
           AI로 초안 쓰기
@@ -340,7 +355,7 @@ export function RecordDraftAiButton({
             <button
               type="button"
               onClick={() => void runQueue(phase.queue, phase.queue.length)}
-              className="mt-1 rounded-md bg-sp-accent/10 px-2 py-0.5 text-[0.6rem] font-medium text-sp-accent"
+              className="mt-1 rounded-md bg-sp-bg px-2 py-0.5 text-[0.6rem] font-medium text-sp-accent ring-1 ring-sp-border"
             >
               이어 하기 ({phase.queue.length}명 남음)
             </button>

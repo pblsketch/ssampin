@@ -6,15 +6,22 @@
  * ★가장 중요한 것: **구독이 연결돼 있지 않으면 요청을 보내지 않는다.** 생기부 초안은
  *   쌤핀 AI(Solar)로 만들지 않는다 — 폴백이 없다.
  */
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { cleanup, render, screen, fireEvent, act } from '@testing-library/react';
+
+/**
+ * 1층 프롬프트는 **실행 시점에 서버에서** 받아 온다(D7). 테스트에서는 그 왕복을 흉내 낸다.
+ * `null` 을 주면 "규정을 못 받아 온" 상황이 된다 — 그때 초안을 만들지 않는지가 핵심이다.
+ */
+const fetchRecordPromptL1 = vi.hoisted(() => vi.fn());
+vi.mock('@adapters/di/container', () => ({ fetchRecordPromptL1 }));
 
 import { RecordDraftAiButton, type DraftTarget } from '../RecordDraftAiButton';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { useOwnAiStatusStore } from '@adapters/stores/useOwnAiStatusStore';
 import type { OwnAiConnection } from '@domain/entities/OwnAiProvider';
 
-const runCalls: { prompt: string }[] = [];
+const runCalls: { prompt: string; appendSystemPrompt?: string }[] = [];
 let eventHandler: ((e: unknown) => void) | null = null;
 /** 컴포넌트가 만든 runId — 테스트가 그 id 로 완료·오류를 흘려보낸다. */
 let lastRunId = '';
@@ -34,13 +41,20 @@ function target(over: Partial<DraftTarget> = {}): DraftTarget {
 }
 
 beforeEach(() => {
+  fetchRecordPromptL1.mockReset();
+  fetchRecordPromptL1.mockResolvedValue('[생기부 작성 규정 본문]');
   runCalls.length = 0;
   eventHandler = null;
   lastRunId = '';
   (globalThis as { electronAPI?: unknown }).electronAPI = {
     ownAi: {
-      run: async (p: { prompt: string; runId: string }) => {
-        runCalls.push({ prompt: p.prompt });
+      run: async (p: { prompt: string; runId: string; appendSystemPrompt?: string }) => {
+        runCalls.push({
+          prompt: p.prompt,
+          ...(p.appendSystemPrompt === undefined
+            ? {}
+            : { appendSystemPrompt: p.appendSystemPrompt }),
+        });
         lastRunId = p.runId;
         return { ok: true };
       },
@@ -60,6 +74,18 @@ afterEach(() => {
   cleanup();
   delete (globalThis as { electronAPI?: unknown }).electronAPI;
 });
+
+/**
+ * 생성 시작 버튼을 누른다.
+ *
+ * ★`fireEvent.click` 만으로는 부족하다 — 이제 눌린 뒤 **프롬프트를 받아 오는 왕복**이
+ * 한 번 끼어들기 때문에, 그 약속이 풀릴 때까지 기다려야 run 이 불린다.
+ */
+async function startWith(name: RegExp | string): Promise<void> {
+  await act(async () => {
+    fireEvent.click(screen.getByRole('button', { name }));
+  });
+}
 
 describe('★구독이 없으면 요청을 보내지 않는다 (D2)', () => {
   it('연결 전에는 눌러도 안내만 하고 실행이 0회다', () => {
@@ -116,7 +142,7 @@ describe('★보내는 꾸러미에 실명이 없고 기재 금지가 빠진다 
     useOwnAiStatusStore.setState({ connections: { claude: connected(), codex: null } });
   });
 
-  it('실명 대신 별칭이 나가고, 금지 항목이 든 근거는 빠진다', () => {
+  it('실명 대신 별칭이 나가고, 금지 항목이 든 근거는 빠진다', async () => {
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
@@ -130,7 +156,7 @@ describe('★보내는 꾸러미에 실명이 없고 기재 금지가 빠진다 
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
-    fireEvent.click(screen.getByRole('button', { name: '이 학생만' }));
+    await startWith('이 학생만');
 
     expect(runCalls).toHaveLength(1);
     const prompt = runCalls[0]?.prompt ?? '';
@@ -166,7 +192,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
-    fireEvent.click(screen.getByRole('button', { name: '이 학생만' }));
+    await startWith('이 학생만');
     await finishWith('탐구 흐름을 이어 쓴 초안.');
 
     expect(screen.getByText(/미리보기/)).toBeTruthy();
@@ -185,7 +211,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
-    fireEvent.click(screen.getByRole('button', { name: '이 학생만' }));
+    await startWith('이 학생만');
     await finishWith('탐구 흐름을 이어 쓴 초안.');
 
     await act(async () => {
@@ -207,7 +233,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
-    fireEvent.click(screen.getByRole('button', { name: '이 학생만' }));
+    await startWith('이 학생만');
     await finishWith('새 문장.');
 
     expect(screen.getByRole('button', { name: '바꾸기' })).toBeTruthy();
@@ -227,7 +253,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
-    fireEvent.click(screen.getByRole('button', { name: /남은 학생 모두/ }));
+    await startWith(/남은 학생 모두/);
 
     await act(async () => {
       eventHandler?.({ type: 'error', runId: lastRunId, kind: 'usage-limit' });
@@ -235,5 +261,58 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 저장된다 (D4)
 
     expect(screen.getByText(/한도/)).toBeTruthy();
     expect(screen.getByRole('button', { name: /이어 하기 \(2명 남음\)/ })).toBeTruthy();
+  });
+});
+
+describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 받는다 (D7)', () => {
+  beforeEach(() => {
+    useAssistStore.setState({ ownAiEnabled: true, provider: 'claude' });
+    useOwnAiStatusStore.setState({ connections: { claude: connected(), codex: null } });
+  });
+
+  it('받아 온 규정을 CLI 에 함께 보낸다 — 규정 없이 쓴 초안은 만들지 않는다', async () => {
+    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith('이 학생만');
+
+    expect(runCalls).toHaveLength(1);
+    expect(runCalls[0]?.appendSystemPrompt).toBe('[생기부 작성 규정 본문]');
+  });
+
+  it('★규정을 못 받아 오면 실행이 0회다 — 초안을 만들지 않고 안내만 한다', async () => {
+    fetchRecordPromptL1.mockResolvedValue(null);
+    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith('이 학생만');
+
+    expect(runCalls).toHaveLength(0);
+    expect(screen.getByText(/규정을 서버에서 받아오지 못해/)).toBeTruthy();
+  });
+
+  it('규정을 못 받아도 학생을 잃지 않는다 — [이어 하기] 로 전원 다시 시도한다', async () => {
+    fetchRecordPromptL1.mockResolvedValue(null);
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        target={target()}
+        remaining={[target({ studentRef: 's2', displayName: '박서연' })]}
+        onApply={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith(/남은 학생 모두/);
+
+    expect(screen.getByRole('button', { name: /이어 하기 \(2명 남음\)/ })).toBeTruthy();
+  });
+
+  it('★규정 본문을 화면에 보여 주지 않는다 — 받아만 쓰고 흘리지 않는다', async () => {
+    fetchRecordPromptL1.mockResolvedValue('절대로 화면에 뜨면 안 되는 규정 본문');
+    const { container } = render(
+      <RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith('이 학생만');
+
+    expect(container.textContent).not.toContain('절대로 화면에 뜨면 안 되는');
   });
 });

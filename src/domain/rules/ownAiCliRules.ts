@@ -101,6 +101,11 @@ export const OWN_AI_ERROR_MESSAGES: Readonly<
       '저장 준비에 실패해서 실행하지 않았어요. 다시 시도하거나, 설정 > AI 연결에서 쓰기를 끄면 조회만 할 수 있어요.',
     draft: '내 AI 를 준비하지 못했어요. 잠시 뒤 다시 시도해 주세요.',
   },
+  'prompt-unavailable': {
+    panel: '지금은 이 기능을 쓸 수 없어요. 잠시 뒤 다시 시도해 주세요.',
+    draft:
+      '생기부 작성 규정을 서버에서 받아오지 못해 초안을 만들지 않았어요. 인터넷 연결을 확인하고 잠시 뒤 다시 눌러 주세요.',
+  },
   cancelled: { panel: '중단했어요.', draft: '중단했어요.' },
   crashed: {
     panel: '내 AI 실행이 도중에 멈췄어요.',

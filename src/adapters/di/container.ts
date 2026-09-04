@@ -74,6 +74,7 @@ import { ComciganApiClient } from '@infrastructure/comcigan/ComciganApiClient';
 import { AppinApiClient } from '@infrastructure/appin/AppinApiClient';
 import { AssistClient } from '@infrastructure/ai/AssistClient';
 import { OwnAiAssistPort } from '@infrastructure/ownAi/OwnAiAssistPort';
+import { fetchRecordPromptL1 as fetchRecordPromptL1Impl } from '@infrastructure/ownAi/RecordPromptClient';
 import { withSolarFallback } from '@usecases/assist/withSolarFallback';
 import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
 import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
@@ -367,6 +368,14 @@ export function assistPortFor(options: {
     ...(options.onFallback === undefined ? {} : { onFallback: options.onFallback }),
   });
 }
+
+/**
+ * 생기부 1층 프롬프트 배급 창구.
+ *
+ * ★규정 본문은 저장소에도 설치파일에도 없다 — 초안을 쓸 때마다 서버에서 받아 메모리에만 둔다
+ * (오너 결정 D7). 화면은 이 컨테이너를 거쳐 부른다(아키텍처 규칙).
+ */
+export const fetchRecordPromptL1 = fetchRecordPromptL1Impl;
 
 // === Google Calendar 관련 ===
 

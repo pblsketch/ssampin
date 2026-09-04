@@ -84,6 +84,8 @@ export type OwnAiErrorKind =
   | 'mcp-boot'
   /** 쓰기 토글은 켜져 있는데 앱의 loopback 서버가 못 떴다 — 이 상태로는 실행하지 않는다 */
   | 'write-server-unavailable'
+  /** 생기부 1층 프롬프트를 못 받아 왔다 — 규정을 못 지키므로 초안을 만들지 않는다 */
+  | 'prompt-unavailable'
   | 'cancelled'
   | 'crashed';
 
