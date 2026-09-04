@@ -322,6 +322,87 @@ UI 변경은 프론트엔드 디자인 에이전트와 함께. 게이트 4종 �
 - "학생별로 나누기"는 **쌤핀 AI 가 실험실에서 켜져 있을 때만** 보인다(꺼져 있으면 진입 자체가
   없다). 나눈 결과는 학생마다 카드 한 장이고 **[실행]을 누르기 전에는 아무것도 저장되지 않는다.**
 
+### T3 (성취기준·루브릭 연결) — 2026-09-04
+
+**T3 가 직접 고친 소유 밖 파일 8개** (숨기지 않고 적는다 — 전부 additive-optional, 동작 변화 없음):
+
+1. `src/domain/entities/{CurriculumProgress,Assignment,Rubric}.ts` — `standardText?` 선택 필드 1줄씩.
+   §3 상 엔티티는 T0 소유지만 T0 는 커밋을 마쳤고 T1·T2·T4·T5 목록에 엔티티가 없다(작업 중
+   `git status` 로 확인). 계획 §2 T3 이 "`standardText?` 자유 입력 허용"을 T3 범위로 적고 있어
+   필드 없이는 그 줄을 지킬 수 없다. `standardCodes?` 는 T0 가 이미 넣어 두었다.
+2. `src/domain/services/evaluationPlanMapping.ts` — `candidateToRubric` 이 코드를 루브릭까지 옮기는 5줄.
+   **이 줄이 없으면 파서가 애써 살린 코드가 여기서 조용히 사라진다**(수용 기준 3번).
+3. `src/usecases/assignment/CreateAssignment.ts` — 파라미터 2개 + 로컬 저장 시 필드 부착.
+   ★**`useAssignmentStore.ts`(T5 소유)는 건드리지 않았다** — 그 파일이 `CreateAssignmentParams` 를
+   **타입으로만** 가져다 쓰므로(3행) 파라미터가 늘어도 자동으로 통과한다. 확인하고 비켜 갔다.
+4. `src/adapters/stores/useTeachingClassStore.ts` — `addProgressEntry` 에 **선택** 8번째 인자.
+   기존 호출부 전부 그대로 동작한다.
+5. `src/adapters/stores/useRubricStore.ts` — `CreateRubricParams` 에 선택 필드 2개.
+6. `ProgressTab.tsx` · `Progress/{useProgressQuickEntry,useProgressFanout,ProgressQuickEntryModal,
+ProgressCalendarView}.ts(x)` · `Timetable/TimetablePage.tsx` — 값 전달 배선.
+   진도 화면이 `ProgressEntryFields`(T3 소유)를 감싸는 껍데기라, 껍데기를 안 고치면 고른 성취기준이
+   **화면에는 보이는데 저장은 안 되는** 상태가 된다.
+7. `.prettierignore` — 생성물 JSON 2개 등록. lint-staged 가 `*.json` 에 `prettier --write` 를
+   돌려서, 등록하지 않으면 1.5MB 한 줄이 커밋할 때마다 수만 줄로 불어난다.
+
+**T3 가 새로 만든 파일** (소유권 표에 이름이 없어 여기 적는다)
+
+- `scripts/fetch-curriculum-standards.mjs` · `src/domain/data/curriculumStandards.{types.ts,d.ts,
+elementary.json,secondary.json}` · `src/domain/rules/curriculumStandardRules.ts`(+테스트) ·
+  `src/adapters/hooks/useCurriculumStandards.ts` ·
+  `src/adapters/components/CurriculumStandards/{StandardPickerModal,StandardCodeField}.tsx`
+
+**T4 에게 (성취기준 복사 검사 K1 을 켜는 법)**
+
+T4 §6 이 "T3 가 착륙하면 배선 한 줄로 켜진다"고 적어 둔 그 재료가 준비됐다. 원문은
+`loadCurriculumStandards(scope)` → `standardsForCodes(index, codes).map(s => s.text)` 로 얻는다
+(`useCurriculumStandards.ts`). ★**원문을 브릿지·AI 로 넘기지 말 것** — 검사 입력으로만 쓴다.
+`textBroken: true` 인 자료(초등 9건)는 원문이 깨져 있으니 검사에서 빼야 한다.
+
+**요청 (T6 가 처리)**
+
+1. **`npm run gen:entity-samples` 재실행 여부 확인.** 엔티티에 선택 필드 4개가 늘었다
+   (`standardText?` ×3, `RubricCandidate.standardCodes?`). 브릿지 계약 샘플이 엔티티에서
+   생성된다면 갱신이 필요하다. T3 는 계약 파일을 건드리지 않았다.
+2. **`/docs` 사용자 가이드에 "성취기준 고르기" 추가.** 진도·과제·루브릭 세 곳에서 같은 창이 뜬다는
+   것과, **2026학년도 중3·고3 은 목록이 안 나오고 직접 적어야 한다**는 것을 반드시 적을 것.
+   그 학년 교사가 "왜 내 과목이 없냐"고 물을 자리다.
+3. **특성화고(전문교과) 번들은 넣지 않았다.** 47,625건이라 꼭 필요한 칸만 남겨도 **4.6MB**
+   (키워드까지 넣으면 ~7MB). 기본 번들에 넣을 크기가 아니다. 넣으려면 "필요할 때 내려받기"가
+   따로 필요하고, `Settings.schoolLevel` 에 **'특성화고' 구분이 없다**는 것도 함께 풀어야 한다
+   (지금은 `high` 하나뿐이라 일반고와 구분할 방법이 없다). 별도 결정 사항으로 남긴다.
+
+**남기는 한계 (정직하게 적는다 — "됐다"고 오판하지 않기 위해)**
+
+- **성취기준 코드는 브릿지로 가지 않는다.** 브릿지의 `curriculumProgress`·`rubric` 정규화가
+  **엄격한 화이트리스트**라 `standardCodes`·`standardText` 가 자동으로 걸러진다(확인함).
+  이것은 사고가 아니라 **의도한 상태**다 — 브릿지에는 번들이 없어 코드가 뜻 없는 문자열이고,
+  모델이 `[9수02-15]` 를 세특 본문에 옮겨 적을 위험만 남는다. 코드를 AI 에 보내려면 T2 가
+  `server.ts` 도구 스키마와 함께 결정할 일이다.
+- **초등 성취기준 9건은 원문이 깨져 있다**(초등 별책15 = 2026-1 고시로 새로 들어온 '건강/움직임').
+  다단 PDF 에서 옆 칸의 내용 체계가 문장 사이에 끼어들어 왔다. **업스트림 패키지의 문제**이고
+  손질로 못 살린다. 목록에는 코드·과목·영역으로 그대로 나오되 원문 자리에는
+  "원문 추출이 불완전합니다"를 적고 키워드는 뽑지 않는다. 길이 같은 어림짐작이 아니라 **출처로**
+  못 박았다(그 출처 밖에는 깨진 것이 0건, 길이 기준을 쓰면 중·고의 멀쩡한 긴 성취기준 2건이 오탐).
+- **초등 원문 92건은 T3 가 손질해 넣었다.** 업스트림은 문장 뒤에 쪽 번호·다음 절 제목을 붙여
+  준다(예: "…말할 수 있다. **15 수학과 교육과정**"). MCP 조회로도 같은 쓰레기가 그대로 나온다.
+  첫 문장 뒤 꼬리가 온전한 문장이 아닐 때만 자르며, **중·고 3,838건에는 변화가 0건**이다(실측).
+- **찾기는 부분 문자열 검사다.** "함수"는 찾아도 "그래프 그리기"는 못 찾는다. 그래서 고르는 주된
+  길을 **영역으로 접힌 목록**으로 두고 찾기는 보조로 밀어 두었다. 화면에도 그렇게 적었다.
+- **학년 좁히기는 약하게 건다.** 학년군이 맞는 것을 앞으로 올릴 뿐 나머지를 지우지 않는다 —
+  고2가 공통국어2(학년군 `10`)를 가르치는 일이 실제로 있다. 과목은 세게 걸되, 수업반 과목 이름이
+  특이해 하나도 안 맞으면 **막지 않고 전부 보여 준다**("내 과목이 없다"보다 "많지만 찾을 수 있다").
+- **수업반에는 학년 칸이 없다.** 명단의 학년 최빈값 → 반 이름 앞 숫자 순으로 추정하고, 둘 다 없으면
+  학년으로 좁히지 않는다. 방과후·동아리처럼 이름에 학년이 없는 반은 목록이 넓게 나온다.
+- **성취기준 자료는 필요할 때 따로 읽어 들인다**(`import()`), 중·고 1.5MB · 초등 212KB. 앱 첫 화면
+  번들에는 들어가지 않고, 학생 화면·모바일은 이 화면들을 아예 import 하지 않아 구조적으로 닿지 않는다.
+- **타입 검사에 JSON 을 읽히지 않으려고 `curriculumStandards.d.ts` 를 두었다.** `resolveJsonModule`
+  이 3,838건의 리터럴 타입을 추론하면 `npx tsc --noEmit` 이 **65초 → 120초**가 된다(실측).
+  선언을 두면 TS 가 파일을 열지 않는다(`--extendedDiagnostics` 의 `Lines of JSON: 6` 으로 확인).
+- **성취기준 고르기 창은 `createPortal` 로 `document.body` 에 붙인다.** 세 호스트가 전부 모달이고
+  `Modal` 뒷배경에 `backdrop-blur` 가 걸려 있어, 그냥 두면 `position: fixed` 가 부모 창 상자에
+  갇힌다(저장소에 같은 사고 기록이 있다). 게이트 4종으로는 안 잡히는 종류다.
+
 ## 7. 하지 않는 것 (이번 프로그램 밖)
 
 - 인앱 [AI 초안] 버튼·`ALLOWED_GRADES` 개방(Phase 4) · 자기평가서(Phase 3) · 로컬 STT 엔진 · 앱 자체 청취(WinRT) ·
