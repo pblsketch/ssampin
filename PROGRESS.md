@@ -40,7 +40,7 @@
   `npm run test` 650 파일 8,564 통과(10 skipped) · `npm run regression-check` 55/55 ·
   브릿지 core 320·mcp 전부 통과.
 
-### 🟡 T1 말로 남기기(STT) — 코드 완료, 배선 3줄 남음 (2026-09-04) — 병렬 세션
+### ✅ T1 말로 남기기(STT) 완료 (2026-09-04) — 병렬 세션
 
 **무엇을 바꿨나.** 관찰 기록을 **말로** 남길 수 있게 했다. 음성 인식기는 넣지 않았다 —
 윈도우·아이폰·안드로이드가 **이미 가진 받아쓰기**를 쌤핀에서 한 번에 부르게만 한다.
@@ -65,17 +65,20 @@ koffi → user32 `SendInput` 으로 Ctrl+V 를 보내고 있어(ADR-038) 그 경
 PowerShell 로 키 입력을 만들면 첫 호출 1~3초 + 콘솔 포커스 탈취 + **학교 보안 프로그램이 흔히
 차단하는 형태**가 된다. `sendWinH()` 를 더하고 공통부를 `sendChord()` 로 묶었다.
 
-**남은 것 — 배선 3줄(T6).** 오너 결정으로 소유 밖 파일은 건드리지 않았다. 계획서 §6 에 적었다.
+**배선.** `electron/main.ts` 등록 2줄은 **오너 승인 후 넣었다**(`74dd8e38`) — 이제 데스크톱
+받아쓰기가 실제로 켜진다(수용 기준 1 코드상 충족). 나머지 2건은 계획서 §6 에 요청으로 남겼다.
 
-1. `electron/main.ts` 에 `registerVoiceTypingHandlers()` **2줄** — 없으면 데스크톱 마이크가
-   동작하지 않는다(지금은 preload 가 잡아 한국어 안내만 돌려준다). **수용 기준 1 미충족.**
-2. 설정 탭에 `<VoiceInputNoticeSection />` 한 줄(조각은 T1 이 완성해 둠).
-3. `ReminderPrompt.tsx` 에 마이크 — 소유권 표 오기(표가 준 `ReminderPopup.tsx` 에는 글자 칸이
-   없다). 2차 분석 §6-4 의 "수업 직후" 자리라 값이 큰데 빠져 있다.
+1. 설정 탭에 `<VoiceInputNoticeSection />` 한 줄(조각은 T1 이 완성해 둠) — **T6**.
+2. `ReminderPrompt.tsx` 에 마이크 — 소유권 표 오기(표가 준 `ReminderPopup.tsx` 에는 글자 칸이
+   없고, 진짜 `<textarea>` 는 형제 파일에 있는데 표에 주인이 없다). 2차 분석 §6-4 가
+   "**수업 직후**가 핵심"이라고 짚은 자리라 값이 크다 — **T6**.
 
-**게이트(내 파일 기준).** `npx tsc --noEmit` 0 · 내 파일 `eslint` 0 ·
-`node scripts/build-electron.mjs` 성공(`dist-electron/ipc/voiceTyping.js` 생성) ·
-새 테스트 20개(`voiceTyping` 10 + `observationSplitRequest` 10) 통과.
+**게이트.** 1차 커밋(`6085e262`) 시점 — `tsc` 0 · `lint` 0 error(경고 136 = 기존) ·
+`test` 655 파일 8,713 통과(10 skipped) · `regression` 55/55.
+배선 커밋(`74dd8e38`) 후 재확인 — `regression` 55/55 · electron+Assist 83 파일 1,230 통과 ·
+`build-electron` 성공(`dist-electron/main.js` 에 `voice-typing:start` 포함) · 내 파일 `tsc` 0.
+새 테스트 20개(`voiceTyping` 10 + `observationSplitRequest` 10).
+★재확인 시점의 전체 `tsc` 는 **다른 세션(T2)이 작성 중인 파일** 때문에 빨갛다 — 내 파일은 0개.
 ★**electron 메인/preload 를 바꿨으므로 `electron:dev` 는 완전히 껐다 켜야 한다**(watch 안 됨).
 
 **실기기 확인 항목(코드로 못 잡음).**
