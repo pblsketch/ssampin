@@ -403,6 +403,78 @@ T4 §6 이 "T3 가 착륙하면 배선 한 줄로 켜진다"고 적어 둔 그 �
   `Modal` 뒷배경에 `backdrop-blur` 가 걸려 있어, 그냥 두면 `position: fixed` 가 부모 창 상자에
   갇힌다(저장소에 같은 사고 기록이 있다). 게이트 4종으로는 안 잡히는 종류다.
 
+### T2 (근거 창고 주제 분류 + 탐구 흐름) — 2026-09-04
+
+**T2 가 직접 고친 소유 밖 파일 3개** (오너 승인 후 진행 — 숨기지 않고 적는다):
+
+1. `src/adapters/hooks/useReminderScheduler.ts` — 알림 문구 뒤에 "미분류 근거 N건" 을 붙이는 배선
+   3곳(import·담임·수업반). 문구 자체는 T2 소유 `recordReminderRules.ts` 에 있지만 **부르는 곳이
+   여기뿐**이라, 순수 함수만 만들면 아무도 안 부르는 죽은 코드가 된다(이 저장소에는 "스케줄러가
+   resolveSlotPromptText 를 부른다" 회귀 테스트까지 있다). 오너 결정으로 배선까지 했다.
+   ★**선정 로직은 한 줄도 안 건드렸다** — 누구를 부를지는 그대로다(ADR-072 결정 6).
+   `pickDueStudents` 에 미분류 건수가 섞이지 않았음을 테스트로 잠갔다
+   (`__tests__/recordReminderUnclassified.test.ts`).
+2. 브릿지 `packages/core/src/{io.ts, identity.ts, entities/index.ts}` — `readInquiryThreads`·
+   `thread:` 신원·export **순수 추가**(기존 줄 변경 0). `get_inquiry_threads` 를 만들려면 코어
+   리더가 없이는 불가능한데 §3 표에 주인이 없다. T4 는 `grounding.ts` 만 만지므로 충돌 위험 0.
+3. 브릿지 `packages/core/src/pii/pseudonymize.ts` — `TokenPrefix` 에 `'thr'` 추가 **+ 같은 파일의
+   `TOKEN_RE` 에도 추가**(2곳). ★**한쪽만 고치면 앱을 다시 켠 뒤 토큰이 조용히 무효가 된다** —
+   조회는 되는데 `get_record_evidence(threadToken)` 왕복이 깨진다. 파일 주석이 경고하던 함정이라
+   재시작 복원 회귀 테스트를 넣었다.
+
+**T2 가 새로 만든 파일** (소유권 표의 `RecordDraft/InquiryThread*.tsx`·`threadSuggest.ts` 범위):
+
+- `src/domain/rules/threadSuggest.ts`(+테스트) · `src/adapters/components/RecordDraft/
+{InquiryThreadPanel,InquiryThreadChips,InquiryThreadCreate}.tsx` ·
+  `src/adapters/components/RecordDraft/__tests__/recordEvidenceThreadIsolation.test.tsx` ·
+  브릿지 `packages/core/src/entities/inquiryThread.ts` · `packages/mcp/test/inquiryThreads.mcp.test.ts`
+
+**요청 (T6 가 처리)**
+
+1. 🔴 **`get_record_guidelines` 에 "주제 하나를 깊게 · 성취기준 원문 복사 금지 · 키워드만" 문구를
+   넣을 것.** 구현 `recordGuidelines()` 가 브릿지 `packages/core/src/grounding.ts` — **T4 소유** —
+   에 있어 오너 결정으로 이번엔 손대지 않았다. 주의: 그 함수의 `principles` 는 **훈령 근거(URL)를
+   동반한 `citations` 에서 파생**되는데, 추가할 문구는 훈령이 아니라 **작성 품질 지침**이다.
+   citations 에 근거 없는 항목을 끼워 넣으면 "원칙마다 출처가 있다"는 계약이 깨진다 — 별도 필드
+   (예: `narrativePrinciples`)로 두는 편이 맞다.
+   ※ 지금도 `get_inquiry_threads`·`get_record_evidence(threadToken)` 의 `notice` 에 같은 취지의
+   문구가 실려 나가므로 **AI 경로가 비어 있지는 않다.**
+2. 🔴 **초안에 주제 칸(`RecordDraft.threadId?`)을 붙일 것.** 엔티티(`src/domain/entities/RecordDraft.ts`,
+   T0)와 저장 통로(`useRecordDraftsStore.ts` 의 `RecordDraftUpsertInput`, **T4 가 작업 중이던 파일**)
+   둘 다 필요해 이번엔 화면만 만들었다. 지금은 "이 주제로" 를 고르면 그 주제 근거 건수를 보여 주고
+   AI 요청문을 복사해 준다(교사 보조). 칸이 생기면 "이 주제로 쓴 초안" 조회가 가능해진다.
+   ★AI 의 주제별 초안 자체는 **이 칸 없이도 이미 동작한다**(`get_inquiry_threads` →
+   `get_record_evidence(threadToken)`).
+3. 🟡 **브릿지 점검 2종(성취기준 복사·공통 문구)은 여전히 생략된다.** T4 가 "`server.ts` 가 T2
+   소유라 손대지 않았다"고 적었는데, 그 재료(성취기준 원문·같은 반 다른 초안)를 **도구 입력
+   스키마로 받는 것은 위험하다** — 원문을 인자로 받으면 그 문장이 모델 컨텍스트에 그대로 들어가
+   막으려던 복사형을 오히려 유발한다(분석 §4-1). 브릿지가 **파일에서 직접 읽는** 방식이라야 한다.
+   T6 가 판단할 것.
+4. 🟡 **T5 §6-3 "창고가 마지막에 연 과제 1건만 본다"는 T2 범위에서 못 고쳤다.**
+   `useAssignmentStore` 가 T5 소유이고, 근거 창고 화면은 그 배열을 읽기만 한다.
+   주제 이름 후보의 "과제 제목" 도 같은 한계를 그대로 받는다(과제수합을 안 들르면 후보에 안 뜬다).
+5. 🟡 **T5 §6-4·6-5(본문 추출 실패 재시도 단추 · 제외 이유 표시)는 하지 않았다.** 이번 작업 단위
+   (주제 묶기)와 다른 갈래라 섞지 않았다. 근거 카드에 자리는 있다.
+
+**남기는 한계 (수용 기준 대비 — "됐다"고 오판하지 않기 위해)**
+
+- **디자인 에이전트 승인을 못 받았다.** `oh-my-claudecode:designer` 가 두 번(최초·재개) 모두 **빈
+  응답**으로 끝났다(알려진 OMC 빈 반환). UI 안(주제 칩 줄 / 흐름 인라인 패널)은 **오너가 직접
+  골랐다**. 실기기 렌더 확인은 아직이다 — 특히 **유리 모드**에서 흐름 패널·새 주제 상자에 붙인
+  `data-sp-floating` 이 실제로 배경을 내는지 눈으로 봐야 한다(jsdom 은 레이아웃이 없어 못 잡는다).
+- **끌어다 놓기(dnd-kit)는 렌더 테스트로 못 덮었다.** 체크 → 묶기 경로만 눌러 봤다. 포인터 센서
+  기반이라 jsdom 에서 신뢰성 있게 흉내 내기 어렵다. **실기기 확인 목록에 넣어야 한다.**
+- **"이것도 이 주제?" 는 주제에 키워드가 있어야만 뜬다.** 수행평가 이름으로 주제를 만들면 그
+  루브릭의 **요소 이름**이 키워드로 자동으로 실리지만, 손으로 만든 주제는 교사가 키워드를 적기
+  전까지 제안이 0건이다. 화면에 그 사실을 한 줄로 적어 두었다.
+- **흐름 노드는 근거 창고 레코드만이다.** 분석 §5-1 예시의 "수업(진도에서 자동)" 노드는 만들지
+  않았다 — `EvidenceSourceType` 에 진도가 없어 엔티티를 건드려야 한다(T7).
+  관찰 낱장(`ObservationRecord.threadId`)도 줄기에 직접 그리지 않는다. 끌어오면 근거로 **복제**
+  되므로 합치면 같은 일이 두 줄로 보인다.
+- **빈 고리 힌트는 슬롯이 붙은 근거에만 반응한다.** 슬롯은 선택이라, 슬롯을 안 쓰는 교사에게는
+  "질문이 하나뿐이에요"만 계속 뜬다(질문 슬롯 0개 = 1개 이하). 마디가 0이면 아무 말도 안 하지만
+  이 비대칭은 남아 있다 — 하네스나 실사용으로 재 볼 것.
+
 ## 7. 하지 않는 것 (이번 프로그램 밖)
 
 - 인앱 [AI 초안] 버튼·`ALLOWED_GRADES` 개방(Phase 4) · 자기평가서(Phase 3) · 로컬 STT 엔진 · 앱 자체 청취(WinRT) ·
