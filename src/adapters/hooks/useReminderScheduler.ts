@@ -30,8 +30,13 @@ import {
   formatDateStr,
   studentDedupKey,
   resolveSlotPromptText,
+  appendUnclassifiedEvidence,
 } from '@domain/rules/recordReminderRules';
 import { detectJustFinishedClass } from '@domain/rules/reminderClassMatch';
+import { countUnclassified } from '@domain/rules/threadSuggest';
+import { teachingStudentRef } from '@domain/entities/RecordDraft';
+import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
+import { useInquiryThreadStore } from '@adapters/stores/useInquiryThreadStore';
 
 /**
  * 학생 관찰 기록 알림 — 인앱 오케스트레이션 훅(P2·P4).
@@ -91,6 +96,11 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
   const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
   const skippedKeys = useRecordReminderStore((s) => s.skippedKeys);
   const studentSnoozes = useRecordReminderStore((s) => s.studentSnoozes);
+  // 주제(탐구 흐름)로 아직 안 묶은 근거 건수를 문구에 덧붙이기 위한 재료.
+  // ★선정에는 쓰지 않는다 — 문구만 바꾼다(ADR-072 결정 6).
+  const evidenceRecords = useRecordEvidenceStore((s) => s.records);
+  const inquiryThreads = useInquiryThreadStore((s) => s.records);
+  const threadIdSet = useMemo(() => new Set(inquiryThreads.map((t) => t.id)), [inquiryThreads]);
 
   const subjectEnabled = rr.enabled && rr.targets.includes('subject');
 
@@ -104,6 +114,15 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     const id = setInterval(() => setTick((t) => t + 1), 60_000);
     return () => clearInterval(id);
   }, [subjectEnabled]);
+
+  // 미분류 근거 꼬리 문구의 재료. 알림이 켜져 있을 때만 읽는다(둘 다 통째로 읽는 파일이라
+  // 알림을 안 쓰는 교사에게 괜한 읽기를 시키지 않는다). 실패해도 알림은 그대로 뜬다 —
+  // 꼬리가 안 붙을 뿐이다.
+  useEffect(() => {
+    if (!rr.enabled) return;
+    void useRecordEvidenceStore.getState().load();
+    void useInquiryThreadStore.getState().load();
+  }, [rr.enabled]);
 
   const { dueNow, missingCount } = useMemo(() => {
     // deps 재평가 트리거(값은 getState로 읽음): 시간 경과·시간표·변동시간표 변화.
@@ -154,13 +173,18 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
           // 빈 슬롯이 있으면 그걸 가리키는 문구를, 없으면 기존 문구를 쓴다.
           // ★선정은 바꾸지 않는다 — 위 pickDueStudents 결과 그대로다. 문구만 갈아 끼운다.
           // ★빈 슬롯 판정은 기본 어휘만 본다(emptySlots). 교사가 추가한 칸은 재촉하지 않는다.
-          promptText: resolveSlotPromptText(
-            cursor + i,
-            r.student.name,
-            emptySlots(
-              records.filter((rec) => rec.studentId === r.student.id),
-              'homeroom',
-            )[0],
+          // 끝에 "미분류 근거 N건"을 덧붙인다(0건이면 원문 그대로) — 주제 묶기가 학기말 배치로
+          // 몰리지 않게 지나가는 길에 조금씩만 재촉한다.
+          promptText: appendUnclassifiedEvidence(
+            resolveSlotPromptText(
+              cursor + i,
+              r.student.name,
+              emptySlots(
+                records.filter((rec) => rec.studentId === r.student.id),
+                'homeroom',
+              )[0],
+            ),
+            countUnclassified(evidenceRecords, r.student.id, threadIdSet),
           ),
           target: 'homeroom' as const,
           classId: null,
@@ -197,7 +221,16 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
           key: keyOf(r.student.id),
           studentId: r.student.id,
           studentName: r.student.name,
-          promptText: `방금 '${finished.name}' 수업에서 ${r.student.name} 학생, 눈에 띈 점이 있었나요?`,
+          // 수업반 근거는 'tc:{classId}:{studentKey}' 로 저장된다 — 담임 학생 id 와 키 체계가
+          // 다르므로 여기서 같은 규칙으로 만들어 세야 남의 학생 건수를 세지 않는다.
+          promptText: appendUnclassifiedEvidence(
+            `방금 '${finished.name}' 수업에서 ${r.student.name} 학생, 눈에 띈 점이 있었나요?`,
+            countUnclassified(
+              evidenceRecords,
+              teachingStudentRef(finished.id, r.student.id),
+              threadIdSet,
+            ),
+          ),
           target: 'subject' as const,
           classId: finished.id,
           tagOptions: DEFAULT_OBSERVATION_TAGS,
@@ -222,6 +255,8 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     skippedKeys,
     studentSnoozes,
     tick,
+    evidenceRecords,
+    threadIdSet,
   ]);
 
   const saveObservation = async (item: ReminderPromptItem, payload: ReminderSavePayload) => {

@@ -199,6 +199,26 @@ export function resolveSlotPromptText(
   return (pool[idx] ?? pool[0]!).replace('{name}', studentName).replace('{slot}', emptySlot);
 }
 
+/**
+ * 아직 주제(탐구 흐름)로 안 묶은 근거가 쌓였을 때 문구 뒤에 덧붙이는 꼬리.
+ *
+ * ★**문구만** 바꾼다. 누구를 부를지는 그대로다(ADR-072 결정 6 — 큰 배치 작업을 만들지 않는다).
+ * 주제 묶기는 학기말 배치가 되기 쉬운 일이라, 알림이 지나가는 길에 "N건 남았다"고 조금씩
+ * 재촉하는 정도로만 둔다. 이 꼬리 때문에 알림이 더 자주 뜨지도, 다른 학생이 불려 나오지도 않는다.
+ *
+ * ★건수만 적는다. "몇 %를 묶었다" 같은 채움률·순위는 만들지 않는다.
+ * 0건이거나 이상한 수면 **빈 문자열**을 돌려준다 — 붙일 말이 없으면 문구를 건드리지 않는다.
+ */
+export function unclassifiedEvidenceSuffix(count: number): string {
+  if (!Number.isFinite(count) || count <= 0) return '';
+  return ` · 미분류 근거 ${Math.floor(count)}건`;
+}
+
+/** 알림 문구에 "미분류 근거 N건" 꼬리를 붙인다. 0건이면 원문 그대로. */
+export function appendUnclassifiedEvidence(promptText: string, count: number): string {
+  return `${promptText}${unclassifiedEvidenceSuffix(count)}`;
+}
+
 /** nameExposure 정책에 따라 알림 본문용 이름을 마스킹한다. */
 export function maskName(name: string, exposure: NameExposure): string {
   if (exposure === 'full') return name;

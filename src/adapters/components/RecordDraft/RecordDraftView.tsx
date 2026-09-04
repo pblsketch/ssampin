@@ -20,6 +20,12 @@ import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
 import { recordDraftFlagLabel } from '@domain/rules/recordDraftFlagLabels';
 import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
+import { useInquiryThreadStore } from '@adapters/stores/useInquiryThreadStore';
+import { useRubricStore } from '@adapters/stores/useRubricStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { useCurriculumStandards } from '@adapters/hooks/useCurriculumStandards';
+import { standardsForCodes } from '@domain/rules/curriculumStandardRules';
+import { isClassified } from '@domain/rules/threadSuggest';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
 import { RecordEvidenceView } from '@adapters/components/RecordDraft/RecordEvidenceView';
@@ -102,6 +108,7 @@ export function RecordDraftView({
   const observations = useObservationStore((s) => s.records);
   const loadObservations = useObservationStore((s) => s.load);
   const loadEvidence = useRecordEvidenceStore((s) => s.load);
+  const loadThreads = useInquiryThreadStore((s) => s.load);
 
   const [activeArea, setActiveArea] = useState<RecordArea>(areas[0] ?? 'autonomy');
   const [filter, setFilter] = useState<DraftFilter>('all');
@@ -113,7 +120,8 @@ export function RecordDraftView({
     void load();
     void loadObservations();
     void loadEvidence();
-  }, [load, loadObservations, loadEvidence]);
+    void loadThreads();
+  }, [load, loadObservations, loadEvidence, loadThreads]);
 
   // 근거 ID → 관찰기록(날짜·내용) 역참조 맵. 교사용 표시를 위해 1회 구성.
   const obsById = useMemo(() => {
@@ -129,6 +137,41 @@ export function RecordDraftView({
 
   const subject = areaSubject(activeArea, classSubject);
   const limit = resolveAreaLimit(activeArea, level);
+
+  /**
+   * 성취기준 복사 검사(K1)의 재료 — **이 수업반이 실제로 가르친 성취기준의 원문**.
+   *
+   * T4 가 만든 `checkStandardCopy` 는 초안이 성취기준 문장을 옮겨 적었는지 어절 겹침으로 본다.
+   * 그런데 그 재료를 넘겨줄 자리가 이 화면이라, 지금까지 검사는 `skipped` 로만 보고돼 왔다
+   * (계획서 §6 T4 항목). 코드는 T3 가 루브릭·진도에 심어 뒀으니 여기서 원문으로 풀어 넘긴다.
+   *
+   * ★**원문은 앱 안에만 머문다.** 여기서 나온 문장은 로컬 점검 함수로만 가고 AI 에는 절대
+   *   실리지 않는다 — 원문을 모델에 보이면 그대로 옮겨 적어 "성취기준 복사형" 세특이 된다
+   *   (분석 §4-1, 실측 C 사례). AI 로 가는 길은 근거 창고이고 거기에는 키워드만 간다.
+   * ★자료는 1.5MB 라 **코드가 하나라도 있을 때만** 읽어 들인다(`enabled`).
+   */
+  const rubrics = useRubricStore((s) => s.rubrics);
+  const progressEntries = useTeachingClassStore((s) => s.progressEntries);
+  const standardCodes = useMemo(() => {
+    if (classId === undefined) return [] as string[];
+    const seen = new Set<string>();
+    for (const r of rubrics) {
+      if (r.classId !== classId) continue;
+      for (const c of r.standardCodes ?? []) seen.add(c);
+    }
+    for (const e of progressEntries) {
+      if (e.classId !== classId) continue;
+      for (const c of e.standardCodes ?? []) seen.add(c);
+    }
+    return [...seen];
+  }, [rubrics, progressEntries, classId]);
+
+  const { data: standardsData } = useCurriculumStandards(level, standardCodes.length > 0);
+  const standardTexts = useMemo(() => {
+    if (!standardsData || standardCodes.length === 0) return undefined;
+    const texts = standardsForCodes(standardsData.index, standardCodes).map((s) => s.text);
+    return texts.length > 0 ? texts : undefined;
+  }, [standardsData, standardCodes]);
 
   const draftFor = (studentRef: string): RecordDraft | undefined =>
     getDraft(activeArea, studentRef, subject);
@@ -294,6 +337,7 @@ export function RecordDraftView({
           students={students}
           {...(classId !== undefined ? { classId } : {})}
           {...(className !== undefined ? { className } : {})}
+          {...(classSubject !== undefined ? { classSubject } : {})}
           headless
         />
       ) : (
@@ -413,6 +457,7 @@ export function RecordDraftView({
                   draft={draftFor(s.studentRef)}
                   obsById={obsById}
                   index={i}
+                  {...(standardTexts !== undefined ? { standardTexts } : {})}
                   onJumpNext={() => focusRowTextarea(i + 1)}
                 />
               ))
@@ -448,6 +493,7 @@ function RecordDraftRow({
   draft,
   obsById,
   index,
+  standardTexts,
   onJumpNext,
 }: {
   student: RecordDraftStudentRow;
@@ -458,6 +504,8 @@ function RecordDraftRow({
   draft?: RecordDraft;
   obsById: ReadonlyMap<string, ObservationRecord>;
   index: number;
+  /** 이 수업반이 가르친 성취기준 원문 — 복사 검사에만 쓴다(AI 에는 안 간다). */
+  standardTexts?: readonly string[];
   onJumpNext: () => void;
 }) {
   const upsert = useRecordDraftsStore((s) => s.upsert);
@@ -507,6 +555,8 @@ function RecordDraftRow({
       ...(student.studentKey !== undefined ? { studentKey: student.studentKey } : {}),
       ...(student.studentId !== undefined ? { studentId: student.studentId } : {}),
       ...(subject !== undefined ? { subject } : {}),
+      // 성취기준 복사 검사용. 없으면 칸을 만들지 않는다 — T4 는 부재를 'skipped' 로 정직히 보고한다.
+      ...(standardTexts !== undefined && standardTexts.length > 0 ? { standardTexts } : {}),
       level,
     };
     setSaveState('saving');
@@ -560,6 +610,52 @@ function RecordDraftRow({
     [evidenceRecords, student.studentRef, area],
   );
   const evidenceCount = evidenceForArea.length;
+
+  /**
+   * "이 주제로" — 이 학생의 탐구 흐름 중 하나를 골라 **그 주제의 근거만** 보게 한다.
+   *
+   * ★고른 값을 초안에 저장하지는 않는다(오너 결정 2026-09-04 — `RecordDraft` 엔티티와 초안 저장
+   *   관문은 다른 작업이 쓰는 중이라 이번엔 건드리지 않는다. 계획서 §6 요청).
+   *   AI 는 `get_inquiry_threads` → `get_record_evidence(threadId)` 로 주제를 직접 읽으므로
+   *   주제별 초안 자체는 이 칸 없이도 된다. 여기서는 **교사가 무엇을 보고 쓰는지**를 맞춘다.
+   * ★행 컴포넌트는 `studentRef:area:subject` 로 key 가 걸려 학생이 바뀌면 통째로 새로 만들어진다 —
+   *   앞 학생의 주제 선택이 따라붙을 길이 없다.
+   */
+  const allThreads = useInquiryThreadStore((s) => s.records);
+  const threadIdSet = useMemo(() => new Set(allThreads.map((t) => t.id)), [allThreads]);
+  const studentThreads = useMemo(
+    () => allThreads.filter((t) => t.studentRef === student.studentRef),
+    [allThreads, student.studentRef],
+  );
+  const [pickedThreadId, setPickedThreadId] = useState<string>('');
+  const pickedThread = studentThreads.find((t) => t.id === pickedThreadId) ?? null;
+  const threadEvidenceCount = useMemo(
+    () =>
+      pickedThread === null
+        ? 0
+        : evidenceRecords.filter(
+            (e) => e.studentRef === student.studentRef && e.threadId === pickedThread.id,
+          ).length,
+    [evidenceRecords, student.studentRef, pickedThread],
+  );
+  const unclassifiedCount = useMemo(
+    () =>
+      evidenceRecords.filter(
+        (e) => e.studentRef === student.studentRef && !isClassified(e, threadIdSet),
+      ).length,
+    [evidenceRecords, student.studentRef, threadIdSet],
+  );
+
+  /** AI 에게 "이 주제로 써 달라"고 말할 문장. 교사가 붙여 넣어 쓴다(인앱 [AI 초안] 버튼은 만들지 않는다). */
+  const copyThreadPrompt = async (): Promise<void> => {
+    if (!pickedThread) return;
+    const text = `'${pickedThread.title}' 주제로 ${RECORD_AREA_LABELS[area]} 초안을 써 주세요. 그 주제의 근거만 보고, 활동을 나열하지 말고 하나의 탐구 흐름으로 써 주세요.`;
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      /* 클립보드 불가 — 무시 */
+    }
+  };
   const recentEvidenceDate = useMemo(() => {
     let best = '';
     for (const e of evidenceForArea) {
@@ -611,6 +707,43 @@ function RecordDraftRow({
           </b>
           {recentEvidenceDate ? ` · 최근 ${formatObsDate(recentEvidenceDate)}` : ''}
         </span>
+        {/* 이 주제로 — 주제가 하나라도 있을 때만 보인다(흐름을 안 쓰면 화면이 그대로다). */}
+        {studentThreads.length > 0 && (
+          <div className="flex flex-col gap-1">
+            <select
+              value={pickedThreadId}
+              onChange={(e) => setPickedThreadId(e.target.value)}
+              aria-label={`${student.name} 초안에 쓸 주제 고르기`}
+              className="w-full rounded-md border border-sp-border bg-sp-surface px-1.5 py-0.5 text-[0.6rem] text-sp-text focus:border-sp-accent focus:outline-none"
+            >
+              <option value="">이 주제로… (전체 근거)</option>
+              {studentThreads.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.status === 'closed' ? `${t.title} (닫힘)` : t.title}
+                </option>
+              ))}
+            </select>
+            {pickedThread && (
+              <button
+                type="button"
+                onClick={() => void copyThreadPrompt()}
+                title="AI에게 이 주제로 써 달라고 할 문장을 복사합니다."
+                className="flex w-fit items-center gap-0.5 rounded-md bg-sp-accent/10 px-1.5 py-0.5 text-[0.55rem] font-medium text-sp-accent ring-1 ring-sp-accent/20 hover:bg-sp-accent/20"
+              >
+                <span className="material-symbols-outlined text-[0.7rem]">content_copy</span>
+                주제 근거 {threadEvidenceCount}건 · 요청문 복사
+              </button>
+            )}
+          </div>
+        )}
+        {unclassifiedCount > 0 && (
+          <span
+            title="아직 주제로 묶지 않은 근거입니다. ‘근거 자료’ 탭에서 묶을 수 있습니다."
+            className="w-fit rounded-full bg-sp-surface px-1.5 py-0.5 text-[0.55rem] font-medium text-sp-muted"
+          >
+            미분류 {unclassifiedCount}건
+          </span>
+        )}
         {needsReview && (
           <span className="w-fit rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[0.55rem] font-semibold text-amber-600">
             검토 필요
