@@ -33,6 +33,8 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "regression-check": "node scripts/regression-grep-check.mjs",
+    "seed:record-flow": "node scripts/seed-record-flow-test-data.mjs",
+    "seed:record-flow:clean": "node scripts/seed-record-flow-test-data.mjs --clean",
     "dev:mobile": "vite --config vite.mobile.config.ts --port 5174",
     "build:mobile": "vite build --config vite.mobile.config.ts",
     "preview:mobile": "vite preview --config vite.mobile.config.ts",
