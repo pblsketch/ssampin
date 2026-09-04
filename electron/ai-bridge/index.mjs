@@ -22733,6 +22733,7 @@ function normalizeRecord(o) {
   };
   const slots = Array.isArray(o['slots']) ? o['slots'].filter((t) => typeof t === 'string') : [];
   if (slots.length > 0) rec['slots'] = slots;
+  setIf2(rec, 'threadId', asString2(o['threadId']));
   setIf2(rec, 'classId', asString2(o['classId']));
   setIf2(rec, 'authorId', asString2(o['authorId']));
   setIf2(rec, 'createdAt', asNumber2(o['createdAt']));
@@ -23720,6 +23721,7 @@ function normalizeRecord4(o) {
   };
   setIf12(rec, 'classId', asString18(o['classId']));
   setIf12(rec, 'subject', asString18(o['subject']));
+  setIf12(rec, 'threadId', asString18(o['threadId']));
   if (Array.isArray(o['groundingFlags'])) {
     rec['groundingFlags'] = o['groundingFlags'].filter((x) => typeof x === 'string');
   }
@@ -23785,6 +23787,7 @@ function normalizeRecord5(o) {
     const slots = o['slots'].filter((t) => typeof t === 'string');
     if (slots.length > 0) rec['slots'] = slots;
   }
+  setIf13(rec, 'threadId', asString19(o['threadId']));
   return rec;
 }
 function parseRecordEvidence(raw) {
@@ -23797,6 +23800,62 @@ function parseRecordEvidence(raw) {
   for (const item of rawRecords) {
     if (!item || typeof item !== 'object') continue;
     const rec = normalizeRecord5(item);
+    if (rec) records.push(rec);
+  }
+  return { records };
+}
+
+// ../ssampin-ai-bridge/packages/core/dist/entities/inquiryThread.js
+var STATUSES = /* @__PURE__ */ new Set(['open', 'closed']);
+function isInquiryThreadStatus(v) {
+  return typeof v === 'string' && STATUSES.has(v);
+}
+function asString20(v) {
+  return typeof v === 'string' ? v : void 0;
+}
+function asNumber12(v) {
+  return typeof v === 'number' && Number.isFinite(v) ? v : void 0;
+}
+function setIf14(target, key, value) {
+  if (value !== void 0) target[key] = value;
+}
+function asStringArray(v) {
+  if (!Array.isArray(v)) return void 0;
+  const out = v.filter((x) => typeof x === 'string' && x.trim().length > 0);
+  return out.length > 0 ? out : void 0;
+}
+function normalizeRecord6(o) {
+  if (typeof o['id'] !== 'string' || typeof o['studentRef'] !== 'string') return null;
+  const title = asString20(o['title']);
+  if (title === void 0 || title.trim().length === 0) return null;
+  const created = asNumber12(o['createdAt']);
+  const rec = {
+    id: o['id'],
+    studentRef: o['studentRef'],
+    title,
+    keywords: asStringArray(o['keywords']) ?? [],
+    // 상태가 깨졌으면 'open' 으로 본다 — 닫힌 것으로 잘못 보면 흐름이 조회에서 통째로 사라진다.
+    status: isInquiryThreadStatus(o['status']) ? o['status'] : 'open',
+    createdAt: created ?? 0,
+    updatedAt: asNumber12(o['updatedAt']) ?? created ?? 0,
+  };
+  setIf14(rec, 'classId', asString20(o['classId']));
+  setIf14(rec, 'standardCodes', asStringArray(o['standardCodes']));
+  setIf14(rec, 'competencyKeywords', asStringArray(o['competencyKeywords']));
+  setIf14(rec, 'nextNotes', asString20(o['nextNotes']));
+  setIf14(rec, 'term', asString20(o['term']));
+  return rec;
+}
+function parseInquiryThreads(raw) {
+  const rawRecords = Array.isArray(raw)
+    ? raw
+    : raw && typeof raw === 'object' && Array.isArray(raw['records'])
+      ? raw['records']
+      : [];
+  const records = [];
+  for (const item of rawRecords) {
+    if (!item || typeof item !== 'object') continue;
+    const rec = normalizeRecord6(item);
     if (rec) records.push(rec);
   }
   return { records };
@@ -23897,6 +23956,9 @@ function readRecordDrafts(dataDir = resolveDataDir()) {
 function readRecordEvidence(dataDir = resolveDataDir()) {
   return parseRecordEvidence(readRawJson('record-evidence', dataDir));
 }
+function readInquiryThreads(dataDir = resolveDataDir()) {
+  return parseInquiryThreads(readRawJson('inquiry-threads', dataDir));
+}
 
 // ../ssampin-ai-bridge/packages/core/dist/identity.js
 var TEACHING_PREFIX = 'tc:';
@@ -23906,6 +23968,7 @@ var RUBRIC_PREFIX = 'rubric:';
 var TODO_PREFIX = 'todo:';
 var EVENT_PREFIX = 'evt:';
 var RECORD_DRAFT_PREFIX = 'recordDraft:';
+var INQUIRY_THREAD_PREFIX = 'thread:';
 var MEMO_PREFIX = 'memo:';
 var BOOKMARK_PREFIX = 'bm:';
 var BOOKMARK_GROUP_PREFIX = 'bmg:';
@@ -23947,6 +24010,14 @@ function parseObservationIdentity(resolved) {
 }
 function makeRecordDraftIdentity(draftId) {
   return `${RECORD_DRAFT_PREFIX}${draftId}`;
+}
+function makeInquiryThreadIdentity(threadId) {
+  return `${INQUIRY_THREAD_PREFIX}${threadId}`;
+}
+function parseInquiryThreadIdentity(resolved) {
+  return resolved.startsWith(INQUIRY_THREAD_PREFIX)
+    ? resolved.slice(INQUIRY_THREAD_PREFIX.length) || null
+    : null;
 }
 function makeMemoIdentity(memoId) {
   return `${MEMO_PREFIX}${memoId}`;
@@ -24024,7 +24095,7 @@ function parseIdentity(resolved) {
 import crypto from 'node:crypto';
 import fs3 from 'node:fs';
 import path2 from 'node:path';
-var TOKEN_RE = /^(?:stu|tcs|cls|obs|rub|todo|evt|rd|memo|bm|bmg|nb|nsec|npg|prg)_[0-9a-f]{12}$/;
+var TOKEN_RE = /^(?:stu|tcs|cls|obs|rub|todo|evt|rd|memo|bm|bmg|nb|nsec|npg|prg|thr)_[0-9a-f]{12}$/;
 function defaultRandomToken(prefix) {
   return `${prefix}_` + crypto.randomBytes(6).toString('hex');
 }
@@ -24552,7 +24623,7 @@ function getTeachingObservations(dataDir, classId, studentKey2, query = {}) {
 var COVERAGE_THRESHOLD = 0.18;
 var UNCOVERED_RUN_MAX = 4;
 var DISCLAIMER =
-  '\uC5B4\uD718 \uC2A4\uD06C\uB9B0\uC77C \uBFD0 \uC758\uBBF8 \uAC80\uC99D\xB7\uAE30\uC7AC \uC801\uD569\uC131\xB7\uC0AC\uC2E4 \uD655\uC778\uC774 \uC544\uB2D9\uB2C8\uB2E4. flags \uAC00 \uC5C6\uC5B4\uB3C4 "\uAE30\uC7AC \uAC00\uB2A5"\uC774 \uC544\uB2C8\uBA70, \uC9E7\uC740 \uB0A0\uC870(\uC218\uC0C1\xB7\uB300\uC0C1\xB7\uC9C4\uB2E8\uBA85 \uB4F1)\uB294 \uC790\uB3D9\uC73C\uB85C \uBABB \uC7A1\uC744 \uC218 \uC788\uC73C\uB2C8 \uBAA8\uB4E0 \uBB38\uC7A5\uC744 \uAD50\uC0AC\uAC00 \uC9C1\uC811 \uC0AC\uC2E4 \uD655\uC778\uD574\uC57C \uD569\uB2C8\uB2E4. \uAE08\uC9C0\uD45C\uD604\xB7\uAE30\uC7AC\uC694\uB839\xB7\uC791\uC131\uBC94\uC704\uB3C4 \uBCC4\uB3C4\uB85C \uD655\uC778\uD558\uC138\uC694.';
+  '\uC5B4\uD718 \uC2A4\uD06C\uB9B0\uC77C \uBFD0 \uC758\uBBF8 \uAC80\uC99D\xB7\uAE30\uC7AC \uC801\uD569\uC131\xB7\uC0AC\uC2E4 \uD655\uC778\uC774 \uC544\uB2D9\uB2C8\uB2E4. flags \uAC00 \uC5C6\uC5B4\uB3C4 "\uAE30\uC7AC \uAC00\uB2A5"\uC774 \uC544\uB2C8\uBA70, \uC9E7\uC740 \uB0A0\uC870(\uC218\uC0C1\xB7\uB300\uC0C1\xB7\uC9C4\uB2E8\uBA85 \uB4F1)\uB294 \uC790\uB3D9\uC73C\uB85C \uBABB \uC7A1\uC744 \uC218 \uC788\uC73C\uB2C8 \uBAA8\uB4E0 \uBB38\uC7A5\uC744 \uAD50\uC0AC\uAC00 \uC9C1\uC811 \uC0AC\uC2E4 \uD655\uC778\uD574\uC57C \uD569\uB2C8\uB2E4. \uAE08\uC9C0\uD45C\uD604\xB7\uAE30\uC7AC\uC694\uB839\xB7\uC791\uC131\uBC94\uC704\uB3C4 \uBCC4\uB3C4\uB85C \uD655\uC778\uD558\uC138\uC694. \uC11C\uC0AC \uD488\uC9C8(\uC131\uCDE8\uAE30\uC900 \uBCF5\uC0AC\xB7\uACF5\uD1B5 \uBB38\uAD6C\xB7\uC77C\uBC18 \uD3C9\uAC00 \uB098\uC5F4\xB7\uD65C\uB3D9 \uB098\uC5F4\xB7\uADFC\uAC70 \uC5C6\uB294 \uBCC0\uD654\xB7\uB0B4\uBA74 \uD45C\uD604)\uC740 narrative \uC5D0 \uC788\uACE0, \uC7AC\uB8CC\uAC00 \uC5C6\uC5B4 **\uBCF4\uC9C0 \uBABB\uD55C** \uAC80\uC0AC\uB294 narrativeSkipped \uC5D0 \uB098\uC5F4\uB429\uB2C8\uB2E4 \u2014 narrative \uAC00 \uBE44\uC5C8\uB2E4\uACE0 \uD1B5\uACFC\uAC00 \uC544\uB2D9\uB2C8\uB2E4.';
 var LEVEL_LABELS = {
   elementary: '\uCD08\uB4F1\uD559\uAD50',
   middle: '\uC911\uD559\uAD50',
@@ -24892,7 +24963,7 @@ function sentenceSegments(text) {
     .map((s) => s.trim())
     .filter((s) => s.length > 0);
 }
-function checkGrounding(claims, observations, query = {}) {
+function checkGrounding(claims, observations, query = {}, narrativeInput = {}) {
   const pack = resolveRulePack(query);
   const highRiskTerms = pack.highRiskTerms;
   const byId = /* @__PURE__ */ new Map();
@@ -24924,6 +24995,10 @@ function checkGrounding(claims, observations, query = {}) {
     return { text, citedIds, validIds, unknownIds, coverage: Number(coverage.toFixed(3)), flags };
   });
   const flaggedCount = checks.filter((c) => c.flags.length > 0).length;
+  const narrative = checkRecordNarrative({
+    ...narrativeInput,
+    content: checks.map((c) => c.text).join(' '),
+  });
   return {
     total: checks.length,
     flaggedCount,
@@ -24932,8 +25007,16 @@ function checkGrounding(claims, observations, query = {}) {
     rulePackLevel: pack.level,
     requiresTeacherReview: true,
     disclaimer: DISCLAIMER,
+    narrative: narrative.flags,
+    narrativeSkipped: narrative.skipped,
   };
 }
+var NARRATIVE_PRINCIPLES = [
+  '\uC8FC\uC81C \uD558\uB098\uB97C \uAE4A\uAC8C \uC4F4\uB2E4 \u2014 \uC5EC\uB7EC \uD65C\uB3D9\uC744 \uB098\uC5F4\uD558\uBA74 \uADF8 \uD559\uC0DD\uC774 \uBB34\uC5C7\uC744 \uAD81\uAE08\uD574\uD588\uB294\uC9C0\uAC00 \uC0AC\uB77C\uC9C4\uB2E4. \uC9C8\uBB38 \u2192 \uC2DC\uB3C4 \u2192 \uB9C9\uD78C \uACF3 \u2192 \uB2E4\uC74C \uC9C8\uBB38\uC758 \uC904\uAE30 \uD558\uB098\uB97C \uACE0\uB978\uB2E4.',
+  '\uC131\uCDE8\uAE30\uC900 \uC6D0\uBB38\uC744 \uC62E\uACA8 \uC801\uC9C0 \uC54A\uB294\uB2E4 \u2014 \uAD50\uC721\uACFC\uC815 \uBB38\uC7A5\uC744 \uADF8\uB300\uB85C \uC4F0\uBA74 \uBAA8\uB4E0 \uD559\uC0DD\uC758 \uAE30\uB85D\uC774 \uAC19\uC544\uC9C4\uB2E4. \uC131\uCDE8\uAE30\uC900\uC740 **\uD0A4\uC6CC\uB4DC\uB85C\uB9CC** \uC8FC\uC5B4\uC9C0\uBA70, \uC6D0\uBB38\uC774 \uD544\uC694\uD574 \uBCF4\uC5EC\uB3C4 \uC694\uCCAD\uD558\uC9C0 \uC54A\uB294\uB2E4.',
+  '\uAD00\uCC30\uD560 \uC218 \uC5C6\uB294 \uAC83\uC744 \uB2E8\uC815\uD558\uC9C0 \uC54A\uB294\uB2E4 \u2014 "\uC774\uD574\uD568\xB7\uAE68\uB2EC\uC74C\xB7\uD765\uBBF8\uB97C \uB290\uB08C"\uC740 \uB208\uC5D0 \uBCF4\uC774\uC9C0 \uC54A\uB294\uB2E4. \uBB34\uC5C7\uC744 \uD588\uACE0 \uBB34\uC5C7\uC774 \uB2EC\uB77C\uC84C\uB294\uC9C0\uB85C \uC801\uB294\uB2E4.',
+  '\uBCC0\uD654\uB97C \uB9D0\uD558\uB824\uBA74 \uC2DC\uAE30\uAC00 \uB2E4\uB978 \uADFC\uAC70 \uB450 \uAC1C\uAC00 \uC788\uC5B4\uC57C \uD55C\uB2E4 \u2014 "\uC810\uCC28\xB7\uAFB8\uC900\uD788"\uB9CC\uC73C\uB85C\uB294 \uADFC\uAC70\uAC00 \uB418\uC9C0 \uC54A\uB294\uB2E4.',
+];
 function recordGuidelines(query = {}) {
   const pack = resolveRulePack(query);
   return {
@@ -24942,6 +25025,7 @@ function recordGuidelines(query = {}) {
     levelLabel: pack.levelLabel,
     principles: pack.citations.map((c) => c.text),
     citations: pack.citations,
+    narrativePrinciples: NARRATIVE_PRINCIPLES,
     source: REF_PORTAL.url,
     references: pack.references,
     disclaimer: DISCLAIMER_GUIDE,
@@ -25008,6 +25092,350 @@ function hasProhibitedRecordItem(content) {
     from = i + 2;
   }
 }
+var NARRATIVE_FLAG_LABELS = {
+  standard_text_copied: '\uC131\uCDE8\uAE30\uC900 \uBB38\uC7A5 \uBCF5\uC0AC \uC758\uC2EC',
+  shared_boilerplate: '\uB2E4\uB978 \uD559\uC0DD\uACFC \uAC19\uC740 \uBB38\uC7A5',
+  generic_praise: '\uC7A5\uBA74 \uC5C6\uB294 \uC77C\uBC18 \uD3C9\uAC00',
+  activity_list_no_question: '\uC9C8\uBB38 \uC5C6\uB294 \uD65C\uB3D9 \uB098\uC5F4',
+  change_without_basis: '\uADFC\uAC70 \uC5C6\uB294 \uBCC0\uD654 \uC11C\uC220',
+  unobservable_inner_state: '\uAD00\uCC30\uD560 \uC218 \uC5C6\uB294 \uD45C\uD604',
+};
+var STANDARD_COPY_NGRAM = 4;
+var BOILERPLATE_SIMILARITY = 0.7;
+var BOILERPLATE_MIN_WORDS = 4;
+var BOILERPLATE_MIN_CHARS = 12;
+var BOILERPLATE_FIRST_MIN_WORDS = 3;
+var BOILERPLATE_FIRST_MIN_CHARS = 8;
+var GENERIC_RUN_MIN = 2;
+var ACTIVITY_KIND_MIN = 3;
+var CHANGE_BASIS_MIN_SPAN_DAYS = 30;
+var CHANGE_BASIS_SLOT = '\uBCC0\uD654';
+var UNOBSERVABLE_EXEMPT_AREAS = ['subjectDev'];
+var GENERIC_PRAISE_TERMS = [
+  '\uC131\uC2E4',
+  '\uC774\uD574\uB825\uC774 \uB6F0\uC5B4',
+  '\uC218\uC5C5 \uD0DC\uB3C4\uAC00 \uBC14',
+  '\uD0DC\uB3C4\uAC00 \uBC14\uB974',
+  '\uCC45\uC784\uAC10\uC774 \uAC15',
+  '\uC801\uADF9\uC801',
+  '\uC5F4\uC2EC\uD788',
+  '\uBAA8\uBC94\uC801',
+  '\uADFC\uBA74',
+  '\uC608\uC758 \uBC14\uB974',
+  '\uC6D0\uB9CC',
+  '\uCC29\uC2E4',
+  '\uBC14\uB978 \uC778\uC131',
+  '\uBC1D\uACE0 \uBA85\uB791',
+  '\uB9AC\uB354\uC2ED\uC774 \uB6F0\uC5B4',
+  '\uD559\uC5C5 \uB2A5\uB825\uC774 \uC6B0\uC218',
+  '\uC6B0\uC218\uD55C \uD559\uC0DD',
+];
+var SCENE_ACTION_STEMS = [
+  '\uC124\uBA85',
+  '\uBE44\uAD50',
+  '\uBD84\uC11D',
+  '\uCE21\uC815',
+  '\uC124\uACC4',
+  '\uC218\uC815',
+  '\uC81C\uC548',
+  '\uBC18\uBC15',
+  '\uC9C0\uC801',
+  '\uACC4\uC0B0',
+  '\uC694\uC57D',
+  '\uAD6C\uBD84',
+  '\uC791\uC131',
+  '\uC801\uC6A9',
+  '\uC5F0\uACB0',
+  '\uAC80\uC99D',
+  '\uC815\uB9AC',
+  '\uC81C\uCD9C',
+  '\uC870\uC0AC\uD558',
+  '\uCC3E\uC544',
+  '\uB9CC\uB4E4',
+  '\uADF8\uB824',
+  '\uC138\uC6B0',
+  '\uB4A4\uC9D1',
+  '\uBC14\uAFB8',
+  '\uACE0\uCCD0',
+  '\uBB3C\uC5B4',
+  '\uB418\uBB3C',
+];
+var SCENE_DATE_RE =
+  /\d{4}-\d{2}-\d{2}|\d{1,2}월\s?\d{1,2}일|\d{1,2}월|\d{1,2}차시|\d{1,2}주차|\d{1,2}학기/;
+var SCENE_QUANTITY_RE = /\d+\s*(명|개|회|차|번|시간|분|쪽|건|편|점|가지)/;
+var SCENE_QUOTE_RE = /["'“”‘’]/;
+var ACTIVITY_NOUNS = [
+  '\uBCF4\uACE0\uC11C',
+  '\uC2E4\uD5D8',
+  '\uBC1C\uD45C',
+  '\uD1A0\uB860',
+  '\uC124\uBB38',
+  '\uC81C\uC791',
+  '\uD504\uB85C\uC81D\uD2B8',
+  '\uD3EC\uC2A4\uD130',
+  '\uACAC\uD559',
+  '\uCEA0\uD398\uC778',
+];
+var QUESTION_MARKERS = ['\uAD81\uAE08', '\uC758\uBB38', '\uC9C8\uBB38', '\uB418\uBB3C', '\uC65C'];
+var QUESTION_CANCEL_SUFFIX = {
+  왜: ['\uACE1', '\uC18C', '\uB780', '\uC801', '\uC0C9'],
+};
+var CHANGE_TERMS = [
+  '\uC810\uCC28',
+  '\uC810\uC810',
+  '\uAFB8\uC900\uD788',
+  '\uAC08\uC218\uB85D',
+  '\uC9C0\uC18D\uC801\uC73C\uB85C',
+  '\uB9E4\uBC88',
+  '\uCC28\uCE30',
+];
+var UNOBSERVABLE_SUGGESTIONS = {
+  이해함: '\uC124\uBA85\uD568 \xB7 \uAD6C\uBD84\uD568 \xB7 \uBE44\uAD50\uD568',
+  이해하게: '\uC124\uBA85\uD558\uAC8C',
+  이해하는: '\uC124\uBA85\uD558\uB294',
+  파악함: '\uC815\uB9AC\uD574 \uC81C\uC2DC\uD568',
+  파악하는: '\uC815\uB9AC\uD574 \uC81C\uC2DC\uD558\uB294',
+  '\uC54C\uAC8C \uB428': '\uC124\uBA85\uD568',
+  '\uC54C\uAC8C \uB418\uC5C8': '\uC124\uBA85\uD568',
+  깨달음: '\uC2A4\uC2A4\uB85C \uC9DA\uC5B4 \uB9D0\uD568',
+  깨닫게: '\uC2A4\uC2A4\uB85C \uC9DA\uC5B4 \uB9D0\uD558\uAC8C',
+  '\uD765\uBBF8\uB97C \uB290':
+    '\uC774\uC5B4\uC11C \uC9C8\uBB38\uD568 \xB7 \uC790\uB8CC\uB97C \uCC3E\uC544\uBD04',
+  '\uD638\uAE30\uC2EC\uC744 \uAC00': '\uC9C8\uBB38\uC744 \uC774\uC5B4 \uAC10',
+  '\uC790\uC2E0\uAC10\uC744 \uC5BB': '\uBA3C\uC800 \uBC1C\uD45C\uB97C \uB9E1\uC74C',
+  함양함: '\uC2E4\uC81C\uB85C \uD55C \uC77C\uB85C \uC801\uAE30',
+  함양하게: '\uC2E4\uC81C\uB85C \uD55C \uC77C\uB85C \uC801\uAE30',
+  성장함: '\uBB34\uC5C7\uC774 \uB2EC\uB77C\uC84C\uB294\uC9C0 \uC7A5\uBA74\uC73C\uB85C \uC801\uAE30',
+};
+var NARRATIVE_PUNCT_RE = /[.,!?;:()[\]{}"'“”‘’·…—–-]/g;
+function narrativeNorm(s) {
+  return s.normalize('NFC');
+}
+function narrativeWords(text) {
+  return narrativeNorm(text)
+    .split(/\s+/)
+    .map((w) => w.replace(NARRATIVE_PUNCT_RE, ''))
+    .filter((w) => w.length > 0);
+}
+function narrativeSentences(text) {
+  return narrativeNorm(text)
+    .split(/(?:[.!?。]|\n)+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+var CLAUSE_CONNECTIVES = /(하고|하며|하여|하였으며|했으며|이며|지만|으나|면서|고서)\s+/g;
+function narrativeClauses(text) {
+  const out = [];
+  for (const s of narrativeSentences(text)) {
+    const marked = s.replace(CLAUSE_CONNECTIVES, '$1\uE000');
+    for (const c of marked.split(/[,、]\s*|\ue000/)) {
+      const t = c.trim();
+      if (t.length > 0) out.push(t);
+    }
+  }
+  return out;
+}
+function narrativeSimilarity(a, b) {
+  const A = bigrams(a);
+  const B = bigrams(b);
+  if (A.size === 0 || B.size === 0) return 0;
+  let inter = 0;
+  for (const g of A) if (B.has(g)) inter += 1;
+  return inter / (A.size + B.size - inter);
+}
+function occursWithoutCancel(text, term) {
+  const cancels = QUESTION_CANCEL_SUFFIX[term];
+  if (cancels === void 0) return text.includes(term);
+  let from = 0;
+  for (;;) {
+    const i = text.indexOf(term, from);
+    if (i < 0) return false;
+    const next = text.slice(i + term.length, i + term.length + 1);
+    if (!cancels.includes(next)) return true;
+    from = i + term.length;
+  }
+}
+function hasSceneMarker(clause) {
+  if (SCENE_DATE_RE.test(clause)) return true;
+  if (SCENE_QUANTITY_RE.test(clause)) return true;
+  if (SCENE_QUOTE_RE.test(clause)) return true;
+  return SCENE_ACTION_STEMS.some((v) => clause.includes(v));
+}
+function narrativeDayNumber(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  if (m === null) return null;
+  const t = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return Number.isNaN(t) ? null : Math.floor(t / 864e5);
+}
+function narrativeFlag(code, detail) {
+  return { code, label: NARRATIVE_FLAG_LABELS[code], detail };
+}
+function checkStandardCopy(content, standardTexts) {
+  const texts = (standardTexts ?? []).filter((t) => typeof t === 'string' && t.trim().length > 0);
+  if (texts.length === 0) return null;
+  const draft = narrativeWords(content);
+  if (draft.length < STANDARD_COPY_NGRAM) return null;
+  const standardGrams = /* @__PURE__ */ new Set();
+  for (const t of texts) {
+    const w = narrativeWords(t);
+    for (let i = 0; i + STANDARD_COPY_NGRAM <= w.length; i += 1) {
+      standardGrams.add(w.slice(i, i + STANDARD_COPY_NGRAM).join(' '));
+    }
+  }
+  if (standardGrams.size === 0) return null;
+  for (let i = 0; i + STANDARD_COPY_NGRAM <= draft.length; i += 1) {
+    const gram = draft.slice(i, i + STANDARD_COPY_NGRAM).join(' ');
+    if (standardGrams.has(gram)) {
+      return narrativeFlag(
+        'standard_text_copied',
+        `\uC131\uCDE8\uAE30\uC900 \uBB38\uC7A5\uACFC "${gram}" \uC774(\uAC00) \uADF8\uB300\uB85C \uACB9\uCE69\uB2C8\uB2E4. \uC131\uCDE8\uAE30\uC900\uC740 \uD0A4\uC6CC\uB4DC\uB9CC \uC4F0\uACE0, \uADF8 \uC704\uC5D0\uC11C \uC774 \uD559\uC0DD\uC774 \uBB34\uC5C7\uC744 \uD588\uB294\uC9C0\uB85C \uBC14\uAFD4 \uC8FC\uC138\uC694.`,
+      );
+    }
+  }
+  return null;
+}
+function checkSharedBoilerplate(content, peerContents) {
+  const peers = (peerContents ?? []).filter((c) => typeof c === 'string' && c.trim().length > 0);
+  if (peers.length === 0) return null;
+  const mine = narrativeSentences(content);
+  if (mine.length === 0) return null;
+  const peerSentences = peers.flatMap((p) => narrativeSentences(p));
+  if (peerSentences.length === 0) return null;
+  for (let i = 0; i < mine.length; i += 1) {
+    const s = mine[i];
+    const first = i === 0;
+    const minWords = first ? BOILERPLATE_FIRST_MIN_WORDS : BOILERPLATE_MIN_WORDS;
+    const minChars = first ? BOILERPLATE_FIRST_MIN_CHARS : BOILERPLATE_MIN_CHARS;
+    if (narrativeWords(s).length < minWords) continue;
+    if (s.replace(/\s+/g, '').length < minChars) continue;
+    for (const p of peerSentences) {
+      if (narrativeSimilarity(s, p) < BOILERPLATE_SIMILARITY) continue;
+      return narrativeFlag(
+        'shared_boilerplate',
+        `"${s}" \uC774(\uAC00) \uAC19\uC740 \uBC18 \uB2E4\uB978 \uD559\uC0DD \uCD08\uC548\uC5D0\uB3C4 \uAC70\uC758 \uADF8\uB300\uB85C \uC788\uC2B5\uB2C8\uB2E4. \uB2E4\uB978 \uD559\uC0DD\uC5D0\uAC8C \uC62E\uACA8\uB3C4 \uB9D0\uC774 \uB418\uB294 \uBB38\uC7A5\uC740 \uC774 \uD559\uC0DD\uC744 \uC124\uBA85\uD558\uC9C0 \uBABB\uD569\uB2C8\uB2E4.`,
+      );
+    }
+  }
+  return null;
+}
+function checkGenericPraise(content) {
+  const cs = narrativeClauses(content);
+  let run = 0;
+  let hits = [];
+  for (const c of cs) {
+    const generic = GENERIC_PRAISE_TERMS.some((t) => c.includes(t)) && !hasSceneMarker(c);
+    if (!generic) {
+      run = 0;
+      hits = [];
+      continue;
+    }
+    run += 1;
+    hits.push(c);
+    if (run >= GENERIC_RUN_MIN) {
+      return narrativeFlag(
+        'generic_praise',
+        `"${hits.join(' / ')}" \uCC98\uB7FC \uC7A5\uBA74 \uC5C6\uB294 \uD3C9\uAC00\uAC00 \uC774\uC5B4\uC9D1\uB2C8\uB2E4. \uC131\uC2E4\uD568\xB7\uD0DC\uB3C4\uB294 \uB4F1\uAE09\uC73C\uB85C \uC774\uBBF8 \uB4DC\uB7EC\uB098\uBBC0\uB85C, \uADF8\uB807\uAC8C \uBCF8 \uC7A5\uBA74 \uD558\uB098\uB97C \uB300\uC2E0 \uC801\uC5B4 \uC8FC\uC138\uC694.`,
+      );
+    }
+  }
+  return null;
+}
+function checkActivityList(content) {
+  const text = narrativeNorm(content);
+  const kinds = ACTIVITY_NOUNS.filter((n) => text.includes(n));
+  if (kinds.length < ACTIVITY_KIND_MIN) return null;
+  if (QUESTION_MARKERS.some((m) => occursWithoutCancel(text, m))) return null;
+  return narrativeFlag(
+    'activity_list_no_question',
+    `\uD65C\uB3D9\uC774 ${kinds.length}\uAC00\uC9C0(${kinds.join('\xB7')}) \uB098\uC5F4\uB410\uB294\uB370 \uD559\uC0DD\uC758 \uC9C8\uBB38\uC774 \uC5C6\uC2B5\uB2C8\uB2E4. \uD65C\uB3D9\uC744 \uC787\uB294 \uAC83\uC740 \uD638\uAE30\uC2EC\uC785\uB2C8\uB2E4 \u2014 \uD558\uB098\uB97C \uACE8\uB77C \uC5B4\uB5A4 \uC758\uBB38\uC5D0\uC11C \uC2DC\uC791\uD588\uB294\uC9C0\uB85C \uB2E4\uC2DC \uC368 \uC8FC\uC138\uC694.`,
+  );
+}
+function checkChangeBasis(content, basis) {
+  if (basis === void 0) return null;
+  const text = narrativeNorm(content);
+  const used = CHANGE_TERMS.filter((t) => text.includes(t));
+  if (used.length === 0) return null;
+  if ((basis.slots ?? []).includes(CHANGE_BASIS_SLOT)) return null;
+  const days = (basis.dates ?? [])
+    .map((d) => (typeof d === 'string' ? narrativeDayNumber(d) : null))
+    .filter((n) => n !== null);
+  const unique = [...new Set(days)];
+  if (
+    unique.length >= 2 &&
+    Math.max(...unique) - Math.min(...unique) >= CHANGE_BASIS_MIN_SPAN_DAYS
+  ) {
+    return null;
+  }
+  return narrativeFlag(
+    'change_without_basis',
+    `"${used.join('\xB7')}" \uAC19\uC740 \uBCC0\uD654 \uD45C\uD604\uC774 \uC788\uB294\uB370 \uC2DC\uAE30\uB97C \uACAC\uC904 \uADFC\uAC70\uAC00 \uC5C6\uC2B5\uB2C8\uB2E4. \uAD00\uCC30\uC5D0 '${CHANGE_BASIS_SLOT}' \uC2AC\uB86F\uC744 \uBD99\uC774\uAC70\uB098 ${CHANGE_BASIS_MIN_SPAN_DAYS}\uC77C \uC774\uC0C1 \uB5A8\uC5B4\uC9C4 \uADFC\uAC70\uB97C \uB354\uD55C \uB4A4 \uC4F0\uAC70\uB098, \uBCC0\uD654 \uD45C\uD604\uC744 \uBE7C \uC8FC\uC138\uC694.`,
+  );
+}
+function checkUnobservableInnerState(content, area) {
+  if (area !== void 0 && UNOBSERVABLE_EXEMPT_AREAS.includes(area)) return null;
+  const text = narrativeNorm(content);
+  const hits = [];
+  for (const term of Object.keys(UNOBSERVABLE_SUGGESTIONS)) {
+    if (text.includes(term)) hits.push(term);
+  }
+  if (hits.length === 0) return null;
+  const shown = hits
+    .slice(0, 3)
+    .map((t) => `${t} \u2192 ${UNOBSERVABLE_SUGGESTIONS[t] ?? ''}`)
+    .join(' / ');
+  return narrativeFlag(
+    'unobservable_inner_state',
+    `\uC18D\uB9C8\uC74C\uC740 \uBCFC \uC218 \uC5C6\uC2B5\uB2C8\uB2E4. \uD589\uB3D9\uC73C\uB85C \uBC14\uAFD4 \uC8FC\uC138\uC694 \u2014 ${shown}.`,
+  );
+}
+function checkRecordNarrative(input) {
+  const flags = [];
+  const skipped = [];
+  const content = typeof input.content === 'string' ? input.content : '';
+  if (content.trim().length === 0) return { flags: [], skipped: [] };
+  const push = (f) => {
+    if (f !== null) flags.push(f);
+  };
+  if ((input.standardTexts ?? []).length === 0) {
+    skipped.push({
+      code: 'standard_text_copied',
+      reason:
+        '\uC5F0\uACB0\uB41C \uC131\uCDE8\uAE30\uC900 \uC6D0\uBB38\uC774 \uC5C6\uC5B4 \uBCF5\uC0AC \uC5EC\uBD80\uB97C \uBCF4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+    });
+  } else {
+    push(checkStandardCopy(content, input.standardTexts));
+  }
+  if ((input.peerContents ?? []).length === 0) {
+    skipped.push({
+      code: 'shared_boilerplate',
+      reason:
+        '\uACAC\uC904 \uB2E4\uB978 \uD559\uC0DD \uCD08\uC548\uC774 \uC5C6\uC5B4 \uACF5\uD1B5 \uBB38\uAD6C \uC5EC\uBD80\uB97C \uBCF4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+    });
+  } else {
+    push(checkSharedBoilerplate(content, input.peerContents));
+  }
+  push(checkGenericPraise(content));
+  push(checkActivityList(content));
+  if (input.evidenceBasis === void 0) {
+    skipped.push({
+      code: 'change_without_basis',
+      reason:
+        '\uADFC\uAC70 \uC790\uB8CC\uB97C \uC544\uC9C1 \uC77D\uC9C0 \uBABB\uD574 \uBCC0\uD654 \uC11C\uC0AC\uC758 \uADFC\uAC70\uB97C \uBCF4\uC9C0 \uBABB\uD588\uC2B5\uB2C8\uB2E4.',
+    });
+  } else {
+    push(checkChangeBasis(content, input.evidenceBasis));
+  }
+  if (input.area !== void 0 && UNOBSERVABLE_EXEMPT_AREAS.includes(input.area)) {
+    skipped.push({
+      code: 'unobservable_inner_state',
+      reason:
+        '\uAD50\uACFC\uD559\uC2B5\uBC1C\uB2EC\uC0C1\uD669\uC740 \uC131\uCDE8\uAE30\uC900 \uB3C4\uB2EC\uB3C4\uB97C \uADF8\uB807\uAC8C \uC801\uB294 \uAC83\uC774 \uAE30\uC7AC \uBB38\uBC95\uC774\uB77C \uAC74\uB108\uB701\uB2C8\uB2E4.',
+    });
+  } else {
+    push(checkUnobservableInnerState(content, input.area));
+  }
+  return { flags, skipped };
+}
 
 // ../ssampin-ai-bridge/packages/core/dist/write.js
 var LOCK_ACQUIRE_TIMEOUT_MS = 5e3;
@@ -25048,7 +25476,7 @@ function assertWriteEnabled(env = process.env, dataDir) {
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
 }
-function setIf14(target, key, value) {
+function setIf15(target, key, value) {
   if (value !== void 0) target[key] = value;
 }
 function validate(input) {
@@ -25090,7 +25518,7 @@ function buildRecord(input) {
     createdAt: now,
     updatedAt: now,
   };
-  setIf14(rec, 'classId', input.classId);
+  setIf15(rec, 'classId', input.classId);
   return rec;
 }
 function idemPath(dataDir) {
@@ -25457,8 +25885,9 @@ function validateRecordDraft(input) {
     const claims = sentences.map((text) => ({ text, observationIds: basisIds }));
     const query = { level: input.level };
     if (input.year !== void 0) query.year = input.year;
-    const report = checkGrounding(claims, input.observations ?? [], query);
+    const report = checkGrounding(claims, input.observations ?? [], query, { area: spec.area });
     for (const f of new Set(report.claims.flatMap((c) => c.flags))) flags.push(f);
+    for (const f of report.narrative) flags.push(f.code);
   }
   if (hasProhibitedRecordItem(content)) flags.push('prohibited_item');
   if (input.secretCorpus && input.secretCorpus.length > 0) {
@@ -25528,8 +25957,8 @@ async function setRecordDraft(dataDir, input) {
       createdAt,
       updatedAt,
     };
-    setIf14(record2, 'classId', input.classId);
-    setIf14(record2, 'subject', input.subject);
+    setIf15(record2, 'classId', input.classId);
+    setIf15(record2, 'subject', input.subject);
     if (dedupFlags.length > 0) record2['groundingFlags'] = dedupFlags;
     else delete record2['groundingFlags'];
     if (idx >= 0) records[idx] = record2;
@@ -25553,7 +25982,7 @@ function recordId(prefix, clientKey) {
   }
   return `${prefix}_${Date.now().toString(36)}_${crypto4.randomBytes(5).toString('hex')}`;
 }
-function setIf15(t, k, v) {
+function setIf16(t, k, v) {
   if (v !== void 0) t[k] = v;
 }
 function hasId(v, id) {
@@ -25631,9 +26060,9 @@ function appendTodoDirect(dataDir, input, clientKey) {
       pendingRemoteOp: 'create',
       priority: input.priority ?? 'none',
     };
-    setIf15(todo, 'dueDate', input.dueDate);
-    setIf15(todo, 'category', input.category);
-    setIf15(todo, 'time', input.time);
+    setIf16(todo, 'dueDate', input.dueDate);
+    setIf16(todo, 'category', input.category);
+    setIf16(todo, 'time', input.time);
     return { next: { ...root, todos: [...list, todo] }, ref: id };
   });
 }
@@ -25649,8 +26078,8 @@ function appendEventDirect(dataDir, input, clientKey) {
       category: input.category ?? 'etc',
       source: 'ssampin',
     };
-    setIf15(ev, 'time', input.time);
-    setIf15(ev, 'location', input.location);
+    setIf16(ev, 'time', input.time);
+    setIf16(ev, 'location', input.location);
     return { next: { ...root, events: [...list, ev] }, ref: id };
   });
 }
@@ -25876,7 +26305,7 @@ function safeAchievement(level) {
   if (t.length === 0 || t.length > 4 || /\d/.test(t)) return void 0;
   return t;
 }
-function setIf16(target, key, value) {
+function setIf17(target, key, value) {
   if (value !== void 0 && value !== '') target[key] = value;
 }
 function getRubricFeedback(dataDir, classId, studentKey2, maskText) {
@@ -25898,9 +26327,9 @@ function getRubricFeedback(dataDir, classId, studentKey2, maskText) {
             criterion: c.name,
             achievedLevel: level?.name ?? null,
           };
-          if (level?.description) setIf16(fb, 'levelDescription', scrub(level.description));
+          if (level?.description) setIf17(fb, 'levelDescription', scrub(level.description));
           const note = g.criterionNotes[c.id];
-          if (note) setIf16(fb, 'note', scrub(note));
+          if (note) setIf17(fb, 'note', scrub(note));
           return fb;
         });
       const view = {
@@ -25909,7 +26338,7 @@ function getRubricFeedback(dataDir, classId, studentKey2, maskText) {
         criteria,
         date: g.gradedAt,
       };
-      if (g.overallFeedback) setIf16(view, 'overallFeedback', scrub(g.overallFeedback));
+      if (g.overallFeedback) setIf17(view, 'overallFeedback', scrub(g.overallFeedback));
       return view;
     });
 }
@@ -25941,7 +26370,7 @@ function getGradeSummary(dataDir, classId, studentKey2, maskText) {
       participation: '\uBBF8\uC785\uB825',
       confirmed: false,
     };
-    if (p.method) setIf16(summary, 'method', scrub(p.method));
+    if (p.method) setIf17(summary, 'method', scrub(p.method));
     if (p.kind === 'written-exam') {
       const w = ga.writtenResults.find((x) => x.assessmentId === p.id && x.studentKey === gKey);
       if (w) {
@@ -25955,7 +26384,7 @@ function getGradeSummary(dataDir, classId, studentKey2, maskText) {
       if (pr) {
         summary['participation'] = pr.scorePresent ? '\uC751\uC2DC' : '\uBBF8\uC785\uB825';
         summary['confirmed'] = pr.confirmed;
-        if (pr.evidenceNote) setIf16(summary, 'evidenceNote', scrub(pr.evidenceNote));
+        if (pr.evidenceNote) setIf17(summary, 'evidenceNote', scrub(pr.evidenceNote));
       }
     }
     return summary;
@@ -27327,12 +27756,18 @@ function checkRecordDraft(ctx, args) {
   const rulePack = {};
   if (args.level !== void 0) rulePack.level = args.level;
   if (args.year !== void 0) rulePack.year = args.year;
-  const report = checkGrounding(args.claims, tokenized, rulePack);
+  const report = checkGrounding(args.claims, tokenized, rulePack, {
+    evidenceBasis: {
+      slots: records.flatMap((o) => o.slots ?? []),
+      dates: records.map((o) => o.date).filter((d) => typeof d === 'string' && d.length > 0),
+    },
+  });
+  const totalFlagged = report.flaggedCount + report.narrative.length;
   ctx.audit.append({
     tool: 'check_record_draft',
     recordIds: records.map((o) => o.id),
     redactionStats: { observations: records.length },
-    validatorResult: report.flaggedCount === 0 ? 'no_flags' : `flagged:${report.flaggedCount}`,
+    validatorResult: totalFlagged === 0 ? 'no_flags' : `flagged:${totalFlagged}`,
     rulePackVersion: report.rulePackVersion,
   });
   return report;
@@ -27553,7 +27988,7 @@ function getWeeklySummary(ctx, args = {}) {
 }
 
 // ../ssampin-ai-bridge/packages/mcp/dist/recordDraftTools.js
-var STATUSES = /* @__PURE__ */ new Set(['draft', 'reviewing', 'confirmed']);
+var STATUSES2 = /* @__PURE__ */ new Set(['draft', 'reviewing', 'confirmed']);
 function asStr3(v) {
   return typeof v === 'string' && v.trim().length > 0 ? v : void 0;
 }
@@ -27595,7 +28030,7 @@ async function writeRecordDraft(ctx, args) {
   const content = asStr3(args.content);
   if (!content) throw new WriteValidationError('content \uAC00 \uD544\uC694\uD569\uB2C8\uB2E4.');
   const status = asStr3(args.status);
-  if (status !== void 0 && !STATUSES.has(status)) {
+  if (status !== void 0 && !STATUSES2.has(status)) {
     throw new WriteValidationError(
       'status \uB294 draft|reviewing|confirmed \uC5EC\uC57C \uD569\uB2C8\uB2E4.',
     );
@@ -27689,11 +28124,31 @@ function getRecordEvidence(ctx, args) {
   const areaFilter = isRecordArea(args.area) ? args.area : void 0;
   const { resolved: studentRef, identity } = resolveStudentTarget(ctx, args.studentToken);
   const roster = rosterForIdentity(ctx.dataDir, identity, ctx.store);
+  const threads = readInquiryThreads(ctx.dataDir).records;
+  let threadFilter;
+  if (args.threadToken !== void 0) {
+    const resolvedThread = ctx.store.resolveToken(args.threadToken);
+    const threadId = resolvedThread ? parseInquiryThreadIdentity(resolvedThread) : null;
+    if (threadId === null) {
+      throw new WriteValidationError(
+        '\uD0D0\uAD6C \uD750\uB984 \uD1A0\uD070\uC774 \uC544\uB2D9\uB2C8\uB2E4. get_inquiry_threads \uC758 threadToken \uC744 \uC4F0\uC138\uC694.',
+      );
+    }
+    threadFilter = threads.find((t) => t.id === threadId && t.studentRef === studentRef);
+    if (!threadFilter) {
+      throw new WriteValidationError(
+        '\uC774 \uD559\uC0DD\uC758 \uD0D0\uAD6C \uD750\uB984\uC774 \uC544\uB2D9\uB2C8\uB2E4.',
+      );
+    }
+  }
+  const titleById = new Map(threads.map((t) => [t.id, t.title]));
   const evidence = readRecordEvidence(ctx.dataDir)
     .records.filter((e) => e.studentRef === studentRef)
     .filter((e) => e.excludedFromAi !== true)
     .filter((e) => areaFilter === void 0 || e.areas.includes(areaFilter))
+    .filter((e) => threadFilter === void 0 || e.threadId === threadFilter.id)
     .map((e) => {
+      const title = e.threadId !== void 0 ? titleById.get(e.threadId) : void 0;
       const view = {
         areas: e.areas,
         content: deidentify(e.content, roster).text,
@@ -27703,6 +28158,16 @@ function getRecordEvidence(ctx, args) {
         ...(e.slots && e.slots.length > 0
           ? { slots: e.slots.map((sl) => deidentify(sl, roster).text) }
           : {}),
+        // 흐름이 있는 근거만 토큰·이름을 싣는다. 흐름이 지워진 고아 threadId 는 이름이 없으므로
+        // 미분류처럼 조용히 빠진다(본체와 같은 관용 — 지우지 않고 안 보여 줄 뿐이다).
+        ...(title !== void 0
+          ? {
+              threadToken: ctx.store.getToken(makeInquiryThreadIdentity(e.threadId), {
+                prefix: 'thr',
+              }),
+              threadTitle: deidentify(title, roster).text,
+            }
+          : {}),
       };
       return view;
     });
@@ -27711,8 +28176,53 @@ function getRecordEvidence(ctx, args) {
     count: evidence.length,
     studentToken: args.studentToken,
     ...(areaFilter !== void 0 ? { area: areaFilter } : {}),
+    ...(threadFilter !== void 0
+      ? { threadTitle: deidentify(threadFilter.title, roster).text }
+      : {}),
     evidence,
-    notice: EVIDENCE_NOTICE,
+    notice: threadFilter !== void 0 ? EVIDENCE_THREAD_NOTICE : EVIDENCE_NOTICE,
+  };
+}
+var THREAD_NOTICE =
+  '\uAD50\uC0AC\uAC00 \uADFC\uAC70\uB97C \uC8FC\uC81C\uBCC4\uB85C \uBB36\uC5B4 \uB454 "\uD0D0\uAD6C \uD750\uB984" \uBAA9\uB85D\uC785\uB2C8\uB2E4(\uC77D\uAE30 \uC804\uC6A9 \u2014 AI \uB294 \uD750\uB984\uC744 \uB9CC\uB4E4\uC9C0 \uC54A\uC2B5\uB2C8\uB2E4). \uCD08\uC548\uC744 \uC4F8 \uB54C\uB294 \uC8FC\uC81C \uD558\uB098\uB97C \uACE8\uB77C get_record_evidence(threadToken) \uB85C \uADF8 \uC8FC\uC81C\uC758 \uADFC\uAC70\uB9CC \uBC1B\uC544, \uD65C\uB3D9\uC744 \uB098\uC5F4\uD558\uC9C0 \uB9D0\uACE0 \uD558\uB098\uC758 \uD0D0\uAD6C \uC11C\uC0AC\uB85C \uC4F0\uC138\uC694. keywords \uB294 \uD0A4\uC6CC\uB4DC\uC77C \uBFD0 \uC131\uCDE8\uAE30\uC900 \uC6D0\uBB38\uC774 \uC544\uB2C8\uBA70, \uC131\uCDE8\uAE30\uC900 \uBB38\uC7A5\uC744 \uC9C0\uC5B4\uB0B4 \uC62E\uACA8 \uC801\uC9C0 \uB9C8\uC138\uC694. \uCD5C\uC885 \uAE30\uC7AC \uC804 \uAD50\uC0AC\uAC00 \uBC18\uB4DC\uC2DC \uAC80\uD1A0\uD569\uB2C8\uB2E4.';
+var EVIDENCE_THREAD_NOTICE =
+  '\uD55C \uD0D0\uAD6C \uD750\uB984(\uC8FC\uC81C)\uC73C\uB85C \uBB36\uC778 \uADFC\uAC70\uB9CC \uCD94\uB9B0 \uAC83\uC785\uB2C8\uB2E4. \uC2DC\uAC04\uC21C\uC73C\uB85C \uC774\uC5B4\uC9C0\uB294 \uD558\uB098\uC758 \uC774\uC57C\uAE30\uB85C \uC77D\uACE0, \uD65C\uB3D9\uC744 \uB098\uC5F4\uD558\uC9C0 \uB9C8\uC138\uC694. \uADFC\uAC70\uC5D0 \uC5C6\uB294 \uC0AC\uC2E4\uC744 \uC9C0\uC5B4\uB0B4\uC9C0 \uB9D0\uACE0, \uC131\uCDE8\uAE30\uC900 \uBB38\uC7A5\uC744 \uC62E\uACA8 \uC801\uC9C0 \uB9C8\uC138\uC694. \uB3D9\uAE09\uC0DD \uC9C1\uC811 \uC2DD\uBCC4\uC790\uB294 \uB9C8\uC2A4\uD0B9\uB418\uB098 \uB9E5\uB77D \uC7AC\uC2DD\uBCC4\uC774 \uAC00\uB2A5\uD558\uBA70, \uCD5C\uC885 \uAE30\uC7AC \uC804 \uAD50\uC0AC\uAC00 \uBC18\uB4DC\uC2DC \uAC80\uD1A0\uD569\uB2C8\uB2E4.';
+function getInquiryThreads(ctx, args) {
+  assertRecordWriteAllowed(ctx);
+  const { resolved: studentRef, identity } = resolveStudentTarget(ctx, args.studentToken);
+  const roster = rosterForIdentity(ctx.dataDir, identity, ctx.store);
+  const countByThread = /* @__PURE__ */ new Map();
+  for (const e of readRecordEvidence(ctx.dataDir).records) {
+    if (e.studentRef !== studentRef || e.excludedFromAi === true || e.threadId === void 0) {
+      continue;
+    }
+    countByThread.set(e.threadId, (countByThread.get(e.threadId) ?? 0) + 1);
+  }
+  const threads = readInquiryThreads(ctx.dataDir)
+    .records.filter((t) => t.studentRef === studentRef)
+    .filter((t) => args.includeClosed === true || t.status === 'open')
+    .map((t) => {
+      const view = {
+        threadToken: ctx.store.getToken(makeInquiryThreadIdentity(t.id), { prefix: 'thr' }),
+        title: deidentify(t.title, roster).text,
+        keywords: t.keywords.map((k) => deidentify(k, roster).text),
+        status: t.status,
+        evidenceCount: countByThread.get(t.id) ?? 0,
+        ...(t.competencyKeywords && t.competencyKeywords.length > 0
+          ? { competencyKeywords: t.competencyKeywords.map((k) => deidentify(k, roster).text) }
+          : {}),
+        ...(t.nextNotes !== void 0 && t.nextNotes.trim().length > 0
+          ? { nextNotes: deidentify(t.nextNotes, roster).text }
+          : {}),
+      };
+      return view;
+    });
+  ctx.audit.append({ tool: 'get_inquiry_threads', redactionStats: { items: threads.length } });
+  return {
+    count: threads.length,
+    studentToken: args.studentToken,
+    threads,
+    notice: THREAD_NOTICE,
   };
 }
 
@@ -29568,7 +30078,7 @@ function createSsampinMcpServer(opts = {}) {
       title:
         '\uC0DD\uAE30\uBD80 \uC791\uC131 \uADFC\uAC70 \uC790\uB8CC \uC870\uD68C(\uD559\uC0DD\uBCC4)',
       description:
-        '\uD2B9\uC815 \uD559\uC0DD\uC5D0 \uB300\uD574 \uAD50\uC0AC\uAC00 \uBAA8\uC544 \uB454 "\uC0DD\uAE30\uBD80 \uC791\uC131 \uADFC\uAC70 \uC790\uB8CC"\uB97C \uC601\uC5ED\uBCC4\uB85C \uC870\uD68C\uD569\uB2C8\uB2E4. write_record_draft \uB85C \uC601\uC5ED\uBCC4 \uCD08\uC548\uC744 \uC4F0\uAE30 \uC804\uC5D0 \uC774 \uB3C4\uAD6C\uB85C \uADFC\uAC70\uB97C \uBA3C\uC800 \uC77D\uACE0, \uADFC\uAC70\uC5D0 \uC788\uB294 \uC0AC\uC2E4\uB9CC\uC73C\uB85C \uC791\uC131\uD558\uC138\uC694(\uC5C6\uB294 \uB0B4\uC6A9 \uC9C0\uC5B4\uB0B4\uAE30 \uAE08\uC9C0). area \uB97C \uC8FC\uBA74 \uD574\uB2F9 \uC601\uC5ED \uADFC\uAC70\uB9CC \uBC18\uD658\uD569\uB2C8\uB2E4. studentToken \uC740 list_students \uC758 \uD1A0\uD070. "\uC0DD\uAE30\uBD80 \uCD08\uC548 \uC4F0\uAE30 \uD5C8\uC6A9" \uD1A0\uAE00\uC774 \uCF1C\uC838 \uC788\uC5B4\uC57C \uC870\uD68C\uB429\uB2C8\uB2E4. \uB3D9\uAE09\uC0DD \uC9C1\uC811 \uC2DD\uBCC4\uC790\uB294 \uB9C8\uC2A4\uD0B9\uB418\uC9C0\uB9CC \uB9E5\uB77D \uC7AC\uC2DD\uBCC4\uC774 \uAC00\uB2A5\uD569\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
+        '\uD2B9\uC815 \uD559\uC0DD\uC5D0 \uB300\uD574 \uAD50\uC0AC\uAC00 \uBAA8\uC544 \uB454 "\uC0DD\uAE30\uBD80 \uC791\uC131 \uADFC\uAC70 \uC790\uB8CC"\uB97C \uC601\uC5ED\uBCC4\uB85C \uC870\uD68C\uD569\uB2C8\uB2E4. write_record_draft \uB85C \uC601\uC5ED\uBCC4 \uCD08\uC548\uC744 \uC4F0\uAE30 \uC804\uC5D0 \uC774 \uB3C4\uAD6C\uB85C \uADFC\uAC70\uB97C \uBA3C\uC800 \uC77D\uACE0, \uADFC\uAC70\uC5D0 \uC788\uB294 \uC0AC\uC2E4\uB9CC\uC73C\uB85C \uC791\uC131\uD558\uC138\uC694(\uC5C6\uB294 \uB0B4\uC6A9 \uC9C0\uC5B4\uB0B4\uAE30 \uAE08\uC9C0). area \uB97C \uC8FC\uBA74 \uD574\uB2F9 \uC601\uC5ED \uADFC\uAC70\uB9CC \uBC18\uD658\uD569\uB2C8\uB2E4. threadToken(get_inquiry_threads \uC758 \uD1A0\uD070)\uC744 \uC8FC\uBA74 \uADF8 \uC8FC\uC81C\uB85C \uBB36\uC778 \uADFC\uAC70\uB9CC \uBC18\uD658\uD558\uBA70, \uC138\uD2B9 \uCD08\uC548\uC740 \uC774\uB807\uAC8C \uC8FC\uC81C \uD558\uB098\uB97C \uAE4A\uAC8C \uC4F0\uB294 \uD3B8\uC774 \uC88B\uC2B5\uB2C8\uB2E4(\uADFC\uAC70 \uC804\uCCB4\uB97C \uBC1B\uC73C\uBA74 \uD65C\uB3D9 \uB098\uC5F4\uC774 \uB429\uB2C8\uB2E4). studentToken \uC740 list_students \uC758 \uD1A0\uD070. "\uC0DD\uAE30\uBD80 \uCD08\uC548 \uC4F0\uAE30 \uD5C8\uC6A9" \uD1A0\uAE00\uC774 \uCF1C\uC838 \uC788\uC5B4\uC57C \uC870\uD68C\uB429\uB2C8\uB2E4. \uB3D9\uAE09\uC0DD \uC9C1\uC811 \uC2DD\uBCC4\uC790\uB294 \uB9C8\uC2A4\uD0B9\uB418\uC9C0\uB9CC \uB9E5\uB77D \uC7AC\uC2DD\uBCC4\uC774 \uAC00\uB2A5\uD569\uB2C8\uB2E4. \uC77D\uAE30 \uC804\uC6A9.',
       inputSchema: {
         studentToken: external_exports
           .string()
@@ -29589,10 +30099,39 @@ function createSsampinMcpServer(opts = {}) {
           .describe(
             '\uC601\uC5ED \uD544\uD130(\uBBF8\uC9C0\uC815 \uC2DC \uC804\uCCB4): autonomy=\uC790\uC728 / career=\uC9C4\uB85C / behavior=\uD589\uD2B9 / subject=\uACFC\uBAA9\uC138\uD2B9 / individualSubject=\uAC1C\uC778\uC138\uD2B9 / club=\uB3D9\uC544\uB9AC / subjectDev=\uAD50\uACFC\uD559\uC2B5\uBC1C\uB2EC',
           ),
+        threadToken: external_exports
+          .string()
+          .optional()
+          .describe(
+            '\uD0D0\uAD6C \uD750\uB984(\uC8FC\uC81C) \uD544\uD130 \u2014 get_inquiry_threads \uAC00 \uBC18\uD658\uD55C threadToken. \uADF8 \uC8FC\uC81C\uB85C \uBB36\uC778 \uADFC\uAC70\uB9CC \uBC18\uD658',
+          ),
       },
       annotations: { readOnlyHint: true },
     },
     async (args) => runTool('get_record_evidence', () => getRecordEvidence(ctx, args)),
+  );
+  server.registerTool(
+    'get_inquiry_threads',
+    {
+      title: '\uD0D0\uAD6C \uD750\uB984(\uC8FC\uC81C) \uC870\uD68C',
+      description:
+        '\uAD50\uC0AC\uAC00 \uADFC\uAC70\uB97C \uC8FC\uC81C\uBCC4\uB85C \uBB36\uC5B4 \uB454 "\uD0D0\uAD6C \uD750\uB984" \uBAA9\uB85D\uC744 \uC870\uD68C\uD569\uB2C8\uB2E4(\uC77D\uAE30 \uC804\uC6A9 \u2014 \uD750\uB984\uC744 \uB9CC\uB4E4\uAC70\uB098 \uACE0\uCE60 \uC218 \uC5C6\uC2B5\uB2C8\uB2E4). \uC88B\uC740 \uC138\uD2B9\uC740 \uD65C\uB3D9 \uB098\uC5F4\uC774 \uC544\uB2C8\uB77C \uC9C8\uBB38\uC73C\uB85C \uC774\uC5B4\uC9C4 \uD558\uB098\uC758 \uD0D0\uAD6C \uC11C\uC0AC\uC774\uBBC0\uB85C, \uCD08\uC548\uC744 \uC4F0\uAE30 \uC804\uC5D0 \uC774 \uB3C4\uAD6C\uB85C \uC8FC\uC81C \uBAA9\uB85D\uC744 \uBCF4\uACE0 \uD558\uB098\uB97C \uACE0\uB978 \uB4A4 get_record_evidence(threadToken) \uB85C \uADF8 \uC8FC\uC81C\uC758 \uADFC\uAC70\uB9CC \uBC1B\uC544 \uC4F0\uC138\uC694. keywords \uB294 \uD0A4\uC6CC\uB4DC\uC77C \uBFD0 \uC131\uCDE8\uAE30\uC900 \uC6D0\uBB38\uC774 \uC544\uB2C8\uBA70, \uC131\uCDE8\uAE30\uC900 \uBB38\uC7A5\uC744 \uC62E\uACA8 \uC801\uC73C\uBA74 \uC548 \uB429\uB2C8\uB2E4. "\uC0DD\uAE30\uBD80 \uCD08\uC548 \uC4F0\uAE30 \uD5C8\uC6A9" \uD1A0\uAE00\uC774 \uCF1C\uC838 \uC788\uC5B4\uC57C \uC870\uD68C\uB429\uB2C8\uB2E4.',
+      inputSchema: {
+        studentToken: external_exports
+          .string()
+          .describe(
+            'list_students \uAC00 \uBC18\uD658\uD55C \uD559\uC0DD \uD1A0\uD070(\uB2F4\uC784=\uD559\uBC88 \uD1A0\uD070 / \uACFC\uBAA9\xB7\uB3D9\uC544\uB9AC=\uC218\uC5C5\uBC18 \uD1A0\uD070)',
+          ),
+        includeClosed: external_exports
+          .boolean()
+          .optional()
+          .describe(
+            '\uB2EB\uD78C \uC8FC\uC81C\uB3C4 \uD3EC\uD568\uD560\uC9C0(\uAE30\uBCF8 false \u2014 \uC5F4\uB9B0 \uC8FC\uC81C\uB9CC)',
+          ),
+      },
+      annotations: { readOnlyHint: true },
+    },
+    async (args) => runTool('get_inquiry_threads', () => getInquiryThreads(ctx, args)),
   );
   server.registerTool(
     'ssampin_complete_todo',
