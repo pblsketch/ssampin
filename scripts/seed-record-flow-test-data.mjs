@@ -29,10 +29,12 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { SEED_DRAFTS } from './fixtures/record-flow-drafts.mjs';
 
 const rawArgs = process.argv.slice(2);
 const clean = rawArgs.includes('--clean');
+const force = rawArgs.includes('--force');
 const targetArg = rawArgs.find((a) => !a.startsWith('--'));
 const dataDir =
   targetArg ??
@@ -48,20 +50,54 @@ if (!fs.existsSync(dataDir)) {
   process.exit(1);
 }
 
-// ── 안전장치: 앱 실행 중이면 중단 ──
-const ctrl = path.join(dataDir, '.ssampin-aibridge', 'control.json');
-if (fs.existsSync(ctrl)) {
+/* ── 안전장치: 앱 실행 중이면 중단 ──────────────────────────────────────────
+ *
+ * 두 가지로 본다. **heartbeat 하나만으로는 부족하다.**
+ *   `.ssampin-aibridge/control.json` 은 AI 브릿지 **쓰기 권한이 켜졌을 때만** 만들어지는데
+ *   (`aiBridgeLiveSyncHost.ts` — allowWrite/allowRecordWrite 가 켜져야 loopback 서버가 뜬다)
+ *   그 게이트는 **기본 꺼짐**이다. 즉 대부분의 선생님 PC 에서는 앱을 켜 둔 채 시더를 돌려도
+ *   이 검사가 아무것도 못 잡는다. 그래서 프로세스 목록도 함께 본다.
+ */
+function appHeartbeatFresh() {
+  const ctrl = path.join(dataDir, '.ssampin-aibridge', 'control.json');
+  if (!fs.existsSync(ctrl)) return false;
   try {
     const c = JSON.parse(fs.readFileSync(ctrl, 'utf-8'));
-    if (typeof c.heartbeatAt === 'number' && Date.now() - c.heartbeatAt < 20_000) {
-      console.error(
-        '[recseed] 쌤핀이 실행 중입니다. 앱을 완전히 닫고 다시 실행하세요(앱이 덮어씀).',
-      );
-      process.exit(1);
-    }
+    return typeof c.heartbeatAt === 'number' && Date.now() - c.heartbeatAt < 20_000;
   } catch {
-    /* 손상된 control 은 무시 */
+    return false; // 손상된 control 은 근거로 쓰지 않는다
   }
+}
+
+/**
+ * 프로세스 목록에서 쌤핀을 찾는다. 설치본은 `쌤핀.exe`(electron-builder productName),
+ * 개발 중에는 `electron.exe` 다. 판정할 수 없으면 `null` — "없다"고 단정하지 않는다.
+ */
+function appProcessRunning() {
+  try {
+    if (process.platform === 'win32') {
+      const r = spawnSync('tasklist.exe', ['/fo', 'csv', '/nh'], { encoding: 'utf-8' });
+      if (r.status !== 0 || typeof r.stdout !== 'string') return null;
+      return /(쌤핀|ssampin|electron)\.exe/i.test(r.stdout);
+    }
+    const r = spawnSync('pgrep', ['-fil', 'ssampin|쌤핀|electron'], { encoding: 'utf-8' });
+    if (r.status > 1) return null;
+    return (r.stdout ?? '').trim().length > 0;
+  } catch {
+    return null;
+  }
+}
+
+const running = appHeartbeatFresh() || appProcessRunning();
+if (running === true && !force) {
+  console.error('[recseed] 쌤핀이 실행 중입니다. 앱을 완전히 닫고 다시 실행하세요.');
+  console.error('          켜 둔 채로 심으면 앱이 메모리에 든 옛 내용으로 파일을 도로 덮습니다.');
+  console.error('          (개발 중이라면 electron:dev 도 함께 끄세요.)');
+  console.error('          다른 Electron 앱을 잘못 본 것이라면 --force 로 넘길 수 있습니다.');
+  process.exit(1);
+}
+if (running === null) {
+  console.warn('[recseed] ⚠ 쌤핀이 켜져 있는지 확인하지 못했습니다. 닫혀 있는지 직접 확인하세요.');
 }
 
 const PREFIX = 'rec-test-';
@@ -87,11 +123,35 @@ const THREAD_A = `${PREFIX}thread-a`; // 키워드 있음 — "이것도 이 주
 const THREAD_B = `${PREFIX}thread-b`; // 키워드 없음 — 제안 0건이 정상
 const THREAD_C = `${PREFIX}thread-c`; // 닫힌 주제
 
+/**
+ * 기존 파일 읽기.
+ *
+ * ★"파일이 없다"와 "있는데 못 읽는다"를 반드시 가른다. 예전에는 둘 다 빈 값으로 넘겼는데,
+ *   그러면 실데이터가 잠깐 잠겨 있거나 손상됐을 때 **빈 것으로 보고 시드만 써 버린다** —
+ *   백업이 남아 복구는 되지만, 교사 눈에는 기록이 사라진 것으로 보인다.
+ *   없으면 새로 만들고, 있는데 못 읽으면 **아무것도 건드리지 않고 멈춘다.**
+ */
 function readJson(file, fallback) {
+  const p = path.join(dataDir, file);
+  if (!fs.existsSync(p)) return fallback;
+  let raw;
   try {
-    return JSON.parse(fs.readFileSync(path.join(dataDir, file), 'utf-8'));
-  } catch {
-    return fallback;
+    raw = fs.readFileSync(p, 'utf-8');
+  } catch (e) {
+    console.error(`[recseed] '${file}' 을 열 수 없습니다: ${e.message}`);
+    console.error(
+      '          쌤핀이 정말 닫혀 있는지 확인하고 다시 실행하세요. 아무것도 바꾸지 않았습니다.',
+    );
+    process.exit(1);
+  }
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error(`[recseed] '${file}' 이 올바른 JSON 이 아닙니다: ${e.message}`);
+    console.error(
+      '          실데이터일 수 있어 덮어쓰지 않고 멈춥니다. 아무것도 바꾸지 않았습니다.',
+    );
+    process.exit(1);
   }
 }
 function backupAndWrite(file, value) {
@@ -104,9 +164,32 @@ const mine = (x) => typeof x?.id === 'string' && x.id.startsWith(PREFIX);
 const notMine = (x) => !mine(x);
 const arr = (o, k) => (Array.isArray(o[k]) ? o[k] : (o[k] = []));
 
+/**
+ * 손댈 파일 전체 목록 — **쓰기 전에 여기 있는 것을 전부 먼저 읽어 본다.**
+ *
+ * ★한 파일씩 읽고 바로 쓰면, 다섯 번째가 손상됐을 때 앞의 네 개는 이미 바뀐 뒤다.
+ *   그 상태에서 "아무것도 바꾸지 않았습니다"라고 말하면 거짓말이 된다.
+ *   그래서 **전부 읽어 본 뒤에야 첫 글자를 쓴다**(all-or-nothing).
+ */
+const TARGETS = [
+  ['teaching-classes.json', { classes: [] }],
+  ['observations.json', { records: [] }],
+  ['inquiry-threads.json', { records: [] }],
+  ['record-evidence.json', { records: [] }],
+  ['curriculum-progress.json', { entries: [] }],
+  ['rubrics.json', { rubrics: [], gradings: [] }],
+  ['assignments.json', { assignments: [] }],
+  ['submission-texts.json', { records: [] }],
+  ['record-drafts.json', { records: [] }],
+];
+
+/** 미리 읽어 둔 내용 — 여기까지 왔다면 전부 정상 JSON 이다. */
+const loaded = new Map(TARGETS.map(([f, fb]) => [f, readJson(f, fb)]));
+
 const touched = [];
-function edit(file, fallback, fn) {
-  const data = readJson(file, fallback);
+function edit(file, _fallback, fn) {
+  const data = loaded.get(file);
+  if (data === undefined) throw new Error(`TARGETS 에 '${file}' 이 없습니다`);
   fn(data);
   backupAndWrite(file, data);
   touched.push(file);
@@ -438,7 +521,7 @@ edit('curriculum-progress.json', { entries: [] }, (cp) => {
       period: 3,
       unit: '합리적 선택과 시장',
       lesson: '기회비용과 합리적 선택',
-      status: 'done',
+      status: 'completed',
       note: '',
       standardCodes: ['[10통사2-02-01]'],
     },
@@ -449,7 +532,7 @@ edit('curriculum-progress.json', { entries: [] }, (cp) => {
       period: 3,
       unit: '합리적 선택과 시장',
       lesson: '소비자 선택의 한계',
-      status: 'done',
+      status: 'completed',
       note: '설문 결과 발표 진행',
       standardCodes: ['[10통사2-02-01]', '[10통사2-02-02]'],
     },
@@ -461,7 +544,7 @@ edit('curriculum-progress.json', { entries: [] }, (cp) => {
       period: 3,
       unit: '인권과 헌법',
       lesson: '차별과 구별',
-      status: 'done',
+      status: 'completed',
       note: '',
       standardText: '일상생활에서 나타나는 차별 사례를 찾아 그 원인을 설명할 수 있다.',
     },
@@ -531,7 +614,19 @@ edit('assignments.json', { assignments: [] }, (a) => {
     title: '소비 선택 탐구 보고서 제출',
     description: '설문 결과와 해석, 한계를 함께 적어 제출하세요.',
     deadline: '2026-07-03T23:59:00.000Z',
-    target: { type: 'teachingClass', teachingClassId: CLASS_ID },
+    // 계약: type 은 'class'|'teaching', name·students 는 필수다.
+    // 목록 화면이 target.students.length 를 직접 읽어서, 빠지면 과제수합이 통째로 안 열린다.
+    target: {
+      type: 'teaching',
+      name: '흐름테스트 3-8',
+      teachingClassId: CLASS_ID,
+      students: TS.map((t) => ({
+        number: t.number,
+        name: t.name,
+        grade: String(t.grade),
+        classNum: String(t.classNum),
+      })),
+    },
     driveFolder: { id: `${PREFIX}folder`, name: '흐름테스트 과제' },
     submitType: 'file',
     fileTypeRestriction: 'document',

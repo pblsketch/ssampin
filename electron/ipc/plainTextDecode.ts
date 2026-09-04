@@ -15,10 +15,47 @@
 /** 이 갈래로 읽을 확장자. `markdownConvert.ts` 의 SUPPORTED_EXTENSIONS 와 짝을 이룬다. */
 export const PLAIN_TEXT_EXTENSIONS: readonly string[] = ['txt', 'md'];
 
+/** 눈에 안 보이는 글자는 이름을 붙여 둔다 - 소스에 날글자로 박으면 편집 도구가 조용히 뭉갠다. */
+const NUL = '\u0000';
+const REPLACEMENT_CHAR = '\ufffd';
+
 export function isPlainTextFile(fileName: string): boolean {
   const lastDot = fileName.lastIndexOf('.');
   if (lastDot < 0) return false;
   return PLAIN_TEXT_EXTENSIONS.includes(fileName.slice(lastDot + 1).toLowerCase());
+}
+
+/**
+ * 결과에 실을 형식 이름. kordoc 이 주던 `format` 자리를 평문도 채워야 한다 —
+ * 화면이 이 값을 그대로 표시하고, 빠지면 성공 계약이 깨진다.
+ */
+export function plainTextFormat(fileName: string): string {
+  const lastDot = fileName.lastIndexOf('.');
+  return lastDot < 0 ? 'txt' : fileName.slice(lastDot + 1).toLowerCase();
+}
+
+/** 깨진 글자로 판정할 비율 — 알아볼 수 없는 글자가 이만큼 넘으면 본문으로 치지 않는다. */
+export const MOJIBAKE_RATIO = 0.05;
+
+/**
+ * 해독 결과가 **깨진 글자인가**.
+ *
+ * ★이 판정이 없으면 깨진 글자가 "본문"으로 저장된다 — 실패보다 나쁘다. 교사는 본문이
+ *   제대로 들어온 줄 알고, 그 글자가 생기부 근거로 쌓인다. 빈 문자열만 걸러 내는
+ *   `hasNoExtractableText` 로는 못 잡는다(대체 문자도 '글자'라서 길이가 0이 아니다).
+ *
+ * 두 가지를 본다:
+ *  - **NUL** 이 하나라도 있으면 평문이 아니다(글자 파일에 NUL 은 나오지 않는다).
+ *  - 대체 문자(U+FFFD)가 5%를 넘으면 인코딩을 잘못 짚은 것이다. 학생이 붙여 넣은 이상한
+ *    글자 한두 개로 오탐하지 않도록 **비율**로 본다.
+ */
+export function looksMojibake(text: string): boolean {
+  if (text.includes(NUL)) return true;
+  const body = text.replace(/\s/g, '');
+  if (body.length === 0) return false;
+  let bad = 0;
+  for (const ch of body) if (ch === REPLACEMENT_CHAR) bad += 1;
+  return bad / body.length > MOJIBAKE_RATIO;
 }
 
 /**
@@ -32,8 +69,8 @@ export function isPlainTextFile(fileName: string): boolean {
  *    BOM 으로 먼저 갈라야만 막힌다.
  *  - **UTF-8 은 엄격(fatal)으로 읽는다.** 느슨하게 읽으면 CP949 파일이 대체 문자(U+FFFD)로
  *    가득 찬 채 "성공"이 되어 버린다. 튕겨야 CP949 로 넘어갈 수 있다.
- *  - CP949 로도 못 읽으면 대체 문자가 남지만, 부르는 쪽의 `hasNoExtractableText` 가 품질
- *    신호로 잡는다(빈 결과를 '성공'이라고 말하지 않는다).
+ *  - CP949 로도 못 읽으면 대체 문자가 남는다. 그건 `looksMojibake` 가 잡는다 —
+ *    `hasNoExtractableText` 는 **빈 문자열만** 보므로 깨진 글자를 통과시킨다.
  */
 export function decodePlainText(arrayBuffer: ArrayBuffer): string {
   const bytes = new Uint8Array(arrayBuffer);

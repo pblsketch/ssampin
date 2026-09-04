@@ -6,7 +6,7 @@
  *   실제로 UTF-16 파일이 이 경로를 통과해 버리는 것을 손으로 시험하다 발견했다(게이트는 초록이었다).
  */
 import { describe, it, expect } from 'vitest';
-import { decodePlainText, isPlainTextFile } from './plainTextDecode';
+import { decodePlainText, isPlainTextFile, looksMojibake } from './plainTextDecode';
 
 const ab = (buf: Buffer): ArrayBuffer =>
   buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
@@ -67,4 +67,31 @@ describe('isPlainTextFile — kordoc 에 넘기지 않을 확장자', () => {
       expect(isPlainTextFile(n)).toBe(false);
     },
   );
+});
+
+describe('looksMojibake — 깨진 글자를 본문이라고 말하지 않는다', () => {
+  it('정상 한글은 깨짐이 아니다', () => {
+    expect(looksMojibake(SAMPLE)).toBe(false);
+  });
+
+  it('영문·숫자만 있어도 깨짐이 아니다', () => {
+    expect(looksMojibake('Report 2026: n = 20.')).toBe(false);
+  });
+
+  it('NUL 이 하나라도 있으면 평문이 아니다 — UTF-16 오판의 흔적', () => {
+    expect(looksMojibake('AB' + '\u0000' + 'C')).toBe(true);
+  });
+
+  it('대체 문자 범벅은 깨짐', () => {
+    expect(looksMojibake('\ufffd'.repeat(10))).toBe(true);
+  });
+
+  it('학생이 붙여 넣은 대체 문자 한 개로는 오탐하지 않는다', () => {
+    expect(looksMojibake('가'.repeat(99) + '\ufffd')).toBe(false);
+  });
+
+  it('빈 문자열은 깨짐이 아니다(빈 것은 low_text 가 따로 본다)', () => {
+    expect(looksMojibake('')).toBe(false);
+    expect(looksMojibake('   ')).toBe(false);
+  });
 });

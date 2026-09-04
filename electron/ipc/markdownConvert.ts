@@ -27,7 +27,12 @@ import {
 import JSZip from 'jszip';
 import { buildStoreZip, dedupeFilenames, sanitizeFilename } from '../lib/zipStore';
 import { friendlyParseFailure, hasNoExtractableText } from './markdownConvertErrors';
-import { decodePlainText, isPlainTextFile } from './plainTextDecode';
+import {
+  decodePlainText,
+  isPlainTextFile,
+  looksMojibake,
+  plainTextFormat,
+} from './plainTextDecode';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50MB
 const SUPPORTED_EXTENSIONS = ['hwp', 'hwpx', 'hwpml', 'pdf', 'xls', 'xlsx', 'docx', 'txt', 'md'];
@@ -185,9 +190,21 @@ export async function parseArrayBuffer(
         status: 'ok',
         fileName,
         markdown: text,
-        ...(hasNoExtractableText(text)
-          ? { textQuality: { needsReview: true, reason: 'low_text' } }
-          : {}),
+        // ★format·isImageBased·warnings 는 성공 계약의 **필수** 필드다. 빠뜨리면 화면이
+        //   `[...o.document.warnings]` 에서 "warnings is not iterable" 로 죽는다(실제로 죽었다).
+        //   ⚠️ `npx tsc --noEmit` 은 이것을 못 잡는다 — tsconfig.json 의 include 가 ["src"] 뿐이라
+        //   electron/ 이 아예 검사 대상이 아니다. 여기 손댈 때는 반드시
+        //   `npx tsc --noEmit -p tsconfig.electron.json` 으로 이 파일을 확인할 것.
+        format: plainTextFormat(fileName),
+        isImageBased: false,
+        warnings: [],
+        // 깨진 글자를 "본문"이라고 말하지 않는다 — 빈 결과보다 이쪽이 더 위험하다.
+        // hasNoExtractableText 는 빈 문자열만 보므로 깨짐은 looksMojibake 가 따로 잡는다.
+        ...(looksMojibake(text)
+          ? { textQuality: { needsReview: true, reason: 'high_replacement' as const } }
+          : hasNoExtractableText(text)
+            ? { textQuality: { needsReview: true, reason: 'low_text' as const } }
+            : {}),
       };
     }
     // filePath 는 메인 프로세스 내부 전용 — kordoc 의 배포용 한글 COM fallback 에만 쓰이고

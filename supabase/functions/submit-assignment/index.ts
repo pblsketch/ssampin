@@ -51,7 +51,10 @@ const BLOCKED_EXTENSIONS = [
 const FILE_TYPE_EXTENSIONS: Record<string, string[]> = {
   all: [],
   image: ['jpg', 'jpeg', 'png', 'gif', 'heic', 'webp'],
-  document: ['pdf', 'hwp', 'hwpx', 'docx', 'doc', 'pptx', 'xlsx', 'txt'],
+  // ★본체 `src/domain/valueObjects/FileTypeRestriction.ts` 의 같은 목록과 **짝이다.**
+  //   한쪽만 고치면 앱에서는 고를 수 있는데 서버가 400 으로 되돌려 보낸다(학생만 겪는다).
+  //   'md' 는 본문 추출이 가능해진 뒤 함께 열었다.
+  document: ['pdf', 'hwp', 'hwpx', 'docx', 'doc', 'pptx', 'xlsx', 'txt', 'md'],
 };
 
 /** 파일 확장자 체크 */

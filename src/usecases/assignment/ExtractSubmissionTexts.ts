@@ -298,6 +298,10 @@ export class ExtractSubmissionTexts {
     if (outcome.status === 'canceled') return { status: 'failed' };
 
     if (outcome.document.isImageBased) return { status: 'scanned' };
+    // 파서가 "글자가 깨졌다"고 신호를 주면 본문으로 싣지 않는다. 깨진 글자를 ok 로 저장하면
+    // 교사는 본문이 들어온 줄 알고 그것이 생기부 근거로 쌓인다 — 빈 결과보다 나쁘다.
+    // 다시 시도해도 낫지 않으므로(같은 파일·같은 인코딩) failed 가 아니라 empty 로 굳힌다.
+    if (outcome.document.textQuality?.reason === 'high_replacement') return { status: 'empty' };
     const markdown = outcome.document.markdown.trim();
     if (markdown.length === 0) return { status: 'empty' };
     return { status: 'ok', text: truncateExtractedText(markdown) };
