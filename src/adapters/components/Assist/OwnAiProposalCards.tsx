@@ -24,21 +24,33 @@ export function OwnAiProposalCards() {
       {pending.map((p) => {
         const preview = proposalPreview(p.request.data);
         return (
-          <div key={p.proposalId} className="rounded-xl border border-sp-border bg-sp-bg p-3">
-            <p className="text-sm font-sp-semibold text-sp-text">
-              {proposalTitle(p.request.domain, p.request.op)}
-            </p>
+          <div key={p.proposalId} className="rounded-xl border border-sp-border bg-sp-card p-3">
+            {/* 같은 패널의 턴 제안 카드(ProposalCard)와 배지+제목 구성을 맞춘다 —
+                다만 라벨은 "제안"이 아니라 "외부 요청"이다. 상태가 아니라 출처가 다르므로. */}
+            <div className="mb-2 flex items-center gap-1.5">
+              <span className="rounded-full bg-sp-bg px-2 py-0.5 text-xs font-sp-medium text-sp-muted">
+                외부 요청
+              </span>
+              <span className="text-xs font-sp-semibold text-sp-text">
+                {proposalTitle(p.request.domain, p.request.op)}
+              </span>
+            </div>
+
             {preview.length > 0 && (
-              <ul className="mt-1 space-y-0.5">
-                {preview.map((line, i) => (
-                  <li key={i} className="text-sm text-sp-text">
-                    {line}
-                  </li>
-                ))}
-              </ul>
+              <div className="mb-2 rounded-lg bg-sp-bg px-2 py-1.5">
+                <ul className="space-y-0.5">
+                  {preview.map((line, i) => (
+                    <li key={i} className="break-words text-sm text-sp-text">
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
-            <p className="mt-1 text-xs text-sp-muted">{OWN_AI_PROPOSAL_SOURCE_NOTE}</p>
-            <div className="mt-2 flex items-center gap-2">
+
+            <p className="text-xs text-sp-muted">{OWN_AI_PROPOSAL_SOURCE_NOTE}</p>
+
+            <div className="mt-3 flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => void apply(p.proposalId)}
@@ -49,7 +61,7 @@ export function OwnAiProposalCards() {
               <button
                 type="button"
                 onClick={() => reject(p.proposalId)}
-                className="rounded-lg border border-sp-border bg-sp-bg px-3 py-1.5 text-sm text-sp-text"
+                className="rounded-lg border border-sp-border bg-sp-bg px-3 py-1.5 text-sm text-sp-text hover:bg-sp-surface"
               >
                 취소
               </button>

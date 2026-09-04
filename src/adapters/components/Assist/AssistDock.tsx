@@ -178,11 +178,13 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
       <WindowDragStrip />
 
       {/* 헤더 */}
-      <header className="flex h-12 shrink-0 items-center justify-between border-b border-sp-border px-4">
-        <span className="flex items-center gap-1.5 text-sm font-sp-semibold text-sp-text">
+      <header className="flex min-h-12 shrink-0 items-center justify-between gap-2 border-b border-sp-border px-4 py-2">
+        <span className="flex shrink-0 items-center gap-1.5 text-sm font-sp-semibold text-sp-text">
           <span aria-hidden="true">✦</span> 쌤핀 AI
         </span>
-        <div className="flex items-center gap-1">
+        {/* flex-wrap: 공급자 고르기 + 사용량 뱃지 + 새 대화가 한꺼번에 뜨면(연결·한도근접·대화중)
+            좁은 폭(max-[1280px]:w-80)에서 한 줄에 다 안 들어간다 — 넘치는 대신 다음 줄로 내린다. */}
+        <div className="flex flex-wrap items-center justify-end gap-1">
           {/* 연결된 "내 AI"가 있을 때만 고르기가 보인다 — 없으면 예전과 똑같은 화면이다. */}
           {connectedProviders.length > 0 && (
             <label className="flex items-center gap-1 text-xs text-sp-muted">

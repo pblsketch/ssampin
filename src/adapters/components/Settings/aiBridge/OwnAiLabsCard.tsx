@@ -66,7 +66,7 @@ function Notice({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-sp-border bg-sp-bg px-3 py-1.5 text-sm text-sp-text"
+          className="rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-sm text-sp-text hover:bg-sp-surface"
         >
           그만두기
         </button>

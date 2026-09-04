@@ -24,11 +24,25 @@ import { useInquiryThreadStore } from '@adapters/stores/useInquiryThreadStore';
 import { useRubricStore } from '@adapters/stores/useRubricStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useCurriculumStandards } from '@adapters/hooks/useCurriculumStandards';
-import { standardsForCodes } from '@domain/rules/curriculumStandardRules';
+import { standardKeywords, standardsForCodes } from '@domain/rules/curriculumStandardRules';
 import { isClassified } from '@domain/rules/threadSuggest';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
 import { RecordEvidenceView } from '@adapters/components/RecordDraft/RecordEvidenceView';
+import {
+  RecordDraftAiButton,
+  type DraftTarget,
+} from '@adapters/components/RecordDraft/RecordDraftAiButton';
+import { useAssistStore } from '@adapters/stores/useAssistStore';
+
+/**
+ * AI 에게 학생을 가리킬 때 쓰는 **별칭**. 실명은 나가지 않는다.
+ *
+ * ★한 번에 한 학생분만 보내므로 모두 같은 별칭이어도 헷갈리지 않는다 — 오히려 여러 학생을
+ * 이어 만들 때 **학생끼리 이어 붙는 것을 막는다**(누가 누구인지 모델이 짝지을 수 없다).
+ * 되돌리기는 `RecordDraftAiButton` 이 [반영] 직전에 한다.
+ */
+export const DRAFT_STUDENT_ALIAS = '［이름1］';
 
 /** 작성주체(담임/교과) — 노출 영역 집합과 작성주체 결속을 결정. */
 type RecordContext = 'homeroom' | 'teaching';
@@ -105,6 +119,7 @@ export function RecordDraftView({
   const records = useRecordDraftsStore((s) => s.records);
   const load = useRecordDraftsStore((s) => s.load);
   const getDraft = useRecordDraftsStore((s) => s.getDraft);
+  const upsertDraft = useRecordDraftsStore((s) => s.upsert);
   const observations = useObservationStore((s) => s.records);
   const loadObservations = useObservationStore((s) => s.load);
   const loadEvidence = useRecordEvidenceStore((s) => s.load);
@@ -173,12 +188,57 @@ export function RecordDraftView({
     return texts.length > 0 ? texts : undefined;
   }, [standardsData, standardCodes]);
 
+  /**
+   * AI 로 나가는 쪽 — **키워드만.** 위의 `standardTexts`(원문)와 이름이 비슷하지만 하는 일이
+   * 정반대다: 원문은 앱 안 복사 검사용이고, 이쪽만 밖으로 나간다. 섞으면 모델이 성취기준
+   * 문장을 그대로 옮겨 적는다(분석 §4-1, 실측 C 사례).
+   */
+  const standardKeywordList = useMemo(() => {
+    if (!standardsData || standardCodes.length === 0) return undefined;
+    const kws = standardKeywords(standardsData.index, standardCodes);
+    return kws.length > 0 ? kws : undefined;
+  }, [standardsData, standardCodes]);
+
   const draftFor = (studentRef: string): RecordDraft | undefined =>
     getDraft(activeArea, studentRef, subject);
 
   const writtenCount = students.filter(
     (s) => (draftFor(s.studentRef)?.content ?? '').trim().length > 0,
   ).length;
+
+  /**
+   * "남은 학생 모두"의 대상 — 이 영역에 아직 초안이 없는 학생.
+   *
+   * ★이미 쓴 초안을 덮지 않는다. 눌러 놓고 자리를 뜨는 기능이라, 덮어쓰면 선생님이 손으로 쓴
+   *   글이 소리 없이 사라진다.
+   */
+  const unwrittenStudents = useMemo(
+    () => students.filter((s) => (draftFor(s.studentRef)?.content ?? '').trim().length === 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- draftFor 는 매 렌더 새로 만들어진다. 실제 의존은 아래 둘이다.
+    [students, records, activeArea, subject],
+  );
+
+  /**
+   * AI 가 쓴 초안을 저장한다. **어느 학생 칸인지 `studentRef` 로만 찾는다.**
+   *
+   * ★목록 위치(index)로 찾으면 안 된다 — 필터가 걸려 있으면 화면 순서와 명단 순서가 다르고,
+   *   그러면 남의 학생 칸에 저장된다(같은 실수를 상담예약에서 한 적이 있다).
+   */
+  const applyAiDraft = async (studentRef: string, content: string): Promise<void> => {
+    const row = students.find((s) => s.studentRef === studentRef);
+    if (!row) return;
+    await upsertDraft({
+      area: activeArea,
+      studentRef: row.studentRef,
+      content,
+      ...(classId !== undefined ? { classId } : {}),
+      ...(row.studentKey !== undefined ? { studentKey: row.studentKey } : {}),
+      ...(row.studentId !== undefined ? { studentId: row.studentId } : {}),
+      ...(subject !== undefined ? { subject } : {}),
+      ...(standardTexts !== undefined && standardTexts.length > 0 ? { standardTexts } : {}),
+      level,
+    });
+  };
 
   const visibleStudents = students.filter((s) => {
     if (filter === 'all') return true;
@@ -458,6 +518,11 @@ export function RecordDraftView({
                   obsById={obsById}
                   index={i}
                   {...(standardTexts !== undefined ? { standardTexts } : {})}
+                  {...(standardKeywordList !== undefined
+                    ? { standardKeywords: standardKeywordList }
+                    : {})}
+                  unwrittenStudents={unwrittenStudents}
+                  onAiApply={applyAiDraft}
                   onJumpNext={() => focusRowTextarea(i + 1)}
                 />
               ))
@@ -494,6 +559,9 @@ function RecordDraftRow({
   obsById,
   index,
   standardTexts,
+  standardKeywords: standardKeywordList,
+  unwrittenStudents,
+  onAiApply,
   onJumpNext,
 }: {
   student: RecordDraftStudentRow;
@@ -506,6 +574,12 @@ function RecordDraftRow({
   index: number;
   /** 이 수업반이 가르친 성취기준 원문 — 복사 검사에만 쓴다(AI 에는 안 간다). */
   standardTexts?: readonly string[];
+  /** 성취기준 **키워드** — 이쪽만 AI 로 나간다. 위의 원문과 헷갈리지 말 것. */
+  standardKeywords?: readonly string[];
+  /** 이 영역에 아직 초안이 없는 학생들("남은 학생 모두"의 대상). */
+  unwrittenStudents: readonly RecordDraftStudentRow[];
+  /** AI 가 쓴 초안을 저장한다. 저장 자리는 부모가 안다(다른 학생 칸도 여기로 간다). */
+  onAiApply: (studentRef: string, content: string) => Promise<void>;
   onJumpNext: () => void;
 }) {
   const upsert = useRecordDraftsStore((s) => s.upsert);
@@ -646,7 +720,12 @@ function RecordDraftRow({
     [evidenceRecords, student.studentRef, threadIdSet],
   );
 
-  /** AI 에게 "이 주제로 써 달라"고 말할 문장. 교사가 붙여 넣어 쓴다(인앱 [AI 초안] 버튼은 만들지 않는다). */
+  /**
+   * AI 에게 "이 주제로 써 달라"고 말할 문장 — **다른 AI 앱에 붙여 넣어 쓰는 길**이다.
+   *
+   * 구독을 연결한 선생님은 아래 [AI로 초안 쓰기]로 앱 안에서 바로 만들 수 있다(T6).
+   * 이 복사 버튼은 AI 브릿지로 클로드·GPT 를 따로 쓰는 선생님을 위해 그대로 둔다.
+   */
   const copyThreadPrompt = async (): Promise<void> => {
     if (!pickedThread) return;
     const text = `'${pickedThread.title}' 주제로 ${RECORD_AREA_LABELS[area]} 초안을 써 주세요. 그 주제의 근거만 보고, 활동을 나열하지 말고 하나의 탐구 흐름으로 써 주세요.`;
@@ -656,6 +735,62 @@ function RecordDraftRow({
       /* 클립보드 불가 — 무시 */
     }
   };
+  /**
+   * [AI로 초안 쓰기]에 넘길 재료.
+   *
+   * ★실명은 넣지 않는다 — 학생은 별칭으로만 간다. 되돌리기는 [반영] 직전에 한다.
+   * ★주제를 골랐으면 **그 주제의 근거만** 보낸다. 안 골랐으면 이 영역 전체.
+   * ★"AI 에 보내지 않기"로 표시한 근거와 기재 금지 항목이 든 근거는 꾸러미를 만드는
+   *   `recordDraftPack` 이 뺀다 — 여기서 거르지 않는다(거르는 자리를 한 곳에 둔다).
+   */
+  const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
+
+  const aiTarget = useMemo<DraftTarget>(() => {
+    const picked = pickedThreadId
+      ? evidenceRecords.filter(
+          (e) => e.studentRef === student.studentRef && e.threadId === pickedThreadId,
+        )
+      : evidenceForArea;
+    return {
+      studentRef: student.studentRef,
+      studentAlias: DRAFT_STUDENT_ALIAS,
+      displayName: student.name,
+      evidences: picked,
+      ...(standardKeywordList !== undefined ? { standardKeywords: standardKeywordList } : {}),
+      ...(text.trim().length > 0 ? { existingText: text } : {}),
+    };
+  }, [
+    pickedThreadId,
+    evidenceRecords,
+    evidenceForArea,
+    student.studentRef,
+    student.name,
+    standardKeywordList,
+    text,
+  ]);
+
+  /**
+   * "남은 학생 모두" 대상. 자기 자신은 뺀다(이미 `target` 으로 먼저 간다).
+   *
+   * ★여기서는 주제를 걸지 않는다 — 주제 고르기는 이 행의 선택이라, 남의 학생에게
+   *   같은 주제를 씌우면 엉뚱한 근거로 쓰게 된다. 각자 영역 전체 근거를 본다.
+   */
+  const aiRemaining = useMemo<readonly DraftTarget[]>(
+    () =>
+      unwrittenStudents
+        .filter((s) => s.studentRef !== student.studentRef)
+        .map((s) => ({
+          studentRef: s.studentRef,
+          studentAlias: DRAFT_STUDENT_ALIAS,
+          displayName: s.name,
+          evidences: evidenceRecords.filter(
+            (e) => e.studentRef === s.studentRef && e.areas.includes(area),
+          ),
+          ...(standardKeywordList !== undefined ? { standardKeywords: standardKeywordList } : {}),
+        })),
+    [unwrittenStudents, student.studentRef, evidenceRecords, area, standardKeywordList],
+  );
+
   const recentEvidenceDate = useMemo(() => {
     let best = '';
     for (const e of evidenceForArea) {
@@ -785,6 +920,17 @@ function RecordDraftRow({
           placeholder="AI에게 초안을 요청하면 자동 입력됩니다 — 또는 직접 작성하세요"
           className="min-h-[48px] w-full resize-y rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm leading-relaxed text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-sp-accent/30"
         />
+        {/* [AI로 초안 쓰기] — 실험실 스위치를 켠 선생님에게만 보인다.
+            꺼져 있으면 화면은 예전 그대로다. */}
+        {ownAiEnabled && (
+          <RecordDraftAiButton
+            areaLabel={RECORD_AREA_LABELS[area]}
+            {...(pickedThread ? { threadTitle: pickedThread.title } : {})}
+            target={aiTarget}
+            remaining={aiRemaining}
+            onApply={onAiApply}
+          />
+        )}
         {saveError !== null && (
           <div className="flex items-start gap-1 rounded-lg bg-red-500/5 px-2.5 py-1.5 text-[0.7rem] leading-snug text-red-500 ring-1 ring-red-500/20">
             <span className="material-symbols-outlined text-sm">error</span>

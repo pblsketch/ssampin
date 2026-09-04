@@ -102,6 +102,17 @@ function newRunId(): string {
   return `draft-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/**
+ * 모델이 쓴 별칭을 실제 이름으로 되돌린다.
+ *
+ * ★지우지 않고 **되돌린다.** 세특 본문에는 보통 이름을 쓰지 않지만, 모델이 "［이름1］은 …"
+ * 처럼 주어로 썼을 때 통째로 지우면 문장이 부서진다. 이름으로 되돌려 놓으면 선생님이
+ * 보고 지울 수 있다 — 부서진 문장은 무엇이 없어졌는지도 모른다.
+ */
+export function restoreAlias(text: string, alias: string, displayName: string): string {
+  return alias.length > 0 ? text.split(alias).join(displayName) : text;
+}
+
 /** CLI 를 한 번 돌려 초안 한 편을 받는다. 실패하면 갈래를 담아 던진다. */
 async function askOnce(
   api: OwnAiRunApi,
@@ -236,8 +247,10 @@ export function RecordDraftAiButton({
   const applyAndContinue = async (mode: 'replace' | 'append'): Promise<void> => {
     if (phase.kind !== 'preview') return;
     const base = target.studentRef === phase.studentRef ? (target.existingText ?? '') : '';
+    // 별칭을 실제 이름으로 되돌린 뒤에 저장한다 — 초안에 ［이름1］ 이 남으면 안 된다.
+    const restored = restoreAlias(phase.text, target.studentAlias, phase.name);
     const merged =
-      mode === 'append' && base.trim().length > 0 ? `${base.trim()}\n${phase.text}` : phase.text;
+      mode === 'append' && base.trim().length > 0 ? `${base.trim()}\n${restored}` : restored;
     await onApply(phase.studentRef, merged);
     if (phase.queue.length > 0) void runQueue(phase.queue, phase.queue.length);
     else setPhase({ kind: 'idle' });
@@ -250,7 +263,7 @@ export function RecordDraftAiButton({
         <button
           type="button"
           onClick={() => setPhase({ kind: 'stopped', message: '', queue: [] })}
-          className="flex w-fit items-center gap-1 rounded-md bg-sp-card px-2 py-1 text-[0.6rem] font-medium text-sp-muted ring-1 ring-sp-border"
+          className="flex w-fit items-center gap-1 rounded-md bg-sp-card px-2 py-1 text-[0.6rem] font-medium text-sp-muted ring-1 ring-sp-border hover:bg-sp-surface"
         >
           <span className="material-symbols-outlined text-[0.75rem]">auto_awesome</span>
           AI로 초안 쓰기
@@ -319,7 +332,16 @@ export function RecordDraftAiButton({
             {phase.name} — 미리보기
             {phase.excluded && <span className="ml-1 text-sp-muted">· {phase.excluded}</span>}
           </p>
-          <p className="mb-2 whitespace-pre-wrap text-[0.65rem] text-sp-text">{phase.text}</p>
+          {/* ★"남은 학생 모두"로 이어 만드는 동안에는 **누른 행이 아닌 학생**의 초안이 여기
+              뜬다. 이름만으로는 눈이 못 따라간다 — 어디에 저장되는지 한 줄로 못 박는다.
+              이 줄이 없으면 다른 학생 초안을 자기 학생 것으로 알고 [반영]을 누른다. */}
+          {phase.studentRef !== target.studentRef && (
+            <p className="mb-1 text-[0.6rem] text-sp-muted">{phase.name} 학생 칸에 저장됩니다.</p>
+          )}
+          {/* 저장될 것과 **같은 글**을 보여 준다 — 미리보기와 저장이 다르면 미리보기가 아니다. */}
+          <p className="mb-2 whitespace-pre-wrap text-[0.65rem] text-sp-text">
+            {restoreAlias(phase.text, target.studentAlias, phase.name)}
+          </p>
           <div className="flex flex-wrap items-center gap-1">
             <button
               type="button"

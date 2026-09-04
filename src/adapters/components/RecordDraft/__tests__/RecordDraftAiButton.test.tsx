@@ -16,7 +16,7 @@ import { cleanup, render, screen, fireEvent, act } from '@testing-library/react'
 const fetchRecordPromptL1 = vi.hoisted(() => vi.fn());
 vi.mock('@adapters/di/container', () => ({ fetchRecordPromptL1 }));
 
-import { RecordDraftAiButton, type DraftTarget } from '../RecordDraftAiButton';
+import { RecordDraftAiButton, restoreAlias, type DraftTarget } from '../RecordDraftAiButton';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { useOwnAiStatusStore } from '@adapters/stores/useOwnAiStatusStore';
 import type { OwnAiConnection } from '@domain/entities/OwnAiProvider';
@@ -314,5 +314,152 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
     await startWith('이 학생만');
 
     expect(container.textContent).not.toContain('절대로 화면에 뜨면 안 되는');
+  });
+});
+
+describe('★별칭을 실제 이름으로 되돌린 뒤 저장한다', () => {
+  beforeEach(() => {
+    useAssistStore.setState({ ownAiEnabled: true, provider: 'claude' });
+    useOwnAiStatusStore.setState({ connections: { claude: connected(), codex: null } });
+  });
+
+  async function finishWith(text: string): Promise<void> {
+    await act(async () => {
+      eventHandler?.({ type: 'done', runId: lastRunId, text });
+    });
+  }
+
+  it('되돌리기 자체 — 나온 만큼 전부 바꾼다', () => {
+    expect(restoreAlias('［이름1］은 ［이름1］답게 썼다.', '［이름1］', '김지훈')).toBe(
+      '김지훈은 김지훈답게 썼다.',
+    );
+  });
+
+  it('별칭이 없으면 글을 건드리지 않는다', () => {
+    expect(restoreAlias('주어 없이 쓴 문장.', '［이름1］', '김지훈')).toBe('주어 없이 쓴 문장.');
+  });
+
+  it('★초안에 ［이름1］ 이 남지 않는다 — 저장되는 글에서 확인', async () => {
+    const applied: { ref: string; text: string }[] = [];
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        target={target()}
+        onApply={(ref, text) => {
+          applied.push({ ref, text });
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith('이 학생만');
+    await finishWith('［이름1］은 탐구 흐름을 이어 썼다.');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+
+    expect(applied[0]?.text).toBe('김지훈은 탐구 흐름을 이어 썼다.');
+    expect(applied[0]?.text).not.toContain('［이름');
+  });
+
+  it('미리보기에도 되돌린 글을 보여 준다 — 보이는 것과 저장되는 것이 같아야 한다', async () => {
+    render(<RecordDraftAiButton areaLabel="교과 세특" target={target()} onApply={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith('이 학생만');
+    await finishWith('［이름1］은 탐구 흐름을 이어 썼다.');
+
+    expect(screen.getByText(/김지훈은 탐구 흐름을 이어 썼다/)).toBeTruthy();
+  });
+
+  it('뒤에 붙이기에도 되돌린 글이 붙는다', async () => {
+    const applied: { ref: string; text: string }[] = [];
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        target={target({ existingText: '먼저 쓴 문장.' })}
+        onApply={(ref, text) => {
+          applied.push({ ref, text });
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith('이 학생만');
+    await finishWith('［이름1］은 이어서 썼다.');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '뒤에 붙이기' }));
+    });
+
+    expect(applied[0]?.text).toBe('먼저 쓴 문장.' + '\n' + '김지훈은 이어서 썼다.');
+  });
+});
+
+describe('★"남은 학생 모두" 중에는 어느 칸에 저장되는지 못 박는다', () => {
+  beforeEach(() => {
+    useAssistStore.setState({ ownAiEnabled: true, provider: 'claude' });
+    useOwnAiStatusStore.setState({ connections: { claude: connected(), codex: null } });
+  });
+
+  async function finishWith(text: string): Promise<void> {
+    await act(async () => {
+      eventHandler?.({ type: 'done', runId: lastRunId, text });
+    });
+  }
+
+  /**
+   * 누른 행은 김지훈인데 두 번째 차례는 박서연이다. 그때 미리보기는 **김지훈 칸 아래**에
+   * 뜬다 — 이름만 작게 적혀 있으면 자기 학생 것으로 알고 [반영]을 누른다.
+   */
+  it('다른 학생 차례면 "○○ 학생 칸에 저장됩니다"를 보여 준다', async () => {
+    const applied: { ref: string }[] = [];
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        target={target()}
+        remaining={[target({ studentRef: 's2', displayName: '박서연' })]}
+        onApply={(ref) => {
+          applied.push({ ref });
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith(/남은 학생 모두/);
+
+    // 첫 차례(김지훈)는 안내를 붙이지 않는다 — 누른 행과 같은 학생이다.
+    await finishWith('김지훈 초안.');
+    expect(screen.queryByText(/칸에 저장됩니다/)).toBeNull();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+    await finishWith('박서연 초안.');
+
+    expect(screen.getByText('박서연 학생 칸에 저장됩니다.')).toBeTruthy();
+  });
+
+  it('그렇게 저장하면 실제로도 그 학생 칸으로 간다', async () => {
+    const applied: { ref: string }[] = [];
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        target={target()}
+        remaining={[target({ studentRef: 's2', displayName: '박서연' })]}
+        onApply={(ref) => {
+          applied.push({ ref });
+        }}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith(/남은 학생 모두/);
+    await finishWith('김지훈 초안.');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+    await finishWith('박서연 초안.');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+
+    expect(applied.map((a) => a.ref)).toEqual(['s1', 's2']);
   });
 });
