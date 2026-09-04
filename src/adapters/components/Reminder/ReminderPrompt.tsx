@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { SnoozeWhen } from '@domain/rules/reminderSnoozeTimes';
+import { VoiceTypingButton } from '@adapters/components/common/VoiceTypingButton';
 
 /**
  * 학생 관찰 기록 알림 — 기록 입력 카드.
@@ -64,6 +65,7 @@ export function ReminderPrompt({
   const [submitting, setSubmitting] = useState(false);
   const [snoozeMenuOpen, setSnoozeMenuOpen] = useState(false);
   const snoozeContainerRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const headingId = useId();
 
   const displayName = studentName.trim() || '학생';
@@ -197,6 +199,7 @@ export function ReminderPrompt({
         </div>
 
         <textarea
+          ref={textareaRef}
           value={content}
           onChange={(e) => setContent(e.target.value)}
           onKeyDown={handleTextareaKeyDown}
@@ -206,6 +209,11 @@ export function ReminderPrompt({
           aria-label="한 줄 메모"
           className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted resize-none focus:outline-none focus:border-sp-accent"
         />
+
+        {/* 말로 쓰기 — 수업 직후 기억이 생생할 때 30초 말하기. 커서를 메모 칸에 두고
+            OS 받아쓰기를 부른다(OS 는 커서가 있는 칸에 글자를 넣는다).
+            데스크톱 앱이 아니면 버튼 자체가 그려지지 않는다. */}
+        <VoiceTypingButton onFocusField={() => textareaRef.current?.focus()} />
 
         {/* 부담 없는 탈출구 — 눈에 띄되 강요하지 않는 점선 톤 */}
         <button

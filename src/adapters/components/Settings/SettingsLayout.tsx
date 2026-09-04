@@ -23,6 +23,7 @@ import { TodoTab } from './tabs/TodoTab';
 import { ToolsTab } from './tabs/ToolsTab';
 import { ShortcutsTab } from './tabs/ShortcutsTab';
 import { RecordReminderSection } from './RecordReminderSection';
+import { VoiceInputNoticeSection } from './VoiceInputNoticeSection';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { Modal } from '@adapters/components/common/Modal';
 interface Props {
@@ -183,7 +184,16 @@ function TabContent({
     case 'shortcuts':
       return <ShortcutsTab />;
     case 'record-reminder':
-      return <RecordReminderSection draft={draft} patch={patch} />;
+      // 말로 남기기 고지를 여기 둔다 — 관찰 기록을 세우러 온 선생님이 보는 자리이고,
+      // 마이크 버튼이 실제로 뜨는 곳도 관찰 입력 칸이다. 실험실 탭이 아닌 이유는
+      // 말로 남기기가 실험실 스위치에 매여 있지 않기 때문이다(데스크톱이면 늘 보인다).
+      // ★음성에 학생 이름이 섞이므로 켜기 전에 보이는 자리여야 한다(계획서 §6 T1 요청 2).
+      return (
+        <>
+          <RecordReminderSection draft={draft} patch={patch} />
+          <VoiceInputNoticeSection />
+        </>
+      );
     case 'system':
       return <SystemTab draft={draft} patch={patch} setDraft={setDraft} />;
     case 'backup':

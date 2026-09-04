@@ -231,9 +231,29 @@ interface SidePinDisplayListResult {
  */
 type SidePinSetDisplayResult = 'applied' | 'deferred' | 'unknown-display' | 'save-failed';
 
+/**
+ * 말로 남기기 — OS 받아쓰기(윈도우: Win+H)를 대신 켜 주는 통로.
+ *
+ * ★음성도 받아쓴 글자도 이 통로로 흐르지 않는다. 오가는 것은 "켜 달라"는 신호와 결과
+ *   한 줄뿐이고, 글자는 OS 가 **지금 커서가 있는 칸에 직접** 넣는다(앱을 거치지 않는다).
+ * ★인자가 없다 — 렌더러 값이 OS 명령에 닿을 길 자체가 없다.
+ *
+ * `not-wired` 는 본체에 통로가 등록되지 않은 빌드(구버전 main + 신버전 렌더러)에서
+ * preload 가 대신 돌려주는 값이다. 화면은 이 경우에도 깨지지 않고 안내만 띄운다.
+ */
+interface VoiceTypingElectronAPI {
+  start: () => Promise<{
+    ok: boolean;
+    reason: 'started' | 'unsupported-platform' | 'send-failed' | 'not-wired';
+    message: string;
+  }>;
+}
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   coolMessenger: CoolMessengerElectronAPI;
+  /** 데스크톱 앱에서만 존재한다. 브라우저·모바일에서는 없음(버튼을 아예 그리지 않는다). */
+  voiceTyping?: VoiceTypingElectronAPI;
   writeData: (filename: string, data: string) => Promise<void>;
   writeDataIfUnchanged: (
     filename: string,

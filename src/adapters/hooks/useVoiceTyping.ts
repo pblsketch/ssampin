@@ -8,13 +8,11 @@
  * 그 뒤로 말한 글자는 **앱을 거치지 않고 OS 가 칸에 직접** 넣는다. 그래서 여기에는
  * 음성도, 받아쓴 글자도 지나가지 않는다.
  *
- * ## 왜 `global.d.ts` 를 고치지 않았나
+ * ## 타입은 공용 선언에 있다
  *
- * 이 통로의 타입을 공용 선언 파일에 넣는 것이 정석이지만, 지금은 5개 세션이 같은 트리에서
- * 동시에 일하고 있고 `src/global.d.ts` 는 여러 작업이 함께 건드릴 파일이라
- * (다른 세션도 자기 IPC 를 여기 적는다) **소유권 표 밖**이다. 그래서 이 파일 안에서만
- * `window` 를 좁혀 쓴다. `any` 는 쓰지 않는다. 통합 세션(T6)이 나중에 공용 선언으로
- * 옮기면 이 함수만 지우면 된다 — 계획서 §6 에 요청으로 남겼다.
+ * 병렬 작업 중에는 `src/global.d.ts` 를 여러 세션이 함께 건드려서 T1 이 이 파일 안에서만
+ * `window` 를 좁혀 썼다. 통합 세션(T6)이 계획서 §6 T1 요청 4번대로 공용 선언
+ * (`VoiceTypingElectronAPI`)으로 옮겼으므로, 여기서는 그것을 그대로 읽는다.
  */
 import { useCallback } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -34,15 +32,9 @@ export interface VoiceTypingOutcome {
   readonly message: string;
 }
 
-interface VoiceTypingBridge {
-  start: () => Promise<VoiceTypingOutcome>;
-}
-
 /** 데스크톱 앱 안에서만 존재하는 통로. 브라우저에서는 `null`. */
-function bridge(): VoiceTypingBridge | null {
-  const api = (window as unknown as { electronAPI?: { voiceTyping?: VoiceTypingBridge } })
-    .electronAPI;
-  return api?.voiceTyping ?? null;
+function bridge(): VoiceTypingElectronAPI | null {
+  return window.electronAPI?.voiceTyping ?? null;
 }
 
 /** 데스크톱 앱에서 열렸고 받아쓰기 통로가 있는가 — 아니면 버튼을 아예 그리지 않는다. */
