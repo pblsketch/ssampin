@@ -84,6 +84,17 @@ export interface RecordDraft {
    *   (브릿지 write 계약도 같이 바뀌어야 한다). 표식이 먼저 있어야 그때 데이터를 가를 수 있다.
    */
   readonly term?: string;
+  /**
+   * 이 초안이 딛고 선 **탐구 흐름(주제)** — `InquiryThread.id`.
+   *
+   * 선택 필드다. 주제를 안 쓰는 선생님도 그대로 쓰고, 부재는 "주제 없음"이지 빈 값이 아니다
+   * (병합에서 덮지 말 것). 이 칸이 생기면서 "이 주제로 쓴 초안" 조회가 가능해진다.
+   *
+   * ★AI 의 주제별 초안 자체는 이 칸 **없이도** 이미 동작한다
+   *   (`get_inquiry_threads` → `get_record_evidence(threadToken)`). 이 칸은 그 결과를
+   *   앱에서 되짚기 위한 것이다.
+   */
+  readonly threadId?: string;
   readonly createdAt: number;
   readonly updatedAt: number;
 }

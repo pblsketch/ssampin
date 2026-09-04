@@ -60,6 +60,14 @@ export interface RecordDraftUpsertInput {
    * 창고가 아직 안 읽혔으면 만들지 않는다 — 모르는 것을 "근거 없음"으로 치면 오탐이 난다.
    */
   evidenceBasis?: NarrativeEvidenceBasis;
+  /**
+   * 이 초안이 딛고 선 탐구 흐름(주제) — `InquiryThread.id`.
+   *
+   * **미지정(undefined)은 "바꾸지 않는다"** 이지 "주제 없음"이 아니다. 초안 화면은 700ms 마다
+   * 글자만 들고 저장을 부르는데, 미지정을 삭제로 보면 타이핑 한 번에 주제가 조용히 떨어진다.
+   * 주제를 **떼려면 `null`** 을 명시한다(`term` 과 같은 태도).
+   */
+  threadId?: string | null;
 }
 
 /**
@@ -241,6 +249,14 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
         ...(input.studentId !== undefined ? { studentId: input.studentId } : {}),
         ...(input.subject !== undefined ? { subject: input.subject } : {}),
         ...(flags.length > 0 ? { groundingFlags: flags } : {}),
+        // 주제 — 미지정이면 기존 값을 지킨다(자동저장이 주제를 떨구지 않게). null 이면 뗀다.
+        ...(input.threadId === undefined
+          ? existing?.threadId !== undefined
+            ? { threadId: existing.threadId }
+            : {}
+          : input.threadId === null
+            ? {}
+            : { threadId: input.threadId }),
         // 학기 표식 — 기존 초안의 term 은 유지하고, 없을 때만 저장 시각의 학기를 붙인다.
         // (구 데이터에 소급해 추측 부착하지 않는다는 원칙과, "처음 만든 학기"를 남기려는 뜻이 같다.)
         ...(existing?.term !== undefined
