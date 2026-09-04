@@ -45,6 +45,11 @@ export interface Rubric {
    * 구 데이터에는 없다(선택). 채점(`RubricGrading`)과 무관하다.
    */
   readonly standardCodes?: readonly string[];
+  /**
+   * 교사가 **직접 적은** 성취기준 문장. 2026학년도 중3·고3처럼 2022 개정 자료가 아직 없는
+   * 학년에서 쓴다. ⚠️ 이 문장도 성취기준 원문일 수 있으므로 AI 로 보내지 않는다.
+   */
+  readonly standardText?: string;
   readonly createdAt: string;
   readonly updatedAt: string;
 }

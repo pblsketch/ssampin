@@ -22,6 +22,10 @@ export interface CreateAssignmentParams {
   readonly allowResubmit: boolean;
   /** true면 제출 폼에서 학년/반/번호 숨기고 이름만으로 매칭 */
   readonly identifyByName?: boolean;
+  /** 이 과제가 겨냥한 성취기준 코드(선택). 서버로는 보내지 않고 로컬에만 남는다. */
+  readonly standardCodes?: readonly string[];
+  /** 2022 개정 자료가 없는 학년에서 직접 적은 성취기준 문장(선택). */
+  readonly standardText?: string;
 }
 
 export class CreateAssignment {
@@ -90,6 +94,14 @@ export class CreateAssignment {
       adminKey: result.adminKey,
       createdAt: new Date().toISOString(),
       teacherEmail,
+      // 성취기준은 **로컬에만** 남긴다 — 위 servicePort.createAssignment 에 넣지 않았다.
+      // 학생 제출 화면이 알 필요가 없는 정보를 서버로 보내지 않는다.
+      ...(params.standardCodes && params.standardCodes.length > 0
+        ? { standardCodes: [...params.standardCodes] }
+        : {}),
+      ...(params.standardText && params.standardText.trim().length > 0
+        ? { standardText: params.standardText.trim() }
+        : {}),
     };
 
     // ④ 로컬 JSON 저장

@@ -5,6 +5,7 @@ import type { ProgressEntryFieldValues } from '@adapters/components/ClassManagem
 import type { FanoutCandidate, FanoutPreviewRow } from '@domain/rules/progressFanout';
 import type { ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
+import type { StandardScope } from '@domain/rules/curriculumStandardRules';
 
 /** "다른 반에도 함께 기록" 선택 상태 — useProgressQuickEntry가 그대로 넘겨준다 */
 export interface ProgressQuickEntryFanout {
@@ -40,6 +41,8 @@ interface ProgressQuickEntryModalProps {
   periodTimes?: readonly PeriodTime[];
   /** 추가 모드에서만 노출되는 "다른 반에도 함께 기록" 선택 */
   fanout?: ProgressQuickEntryFanout;
+  /** 성취기준 고르기 범위(학교급·과목·학년). 없으면 성취기준 칸이 나오지 않는다. */
+  standardScope?: StandardScope;
   onSubmit: (values: ProgressEntryFieldValues, status: ProgressStatus) => void | Promise<void>;
   onDelete?: () => void | Promise<void>;
   /**
@@ -61,6 +64,7 @@ export function ProgressQuickEntryModal({
   maxPeriods,
   periodTimes,
   fanout,
+  standardScope,
   onSubmit,
   onDelete,
   onShiftFromHere,
@@ -135,6 +139,9 @@ export function ProgressQuickEntryModal({
             accentColor={accentColor}
             maxPeriods={maxPeriods}
             periodTimes={periodTimes}
+            standardScope={standardScope}
+            standardContextLabel={className}
+            compact
           />
 
           {/* 다른 반에도 함께 기록 (추가 모드 전용) */}

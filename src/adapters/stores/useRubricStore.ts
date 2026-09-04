@@ -17,6 +17,10 @@ export interface CreateRubricParams {
   readonly title: string;
   readonly description?: string;
   readonly criteria: readonly RubricCriterion[];
+  /** 연결된 성취기준 코드(선택). 평가계획서에서 불러온 루브릭은 파서가 읽은 코드가 그대로 온다. */
+  readonly standardCodes?: readonly string[];
+  /** 2022 개정 자료가 없는 학년에서 직접 적은 성취기준 문장(선택). */
+  readonly standardText?: string;
 }
 
 interface RubricState {
@@ -102,6 +106,13 @@ export const useRubricStore = create<RubricState>((set, get) => ({
         ? { description: params.description.trim() }
         : {}),
       criteria: params.criteria.map((criterion, index) => ({ ...criterion, order: index })),
+      // 선택 필드 — 없을 때 빈 배열을 만들지 않는다(부재와 빈 값은 다르다).
+      ...(params.standardCodes && params.standardCodes.length > 0
+        ? { standardCodes: [...params.standardCodes] }
+        : {}),
+      ...(params.standardText && params.standardText.trim().length > 0
+        ? { standardText: params.standardText.trim() }
+        : {}),
       createdAt: now,
       updatedAt: now,
     };

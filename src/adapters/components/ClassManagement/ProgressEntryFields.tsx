@@ -1,5 +1,7 @@
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
+import { StandardCodeField } from '@adapters/components/CurriculumStandards/StandardCodeField';
 import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import type { StandardScope } from '@domain/rules/curriculumStandardRules';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
 /**
@@ -15,6 +17,13 @@ export interface ProgressEntryFieldValues {
   readonly unit: string;
   readonly lesson: string;
   readonly note: string;
+  /**
+   * 이 차시가 다루는 성취기준 코드. `unit`·`lesson` 은 자유 문자열이라 "무엇을 배우는 장면인가"를
+   * 기계가 알 수 없었다. 선택 — 안 붙여도 진도는 그대로 돈다.
+   */
+  readonly standardCodes?: readonly string[];
+  /** 2022 개정 자료가 없는 학년(2026 중3·고3)에서 직접 적은 성취기준 문장. */
+  readonly standardText?: string;
 }
 
 interface ProgressEntryFieldsProps {
@@ -45,6 +54,14 @@ interface ProgressEntryFieldsProps {
   canStepLessonDate?: { prev: boolean; next: boolean };
   /** 컴팩트 간격 (모달/좁은 폼용) */
   compact?: boolean;
+  /**
+   * 성취기준 고르기를 붙일 범위(학교급·과목·학년). **넘기지 않으면 칸 자체가 안 나온다** —
+   * 어느 반의 수업인지 모르면 목록을 과목·학년으로 좁힐 수 없고, 좁히지 않은 3,838건짜리
+   * 목록은 없는 것만 못하기 때문이다.
+   */
+  standardScope?: StandardScope;
+  /** 성취기준 칸에 보여 줄 맥락 한 줄 (예: '2학년 수학') */
+  standardContextLabel?: string;
 }
 
 export function ProgressEntryFields({
@@ -60,6 +77,8 @@ export function ProgressEntryFields({
   onStepLessonDate,
   canStepLessonDate,
   compact = false,
+  standardScope,
+  standardContextLabel,
 }: ProgressEntryFieldsProps) {
   const inputPad = compact ? 'px-2.5 py-1' : 'px-3 py-1.5';
   return (
@@ -154,6 +173,17 @@ export function ProgressEntryFields({
                      placeholder:text-sp-muted`}
         />
       </div>
+      {standardScope !== undefined && (
+        <StandardCodeField
+          codes={values.standardCodes}
+          onCodesChange={(standardCodes) => onChange({ standardCodes })}
+          standardText={values.standardText}
+          onStandardTextChange={(standardText) => onChange({ standardText })}
+          scope={standardScope}
+          contextLabel={standardContextLabel}
+          compact={compact}
+        />
+      )}
       <div>
         <label className="block text-xs text-sp-muted mb-1">비고 (선택)</label>
         <input

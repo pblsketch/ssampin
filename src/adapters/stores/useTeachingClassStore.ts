@@ -100,6 +100,8 @@ interface TeachingClassState {
     lesson: string,
     note?: string,
     status?: ProgressStatus,
+    /** 성취기준(선택). 안 넘기면 칸을 만들지 않는다. */
+    standards?: { standardCodes?: readonly string[]; standardText?: string },
   ) => Promise<ProgressEntry>;
   updateProgressEntry: (entry: ProgressEntry) => Promise<void>;
   /**
@@ -494,6 +496,7 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       lesson,
       note = '',
       status = 'planned',
+      standards,
     ) => {
       const entry: ProgressEntry = {
         id: generateUUID(),
@@ -504,6 +507,13 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
         lesson,
         status,
         note,
+        // 성취기준은 선택이다. 없을 때 빈 배열을 넣지 않는다 — 부재와 빈 값은 다르다.
+        ...(standards?.standardCodes && standards.standardCodes.length > 0
+          ? { standardCodes: [...standards.standardCodes] }
+          : {}),
+        ...(standards?.standardText && standards.standardText.trim().length > 0
+          ? { standardText: standards.standardText.trim() }
+          : {}),
       };
       await manageProgress.add(entry);
       set((state) => ({ progressEntries: [...state.progressEntries, entry] }));

@@ -62,7 +62,7 @@ export function ProgressCalendarView() {
   const colorBy =
     settings.timetableColorBy ?? (settings.schoolLevel === 'elementary' ? 'subject' : 'classroom');
 
-  const { modal, openAdd, openEntry, submit, remove, close, accentFor, fanout } =
+  const { modal, openAdd, openEntry, submit, remove, close, accentFor, fanout, standardScope } =
     useProgressQuickEntry({
       colorBy,
       subjectColors: settings.subjectColors,
@@ -217,6 +217,7 @@ export function ProgressCalendarView() {
           accentColor={accentFor(modal.cell)}
           maxPeriods={maxPeriods}
           fanout={fanout}
+          standardScope={standardScope}
           onSubmit={submit}
           onDelete={modal.mode === 'edit' ? remove : undefined}
           onShiftFromHere={

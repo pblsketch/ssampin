@@ -9,6 +9,11 @@
  * - 모달 높이 상속: 공용 Modal + 내부 래퍼 `flex-1 min-h-0` 패턴 준수.
  */
 import { useMemo, useState } from 'react';
+import { StandardCodeField } from '@adapters/components/CurriculumStandards/StandardCodeField';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { coerceSchoolLevel } from '@domain/entities/RecordDraft';
+import { inferClassGrade, type StandardScope } from '@domain/rules/curriculumStandardRules';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -130,7 +135,31 @@ export function RubricBuilderModal({ classId, rubric, draft, onClose }: RubricBu
   const [drafts, setDrafts] = useState<DraftCriterion[]>(() =>
     seed !== undefined ? rubricToDrafts(seed) : [makeDraftCriterion()],
   );
+  const [standardCodes, setStandardCodes] = useState<readonly string[]>(seed?.standardCodes ?? []);
+  const [standardText, setStandardText] = useState(seed?.standardText ?? '');
   const [saving, setSaving] = useState(false);
+
+  // 성취기준 목록을 좁힐 범위 — 이 루브릭이 속한 수업반의 학교급·과목·학년.
+  const { settings } = useSettingsStore();
+  const teachingClasses = useTeachingClassStore((s) => s.classes);
+  const cls = useMemo(
+    () => teachingClasses.find((c) => c.id === classId),
+    [teachingClasses, classId],
+  );
+  const standardScope = useMemo<StandardScope>(
+    () => ({
+      schoolLevel: coerceSchoolLevel(settings.schoolLevel),
+      subject: cls?.subject,
+      grade: cls
+        ? inferClassGrade(
+            cls.name,
+            cls.students.map((st) => st.grade),
+          )
+        : null,
+    }),
+    [cls, settings.schoolLevel],
+  );
+  const standardContextLabel = cls ? `${cls.name} · ${cls.subject}` : undefined;
   /** 구조 변경 경고 단계 — 영향받는 기록 수와 함께 확인을 요구 */
   const [pendingWarning, setPendingWarning] = useState<{
     affectedCount: number;
@@ -212,6 +241,13 @@ export function RubricBuilderModal({ classId, rubric, draft, onClose }: RubricBu
             ? { description: description.trim() }
             : { description: undefined }),
           criteria,
+          // 비우면 칸을 지운다 — 성취기준을 뺐는데 옛 값이 남으면 안 된다.
+          ...(standardCodes.length > 0
+            ? { standardCodes: [...standardCodes] }
+            : { standardCodes: undefined }),
+          ...(standardText.trim().length > 0
+            ? { standardText: standardText.trim() }
+            : { standardText: undefined }),
         });
         showToast('루브릭을 수정했습니다', 'success');
       } else {
@@ -220,6 +256,8 @@ export function RubricBuilderModal({ classId, rubric, draft, onClose }: RubricBu
           title,
           ...(description.trim().length > 0 ? { description: description.trim() } : {}),
           criteria,
+          standardCodes,
+          standardText,
         });
         showToast('루브릭을 만들었습니다', 'success');
       }
@@ -293,6 +331,20 @@ export function RubricBuilderModal({ classId, rubric, draft, onClose }: RubricBu
               className="w-full bg-transparent text-sm text-sp-text placeholder:text-sp-muted outline-none"
             />
           </div>
+
+          {/*
+            성취기준 — 평가계획서에서 불러온 루브릭에는 파서가 읽은 코드가 이미 붙어 있고,
+            손으로 만든 루브릭에는 여기서 붙인다. 루브릭 요소 이름은 교사가 이미 자기 말로 써 둔
+            "이 활동에서 보려는 것"이라, 성취기준과 함께 두면 탐구 주제를 묶는 실마리가 된다.
+          */}
+          <StandardCodeField
+            codes={standardCodes}
+            onCodesChange={setStandardCodes}
+            standardText={standardText}
+            onStandardTextChange={setStandardText}
+            scope={standardScope}
+            contextLabel={standardContextLabel}
+          />
 
           {/* 평가 요소 블록 (D7: 요소마다 독립 수준) */}
           {drafts.map((criterion, index) => (

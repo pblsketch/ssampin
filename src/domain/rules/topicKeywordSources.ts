@@ -79,6 +79,33 @@ export function topicMatchKeywords(sources: TopicKeywordSources): string[] {
   ]);
 }
 
+/* ──────────────────── 성취기준 키워드 원천 (T3) ──────────────────── */
+
+/**
+ * 성취기준 코드 목록 → 그 성취기준의 **핵심 키워드**를 주는 함수.
+ *
+ * 실제 구현은 `curriculumStandardRules.standardKeywords` 이고, 화면이 그것을 감아 넘겨준다.
+ * 여기서 자료를 직접 읽지 않고 **함수 하나로 받는** 이유는 이 규칙 파일이 성취기준 자료 파일을
+ * 몰라야 하기 때문이다 — 자료가 1.5MB 라 필요할 때만 따로 읽어 들이는데(`useCurriculumStandards`),
+ * 이 파일이 그것을 직접 import 하면 그 덩어리가 앱 첫 화면에 딸려 들어온다.
+ */
+export type StandardKeywordLookup = (codes: readonly string[]) => readonly string[];
+
+/**
+ * 성취기준 코드에서 **키워드만** 뽑아 온다. 주제 이름 후보(③)와 매칭 키워드가 이것을 받는다.
+ *
+ * ⚠️ 여기로 나오는 것은 명사 키워드뿐이고 **원문 문장은 절대 아니다.** 원문("일차함수의 개념을
+ * 이해하고, 그 그래프를 그릴 수 있다")을 근거에 실으면 모델이 그대로 옮겨 적어 성취기준
+ * 복사형 세특이 된다(오너 결정 2026-09-04). 나가는 것은 `일차함수`·`그래프` 같은 낱말뿐이다.
+ */
+export function standardKeywordsFromCodes(
+  lookup: StandardKeywordLookup | undefined,
+  codes: readonly string[] | undefined,
+): string[] {
+  if (lookup === undefined || codes === undefined || codes.length === 0) return [];
+  return cleanUnique(lookup(codes));
+}
+
 /**
  * 본문에 든 키워드 — "이것도 이 주제?" 제안의 근거. 문자열 포함 검사(AI 없음).
  * 두 글자 미만 키워드는 아무 데나 걸리므로 제외한다(예: '수').

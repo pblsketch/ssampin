@@ -11,6 +11,11 @@ import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import { shortLinkClient } from '@adapters/di/container';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { SITE_DISPLAY } from '@config/siteUrl';
+import { StandardCodeField } from '@adapters/components/CurriculumStandards/StandardCodeField';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { coerceSchoolLevel } from '@domain/entities/RecordDraft';
+import { inferClassGrade, type StandardScope } from '@domain/rules/curriculumStandardRules';
 
 interface AssignmentCreateModalProps {
   onClose: () => void;
@@ -57,6 +62,8 @@ export function AssignmentCreateModal({
   const [linkCodeError, setLinkCodeError] = useState<string | null>(null);
   const [isCheckingCode, setIsCheckingCode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [standardCodes, setStandardCodes] = useState<readonly string[]>([]);
+  const [standardText, setStandardText] = useState('');
 
   // 커스텀 코드 실시간 검증 (디바운스 300ms)
   useEffect(() => {
@@ -85,6 +92,21 @@ export function AssignmentCreateModal({
     }, 300);
     return () => clearTimeout(timer);
   }, [customLinkCode]);
+
+  // 성취기준 목록을 좁힐 범위 — 고른 대상이 수업반이면 그 반의 과목·학년을 쓴다.
+  const { settings } = useSettingsStore();
+  const teachingClasses = useTeachingClassStore((s) => s.classes);
+  const standardScope = useMemo<StandardScope>(() => {
+    const cls = selectedTarget?.teachingClassId
+      ? teachingClasses.find((c) => c.id === selectedTarget.teachingClassId)
+      : undefined;
+    const grades = (selectedTarget?.students ?? []).map((s) => s.grade);
+    return {
+      schoolLevel: coerceSchoolLevel(settings.schoolLevel),
+      subject: cls?.subject,
+      grade: inferClassGrade(selectedTarget?.name ?? '', grades),
+    };
+  }, [selectedTarget, teachingClasses, settings.schoolLevel]);
 
   // Auto-fill folder name when title changes
   const autoFolderName = useMemo(() => {
@@ -125,6 +147,8 @@ export function AssignmentCreateModal({
         allowLate,
         allowResubmit,
         customLinkCode: customLinkCode.trim() || undefined,
+        standardCodes,
+        standardText,
       });
       track('assignment_create', { title: title.trim() || '무제' });
       onCreated(assignment.id);
@@ -186,6 +210,16 @@ export function AssignmentCreateModal({
               className="w-full px-4 py-2.5 bg-sp-surface border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none"
             />
           </div>
+
+          {/* 성취기준 — 붙여 두면 이 과제 제출물이 생기부 근거로 이어질 때 무엇을 배운 장면인지 남는다 */}
+          <StandardCodeField
+            codes={standardCodes}
+            onCodesChange={setStandardCodes}
+            standardText={standardText}
+            onStandardTextChange={setStandardText}
+            scope={standardScope}
+            contextLabel={selectedTarget?.name}
+          />
 
           {/* Deadline */}
           <div>

@@ -176,6 +176,9 @@ export function useProgressFanout(sourceClassId: string | null) {
           unit,
           lesson,
           values.note.trim() || undefined,
+          undefined,
+          // 같은 진도를 나갔으면 같은 성취기준을 본 것이다 — 함께 옮긴다.
+          { standardCodes: values.standardCodes, standardText: values.standardText },
         );
         added++;
         if (placement.kind !== 'same-slot') shifted++;

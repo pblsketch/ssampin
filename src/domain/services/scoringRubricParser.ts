@@ -78,6 +78,25 @@ const CODE_SUBJECT: Readonly<Record<string, string>> = {
   환경: '환경',
 };
 
+/**
+ * 본문에서 성취기준 코드를 **있는 그대로** 뽑는다 (`[12언매01-01]` · `[12가정-01-03]`).
+ *
+ * 전에는 코드를 과목 추정에만 쓰고 버렸다. 평가계획서에는 교사가 이미 "이 수행평가가 어느
+ * 성취기준을 보는지" 적어 두었는데, 그것을 읽고도 버리면 교사가 앱에서 다시 골라야 한다.
+ * 등장 순서를 지키고 중복은 없앤다.
+ */
+export function standardCodesIn(text: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const m of text.matchAll(/\[\s*(\d{1,2}\s*[가-힣]{1,4}\s*[\d-]{1,8})\s*\]/g)) {
+    const code = `[${m[1]!.replace(/\s+/g, '')}]`;
+    if (seen.has(code)) continue;
+    seen.add(code);
+    out.push(code);
+  }
+  return out;
+}
+
 /** 성취기준 코드들의 접두사 최빈값으로 과목 추정 ([12언매01-01], [12가정-01-03] 등) */
 export function subjectByCode(text: string): string | null {
   const codes = [...text.matchAll(/\[\s*\d{1,2}\s*([가-힣]{1,4})\s*[-\d]/g)].map((m) => m[1]!);
@@ -268,6 +287,15 @@ export function parseScoringRubrics(
   let headerSubject: string | null = null;
   let codeSubject: string | null = null;
   let currentTitle: string | null = null;
+  /**
+   * 아직 어느 수행평가에도 붙지 않은 성취기준 코드.
+   *
+   * 학교 평가계획서는 보통 **성취기준표 → 채점기준표** 순서로 놓인다. 그래서 코드는 채점기준표
+   * *앞*(표 사이 본문 또는 바로 앞의 성취기준표)에서 나온다. `currentTitle` 과 똑같이 모았다가
+   * 채점기준표를 만나면 **붙이고 비운다** — 안 비우면 문서 뒤쪽 수행평가에까지 앞 항목의 코드가
+   * 줄줄이 따라붙어 엉뚱한 성취기준이 달린다.
+   */
+  let pendingCodes: string[] = [];
 
   for (const { grid, index, endIndex } of tables) {
     const betweenRaw = markdown.slice(prevEnd, index);
@@ -281,12 +309,15 @@ export function parseScoringRubrics(
     // 항목명: 직전 구간의 "가./나./1) 제목"(보일러플레이트 제외) — 원문 줄 단위
     const tBetween = extractTaskTitle(betweenRaw);
     if (tBetween) currentTitle = tBetween;
+    pendingCodes.push(...standardCodesIn(betweenText));
 
     const detected = isScoringGrid(grid);
     if (!detected) {
-      // 비-채점기준표(성취기준표 등): 표 안 성취기준 코드로 과목 폴백 갱신
-      const sGrid = subjectByCode(grid.map((r) => r.join(' ')).join(' '));
+      // 비-채점기준표(성취기준표 등): 표 안 성취기준 코드로 과목 폴백 갱신 + 코드 자체를 챙긴다
+      const gridText = grid.map((r) => r.join(' ')).join(' ');
+      const sGrid = subjectByCode(gridText);
       if (sGrid) codeSubject = sGrid;
+      pendingCodes.push(...standardCodesIn(gridText));
       continue;
     }
     const currentSubject = headerSubject ?? codeSubject;
@@ -296,6 +327,11 @@ export function parseScoringRubrics(
     const criteria = buildCriteria(grid, detected.headerRow, cols);
     if (criteria.length === 0) continue;
 
+    // 채점기준표 안에 코드가 직접 적힌 양식도 있다.
+    const codes = [
+      ...new Set([...pendingCodes, ...standardCodesIn(grid.map((r) => r.join(' ')).join(' '))]),
+    ];
+
     // 제목은 추출된 항목명만 우선 보관(일반 번호는 dedup 후에 매긴다).
     candidates.push({
       subject: currentSubject,
@@ -303,8 +339,10 @@ export function parseScoringRubrics(
       title: currentTitle ?? '',
       criteria,
       hasScores: true,
+      ...(codes.length > 0 ? { standardCodes: codes } : {}),
     });
     currentTitle = null; // 이 항목 제목 소비 — 다음 항목은 자기 제목을 다시 찾는다
+    pendingCodes = []; // 코드도 함께 소비한다(안 비우면 뒤 항목에 앞 항목 코드가 따라붙는다)
   }
 
   // 1) 중복 제거 — **내용(평가요소·점수·설명)** 만으로 식별(과목/제목 제외).
@@ -329,7 +367,15 @@ export function parseScoringRubrics(
   for (const c of candidates) {
     const sig = contentSig(c);
     const cur = byContent.get(sig);
-    if (!cur || isBetter(c, cur)) byContent.set(sig, c);
+    if (!cur) {
+      byContent.set(sig, c);
+      continue;
+    }
+    // 같은 내용의 사본 중 더 나은 쪽을 남기되, **성취기준 코드는 양쪽을 합친다** —
+    // 한 사본에만 코드가 붙어 있는 경우가 있어서, 더 나은 쪽을 고르다 코드를 잃을 수 있다.
+    const winner = isBetter(c, cur) ? c : cur;
+    const merged = [...new Set([...(cur.standardCodes ?? []), ...(c.standardCodes ?? [])])];
+    byContent.set(sig, merged.length > 0 ? { ...winner, standardCodes: merged } : winner);
   }
   const deduped = [...byContent.values()];
 

@@ -85,6 +85,14 @@ export interface RubricCandidate {
   readonly criteria: readonly RubricCriterionDraft[];
   /** 채점기준표에서 점수까지 추출됐는지 (false면 교사가 배점 입력) */
   readonly hasScores: boolean;
+  /**
+   * 이 수행평가에 딸린 2022 개정 성취기준 코드 (예: `['[12언매01-01]']`).
+   *
+   * 평가계획서에는 교사가 "이 수행평가가 어느 성취기준을 보는지" 이미 적어 두었다. 전에는 그
+   * 코드를 **과목 추정에만 쓰고 버렸다**. 버리지 않고 실어 두면 불러오기로 만든 루브릭에
+   * 성취기준이 그대로 붙어 온다(`Rubric.standardCodes`). 문서에 코드가 없으면 없다.
+   */
+  readonly standardCodes?: readonly string[];
 }
 
 /** 다운로드+파싱된 평가계획 1건 */

@@ -258,6 +258,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
     close: closeProgressModal,
     accentFor: progressAccentFor,
     fanout: progressFanout,
+    standardScope: progressStandardScope,
   } = useProgressQuickEntry({
     colorBy,
     subjectColors: settings.subjectColors,
@@ -1471,6 +1472,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
           maxPeriods={settings.maxPeriods}
           periodTimes={settings.periodTimes}
           fanout={progressFanout}
+          standardScope={progressStandardScope}
           onSubmit={handleProgressSubmit}
           onDelete={progressModal.mode === 'edit' ? handleProgressDelete : undefined}
           onClose={closeProgressModal}

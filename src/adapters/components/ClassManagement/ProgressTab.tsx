@@ -9,6 +9,8 @@ import { ProgressEntryFields } from './ProgressEntryFields';
 import { ProgressFanoutPicker } from '@adapters/components/Progress/ProgressFanoutPicker';
 import { useProgressFanout } from '@adapters/components/Progress/useProgressFanout';
 import { describeFanoutResult } from '@domain/rules/progressFanout';
+import { inferClassGrade, type StandardScope } from '@domain/rules/curriculumStandardRules';
+import { coerceSchoolLevel } from '@domain/entities/RecordDraft';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { ProgressEntry, ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
@@ -107,6 +109,27 @@ export function ProgressTab({ classId }: ProgressTabProps) {
   const [formUnit, setFormUnit] = useState('');
   const [formLesson, setFormLesson] = useState('');
   const [formNote, setFormNote] = useState('');
+  const [formStandardCodes, setFormStandardCodes] = useState<readonly string[]>([]);
+  const [formStandardText, setFormStandardText] = useState('');
+
+  // 성취기준 목록을 좁힐 범위 — 이 수업반의 학교급·과목·학년.
+  const standardScope = useMemo<StandardScope>(() => {
+    const cls = classes.find((c: TeachingClass) => c.id === classId);
+    return {
+      schoolLevel: coerceSchoolLevel(settings.schoolLevel),
+      subject: cls?.subject,
+      grade: cls
+        ? inferClassGrade(
+            cls.name,
+            cls.students.map((s) => s.grade),
+          )
+        : null,
+    };
+  }, [classes, classId, settings.schoolLevel]);
+  const standardContextLabel = useMemo(() => {
+    const cls = classes.find((c: TeachingClass) => c.id === classId);
+    return cls ? `${cls.name} · ${cls.subject}` : undefined;
+  }, [classes, classId]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDate, setEditDate] = useState('');
   const [editPeriod, setEditPeriod] = useState(1);
@@ -404,6 +427,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     // 직전 기록의 표기를 이어받아 차시 칸을 미리 채운다. 못 읽으면 빈칸.
     setFormLesson(suggestLessonFor(''));
     setFormNote('');
+    setFormStandardCodes([]);
+    setFormStandardText('');
   }, [getMatchingPeriods, suggestLessonFor]);
 
   const handleAdd = useCallback(async () => {
@@ -415,14 +440,19 @@ export function ProgressTab({ classId }: ProgressTabProps) {
       formUnit.trim(),
       formLesson.trim(),
       formNote.trim() || undefined,
+      undefined,
+      { standardCodes: formStandardCodes, standardText: formStandardText },
     );
     // 선택한 다른 반에도 같은 진도를 기록 (날짜·교시는 그 반 시간표에 맞춰 자동 배정)
+    // 성취기준도 함께 간다 — 같은 진도를 나갔으면 같은 성취기준을 본 것이다.
     const fanoutResult = await applyFanout({
       date: formDate,
       period: formPeriod,
       unit: formUnit,
       lesson: formLesson,
       note: formNote,
+      standardCodes: formStandardCodes,
+      standardText: formStandardText,
     });
     const message = describeFanoutResult(fanoutResult);
     if (message) showToast(message, fanoutResult.added > 0 ? 'success' : 'info');
@@ -435,6 +465,8 @@ export function ProgressTab({ classId }: ProgressTabProps) {
     formUnit,
     formLesson,
     formNote,
+    formStandardCodes,
+    formStandardText,
     addProgressEntry,
     resetForm,
     applyFanout,
@@ -778,13 +810,19 @@ export function ProgressTab({ classId }: ProgressTabProps) {
               unit: formUnit,
               lesson: formLesson,
               note: formNote,
+              standardCodes: formStandardCodes,
+              standardText: formStandardText,
             }}
             onChange={(patch) => {
               if (patch.period !== undefined) setFormPeriod(patch.period);
               if (patch.unit !== undefined) setFormUnit(patch.unit);
               if (patch.lesson !== undefined) setFormLesson(patch.lesson);
               if (patch.note !== undefined) setFormNote(patch.note);
+              if (patch.standardCodes !== undefined) setFormStandardCodes(patch.standardCodes);
+              if (patch.standardText !== undefined) setFormStandardText(patch.standardText);
             }}
+            standardScope={standardScope}
+            standardContextLabel={standardContextLabel}
             onDateChange={handleDateChange}
             matchingPeriods={getMatchingPeriods(formDate)}
             lessonDays={lessonDayIndices}

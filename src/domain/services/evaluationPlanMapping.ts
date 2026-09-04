@@ -139,6 +139,11 @@ export function candidateToRubric(
     classId,
     title,
     criteria,
+    // 평가계획서에서 읽은 성취기준 코드를 루브릭까지 그대로 들고 온다.
+    // 이 한 줄이 없으면 파서가 애써 살려 둔 코드가 여기서 조용히 사라진다.
+    ...(candidate.standardCodes && candidate.standardCodes.length > 0
+      ? { standardCodes: [...candidate.standardCodes] }
+      : {}),
     createdAt: now,
     updatedAt: now,
   };

@@ -79,6 +79,11 @@ export interface Assignment {
    * 해당 주제(탐구 흐름)에 **산출물 후보**로 자동 표시된다. 선택 — 없어도 과제는 그대로 돈다.
    */
   readonly standardCodes?: readonly string[];
+  /**
+   * 교사가 **직접 적은** 성취기준 문장. 2026학년도 중3·고3처럼 2022 개정 자료가 아직 없는
+   * 학년에서 쓴다. ⚠️ 이 문장도 성취기준 원문일 수 있으므로 AI 로 보내지 않는다.
+   */
+  readonly standardText?: string;
 }
 
 export interface Submission {

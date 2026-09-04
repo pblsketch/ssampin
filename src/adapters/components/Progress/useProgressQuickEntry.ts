@@ -3,6 +3,9 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useProgressFanout } from './useProgressFanout';
 import { describeFanoutResult } from '@domain/rules/progressFanout';
+import { inferClassGrade, type StandardScope } from '@domain/rules/curriculumStandardRules';
+import { coerceSchoolLevel } from '@domain/entities/RecordDraft';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import type { WeeklyProgressCell } from '@domain/rules/progressCalendarRules';
@@ -34,8 +37,9 @@ export function useProgressQuickEntry({
   subjectColors,
   classroomColors,
 }: UseProgressQuickEntryOptions) {
-  const { progressEntries, addProgressEntry, updateProgressEntry, deleteProgressEntry } =
+  const { classes, progressEntries, addProgressEntry, updateProgressEntry, deleteProgressEntry } =
     useTeachingClassStore();
+  const { settings } = useSettingsStore();
   const showToast = useToastStore((s) => s.show);
   const [modal, setModal] = useState<ProgressQuickEntryModalState | null>(null);
 
@@ -71,7 +75,15 @@ export function useProgressQuickEntry({
     setModal({
       mode: 'add',
       cell,
-      values: { date: cell.date, period: cell.period, unit: '', lesson: '', note: '' },
+      values: {
+        date: cell.date,
+        period: cell.period,
+        unit: '',
+        lesson: '',
+        note: '',
+        standardCodes: [],
+        standardText: '',
+      },
       status: 'planned',
     });
   }, []);
@@ -94,6 +106,8 @@ export function useProgressQuickEntry({
           unit: entry.unit,
           lesson: entry.lesson,
           note: entry.note,
+          standardCodes: entry.standardCodes ?? [],
+          standardText: entry.standardText ?? '',
         },
         status: entry.status,
       });
@@ -115,6 +129,8 @@ export function useProgressQuickEntry({
           values.unit,
           values.lesson,
           values.note || undefined,
+          undefined,
+          { standardCodes: values.standardCodes, standardText: values.standardText },
         );
         // addProgressEntry는 상태를 'planned'로 고정하므로, 그 외 상태면 방금 만든 항목을 찾아 갱신
         if (status !== 'planned') {
@@ -145,6 +161,13 @@ export function useProgressQuickEntry({
             lesson: values.lesson,
             note: values.note,
             status,
+            // 선택 필드는 **비면 칸을 지운다** — 교사가 성취기준을 뺐는데 옛 값이 남으면 안 된다.
+            ...(values.standardCodes && values.standardCodes.length > 0
+              ? { standardCodes: [...values.standardCodes] }
+              : { standardCodes: undefined }),
+            ...(values.standardText && values.standardText.trim().length > 0
+              ? { standardText: values.standardText.trim() }
+              : { standardText: undefined }),
           });
         }
       }
@@ -171,5 +194,20 @@ export function useProgressQuickEntry({
     [colorBy, subjectColors, classroomColors],
   );
 
-  return { modal, openAdd, openEntry, submit, remove, close, accentFor, fanout };
+  /**
+   * 지금 열린 칸의 성취기준 범위 — 학교급·과목·학년. 두 호스트(캘린더·시간표)가 같은 값을 쓰도록
+   * 여기서 한 번만 만든다.
+   */
+  const standardScope = useMemo<StandardScope | undefined>(() => {
+    const matched = modal?.cell.matchedClass;
+    if (!matched) return undefined;
+    const cls = classes.find((c) => c.id === matched.id);
+    return {
+      schoolLevel: coerceSchoolLevel(settings.schoolLevel),
+      subject: matched.subject,
+      grade: inferClassGrade(matched.name, cls?.students.map((s) => s.grade) ?? []),
+    };
+  }, [modal, classes, settings.schoolLevel]);
+
+  return { modal, openAdd, openEntry, submit, remove, close, accentFor, fanout, standardScope };
 }

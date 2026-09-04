@@ -168,3 +168,33 @@ describe('parseScoringRubrics — 정확도 개선(①②③)', () => {
     expect(cri[0]!.levels.map((l) => l.score)).toEqual([30, 20, 10]); // 점수밴드 1개 보존(분리 X)
   });
 });
+
+describe('성취기준 코드 보존 (T3)', () => {
+  it('성취기준표에 적힌 코드를 버리지 않고 후보에 싣는다', () => {
+    const c = parseScoringRubrics(FIXTURE_GAJEONG, OPTS);
+    expect(c).toHaveLength(1);
+    expect(c[0]!.standardCodes).toEqual(['[12가정-01-03]']);
+  });
+
+  it('레이아웃이 달라도(평가척도 열) 똑같이 챙긴다', () => {
+    const c = parseScoringRubrics(FIXTURE_JEONGBO, OPTS);
+    expect(c).toHaveLength(1);
+    expect(c[0]!.standardCodes).toEqual(['[12정연02-01]']);
+  });
+
+  it('🚨 앞 수행평가의 코드가 뒤 수행평가에 따라붙지 않는다', () => {
+    // 한 문서에 수행평가가 여러 개 실린다. 코드를 소비하고 비우지 않으면 뒤 항목에
+    // 앞 항목 성취기준이 줄줄이 달라붙어, 엉뚱한 성취기준이 붙은 루브릭이 만들어진다.
+    const c = parseScoringRubrics(FIXTURE_GAJEONG + '\n' + FIXTURE_JEONGBO, OPTS);
+    expect(c).toHaveLength(2);
+    expect(c[0]!.standardCodes).toEqual(['[12가정-01-03]']);
+    expect(c[1]!.standardCodes).toEqual(['[12정연02-01]']);
+  });
+
+  it('문서에 코드가 없으면 칸을 만들지 않는다 (부재 = 빈 배열이 아니다)', () => {
+    const noCode = FIXTURE_GAJEONG.replace('[12가정-01-03]', '개인 및 가족의 발달');
+    const c = parseScoringRubrics(noCode, OPTS);
+    expect(c).toHaveLength(1);
+    expect('standardCodes' in c[0]!).toBe(false);
+  });
+});
