@@ -10,6 +10,7 @@ import type { RecordPrefill } from '../HomeroomPage';
 import { useRecordSaveStatus } from '@adapters/hooks/useRecordSaveStatus';
 import { DEFAULT_TEMPLATES } from '@domain/valueObjects/DefaultTemplates';
 import { InlineRecordEditor } from './InlineRecordEditor';
+import { VoiceTypingButton } from '@adapters/components/common/VoiceTypingButton';
 import { StudentRecordReferencePanel } from './StudentRecordReferencePanel';
 import {
   type ModeProps,
@@ -81,6 +82,8 @@ function InputMode({
   const addAttachment = useObservationAttachmentStore((s) => s.addAttachment);
   const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
   const pendingFilesRef = useRef<PendingAttachment[]>([]);
+  /** 말로 쓰기 — OS 는 커서가 있는 칸에 글자를 넣으므로 키를 보내기 전에 여기로 커서를 옮긴다. */
+  const memoRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
   }, [pendingFiles]);
@@ -861,6 +864,7 @@ function InputMode({
             {/* 메모 */}
             <div className="relative">
               <textarea
+                ref={memoRef}
                 value={memo}
                 onChange={(e) => {
                   setMemo(e.target.value);
@@ -876,6 +880,12 @@ function InputMode({
               >
                 <span className="material-symbols-outlined text-base">open_in_full</span>
               </button>
+            </div>
+
+            {/* 말로 쓰기 — 커서를 메모 칸에 두고 OS 받아쓰기를 부른다.
+                데스크톱 앱이 아니면(브라우저 모드) 버튼 자체가 그려지지 않는다. */}
+            <div className="mt-1.5">
+              <VoiceTypingButton onFocusField={() => memoRef.current?.focus()} />
             </div>
 
             {/* 첨부 자료 (작성 중 담아두고 저장 시 함께 커밋) */}
