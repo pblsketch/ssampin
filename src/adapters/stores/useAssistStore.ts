@@ -22,6 +22,7 @@ import {
   restoreModelText,
 } from '@domain/rules/redactOutbound';
 import { createMaskSession } from '@domain/privacy/maskEngine';
+import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
 import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import type { KeywordGroup } from '@domain/privacy/types';
@@ -37,6 +38,15 @@ import { mentionsWriteIntent } from '@domain/rules/assistWriteIntent';
 
 /** 고지문이 바뀌면 이 숫자를 올린다. 다음에 켤 때 안내가 다시 뜬다. */
 export const ASSIST_NOTICE_VERSION = 1;
+
+/**
+ * "내 AI로 실행" 첫 사용 고지문 버전.
+ *
+ * 쌤핀 AI 고지와 **따로** 받는다 — 알려야 할 내용이 다르다:
+ * 선생님 구독 사용량을 쓴다 · 대화가 그 회사 설정에 따라 학습에 쓰일 수 있다 ·
+ * 내 CLI 설정이 함께 적용된다 · 읽기 허용을 켜야 제목까지 볼 수 있다.
+ */
+export const OWN_AI_NOTICE_VERSION = 1;
 
 /**
  * 도구 결과 한 건.
@@ -96,6 +106,20 @@ interface AssistState {
   /** 확인한 고지문 버전. 0 이면 아직 안 봤다 */
   readonly acknowledgedNoticeVersion: number;
   readonly installId: string;
+  /**
+   * 어느 AI 가 답하는가.
+   *
+   * - `ssampin` 쌤핀 AI(무료, 중계 서버) — 기본값
+   * - `claude`·`codex` 선생님 본인 구독 CLI("내 AI로 실행")
+   *
+   * ★스토어는 이 값을 **기억만** 한다. 실제로 어느 통로로 물어보는지는 화면이 고른
+   * 포트가 정한다(DI). 그래야 스토어가 infrastructure 를 import 하지 않는다.
+   */
+  readonly provider: OwnAiProviderId | 'ssampin';
+  /** 공급자별로 고른 모델. 빈 문자열이면 CLI 기본값. */
+  readonly ownAiModels: Readonly<Record<OwnAiProviderId, string>>;
+  /** "내 AI" 첫 사용 고지문을 확인한 버전. 0 이면 아직 안 봤다. */
+  readonly acknowledgedOwnAiNoticeVersion: number;
   readonly open: boolean;
   readonly turns: readonly AssistTurn[];
   readonly draft: string;
@@ -103,6 +127,10 @@ interface AssistState {
 
 interface AssistActions {
   setEnabled: (value: boolean) => void;
+  setProvider: (value: OwnAiProviderId | 'ssampin') => void;
+  setOwnAiModel: (provider: OwnAiProviderId, model: string) => void;
+  acknowledgeOwnAiNotice: () => void;
+  needsOwnAiNotice: () => boolean;
   acknowledgeNotice: () => void;
   needsNotice: () => boolean;
   setOpen: (value: boolean) => void;
@@ -278,9 +306,21 @@ export const useAssistStore = create<AssistStore>()(
       enabled: false,
       acknowledgedNoticeVersion: 0,
       installId: newId(),
+      provider: 'ssampin',
+      ownAiModels: { claude: '', codex: '' },
+      acknowledgedOwnAiNoticeVersion: 0,
       open: false,
       turns: [],
       draft: '',
+
+      setProvider: (value) => set({ provider: value }),
+
+      setOwnAiModel: (provider, model) =>
+        set((s) => ({ ownAiModels: { ...s.ownAiModels, [provider]: model } })),
+
+      acknowledgeOwnAiNotice: () => set({ acknowledgedOwnAiNoticeVersion: OWN_AI_NOTICE_VERSION }),
+
+      needsOwnAiNotice: () => get().acknowledgedOwnAiNoticeVersion < OWN_AI_NOTICE_VERSION,
 
       setEnabled: (value) =>
         set((s) => ({
@@ -346,8 +386,10 @@ export const useAssistStore = create<AssistStore>()(
         })),
 
       ask: async (port, question, cards, roster, executeTool, proposeWrite) => {
-        // ★차단선. 꺼져 있으면 **요청이 나가지 않는다**(성공 기준 5).
-        if (!get().enabled) return;
+        // ★차단선. 쌤핀 AI(중계 서버)로 물어보는 경우에만 동의가 필요하다.
+        //   "내 AI"(선생님 본인 구독 CLI)는 서버를 거치지 않으므로 이 관문에 걸리지 않는다 —
+        //   대신 그쪽은 자체 고지(acknowledgedOwnAiNoticeVersion)를 따로 받는다.
+        if (!get().enabled && get().provider === 'ssampin') return;
 
         // ★계획서: "실행 없이 대화가 이어지면 제안은 소멸".
         //   다음 질문을 던지는 순간 앞 제안의 [실행] 버튼은 죽는다 — 한참 전에 말한
@@ -656,6 +698,9 @@ export const useAssistStore = create<AssistStore>()(
         enabled: state.enabled,
         acknowledgedNoticeVersion: state.acknowledgedNoticeVersion,
         installId: state.installId,
+        provider: state.provider,
+        ownAiModels: state.ownAiModels,
+        acknowledgedOwnAiNoticeVersion: state.acknowledgedOwnAiNoticeVersion,
       }),
     },
   ),

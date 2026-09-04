@@ -450,6 +450,8 @@ const DEGRADED_MESSAGE: Readonly<Record<string, string>> = {
   offline: '인터넷이 끊겨 AI 요약을 못 받았어요. 숫자는 그대로 보실 수 있어요.',
   timeout: 'AI 응답이 늦어 기다리기를 멈췄어요. 숫자는 그대로 보실 수 있어요.',
   unreachable: 'AI 서버에 연결하지 못했어요. 숫자는 그대로 보실 수 있어요.',
+  // ★실패가 아니다 — 답은 정상이고, 어느 AI 가 답했는지만 알려 준다.
+  'own-ai-fallback': '내 AI 로 답하지 못해 쌤핀 AI 가 대신 답했어요.',
 };
 
 export function AssistThread({

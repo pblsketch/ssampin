@@ -73,6 +73,9 @@ import { NeisApiClient } from '@infrastructure/neis/NeisApiClient';
 import { ComciganApiClient } from '@infrastructure/comcigan/ComciganApiClient';
 import { AppinApiClient } from '@infrastructure/appin/AppinApiClient';
 import { AssistClient } from '@infrastructure/ai/AssistClient';
+import { OwnAiAssistPort } from '@infrastructure/ownAi/OwnAiAssistPort';
+import { withSolarFallback } from '@usecases/assist/withSolarFallback';
+import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
 import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
 import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarApiClient';
 import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnalyticsAdapter';
@@ -333,6 +336,37 @@ export const appinPort: IAppinPort = new AppinApiClient();
  * 화면은 이 컨테이너에서 받아 쓴다 - lint 규칙이 그걸 강제한다.
  */
 export const assistPort: AssistPort = new AssistClient();
+
+/**
+ * 어느 AI 로 물어볼지 고른다 — "내 AI로 실행"(선생님 본인 구독 CLI) 또는 쌤핀 AI.
+ *
+ * ★여기가 유일하게 infrastructure 를 아는 자리다. 스토어도 화면도
+ * `OwnAiAssistPort` 를 직접 import 하지 않는다(아키텍처 규칙).
+ *
+ * ★폴백은 **쌤핀 AI 에 동의한 경우에만** 일어난다. 동의 없이 서버로 질문이 나가면
+ * 그건 동의 없는 전송이다.
+ */
+export function assistPortFor(options: {
+  readonly provider: OwnAiProviderId | 'ssampin';
+  readonly solarEnabled: () => boolean;
+  readonly appendSystemPrompt?: string;
+  readonly onUsage?: (fiveHourUtilization: number | null, resetsAt: number | null) => void;
+  readonly onFallback?: (reason: unknown) => void;
+}): AssistPort {
+  if (options.provider === 'ssampin') return assistPort;
+
+  const own = new OwnAiAssistPort({
+    provider: options.provider,
+    ...(options.appendSystemPrompt === undefined
+      ? {}
+      : { appendSystemPrompt: options.appendSystemPrompt }),
+    ...(options.onUsage === undefined ? {} : { onUsage: options.onUsage }),
+  });
+  return withSolarFallback(own, assistPort, {
+    solarEnabled: options.solarEnabled,
+    ...(options.onFallback === undefined ? {} : { onFallback: options.onFallback }),
+  });
+}
 
 // === Google Calendar 관련 ===
 

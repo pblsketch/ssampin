@@ -244,7 +244,9 @@ export interface AnalyticsEventProperties {
       | 'timeout'
       | 'unreachable'
       /** 앱이 보내기 전에 막았다 — 개인정보가 섞인 질문 */
-      | 'blocked';
+      | 'blocked'
+      /** "내 AI"(선생님 구독 CLI)로 못 답해서 쌤핀 AI 가 대신 답했다 */
+      | 'own-ai-fallback';
   };
 
   // ── 동기화 ──
