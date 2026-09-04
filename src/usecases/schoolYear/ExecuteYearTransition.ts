@@ -60,7 +60,7 @@ export interface YearTransitionFileSpec {
     | { readonly kind: 'remove' };
 }
 
-/** 전환(보관+리셋) 대상 17키 — 각 리포지토리가 기대하는 봉투 형태 기준(실측 근거는 계획 보고). */
+/** 전환(보관+리셋) 대상 19키 — 각 리포지토리가 기대하는 봉투 형태 기준(실측 근거는 계획 보고). */
 export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
   // ── 담임 축 ──
   // F7b: `[]` 쓰기(F7a로 유효) — 첫 업로드가 리모트 옛 명렬을 정화한다(remove는 정화 불가였다).
@@ -129,6 +129,11 @@ export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
   { key: 'seating-snapshots', reset: { kind: 'empty-envelope', envelope: [] } },
   { key: 'surveys', reset: { kind: 'empty-envelope', envelope: { surveys: [], localData: [] } } },
   { key: 'assignments', reset: { kind: 'empty-envelope', envelope: { assignments: [] } } },
+  // 과제 제출 본문 캐시 — 과제 본체와 같은 축이라 함께 내려간다. 이걸 빼면 과제만
+  // 보관함으로 가고 학생이 쓴 글의 본문만 새 학년도에 남는다.
+  // guardDownloads 를 걸지 않는 이유: SYNC_REGISTRY 미등재라 다운로드 표면 자체가 없다
+  // (파생 캐시이고, 학생 원문을 기기 사이로 실어 나르지 않기로 한 결정 — T5).
+  { key: 'submission-texts', reset: { kind: 'empty-envelope', envelope: { records: [] } } },
   // ── 교과 축 ──
   { key: 'teaching-classes', reset: { kind: 'empty-envelope', envelope: { classes: [] } } },
   { key: 'attendance', reset: { kind: 'empty-envelope', envelope: { records: [] } } },

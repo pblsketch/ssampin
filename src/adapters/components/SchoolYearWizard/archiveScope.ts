@@ -37,6 +37,12 @@ export const ARCHIVE_SCOPE_ITEMS: readonly ArchiveScopeItem[] = [
   { key: 'seating-snapshots', label: '좌석 배치 스냅샷', axis: 'homeroom', countField: '' },
   { key: 'surveys', label: '설문', axis: 'homeroom', countField: 'surveys' },
   { key: 'assignments', label: '과제', axis: 'homeroom', countField: 'assignments' },
+  {
+    key: 'submission-texts',
+    label: '과제 제출 본문(캐시)',
+    axis: 'homeroom',
+    countField: 'records',
+  },
   // ── 교과 축 ──
   { key: 'teaching-classes', label: '수업반', axis: 'subject', countField: 'classes' },
   { key: 'attendance', label: '출결 기록', axis: 'subject', countField: 'records' },

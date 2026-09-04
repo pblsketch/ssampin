@@ -29,8 +29,9 @@ import { extensionOf, truncateExtractedText } from '@domain/rules/observationAtt
 import { FILE_TYPE_EXTENSIONS } from '@domain/valueObjects/FileTypeRestriction';
 
 /**
- * 글자를 뽑을 수 있는 형식 — 메인 프로세스 kordoc 의 `SUPPORTED_EXTENSIONS` 를 **미러**한다
+ * 글자를 뽑을 수 있는 형식 — 메인 프로세스의 `SUPPORTED_EXTENSIONS` 를 **미러**한다
  * (`electron/ipc/markdownConvert.ts`). 렌더러에서 메인 상수를 import 할 수 없어 옮겨 적는다.
+ * ★한쪽만 고치면 조용히 어긋난다 — 두 목록을 같이 고칠 것.
  *
  * ★허용 목록이지 금지 목록이 아니다. 과제의 파일 형식 제한이 '전체'면 학생은 .zip·.mp4 도 낼 수
  *  있는데, 금지 목록으로 짜면 그런 파일까지 전부 내려받아 파서에 넘기게 된다.
@@ -43,6 +44,10 @@ const PARSABLE_EXTENSIONS: readonly string[] = [
   'xls',
   'xlsx',
   'docx',
+  // 평문 2종. kordoc 은 이것들을 못 읽지만(실측: UNSUPPORTED_FORMAT) 메인 프로세스가
+  // 파서에 넘기기 전에 직접 해독한다 — 그래서 여기서도 "글자를 뽑을 수 있는 형식"이다.
+  'txt',
+  'md',
 ];
 
 /**

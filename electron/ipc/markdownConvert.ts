@@ -29,8 +29,42 @@ import { buildStoreZip, dedupeFilenames, sanitizeFilename } from '../lib/zipStor
 import { friendlyParseFailure, hasNoExtractableText } from './markdownConvertErrors';
 
 const MAX_BYTES = 50 * 1024 * 1024; // 50MB
-const SUPPORTED_EXTENSIONS = ['hwp', 'hwpx', 'hwpml', 'pdf', 'xls', 'xlsx', 'docx'];
+const SUPPORTED_EXTENSIONS = ['hwp', 'hwpx', 'hwpml', 'pdf', 'xls', 'xlsx', 'docx', 'txt', 'md'];
 const MAX_OUTLINE_ITEMS = 100;
+
+/**
+ * 글자 파일(.txt·.md) — **kordoc 에 넘기지 않는다.**
+ *
+ * kordoc 은 한글·PDF·오피스 같은 *구조가 있는* 문서를 읽는 파서라 평문 바이트를 주면
+ * `UNSUPPORTED_FORMAT` 을 돌려준다(실측). 그래서 확장자 목록에만 넣으면 파일을 내려받아
+ * 파서에 넘기고 실패로 굳는 결과가 되어 지금보다 나빠진다. 평문은 여기서 **직접 해독**한다.
+ *
+ * 해독 순서: BOM 제거 → UTF-8(엄격) → 실패하면 CP949(euc-kr).
+ * 한국 학교에서 만들어진 `.txt` 는 아직 CP949 가 흔해서, UTF-8 로만 읽으면 한글이 통째로
+ * 깨진 글자가 된다. 엄격 모드로 읽어 보고 튕길 때만 CP949 로 넘어간다 —
+ * 느슨하게 읽으면 깨진 글자가 조용히 본문으로 저장된다.
+ */
+const PLAIN_TEXT_EXTENSIONS: readonly string[] = ['txt', 'md'];
+
+function isPlainTextFile(fileName: string): boolean {
+  const lastDot = fileName.lastIndexOf('.');
+  if (lastDot < 0) return false;
+  return PLAIN_TEXT_EXTENSIONS.includes(fileName.slice(lastDot + 1).toLowerCase());
+}
+
+function decodePlainText(arrayBuffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(arrayBuffer);
+  // UTF-8 BOM 은 눈에 안 보이는 글자로 남아 첫 낱말에 달라붙는다.
+  const body =
+    bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? bytes.subarray(3) : bytes;
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(body);
+  } catch {
+    // CP949 로도 못 읽으면 대체 문자로 채워지는데, 그건 아래 hasNoExtractableText 가
+    // 품질 신호로 잡아 준다(빈 결과를 '성공'이라고 말하지 않는다).
+    return new TextDecoder('euc-kr').decode(body);
+  }
+}
 
 /** 문서 정보(존재값만). 표시 전용 — 마스킹 본문/저장 결과에 주입하지 않는다. */
 export interface MarkdownDocMetadata {
@@ -174,6 +208,19 @@ export async function parseArrayBuffer(
         status: 'error',
         code: 'TOO_LARGE',
         message: `파일이 너무 큽니다. (최대 ${MAX_BYTES / 1024 / 1024}MB)`,
+      };
+    }
+    // 평문(.txt·.md)은 kordoc 을 거치지 않는다 — 구조가 없는 바이트라 파서가
+    // UNSUPPORTED_FORMAT 을 돌려준다. 여기서 해독해 곧장 마크다운 자리에 싣는다.
+    if (isPlainTextFile(fileName)) {
+      const text = decodePlainText(arrayBuffer);
+      return {
+        status: 'ok',
+        fileName,
+        markdown: text,
+        ...(hasNoExtractableText(text)
+          ? { textQuality: { needsReview: true, reason: 'low_text' } }
+          : {}),
       };
     }
     // filePath 는 메인 프로세스 내부 전용 — kordoc 의 배포용 한글 COM fallback 에만 쓰이고

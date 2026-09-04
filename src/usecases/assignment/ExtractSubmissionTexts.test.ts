@@ -152,8 +152,16 @@ describe('submissionFileKindOf — 허용 목록이지 금지 목록이 아니�
 
   it('파일 형식 제한이 없는 과제로 들어올 수 있는 것들은 전부 unsupported', () => {
     // 과제의 fileTypeRestriction 이 'all' 이면 학생은 이런 것도 낼 수 있다.
-    for (const name of ['a.zip', 'a.mp4', 'a.txt', 'a.md', 'a.doc', 'a.pptx', '확장자없음']) {
+    for (const name of ['a.zip', 'a.mp4', 'a.doc', 'a.pptx', '확장자없음']) {
       expect(submissionFileKindOf(name)).toBe('unsupported');
+    }
+  });
+
+  it('평문(.txt·.md)도 parsable — 메인이 kordoc 대신 직접 해독한다(T6)', () => {
+    // kordoc 은 평문 바이트에 UNSUPPORTED_FORMAT 을 돌려준다(실측). 그래서 확장자 목록에만
+    // 넣으면 내려받아 파서에 넘기고 실패로 굳는다 — 메인의 해독 갈래와 **함께** 켜야 한다.
+    for (const name of ['a.txt', 'a.MD', '학생글.md']) {
+      expect(submissionFileKindOf(name)).toBe('parsable');
     }
   });
 
