@@ -475,7 +475,122 @@ T4 §6 이 "T3 가 착륙하면 배선 한 줄로 켜진다"고 적어 둔 그 �
   "질문이 하나뿐이에요"만 계속 뜬다(질문 슬롯 0개 = 1개 이하). 마디가 0이면 아무 말도 안 하지만
   이 비대칭은 남아 있다 — 하네스나 실사용으로 재 볼 것.
 
+### T6 처리 결과 (통합 세션, 2026-09-04)
+
+한 트리에서 게이트를 돌리고 위 요청을 처리한 결과다. **처리하지 않은 것도 이유와 함께 적는다.**
+
+| 요청                                  | 결과               | 비고                                                                                                                                                                                      |
+| ------------------------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| T1-1 `electron/main.ts` 통로 등록     | ✅ **이미 됨**     | T1 이 스스로 처리했다(`74dd8e38`). 요청 목록이 갱신되지 않았을 뿐이다.                                                                                                                    |
+| T1-2 설정 탭에 음성 고지              | ✅ 처리            | 설정 → **학생 관찰 기록**(`record-reminder`) 탭 아래. 실험실이 아닌 이유는 이 기능이 실험실 스위치에 매여 있지 않기 때문이다.                                                             |
+| T1-3 `ReminderPrompt.tsx` 마이크 버튼 | ✅ 처리            | 표의 오기가 맞았다 — 글자 칸은 `ReminderPopup` 이 아니라 이 파일에 있다.                                                                                                                  |
+| T1-4 `global.d.ts` 로 타입 이동       | ✅ 처리            | `VoiceTypingElectronAPI` 신설. 훅의 지역 `window` 좁히기를 걷어냈다.                                                                                                                      |
+| T1-5 카드 건별 저장 상태              | ⬜ 미처리          | `AssistWriteProposal` 구조 변경이라 이번 작업 단위 밖. 지금도 동작에 문제는 없다.                                                                                                         |
+| T4-1 브릿지 `write.ts` 서사 flag      | ✅ 처리            | `for (const f of report.narrative) flags.push(f.code)` + `{ area: spec.area }` 전달(초등 `subjectDev` 제외가 살아난다).                                                                   |
+| T5-1 `submission-texts` 학년도 전환   | ✅ 처리            | 두 목록에 **모두** 등록. `guardDownloads` 는 걸지 않았다(SYNC_REGISTRY 미등재라 다운로드 표면이 없다). 키 수 주석 17→19 정정.                                                             |
+| T5-2 kordoc `txt`·`md`                | ⚠️ **다르게 처리** | **요청대로 하면 안 됐다** — kordoc 은 평문에 `UNSUPPORTED_FORMAT` 을 낸다(실측). 목록만 늘리면 내려받아 실패로 굳는다. 메인에 평문 해독 갈래를 넣었다.                                    |
+| T5-3 창고가 마지막에 연 과제 1건만 봄 | ⬜ 미처리          | `useAssignmentStore` 구조 변경이라 별도 작업 단위. 실사용 영향이 커서 다음 순번 1번으로 올릴 것을 권한다.                                                                                 |
+| T5-4 본문 추출 실패 재시도 단추       | ⬜ 미처리          | 스토어에 `retrySubmissionTexts` 는 있다. 단추만 붙이면 되는데 디자인 협업이 필요해 미뤘다.                                                                                                |
+| T5-5 제외 이유 표시                   | ⬜ 미처리          | 위와 같음.                                                                                                                                                                                |
+| T2-1 `get_record_guidelines` 문구     | ✅ 처리            | **`narrativePrinciples` 별도 필드**로 넣었다 — T2 지적대로 `citations` 에 끼우면 "원칙마다 출처가 있다" 계약이 깨진다. 실측 확인: `principles 9 == citations 9`, `narrativePrinciples 4`. |
+| T2-2 `RecordDraft.threadId?`          | ✅ 처리            | 엔티티 + 스토어 입력 + **브릿지 미러 화이트리스트**까지. 미지정=유지, `null`=해제(자동저장이 주제를 떨구지 않게).                                                                         |
+| T2-3 브릿지 점검 2종                  | ⬜ **의도적 보류** | T2 판단이 옳다 — 원문을 도구 인자로 받으면 그 문장이 모델에 들어가 복사를 유발한다. 파일 직접 읽기 방식이 필요하고 이는 별도 설계다.                                                      |
+| T2-4·5 (= T5-3·4·5)                   | ⬜ 미처리          | 위 T5 항목과 같다.                                                                                                                                                                        |
+| T3-1 `gen:entity-samples` 재실행      | ✅ **불필요 확인** | 재실행해 대조했다 — **내용 변화 0**(prettier 줄바꿈 차이만). 새 선택 필드들은 생성기가 다루는 5개 엔티티에 없다. 되돌려 두었다.                                                           |
+| T3-2 `/docs` 성취기준 고르기          | ✅ 원문 작성       | **미출시라 `docs.ts` 에 넣지 않았다**(선례 `26170d26`·`60fa62f9`). 원문은 `docs/release-prep/record-flow-uplift-docs-가이드-보류분.md`.                                                   |
+| T3-3 특성화고 번들                    | ⬜ 별도 결정       | 4.6MB. `Settings.schoolLevel` 에 '특성화고' 구분이 없다는 것도 함께 풀어야 한다.                                                                                                          |
+
+**T6 이 소유권 표 밖에서 추가로 만진 파일** (숨기지 않고 적는다):
+
+- `src/domain/valueObjects/FileTypeRestriction.ts` — 문서 확장자에 `md` 추가. 파서는 읽는데
+  문 앞에서 막히는 비대칭을 남기지 않기 위해서다.
+- `src/usecases/assignment/ExtractSubmissionTexts.ts`(+테스트) — `PARSABLE_EXTENSIONS` 에 `txt`·`md`.
+  T5 소유지만 T5 요청 2번을 실제로 켜려면 이 미러를 함께 고쳐야 한다(한쪽만 고치면 조용히 어긋난다).
+- 브릿지 `packages/core/src/entities/recordDraft.ts` — `threadId` 화이트리스트 등록.
+
+**게이트 결과**는 §8 참조.
+
+---
+
 ## 7. 하지 않는 것 (이번 프로그램 밖)
 
 - 인앱 [AI 초안] 버튼·`ALLOWED_GRADES` 개방(Phase 4) · 자기평가서(Phase 3) · 로컬 STT 엔진 · 앱 자체 청취(WinRT) ·
   외부 유료 STT · 성취기준 원문의 AI 전송 · 흐름 자동 생성·필수화 · 담임 행특에 흐름 적용 · 점수판형 커버리지.
+
+---
+
+## 8. 게이트 결과 (T6, 2026-09-04 — 한 트리에서 실측)
+
+T1~T5 커밋을 모두 담은 `main` 워킹트리에서 실행했다. 실행 명령과 핵심 출력을 함께 적는다.
+
+### 본체 (`E:\github\ssampin`)
+
+```
+$ npx tsc --noEmit
+(출력 없음 = 에러 0개)
+
+$ npm run lint
+✖ 136 problems (0 errors, 136 warnings)     ← exit 0. 경고 수는 작업 전과 동일.
+
+$ npm run test
+Test Files  659 passed (659)
+      Tests  8759 passed | 10 skipped (8769)
+
+$ npm run regression-check
+Total: 55 | Passed: 55 | Failed: 0
+All 55 regression checks passed.
+```
+
+### 브릿지 (`E:\github\ssampin-ai-bridge`, master)
+
+```
+$ pnpm -r typecheck
+packages/core|cli|mcp typecheck: Done      ← 3개 전부
+
+$ pnpm -r test
+core: Test Files 34 passed / Tests 329 passed
+cli : Test Files  2 passed / Tests  47 passed
+mcp : Test Files 22 passed / Tests 244 passed   (합계 620)
+```
+
+### 랜딩 (`landing/`)
+
+```
+$ npm run docs:check
+docs:check 통과 — 문서 45개, 내부 링크 8개, 이미지 16개 확인
+
+$ npm run build
+(exit 0 — 라우트 표 정상 출력)
+```
+
+### 동봉 번들 재생성 + `tools/list` 실측
+
+`electron/ai-bridge/index.mjs` 를 README 절차대로 재생성했다(1,070,492 B, 셰뱅 1개).
+**`node_modules` 가 없는 격리 폴더**(`E:/tmp-bridge-smoke`)에 복사해 실제 MCP 왕복을 했다 —
+설치된 앱과 같은 조건이다(이 조건에서 죽은 전례가 있다).
+
+```
+[srv] [ssampin-mcp] connected (stdio)
+TOTAL TOOLS = 54
+  check_record_draft / get_inquiry_threads / get_record_drafts /
+  get_record_evidence / get_record_guidelines / write_record_draft ...
+get_inquiry_threads present: true
+get_record_evidence inputSchema keys: [ 'studentToken', 'area', 'threadToken' ]   ← T2 신설 인자
+```
+
+`get_record_guidelines(level:'high')` 를 실제로 호출한 결과:
+
+```
+principles(훈령 파생) count = 9
+citations count          = 9      ← 둘이 같아야 "원칙마다 출처가 있다" 계약이 유지된다
+narrativePrinciples count = 4     ← T2 요청 1로 신설(훈령이 아니라 품질 지침이라 별도 필드)
+```
+
+★ 남는 한계: **CI 에서는 본체↔브릿지 실제 파일 대조가 돌지 않는다**(저장소가 갈라져 있어
+브릿지 파일이 체크아웃에 없다). 미러 지문 대조는 "한쪽만 고쳤다"만 잡는 알람이다.
+
+### 아직 안 한 것
+
+- **실기기 확인** — `docs/04-report/features/record-flow-uplift-device-qa.report.md` 로 넘겼다.
+- **하네스 실행**(F·G 사례) — API 호출 비용이라 오너 승인 대기.
+- **릴리즈** — SOP 8단계는 오너 승인 후.
