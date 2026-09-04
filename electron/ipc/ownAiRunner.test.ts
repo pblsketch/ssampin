@@ -57,7 +57,8 @@ function harness(over: Partial<OwnAiRunnerDeps> = {}): Harness {
   const h = { events, children, killed, spawnOpts, spawnArgs, now: 1_000_000 } as Harness;
 
   const deps: OwnAiRunnerDeps = {
-    cliPath: () => 'C:\\npm\\claude.cmd',
+    // ★.cmd 가 아니다 — Node 20.12.2+ 는 shell 없이 .cmd 를 spawn 하면 EINVAL 이다.
+    launch: () => ({ file: 'C:\\npm\\claude.exe', args: [], asNode: false }),
     version: () => '2.1.258',
     cwd: 'C:\\tmp\\cwd',
     emit: (e) => events.push(e),
@@ -194,7 +195,7 @@ describe('실행 — stdin 과 프로세스 옵션', () => {
   });
 
   it('CLI 를 못 찾으면 띄우지 않고 not-installed 로 알린다', () => {
-    const h = harness({ cliPath: () => null });
+    const h = harness({ launch: () => null });
     const r = h.runner.start(panelReq());
     expect(r.ok).toBe(false);
     expect(h.children).toHaveLength(0);

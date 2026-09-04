@@ -25,6 +25,7 @@ import {
   buildCodexArgv,
   classifyOwnAiError,
 } from '../../src/domain/rules/ownAiCliRules';
+import type { OwnAiLaunch } from './ownAiCli';
 import type {
   OwnAiProviderId,
   OwnAiRunEvent,
@@ -50,7 +51,8 @@ export interface OwnAiRunRequest {
 }
 
 export interface OwnAiRunnerDeps {
-  readonly cliPath: (provider: OwnAiProviderId) => string | null;
+  /** 어떻게 띄울지 — 실행 파일이거나, node 로 돌릴 스크립트다(`.cmd` 는 직접 못 띄운다). */
+  readonly launch: (provider: OwnAiProviderId) => OwnAiLaunch | null;
   readonly version: (provider: OwnAiProviderId) => string | null;
   readonly cwd: string;
   readonly emit: (event: OwnAiRunEvent) => void;
@@ -160,8 +162,8 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
   function start(req: OwnAiRunRequest): { ok: boolean; kind?: 'not-installed' | 'busy' } {
     if (req.kind === 'panel' && hasActivePanelRun()) return { ok: false, kind: 'busy' };
 
-    const file = deps.cliPath(req.provider);
-    if (!file) {
+    const launch = deps.launch(req.provider);
+    if (!launch) {
       deps.emit({ type: 'error', runId: req.runId, kind: 'not-installed' });
       return { ok: false, kind: 'not-installed' };
     }
@@ -192,8 +194,12 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
 
     let child: ChildProcess;
     try {
-      child = deps.spawnChild(file, [...argv], {
+      child = deps.spawnChild(launch.file, [...launch.args, ...argv], {
         cwd: deps.cwd,
+        // node 스크립트로 띄우는 경우에만 Electron 을 node 모드로 돌린다.
+        ...(launch.asNode
+          ? { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', MCP_TIMEOUT: '45000' } }
+          : {}),
         // ★stdin 을 닫는다. 안 닫으면 codex 는 영원히 기다린다(실측).
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,

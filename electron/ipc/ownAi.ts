@@ -21,7 +21,7 @@ import {
   inspectConnection,
   loginArgs,
   logoutArgs,
-  resolveCliPath,
+  resolveCliLaunch,
   readVersion,
   type OwnAiCliDeps,
 } from './ownAiCli';
@@ -122,10 +122,10 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
   }
 
   runner = createOwnAiRunner({
-    cliPath: (p) => resolveCliPath(p, cliDeps),
+    launch: (p) => resolveCliLaunch(p, cliDeps),
     version: (p) => {
-      const file = resolveCliPath(p, cliDeps);
-      return file ? readVersion(file, cliDeps) : null;
+      const l = resolveCliLaunch(p, cliDeps);
+      return l ? readVersion(l, cliDeps) : null;
     },
     cwd: runCwd(),
     emit,
@@ -182,10 +182,10 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
    * 쌤핀은 결과(종료 코드)만 본다. 토큰은 보지도, 저장하지도 않는다.
    */
   ipcMain.handle('ownAi:login', async (_e, provider: OwnAiProviderId): Promise<OwnAiConnection> => {
-    const file = resolveCliPath(provider, cliDeps);
-    if (file) {
+    const l = resolveCliLaunch(provider, cliDeps);
+    if (l) {
       await new Promise<void>((resolve) => {
-        const child = spawn(file, [...loginArgs(provider)], {
+        const child = spawn(l.file, [...l.args, ...loginArgs(provider)], {
           // stdin 을 닫는다 — 두 CLI 모두 열려 있으면 기다린다(S0 실측).
           stdio: ['ignore', 'ignore', 'ignore'],
           windowsHide: false,
@@ -211,10 +211,10 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
   ipcMain.handle(
     'ownAi:logout',
     async (_e, provider: OwnAiProviderId): Promise<OwnAiConnection> => {
-      const file = resolveCliPath(provider, cliDeps);
-      if (file) {
+      const l = resolveCliLaunch(provider, cliDeps);
+      if (l) {
         await new Promise<void>((resolve) => {
-          const child = spawn(file, [...logoutArgs(provider)], {
+          const child = spawn(l.file, [...l.args, ...logoutArgs(provider)], {
             stdio: ['ignore', 'ignore', 'ignore'],
             windowsHide: true,
           });
