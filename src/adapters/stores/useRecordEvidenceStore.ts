@@ -7,6 +7,7 @@ import {
 } from '@domain/entities/RecordEvidence';
 import { hasProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import { recordEvidenceRepository } from '@adapters/di/container';
+import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 /** 근거 자료 추가 입력(직접 입력 / 기존 데이터 끌어오기 공통). id·시각은 스토어가 채운다. */
@@ -20,6 +21,8 @@ export interface RecordEvidenceAddInput {
   classId?: string;
   /** 원본 기록에서 이어받은 관찰 슬롯. 비면 필드를 만들지 않는다(부재 != 빈 배열). */
   slots?: readonly string[];
+  /** 속한 탐구 흐름(InquiryThread.id). 원본 낱장에 있으면 이어받고, 없으면 미분류. */
+  threadId?: string;
 }
 
 /** 근거 자료 부분 수정 입력. id 로 대상 지정. */
@@ -44,6 +47,11 @@ interface RecordEvidenceState {
    * 자동 표시와 달리 이쪽이 최종 판단이다.
    */
   setExcludedFromAi: (id: string, excluded: boolean) => Promise<void>;
+  /**
+   * 근거를 주제(탐구 흐름)로 묶거나(threadId) 미분류로 되돌린다(null). 여러 건을 한 번의 저장으로.
+   * 창고에서 묶는 것이 기본 경로라 이 함수가 주제 열의 저장 관문이다.
+   */
+  setThread: (ids: readonly string[], threadId: string | null) => Promise<void>;
   remove: (id: string) => Promise<void>;
   exists: (id: string) => boolean;
 
@@ -51,6 +59,8 @@ interface RecordEvidenceState {
   getByStudentRef: (studentRef: string) => readonly RecordEvidence[];
   /** 특정 학생의 특정 영역 근거(해당 area 를 포함하는 근거). */
   getByArea: (studentRef: string, area: RecordArea) => readonly RecordEvidence[];
+  /** 특정 주제(탐구 흐름)에 묶인 근거. */
+  getByThread: (threadId: string) => readonly RecordEvidence[];
 }
 
 export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => {
@@ -91,10 +101,15 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
         ...(input.sourceId !== undefined ? { sourceId: input.sourceId } : {}),
         ...(input.classId !== undefined ? { classId: input.classId } : {}),
         ...(input.slots && input.slots.length > 0 ? { slots: [...input.slots] } : {}),
+        ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
         // 기재 금지 항목이 섞였으면 저장 시점에 표시한다 — 모델까지 가지 않게(ADR-072 결정 5).
         ...(hasProhibitedTerms(input.content) ? { excludedFromAi: true } : {}),
       };
       await persist([...get().records, rec]);
+      trackEventSafely('record_evidence_import', {
+        sourceType: rec.sourceType ?? 'manual',
+        count: 1,
+      });
       return rec.id;
     },
 
@@ -114,9 +129,15 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
         ...(input.sourceId !== undefined ? { sourceId: input.sourceId } : {}),
         ...(input.classId !== undefined ? { classId: input.classId } : {}),
         ...(input.slots && input.slots.length > 0 ? { slots: [...input.slots] } : {}),
+        ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
         ...(hasProhibitedTerms(input.content) ? { excludedFromAi: true } : {}),
       }));
       await persist([...get().records, ...recs]);
+      // 일괄 끌어오기는 출처가 섞일 수 있어 첫 건의 출처로 대표한다(이름만 담는 계측).
+      trackEventSafely('record_evidence_import', {
+        sourceType: recs[0]?.sourceType ?? 'manual',
+        count: recs.length,
+      });
       return recs.length;
     },
 
@@ -152,6 +173,25 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
       );
     },
 
+    setThread: async (ids, threadId) => {
+      if (ids.length === 0) return;
+      await get().load();
+      const now = Date.now();
+      const target = new Set(ids);
+      await persist(
+        get().records.map((r) => {
+          if (!target.has(r.id)) return r;
+          if (threadId === null) {
+            // 미분류로 되돌림 — 키를 지워 "부재" 로 남긴다(빈 문자열을 넣지 않는다).
+            const { threadId: _dropped, ...rest } = r;
+            void _dropped;
+            return { ...rest, updatedAt: now };
+          }
+          return { ...r, threadId, updatedAt: now };
+        }),
+      );
+    },
+
     remove: async (id) => {
       await get().load();
       await persist(get().records.filter((r) => r.id !== id));
@@ -163,5 +203,7 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
 
     getByArea: (studentRef, area) =>
       get().records.filter((r) => r.studentRef === studentRef && r.areas.includes(area)),
+
+    getByThread: (threadId) => get().records.filter((r) => r.threadId === threadId),
   };
 });

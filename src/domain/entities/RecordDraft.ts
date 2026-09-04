@@ -75,6 +75,15 @@ export interface RecordDraft {
   /** 항상 true — 자동 확정 경로 없음. */
   readonly requiresTeacherReview: true;
   readonly status: RecordDraftStatus;
+  /**
+   * 학기 epoch 스탬프('2026-1'). 초안에는 `date` 가 없어 **저장 시각의 학기**를 부착한다
+   * (관찰·누가기록의 `withDerivedTerm` 과 같은 형식). 구 데이터에는 없다 — 추측 부착 금지.
+   *
+   * ★지금은 표식일 뿐이다. upsert 키(area+studentRef+subject)에는 아직 들어가지 않아 학년이 바뀌면
+   *   같은 키의 초안을 덮어쓰는 문제는 그대로다. 키에 넣는 일은 학년도 전환 작업과 함께 본다
+   *   (브릿지 write 계약도 같이 바뀌어야 한다). 표식이 먼저 있어야 그때 데이터를 가를 수 있다.
+   */
+  readonly term?: string;
   readonly createdAt: number;
   readonly updatedAt: number;
 }

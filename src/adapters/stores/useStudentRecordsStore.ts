@@ -14,6 +14,7 @@ import { ManageStudentRecords } from '@usecases/studentRecords/ManageStudentReco
 import { updateAttendancePeriods } from '@usecases/studentRecords/UpdateAttendancePeriods';
 import { migrateStudentRecordsOnLoad } from '@usecases/studentRecords/MigrateStudentRecordsSubcatToTags';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import type { StudentAttendance, AttendanceStatus } from '@domain/entities/Attendance';
 import { pickRepresentativeAttendance } from '@domain/rules/attendanceRules';
 import { toggleDocumentKind } from '@domain/rules/attendanceDocumentPolicy';
@@ -324,6 +325,11 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       };
       await manageRecords.add(newRecord);
       set((state) => ({ records: [...state.records, newRecord] }));
+      trackEventSafely('record_observation_save', {
+        context: 'homeroom',
+        slotCount: newRecord.slots?.length ?? 0,
+        hasThread: false,
+      });
       return newRecord.id;
     },
 
@@ -341,6 +347,11 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
       };
       await manageRecords.add(newRecord);
       set((state) => ({ records: [...state.records, newRecord] }));
+      trackEventSafely('record_observation_save', {
+        context: 'homeroom',
+        slotCount: newRecord.slots?.length ?? 0,
+        hasThread: false,
+      });
       return newRecord.id;
     },
 

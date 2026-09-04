@@ -372,6 +372,18 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useRecordEvidenceStore.getState().load();
     },
   },
+  // 28-c. inquiry-threads ─ 탐구 흐름(근거·관찰 낱장을 주제로 묶는 단위).
+  // ★근거 창고가 처음에 동기화 목록에서 빠졌던 실수를 되풀이하지 않는다 — 낱장(observations·
+  //   record-evidence)의 threadId 는 넘어가는데 흐름 자체가 안 넘어가면 다른 기기에서 "없는 주제"를
+  //   가리키는 고아가 된다. 만드는 순간 등록한다.
+  {
+    fileName: 'inquiry-threads',
+    strategy: 'snapshot',
+    reload: async () => {
+      const { useInquiryThreadStore } = await import('@adapters/stores/useInquiryThreadStore');
+      await useInquiryThreadStore.getState().load(true);
+    },
+  },
   // 29. observation-attachments ─ 관찰 첨부 메타(JSON). useObservationAttachmentStore 대표 키.
   {
     fileName: 'observation-attachments',

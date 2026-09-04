@@ -9,6 +9,7 @@
       "content": "수업 중 모둠 토의를 주도하며 근거를 들어 설명함(합성 샘플).",
       "tags": ["학습태도", "교과역량"],
       "slots": ["질문", "시행착오"],
+      "threadId": "thr-1",
       "visibility": "shared",
       "createdAt": 1735689600000,
       "updatedAt": 1735689600000,

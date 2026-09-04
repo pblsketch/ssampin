@@ -53,6 +53,9 @@ export const ENTITY_FIELD_CONTRACT = {
           'tags',
           // 관찰 슬롯("어떤 장면인가") — get_observations 가 탈식별해 노출한다.
           'slots',
+          // 탐구 흐름 id — 브릿지가 흐름 단위로 근거를 읽으려면 낱장에 붙은 id 가 보존돼야 한다.
+          // 값은 앱 내부 uuid 라 그 자체로는 개인정보가 아니다.
+          'threadId',
           'visibility',
           'createdAt',
           'updatedAt',
@@ -197,6 +200,7 @@ export const SAMPLES = {
         content: '수업 중 모둠 토의를 주도하며 근거를 들어 설명함(합성 샘플).',
         tags: ['학습태도', '교과역량'],
         slots: ['질문', '시행착오'], // 관찰 슬롯(교과) — 태그와 별개 축
+        threadId: 'thr-1', // 탐구 흐름 id(합성) — 브릿지 미러가 보존해야 흐름 단위 읽기가 된다
         visibility: 'shared',
         createdAt: 1735689600000,
         updatedAt: 1735689600000,

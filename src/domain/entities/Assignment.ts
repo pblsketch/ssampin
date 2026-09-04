@@ -74,6 +74,11 @@ export interface Assignment {
    * 이 값이 생기기 전(v2.4.5 이하)에 만든 과제에는 없다 — 없으면 대조를 건너뛴다.
    */
   readonly teacherEmail?: string;
+  /**
+   * 이 과제가 겨냥한 2022 개정 성취기준 코드. 과제에 코드가 달려 있으면 그 제출물이 같은 학생의
+   * 해당 주제(탐구 흐름)에 **산출물 후보**로 자동 표시된다. 선택 — 없어도 과제는 그대로 돈다.
+   */
+  readonly standardCodes?: readonly string[];
 }
 
 export interface Submission {
@@ -97,6 +102,12 @@ export interface Submission {
   readonly driveFileId?: string;
   /** 텍스트 제출 내용 */
   readonly textContent?: string;
+  /**
+   * 제출 **파일**에서 뽑아낸 본문(텍스트·HWP·PDF 등). 지금까지 파일 제출물은 근거 창고에 파일명만
+   * 들어갔고 본문은 드라이브에만 있었다 — 같은 파일인데 "첨부"로 올리면 본문이 들어오고 과제수합으로
+   * 내면 안 들어오는 비대칭이었다. 추출은 별도 작업(T5)이 채운다. 없으면 추출 전이거나 실패(이미지 등).
+   */
+  readonly extractedText?: string;
   /** 지각 제출 여부 */
   readonly isLate: boolean;
 }

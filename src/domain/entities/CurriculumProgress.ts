@@ -9,6 +9,12 @@ export interface ProgressEntry {
   readonly lesson: string;
   readonly status: ProgressStatus;
   readonly note: string;
+  /**
+   * 이 차시가 다루는 2022 개정 성취기준 코드. `unit`·`lesson` 은 자유 문자열이라 "무엇을 배우는
+   * 장면인가"를 기계가 알 수 없었다. 코드가 있으면 그날·그 반의 관찰 입력에 성취기준 칩을 제안할 수
+   * 있다. 선택 — 자유 문자열만 쓰던 교사는 그대로 쓴다. 2015 개정 학년(2026 중3·고3)은 자료가 없다.
+   */
+  readonly standardCodes?: readonly string[];
 }
 
 /**

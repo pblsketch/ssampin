@@ -2,6 +2,44 @@
 
 마지막 업데이트: 2026-09-04 KST
 
+## 🔎 분석 — 누적 관찰 → 과제물 → AI 생기부 초안 흐름 × 성취기준 MCP (2026-09-04, 분석만)
+
+`docs/03-analysis/record-draft-flow-curriculum-standards.analysis.md`. 구현 결정 없음.
+핵심: 파이프라인 뼈대는 서 있고 **성취기준 축이 앱 어디에도 없다**(진도는 `unit`·`lesson`
+자유 문자열, 평가계획서 파서는 코드를 읽고도 버린다). 관찰·근거 창고·초안 화면 **계측 0건**.
+성취기준 MCP 3종(초·중·고·특성화고, MIT)은 코드·원문·출처가 정본이나 주제 서술은 기계 생성.
+★2026학년도 중3·고3은 2015 개정이라 자료 없음. 방안 0~7과 권장 순서는 문서 §4·§5.
+
+**2차(같은 날)**: `docs/03-analysis/record-draft-flow-v2-inquiry-thread.analysis.md` — 오너 자료
+(`E:\test` 생기부 프롬프트·강의 분석)에서 "좋은 세특" 기준 14개를 추려 대조. 최대 구멍은
+**관찰이 낱장이라 구조가 활동 나열형을 만든다**는 것 → 핵심 제안 **탐구 흐름(Inquiry Thread)**
+엔티티. 성취기준은 **원문 전송 철회, 로컬(Kiwi) 키워드 추출만**. STT 는 0코드(OS 받아쓰기) →
+쌤핀 AI `add_observation` 구조화 → 로컬 sherpa-onnx(선택, int8 약 126MB) 3층. 우선순위 정본은 2차 §9.
+
+**프로그램 계획(같은 날)**: `docs/01-plan/features/record-flow-uplift-program.plan.md` — 상위 작업 T0~T6
+
+- **파일 소유권 표**. 오너 결정으로 **병렬 세션**: T0(공통 기반) 혼자 먼저 → T1 STT · T2 창고 주제
+  분류+탐구 흐름(핵심) · T3 성취기준·루브릭 · T4 점검 축 · T5 과제 파일 본문 병렬 → T6 통합·릴리즈 혼자.
+  ★커밋은 경로 지정 한 줄, `git add -A` 금지. 소유 밖 파일은 계획서 §6 에 요청만.
+
+### ✅ T0 공통 기반 완료 (2026-09-04) — 병렬 세션 T1~T5 출발점
+
+- **새 엔티티 `InquiryThread`**(`inquiry-threads.json`) + 저장소·스토어(`useInquiryThreadStore`) +
+  **동기화 등록(36번째)·보관함·학년도 전환** 한 번에. 낱장 연결은 `ObservationRecord.threadId?` ·
+  `RecordEvidence.threadId?`(선택, 부재≠빈 값). 근거 스토어에 `setThread`·`getByThread`.
+- 선택 필드: `RecordDraft.term?`(저장 시각 학기, upsert 키에는 아직 안 넣음) · `Rubric.standardCodes?` ·
+  `Assignment.standardCodes?` · `Submission.extractedText?` · `ProgressEntry.standardCodes?`.
+- **계측 4종**(이름만): `record_observation_save`(교과·담임, 슬롯 개수) · `record_evidence_open` ·
+  `record_evidence_import` · `record_draft_save`(출처·경고 유무). 스토어에서 `trackEventSafely`
+  (동적 import + catch — 계측이 저장을 막지 않는다).
+- 도메인 이동·신설: `recordDraftFlagLabels.ts`(화면에서 옮김, T4 가 라벨 추가) ·
+  `topicKeywordSources.ts`(주제 이름 후보 = 수행평가명→과제→성취기준 키워드 / 매칭 키워드, T2 사용·T3 원천 추가).
+- 브릿지(`ssampin-ai-bridge` master `7995c3b`): 관찰·근거 파서 `threadId` 보존 + 엔티티 샘플 재벤더링.
+  **동봉 번들은 재생성하지 않았다**(T6).
+- 게이트: `npx tsc --noEmit` 0 · `npm run lint` 0 error(경고 136 = 기존, 내 파일 0) ·
+  `npm run test` 650 파일 8,564 통과(10 skipped) · `npm run regression-check` 55/55 ·
+  브릿지 core 320·mcp 전부 통과.
+
 ## 🚀 v2.4.9 출시 완료 (2026-09-04)
 
 v2.4.8 이후 쌓인 7커밋을 한 번에 내보낸다. 기능 3건 + 수정 2건 + 계측 1건.

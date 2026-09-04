@@ -13,6 +13,7 @@
             "content",
             "tags",
             "slots",
+            "threadId",
             "visibility",
             "createdAt",
             "updatedAt"

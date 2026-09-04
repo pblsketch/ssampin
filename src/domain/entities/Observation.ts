@@ -23,6 +23,12 @@ export interface ObservationRecord {
    * 병합에서 부재를 빈 배열로 덮으면 다른 기기의 슬롯이 지워진다.
    */
   readonly slots?: readonly string[];
+  /**
+   * 이 낱장이 속한 탐구 흐름(`InquiryThread.id`). 없으면 낱장 그대로다 — **선택이며 필수로 만들지
+   * 않는다.** 흐름은 근거 창고에서 묶는 것이 기본 경로이고, 여기엔 보조 경로(입력 시 제안)가 붙는다.
+   * 구 데이터에는 없다. 병합은 레코드 단위 LWW 라 이 값도 레코드와 함께 움직인다.
+   */
+  readonly threadId?: string;
 }
 
 /**

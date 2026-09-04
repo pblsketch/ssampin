@@ -81,6 +81,13 @@ export interface RecordEvidence {
    * 오탐이 나기 마련이고, 되돌릴 수 없는 안전장치는 기능을 죽인다.
    */
   readonly excludedFromAi?: boolean;
+  /**
+   * 이 근거가 속한 탐구 흐름(`InquiryThread.id`). **근거 창고에서 주제로 묶는 것이 기본 경로**다
+   * (오너 결정 2026-09-04) — 창고의 분류 축이 생기부 영역 탭 하나뿐이라 "주제" 축을 여기로 더한다.
+   * 없으면 미분류. 부재는 빈 값이 아니다(병합에서 덮지 말 것).
+   * ★브릿지 `normalizeRecord` 화이트리스트에도 같이 넣어야 AI 가 흐름 단위로 읽을 수 있다.
+   */
+  readonly threadId?: string;
   readonly createdAt: number;
   readonly updatedAt: number;
 }

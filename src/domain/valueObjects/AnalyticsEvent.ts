@@ -74,7 +74,14 @@ export type AnalyticsEventName =
   //   지금까지 쌓은 추세선이 끊긴다. 롤업에서 이 접두사를 걸러 데스크톱 숫자를 지킨다.
   | 'mobile_app_open'
   | 'mobile_page_view'
-  | 'mobile_action';
+  | 'mobile_action'
+  // ── 생기부 흐름 (2026-09-04 추가) ──
+  // 관찰 입력·근거 창고·초안 화면에는 계측이 **한 건도 없었다.** "꾸준히 누적되고 있는가"에
+  // 아무도 숫자로 답할 수 없었고, 그러면 고도화 순서를 정할 근거도 없다. 값이 아니라 이름만 담는다.
+  | 'record_observation_save'
+  | 'record_evidence_open'
+  | 'record_evidence_import'
+  | 'record_draft_save';
 
 /** tool_use 이벤트의 tool 프로퍼티에 사용 가능한 도구명 */
 export type ToolName =
@@ -281,4 +288,25 @@ export interface AnalyticsEventProperties {
   mobile_app_open: { isReturning: boolean };
   mobile_page_view: { page: string };
   mobile_action: { action: string };
+
+  // ── 생기부 흐름 ──
+  /**
+   * 관찰 낱장을 저장했다(교과 관찰·담임 누가기록 공통).
+   * ★본문·학생·태그 값은 담지 않는다. 슬롯은 **개수만** — "슬롯이 실제로 붙는가"가 알고 싶은 것이다.
+   */
+  record_observation_save: {
+    context: 'teaching' | 'homeroom';
+    slotCount: number;
+    /** 탐구 흐름에 붙여 저장했는가 */
+    hasThread: boolean;
+  };
+  /** 근거 창고를 열었다(초안 화면의 '근거 자료' 서브페이지). */
+  record_evidence_open: { context: 'teaching' | 'homeroom' };
+  /** 근거를 창고에 넣었다 — 직접 입력이든 끌어오기든. 출처 종류와 건수만. */
+  record_evidence_import: { sourceType: string; count: number };
+  /**
+   * 초안을 저장했다. 누가 썼는지(교사 직접 / 브릿지 / 쌤핀 AI)와 경고 유무만.
+   * ★본문은 절대 담지 않는다 — 법정기록 서술이다.
+   */
+  record_draft_save: { area: string; origin: 'teacher' | 'bridge' | 'assist'; hasFlags: boolean };
 }

@@ -18,6 +18,7 @@ import {
 } from '@adapters/stores/useRecordDraftsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
+import { recordDraftFlagLabel } from '@domain/rules/recordDraftFlagLabels';
 import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
@@ -69,16 +70,8 @@ const NEXT_STATUS: Record<RecordDraftStatus, RecordDraftStatus> = {
   confirmed: 'draft',
 };
 
-/** AI 브릿지 검토 플래그 코드 → 교사용 한국어 라벨(현실 언어 일치). 미지값은 일반 라벨로 폴백. */
-const FLAG_LABELS: Record<string, string> = {
-  // NEIS 에 들어가면 감사 대상이 되는 항목이 본문에 남아 있다는 뜻. 막지는 않는다(오탐 대비) —
-  // 대신 가장 눈에 띄게 띄우고 무엇이 걸렸는지 아래에 적어 준다.
-  prohibited_item: '생기부에 적으면 안 되는 항목',
-  unverified_high_risk_term: '확인되지 않은 고위험 표현',
-  pii_leak: '개인정보 노출 우려',
-  low_overlap: '근거와 일치도 낮음',
-};
-const flagLabel = (flag: string): string => FLAG_LABELS[flag] ?? '기타 확인 필요 항목';
+/** 검토 플래그 라벨은 도메인(`recordDraftFlagLabels.ts`)이 정본 — 점검 규칙이 늘어도 이 파일은 안 바뀐다. */
+const flagLabel = recordDraftFlagLabel;
 
 /** 관찰기록 날짜(YYYY-MM-DD) → 'M/D'. */
 function formatObsDate(date: string): string {

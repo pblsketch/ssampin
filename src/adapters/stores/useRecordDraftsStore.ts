@@ -13,6 +13,8 @@ import {
 import { recordDraftsRepository } from '@adapters/di/container';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { detectProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
+import { academicTermForDate } from '@domain/rules/academicCalendar';
+import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 /** (area + studentRef + subject) upsert 입력 — UI 직접 편집 / live-sync 수신 공통. */
@@ -182,11 +184,24 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
         ...(input.studentId !== undefined ? { studentId: input.studentId } : {}),
         ...(input.subject !== undefined ? { subject: input.subject } : {}),
         ...(flags.length > 0 ? { groundingFlags: flags } : {}),
+        // 학기 표식 — 기존 초안의 term 은 유지하고, 없을 때만 저장 시각의 학기를 붙인다.
+        // (구 데이터에 소급해 추측 부착하지 않는다는 원칙과, "처음 만든 학기"를 남기려는 뜻이 같다.)
+        ...(existing?.term !== undefined
+          ? { term: existing.term }
+          : (() => {
+              const term = academicTermForDate(new Date().toISOString().slice(0, 10));
+              return term !== null ? { term } : {};
+            })()),
       };
       const next = existing
         ? get().records.map((r) => (r.id === existing.id ? base : r))
         : [...get().records, base];
       await persist(next);
+      trackEventSafely('record_draft_save', {
+        area: input.area,
+        origin: input.origin ?? 'teacher',
+        hasFlags: flags.length > 0,
+      });
       return base.id;
     },
 

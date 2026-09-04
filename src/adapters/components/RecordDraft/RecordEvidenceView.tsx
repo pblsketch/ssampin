@@ -11,6 +11,7 @@ import {
   useRecordEvidenceStore,
   type RecordEvidenceAddInput,
 } from '@adapters/stores/useRecordEvidenceStore';
+import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useRubricStore } from '@adapters/stores/useRubricStore';
@@ -175,6 +176,8 @@ export function RecordEvidenceView({
 
   useEffect(() => {
     void load();
+    // 근거 창고를 열었다는 사실만 센다(값 없음) — "재료를 모으는 단계"가 실제로 쓰이는지 알기 위해.
+    trackEventSafely('record_evidence_open', { context });
     if (context === 'teaching') {
       void loadObservations();
       void loadRubrics();

@@ -56,6 +56,7 @@ import type { IImageResizerPort } from '@domain/ports/IImageResizerPort';
 import type { IPhotoRosterParserPort } from '@domain/ports/IPhotoRosterParserPort';
 import type { IRecordDraftsRepository } from '@domain/repositories/IRecordDraftsRepository';
 import type { IRecordEvidenceRepository } from '@domain/repositories/IRecordEvidenceRepository';
+import type { IInquiryThreadRepository } from '@domain/repositories/IInquiryThreadRepository';
 import type { IReminderFireRepository } from '@domain/repositories/IReminderFireRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
@@ -128,6 +129,7 @@ import { CanvasImageResizer } from '@infrastructure/image/CanvasImageResizer';
 import { PhotoRosterParserAdapter } from '@infrastructure/parse/PhotoRosterParserAdapter';
 import { JsonRecordDraftsRepository } from '@adapters/repositories/JsonRecordDraftsRepository';
 import { JsonRecordEvidenceRepository } from '@adapters/repositories/JsonRecordEvidenceRepository';
+import { JsonInquiryThreadRepository } from '@adapters/repositories/JsonInquiryThreadRepository';
 import { JsonReminderFireRepository } from '@adapters/repositories/JsonReminderFireRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
@@ -279,6 +281,11 @@ export const recordDraftsRepository: IRecordDraftsRepository = new JsonRecordDra
 );
 
 export const recordEvidenceRepository: IRecordEvidenceRepository = new JsonRecordEvidenceRepository(
+  storage,
+);
+
+// === 탐구 흐름(InquiryThread) — 근거·관찰 낱장을 주제로 묶는 단위. inquiry-threads.json ===
+export const inquiryThreadRepository: IInquiryThreadRepository = new JsonInquiryThreadRepository(
   storage,
 );
 

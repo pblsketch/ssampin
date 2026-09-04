@@ -5,6 +5,7 @@ import { observationRepository } from '@adapters/di/container';
 import { ManageObservations } from '@usecases/classManagement/ManageObservations';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import { normalizeSlots } from '@domain/rules/observationSlots';
+import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { useObservationAttachmentStore } from './useObservationAttachmentStore';
 
 interface ObservationState {
@@ -29,6 +30,8 @@ interface ObservationState {
      * 빈 배열이면 필드를 아예 넣지 않는다 — 구 데이터와 같은 모양(부재)으로 남긴다.
      */
     slots?: readonly string[];
+    /** 속한 탐구 흐름(InquiryThread.id). 보조 경로(입력 시 제안)용 — 없으면 낱장 그대로. */
+    threadId?: string;
   }) => Promise<string>;
   updateRecord: (record: ObservationRecord) => Promise<void>;
   deleteRecord: (id: string) => Promise<void>;
@@ -72,7 +75,7 @@ export const useObservationStore = create<ObservationState>((set, get) => {
       }
     },
 
-    addRecord: async ({ studentId, classId, date, content, tags, category, slots }) => {
+    addRecord: async ({ studentId, classId, date, content, tags, category, slots, threadId }) => {
       const now = Date.now();
       // ★정규화를 **먼저** 한다. 길이만 보고 넣으면 맥락에 없는 값만 들어온 경우
       //   빈 배열이 저장돼 "부재 ≠ 빈 배열" 불변식이 깨진다(병합에서 남의 슬롯을 덮는다).
@@ -92,9 +95,15 @@ export const useObservationStore = create<ObservationState>((set, get) => {
         ...(category ? { category } : {}),
         // ★빈 배열이면 넣지 않는다. 부재 ≠ 빈 배열 — 병합에서 다른 기기의 슬롯을 덮지 않게.
         ...(normalizedSlots.length > 0 ? { slots: normalizedSlots } : {}),
+        ...(threadId !== undefined ? { threadId } : {}),
       };
       set((s) => ({ records: [...s.records, record] }));
       await manage.add(record);
+      trackEventSafely('record_observation_save', {
+        context: 'teaching',
+        slotCount: normalizedSlots.length,
+        hasThread: threadId !== undefined,
+      });
       return record.id;
     },
 
