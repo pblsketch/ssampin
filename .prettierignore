@@ -17,3 +17,7 @@ public/release-notes.json
 src/domain/contracts/aiBridgeWriteContract.ts
 electron/ipc/_generated/aiBridgeWriteContract.ts
 contracts/aiBridgeWriteContract.json
+# 성취기준 번들 — scripts/fetch-curriculum-standards.mjs 생성물(직접 수정 금지).
+# prettier 로 예쁘게 찍으면 1.5MB 한 줄이 수만 줄로 불어나 커밋마다 diff 가 폭발한다.
+src/domain/data/curriculumStandards.elementary.json
+src/domain/data/curriculumStandards.secondary.json
