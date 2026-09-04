@@ -141,6 +141,23 @@ export function useAiBridgeLiveSync(): void {
     void useTeachingClassStore.getState().load();
     return api.aiBridge.onApplyWrite((raw) => {
       const req = raw as LiveSyncWriteRequest;
+      return applyLiveSyncWrite(req, buildLiveSyncDeps());
+    });
+  }, []);
+}
+
+/**
+ * 쓰기를 실제로 적용할 때 쓰는 store 묶음.
+ *
+ * ★따로 뺀 이유: "내 AI로 실행" 중에는 브릿지 쓰기가 곧바로 적용되지 않고 **제안 카드**로
+ * 올라간다. 선생님이 [실행]을 누른 뒤 적용하는 쪽(`useOwnAiWriteGate`)도 **같은 묶음**을
+ * 써야 두 경로가 어긋나지 않는다. 인라인으로 두면 한쪽만 고쳐지는 사고가 난다.
+ *
+ * 내용은 옮기기 전과 **한 줄도 다르지 않다**.
+ */
+export function buildLiveSyncDeps(): Parameters<typeof applyLiveSyncWrite>[1] {
+  {
+    {
       const todo = useTodoStore.getState();
       const ev = useEventsStore.getState();
       const rd = useRecordDraftsStore.getState();
@@ -150,7 +167,7 @@ export function useAiBridgeLiveSync(): void {
       const tc = useTeachingClassStore.getState();
       const sr = useStudentRecordsStore.getState();
       const obs = useObservationStore.getState();
-      return applyLiveSyncWrite(req, {
+      return {
         todos: {
           add: (text, opts) =>
             todo.addTodo(
@@ -391,7 +408,7 @@ export function useAiBridgeLiveSync(): void {
             return cls ? isTeachingClassArchived(cls) : false;
           },
         },
-      });
-    });
-  }, []);
+      };
+    }
+  }
 }
