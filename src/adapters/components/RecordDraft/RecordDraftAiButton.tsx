@@ -21,6 +21,8 @@ import {
   useOwnAiStatusStore,
 } from '@adapters/stores/useOwnAiStatusStore';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
+import { OWN_AI_PROVIDER_LABELS } from '@domain/entities/OwnAiProvider';
+import { useOwnAiModelCatalog } from '@adapters/hooks/useOwnAiModelCatalog';
 import {
   buildRecordDraftPack,
   summarizeExclusions,
@@ -194,6 +196,23 @@ export function RecordDraftAiButton({
   const setUsage = useOwnAiStatusStore((s) => s.setUsage);
   const installId = useAssistStore((s) => s.installId);
 
+  /**
+   * 어느 AI 로, 어떤 모델로 쓸지 **이 화면에서** 고른다.
+   *
+   * ★예전에는 고를 자리가 없어서, 둘 다 연결한 선생님이 AI 패널을 한 번도 안 열었으면
+   *   말없이 첫 번째 공급자로 나갔다. 무엇으로 쓰는지도 안 보였다(오너 지적 2026-09-05).
+   * ★값은 AI 패널과 **같은 것**을 쓴다 — 두 화면이 서로 다른 값을 들고 있으면 안 된다.
+   */
+  const setProvider = useAssistStore((s) => s.setProvider);
+  const ownAiModels = useAssistStore((s) => s.ownAiModels);
+  const setOwnAiModel = useAssistStore((s) => s.setOwnAiModel);
+  const modelCatalog = useOwnAiModelCatalog(connected.length > 0);
+  const changeModel = (p: 'claude' | 'codex', model: string): void => {
+    setOwnAiModel(p, model);
+    // CLI 를 띄우는 쪽(main)도 따로 기억한다 — 알리지 않으면 화면과 실제가 어긋난다.
+    void window.electronAPI?.ownAi?.setModel?.(p, model);
+  };
+
   /** 실제로 쓸 공급자 — 고른 것이 연결돼 있어야 한다. 아니면 연결된 첫 번째. */
   const runProvider = useMemo(() => {
     if (!ownAiEnabled || connected.length === 0) return null;
@@ -320,6 +339,48 @@ export function RecordDraftAiButton({
 
       {phase.kind === 'picking' && (
         <div className="flex flex-wrap items-center gap-1">
+          {/* 무엇으로 쓰는지 보여 주고, 바꿀 수 있게 한다. 연결이 하나면 고를 게 없으므로
+              이름만 보여 준다 — 그래도 "무엇으로 쓰이는지"는 알아야 한다. */}
+          {runProvider !== null &&
+            (connected.length > 1 ? (
+              <span className="inline-flex overflow-hidden rounded-md ring-1 ring-sp-border">
+                {connected.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setProvider(p)}
+                    aria-pressed={runProvider === p}
+                    className={`px-2 py-1 text-[0.6rem] font-medium ${
+                      runProvider === p
+                        ? 'bg-sp-accent text-sp-accent-fg'
+                        : 'bg-sp-card text-sp-muted hover:text-sp-text'
+                    }`}
+                  >
+                    {OWN_AI_PROVIDER_LABELS[p]}
+                  </button>
+                ))}
+              </span>
+            ) : (
+              <span className="rounded-md bg-sp-card px-2 py-1 text-[0.6rem] text-sp-muted ring-1 ring-sp-border">
+                {OWN_AI_PROVIDER_LABELS[runProvider]}
+              </span>
+            ))}
+          {runProvider !== null && (
+            <label className="flex items-center gap-1">
+              <span className="sr-only">초안에 쓸 모델 고르기</span>
+              <select
+                value={ownAiModels[runProvider]}
+                onChange={(e) => changeModel(runProvider, e.target.value)}
+                className="rounded-md border border-sp-border bg-sp-bg px-1 py-1 text-[0.6rem] text-sp-text"
+              >
+                {modelCatalog[runProvider].map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button
             type="button"
             onClick={() => start([target])}
@@ -350,6 +411,9 @@ export function RecordDraftAiButton({
         <p className="text-[0.6rem] text-sp-muted">
           {phase.total > 1 ? `${phase.done + 1}/${phase.total} · ` : ''}
           {phase.name} 초안을 쓰는 중이에요…
+          {runProvider !== null && (
+            <span className="ml-1">({OWN_AI_PROVIDER_LABELS[runProvider]})</span>
+          )}
         </p>
       )}
 
@@ -357,6 +421,13 @@ export function RecordDraftAiButton({
         <div className="rounded-md border border-sp-border bg-sp-bg p-2">
           <p className="mb-1 text-[0.6rem] font-medium text-sp-text">
             {phase.name} — 미리보기
+            {/* 어느 AI·모델이 썼는지 남긴다. 결과가 마음에 안 들 때 무엇을 바꿔 볼지 알 수 있다. */}
+            {runProvider !== null && (
+              <span className="ml-1 font-normal text-sp-muted">
+                · {OWN_AI_PROVIDER_LABELS[runProvider]}
+                {ownAiModels[runProvider] ? ` ${ownAiModels[runProvider]}` : ''}
+              </span>
+            )}
             {phase.excluded && <span className="ml-1 text-sp-muted">· {phase.excluded}</span>}
           </p>
           {/* ★"남은 학생 모두"로 이어 만드는 동안에는 **누른 행이 아닌 학생**의 초안이 여기

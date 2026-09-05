@@ -14,11 +14,16 @@ import { cleanup, render, screen, fireEvent, act } from '@testing-library/react'
  * `null` 을 주면 "규정을 못 받아 온" 상황이 된다 — 그때 초안을 만들지 않는지가 핵심이다.
  */
 const fetchRecordPromptL1 = vi.hoisted(() => vi.fn());
-vi.mock('@adapters/di/container', () => ({ fetchRecordPromptL1 }));
+// 컨테이너는 이 화면이 쓰는 것 **전부**를 흉내 내야 한다 — 하나라도 빠지면 훅이 터진다.
+vi.mock('@adapters/di/container', () => ({
+  fetchRecordPromptL1,
+  fetchModelCatalog: async () => OWN_AI_MODELS,
+}));
 
 import { RecordDraftAiButton, restoreAliases, type DraftTarget } from '../RecordDraftAiButton';
 import { rosterFromAll } from '@domain/rules/redactOutbound';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
+import { OWN_AI_MODELS } from '@domain/rules/ownAiCliRules';
 import { useOwnAiStatusStore } from '@adapters/stores/useOwnAiStatusStore';
 import type { OwnAiConnection } from '@domain/entities/OwnAiProvider';
 
@@ -558,5 +563,109 @@ describe('★"남은 학생 모두" 중에는 어느 칸에 저장되는지 못 
     });
 
     expect(applied.map((a) => a.ref)).toEqual(['s1', 's2']);
+  });
+});
+
+describe('★어느 AI·모델로 쓰는지 보이고 고를 수 있다 (오너 지적 2026-09-05)', () => {
+  function bothConnected() {
+    useAssistStore.setState({ ownAiEnabled: true, provider: 'claude' });
+    useOwnAiStatusStore.setState({
+      connections: {
+        claude: connected(),
+        codex: { provider: 'codex', state: 'connected', version: '0.144.4', model: '' },
+      },
+    });
+  }
+
+  it('둘 다 연결되면 공급자를 고를 수 있다', () => {
+    bothConnected();
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+
+    expect(screen.getByRole('button', { name: 'Claude Code' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Codex' })).toBeTruthy();
+  });
+
+  it('고르면 그 공급자로 실행한다 — 패널을 열지 않아도 된다', async () => {
+    bothConnected();
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
+    await startWith('이 학생만');
+
+    expect(runCalls).toHaveLength(1);
+    expect(useAssistStore.getState().provider).toBe('codex');
+  });
+
+  it('하나만 연결됐으면 고르기 대신 이름만 보여 준다', () => {
+    useAssistStore.setState({ ownAiEnabled: true, provider: 'claude' });
+    useOwnAiStatusStore.setState({ connections: { claude: connected(), codex: null } });
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+
+    // 버튼이 아니라 표시만 — 고를 게 없으므로.
+    expect(screen.queryByRole('button', { name: 'Claude Code' })).toBeNull();
+    expect(screen.getByText('Claude Code')).toBeTruthy();
+  });
+
+  it('모델을 고를 수 있다', () => {
+    bothConnected();
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+
+    const select = screen.getByRole('combobox', { name: '초안에 쓸 모델 고르기' });
+    fireEvent.change(select, { target: { value: 'opus' } });
+
+    expect(useAssistStore.getState().ownAiModels.claude).toBe('opus');
+  });
+
+  it('★미리보기에 어느 AI 가 썼는지 남는다 — 결과를 보고 무엇을 바꿀지 알 수 있게', async () => {
+    bothConnected();
+    useAssistStore.setState({ ownAiModels: { claude: 'opus', codex: '' } });
+    render(
+      <RecordDraftAiButton
+        areaLabel="교과 세특"
+        roster={ROSTER}
+        target={target()}
+        onApply={() => {}}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    await startWith('이 학생만');
+    await act(async () => {
+      eventHandler?.({ type: 'done', runId: lastRunId, text: '탐구 흐름을 이어 쓴 초안.' });
+    });
+
+    // 표시가 여러 <span> 으로 쪼개져 있어 문자열 매칭이 안 된다 — 머리줄 전체로 본다.
+    expect(screen.getByText(/미리보기/).textContent ?? '').toContain('Claude Code opus');
   });
 });
