@@ -3,6 +3,7 @@
 - 작성일: 2026-09-04 (통합 세션 T6)
 - 정본: `docs/01-plan/features/record-flow-uplift-program.plan.md` §4
 - 상태: **코드는 게이트 전부 통과. 아래는 사람이 눈으로 봐야만 하는 것들이다.**
+- 👉 **단계별로 따라 하실 시나리오는 [여기](record-flow-uplift-device-qa-scenario.md)** — 어디를 눌러 무엇이 보여야 정상인지 적어 두었습니다. 이 문서는 결과·한계 요약용입니다.
 
 ---
 
