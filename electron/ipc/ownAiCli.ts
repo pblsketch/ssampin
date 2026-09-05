@@ -179,7 +179,20 @@ const NPM_ENTRIES: Readonly<Record<OwnAiProviderId, readonly string[]>> = {
     'node_modules/@anthropic-ai/claude-code/bin/claude',
     'node_modules/@anthropic-ai/claude-code/cli.js',
   ],
-  codex: ['node_modules/@openai/codex/bin/codex.exe', 'node_modules/@openai/codex/bin/codex.js'],
+  codex: [
+    // ★네이티브 실행 파일을 **가장 먼저** 찾는다. `codex.js` 로 띄우면 그 안에서 다시
+    //   네이티브를 손자로 띄우는데, **그 손자의 창은 우리가 숨길 수 없다**(터미널이
+    //   깜빡이는 원인, 2026-09-06 실측). 직접 띄우면 창도 없고 프로세스도 하나 준다.
+    //   경로에 플랫폼 이름이 들어가므로 알려진 조합을 나열한다.
+    'node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe',
+    'node_modules/@openai/codex/node_modules/@openai/codex-win32-arm64/vendor/aarch64-pc-windows-msvc/bin/codex.exe',
+    'node_modules/@openai/codex/node_modules/@openai/codex-darwin-arm64/vendor/aarch64-apple-darwin/bin/codex',
+    'node_modules/@openai/codex/node_modules/@openai/codex-darwin-x64/vendor/x86_64-apple-darwin/bin/codex',
+    'node_modules/@openai/codex/node_modules/@openai/codex-linux-x64/vendor/x86_64-unknown-linux-musl/bin/codex',
+    'node_modules/@openai/codex/bin/codex.exe',
+    // 마지막 수단 — node 로 감싸 띄운다(위의 손자 창 문제가 남는다).
+    'node_modules/@openai/codex/bin/codex.js',
+  ],
 };
 
 /**

@@ -124,8 +124,14 @@ export function useOwnAiReady(): boolean {
   return enabled && OWN_AI_PROVIDERS.some((p) => isOwnAiConnected(connections[p]));
 }
 
-/** 창 전환마다 CLI 두 개를 띄우면 무겁다 — 이 간격 안의 재확인은 건너뛴다. */
-const FOCUS_RECHECK_MIN_MS = 10_000;
+/**
+ * 창 전환마다 CLI 두 개를 띄우면 무겁다 — 이 간격 안의 재확인은 건너뛴다.
+ *
+ * ★10초였을 때 "AI 를 쓰려고 하면 터미널이 자꾸 깜빡인다"는 신고가 있었다(2026-09-06).
+ * 로그인은 한 번 하면 유지되므로 자주 확인할 이유가 없다. 설치·로그인은 앱 밖에서
+ * 끝나지만, 그때는 카드의 [다시 확인]이 캐시를 건너뛰고 곧바로 묻는다.
+ */
+const FOCUS_RECHECK_MIN_MS = 10 * 60_000;
 
 /**
  * 상태를 **때맞춰** 다시 묻는다: 마운트 시 한 번 + 창이 다시 앞으로 올 때.
@@ -139,6 +145,11 @@ export function useOwnAiStatusRefresh(active: boolean): void {
     let last = Date.now();
     const onFocus = (): void => {
       if (Date.now() - last < FOCUS_RECHECK_MIN_MS) return;
+      // ★이미 연결된 것이 있으면 다시 묻지 않는다. 연결은 한 번 되면 유지되고,
+      //   확인할 때마다 CLI 프로세스가 뜬다. 아직 연결이 없을 때만(= 설치·로그인을
+      //   기다리는 상황) 창이 돌아온 것을 신호로 본다.
+      const connections = useOwnAiStatusStore.getState().connections;
+      if (OWN_AI_PROVIDERS.some((p) => isOwnAiConnected(connections[p]))) return;
       last = Date.now();
       void refresh();
     };

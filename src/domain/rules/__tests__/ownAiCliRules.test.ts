@@ -276,3 +276,21 @@ describe('★API 키 env 스트립 — 구독이 아닌 청구 경로를 자식�
     expect(env.ANTHROPIC_API_KEY).toBe('sk-ant');
   });
 });
+
+describe('★모델 목록은 실제로 되는 것만 올린다', () => {
+  it('codex 는 기본 하나뿐이다 — 이름을 지정하면 구독으로는 거부된다(2026-09-06 실측)', () => {
+    // gpt-5.3-codex · gpt-5.3-codex-spark · gpt-5.2-codex · gpt-5.1-codex-max 를
+    // 모두 넣어 봤지만 전부 "not supported when using Codex with a ChatGPT account".
+    // 눌렀는데 실패하는 항목을 목록에 두면 안 된다.
+    expect(OWN_AI_MODELS.codex).toHaveLength(1);
+    expect(OWN_AI_MODELS.codex[0]?.id).toBe('');
+  });
+
+  it('claude 라벨에 실제 판(버전)이 보인다 — "Opus" 만으로는 무엇인지 알 수 없다', () => {
+    const labels = OWN_AI_MODELS.claude.map((m) => m.label).join(' ');
+    expect(labels).toContain('Fable 5.1');
+    expect(labels).toContain('Opus 5');
+    expect(labels).toContain('Sonnet 5');
+    expect(labels).toContain('Haiku 4.5');
+  });
+});

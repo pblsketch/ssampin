@@ -94,6 +94,28 @@ describe('어떻게 띄울지 찾기', () => {
     expect(l).toEqual({ file: CLAUDE_EXE, args: [], asNode: false });
   });
 
+  it('★codex 는 네이티브 실행 파일을 먼저 쓴다 — .js 로 띄우면 손자 창이 깜빡인다', () => {
+    // 2026-09-06 실측: codex.js 로 띄우면 그 안에서 네이티브를 손자로 띄우는데,
+    // 그 손자의 창은 windowsHide 로 못 숨긴다. 직접 띄우면 창도 없고 프로세스도 하나 준다.
+    const native = path.win32.join(
+      NPM_BIN,
+      'node_modules',
+      '@openai',
+      'codex',
+      'node_modules',
+      '@openai',
+      'codex-win32-x64',
+      'vendor',
+      'x86_64-pc-windows-msvc',
+      'bin',
+      'codex.exe',
+    );
+    const js = path.win32.join(NPM_BIN, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+    // 둘 다 있으면 네이티브가 이긴다.
+    const l = resolveCliLaunch('codex', deps({ isFile: (p) => p === native || p === js }));
+    expect(l).toEqual({ file: native, args: [], asNode: false });
+  });
+
   it('★node 스크립트면 electron 을 node 로 써서 돌린다 — codex 는 .js 가 진입점이다', () => {
     const l = resolveCliLaunch('codex', deps({ isFile: (p) => p === CODEX_JS }));
     expect(l?.asNode).toBe(true);
