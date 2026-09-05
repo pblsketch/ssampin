@@ -84,26 +84,33 @@ export const CLAUDE_PERMISSION_PROMPTS_MIN = '2.1.259';
  * 모델 목록의 **기본값(폴백)**. 평소에는 서버가 준 목록을 쓰고(`AiModelCatalogClient`),
  * 서버를 못 받았을 때만 이 값이 쓰인다.
  *
- * ★claude 는 **별칭**을 쓴다. 별칭은 그 계열의 최신을 가리키므로(CLI 도움말 원문:
- * "an alias for the latest model"), 계열 안에서 새 모델이 나오면 여기를 안 고쳐도 따라간다.
- * 실측(2026-09-05): fable→claude-fable-5-1 · opus→claude-opus-5 · sonnet→claude-sonnet-5 ·
- * haiku→claude-haiku-4-5-20251001.
- * → 서버 목록이 필요한 건 **계열 자체가 새로 생길 때**다.
+ * ★**실제 모델 이름을 쓴다**(별칭이 아니라). 선생님이 무엇으로 쓰는지 보이게 하려면
+ * 화면에 판(버전)이 나와야 한다는 오너 결정(2026-09-06). 별칭(`opus`)은 최신을 따라가지만
+ * 화면에 "Opus"라고만 뜨고 몇 판인지 알 수 없다.
+ * → 새 모델이 나오면 **서버 목록만 갱신**한다. 앱 배포는 필요 없다.
+ *
+ * ★목록은 **실제로 되는 것만** 올린다. 두 CLI 로 하나씩 돌려 확인했다(2026-09-06):
+ *   claude-fable-5-1 · claude-opus-5 · claude-haiku-4-5 / gpt-6-astra · gpt-5.6-sol ·
+ *   gpt-5.4-mini 전부 응답 확인. 누르면 실패하는 항목을 두면 안 된다.
+ *
+ * ★한때 codex 목록에 `gpt-5.3-codex-spark` 가 있었는데 **실제로는 거부되는 이름**이었다.
+ *   바이너리 문자열만 보고 넣었던 탓이다 — 반드시 돌려 보고 넣을 것.
  */
 export const OWN_AI_MODELS: Readonly<Record<OwnAiProviderId, readonly OwnAiModelOption[]>> = {
   claude: [
     { id: '', label: '기본 (권장)' },
-    { id: 'fable', label: 'Fable 5.1 — 최신' },
-    { id: 'opus', label: 'Opus 5 — 꼼꼼함' },
-    { id: 'sonnet', label: 'Sonnet 5 — 빠름' },
-    { id: 'haiku', label: 'Haiku 4.5 — 가장 빠름' },
+    { id: 'claude-fable-5-1', label: 'Fable 5.1 — 가장 강력함' },
+    { id: 'claude-opus-5', label: 'Opus 5 — 꼼꼼함' },
+    { id: 'claude-sonnet-5', label: 'Sonnet 5 — 일상 작업' },
+    { id: 'claude-haiku-4-5', label: 'Haiku 4.5 — 가장 빠름' },
   ],
   codex: [
-    // ★기본 하나뿐이다. 실측(2026-09-06)에서 gpt-5.3-codex · gpt-5.3-codex-spark ·
-    //   gpt-5.2-codex · gpt-5.1-codex-max 를 모두 넣어 봤지만 전부
-    //   "not supported when using Codex with a ChatGPT account" 로 거절됐다.
-    //   되는 것만 올린다 — 눌렀는데 실패하는 항목을 두면 안 된다.
     { id: '', label: '기본 (권장)' },
+    { id: 'gpt-6-astra', label: 'GPT-6 Astra — 가장 강력함' },
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol — 두루 좋음' },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra — 균형' },
+    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna — 빠름' },
+    { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini — 가장 빠름' },
   ],
 };
 

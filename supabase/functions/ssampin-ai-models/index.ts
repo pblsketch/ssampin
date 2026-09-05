@@ -42,17 +42,18 @@ const TTL_SEC = 6 * 60 * 60;
 const CATALOG: Record<string, { id: string; label: string }[]> = {
   claude: [
     { id: '', label: '기본 (권장)' },
-    { id: 'fable', label: 'Fable 5.1 — 최신' },
-    { id: 'opus', label: 'Opus 5 — 꼼꼼함' },
-    { id: 'sonnet', label: 'Sonnet 5 — 빠름' },
-    { id: 'haiku', label: 'Haiku 4.5 — 가장 빠름' },
+    { id: 'claude-fable-5-1', label: 'Fable 5.1 — 가장 강력함' },
+    { id: 'claude-opus-5', label: 'Opus 5 — 꼼꼼함' },
+    { id: 'claude-sonnet-5', label: 'Sonnet 5 — 일상 작업' },
+    { id: 'claude-haiku-4-5', label: 'Haiku 4.5 — 가장 빠름' },
   ],
   codex: [
-    // ★기본 하나뿐이다. 실측(2026-09-06)에서 gpt-5.3-codex · gpt-5.3-codex-spark ·
-    //   gpt-5.2-codex · gpt-5.1-codex-max 를 모두 넣어 봤지만 전부
-    //   "not supported when using Codex with a ChatGPT account" 로 거절됐다.
-    //   되는 것만 올린다 — 눌렀는데 실패하는 항목을 두면 안 된다.
     { id: '', label: '기본 (권장)' },
+    { id: 'gpt-6-astra', label: 'GPT-6 Astra — 가장 강력함' },
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol — 두루 좋음' },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra — 균형' },
+    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna — 빠름' },
+    { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini — 가장 빠름' },
   ],
 };
 

@@ -119,11 +119,9 @@ describe('기본값 자체가 쓸 만한가', () => {
     }
   });
 
-  it('★claude 는 별칭만 쓴다 — 별칭이라야 새 모델이 나와도 따라간다', () => {
-    // 실측(2026-09-05): opus→claude-opus-5 처럼 별칭이 계열의 최신을 가리킨다.
-    // 전체 이름(claude-opus-5)을 적어 두면 새 판이 나올 때 옛 모델에 고정된다.
-    for (const m of OWN_AI_MODELS.claude) {
-      expect(m.id).not.toMatch(/^claude-/);
-    }
+  it('★새 모델은 서버 목록으로 들어온다 — 앱 기본값은 그때의 스냅숏일 뿐', () => {
+    // 실제 이름을 쓰기로 했으므로(오너 결정 2026-09-06, 화면에 판이 보여야 한다)
+    // 새 판이 나오면 서버 목록을 갱신한다. 앱 기본값은 서버를 못 받을 때만 쓰인다.
+    expect(OWN_AI_MODELS.claude.length).toBeGreaterThan(1);
   });
 });

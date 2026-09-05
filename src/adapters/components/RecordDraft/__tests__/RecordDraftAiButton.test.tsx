@@ -643,14 +643,14 @@ describe('★어느 AI·모델로 쓰는지 보이고 고를 수 있다 (오너 
     fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
 
     const select = screen.getByRole('combobox', { name: '초안에 쓸 모델 고르기' });
-    fireEvent.change(select, { target: { value: 'opus' } });
+    fireEvent.change(select, { target: { value: 'claude-opus-5' } });
 
-    expect(useAssistStore.getState().ownAiModels.claude).toBe('opus');
+    expect(useAssistStore.getState().ownAiModels.claude).toBe('claude-opus-5');
   });
 
   it('★미리보기에 어느 AI 가 썼는지 남는다 — 결과를 보고 무엇을 바꿀지 알 수 있게', async () => {
     bothConnected();
-    useAssistStore.setState({ ownAiModels: { claude: 'opus', codex: '' } });
+    useAssistStore.setState({ ownAiModels: { claude: 'claude-opus-5', codex: '' } });
     render(
       <RecordDraftAiButton
         areaLabel="교과 세특"
@@ -666,6 +666,6 @@ describe('★어느 AI·모델로 쓰는지 보이고 고를 수 있다 (오너 
     });
 
     // 표시가 여러 <span> 으로 쪼개져 있어 문자열 매칭이 안 된다 — 머리줄 전체로 본다.
-    expect(screen.getByText(/미리보기/).textContent ?? '').toContain('Claude Code opus');
+    expect(screen.getByText(/미리보기/).textContent ?? '').toContain('Claude Code claude-opus-5');
   });
 });
