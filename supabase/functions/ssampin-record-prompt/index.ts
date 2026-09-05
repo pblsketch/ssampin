@@ -25,6 +25,22 @@ const PROMPT_VERSION = 1;
 /** 클라이언트가 메모리에 얼마나 들고 있어도 되는가. */
 const TTL_SEC = 60 * 60;
 
+/** 한 줄 base64 면 풀어서, 아니면 그대로. 둘 다 아니면 빈 문자열. */
+function decodePrompt(raw: string | undefined): string {
+  if (!raw) return '';
+  const t = raw.trim();
+  if (t.length === 0) return '';
+  // 줄바꿈이 있으면 이미 평문이다(옛 방식).
+  if (t.includes('\n')) return t;
+  try {
+    const decoded = new TextDecoder().decode(Uint8Array.from(atob(t), (c) => c.charCodeAt(0)));
+    // 풀었더니 한글이 나오면 base64 가 맞다.
+    return /[가-힣]/.test(decoded) ? decoded : t;
+  } catch {
+    return t;
+  }
+}
+
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -42,7 +58,11 @@ serve(async (req: Request) => {
       return errorResponse('installId 가 필요합니다', 400);
     }
 
-    const prompt = Deno.env.get('RECORD_PROMPT_L1');
+    // ★값은 **한 줄 base64** 로 저장한다. supabase 시크릿에 여러 줄을 그대로 넣으면
+    //   첫 줄만 저장되어(실측) 규정이 통째로 잘린다 — 잘린 줄 알아채기도 어렵다.
+    //   옛 방식(평문)으로 넣은 값도 계속 읽히게 둘 다 받는다.
+    const raw = Deno.env.get('RECORD_PROMPT_L1');
+    const prompt = decodePrompt(raw);
     if (!prompt || prompt.trim().length === 0) {
       // 배포 실수 — 프롬프트 없이 초안을 만들면 규정을 못 지킨다. 그럴 바엔 멈춘다.
       return errorResponse('생기부 프롬프트가 설정되지 않았습니다', 503);

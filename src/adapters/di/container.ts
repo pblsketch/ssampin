@@ -75,6 +75,10 @@ import { AppinApiClient } from '@infrastructure/appin/AppinApiClient';
 import { AssistClient } from '@infrastructure/ai/AssistClient';
 import { OwnAiAssistPort } from '@infrastructure/ownAi/OwnAiAssistPort';
 import { fetchRecordPromptL1 as fetchRecordPromptL1Impl } from '@infrastructure/ownAi/RecordPromptClient';
+import {
+  fetchModelCatalog as fetchModelCatalogImpl,
+  type ModelCatalog,
+} from '@infrastructure/ownAi/AiModelCatalogClient';
 import { withSolarFallback } from '@usecases/assist/withSolarFallback';
 import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
 import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
@@ -376,6 +380,15 @@ export function assistPortFor(options: {
  * (오너 결정 D7). 화면은 이 컨테이너를 거쳐 부른다(아키텍처 규칙).
  */
 export const fetchRecordPromptL1 = fetchRecordPromptL1Impl;
+
+/**
+ * "내 AI" 모델 목록 창구.
+ *
+ * ★두 CLI 다 "쓸 수 있는 모델"을 알려 주는 명령이 없다(2026-09-05 실측). 앱에 적어 두면
+ * 새 모델이 나올 때마다 배포해야 하므로 서버에서 받는다. 못 받으면 기본값으로 계속 간다.
+ */
+export const fetchModelCatalog = fetchModelCatalogImpl;
+export type { ModelCatalog };
 
 // === Google Calendar 관련 ===
 

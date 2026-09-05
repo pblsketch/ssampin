@@ -27,6 +27,7 @@ import {
   useOwnAiStatusStore,
 } from '@adapters/stores/useOwnAiStatusStore';
 import { answererLabel } from './answererLabels';
+import { useOwnAiModelCatalog } from '@adapters/hooks/useOwnAiModelCatalog';
 import { OwnAiProposalCards } from './OwnAiProposalCards';
 
 /**
@@ -143,6 +144,22 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
   const provider = useAssistStore((s) => s.provider);
   const setProvider = useAssistStore((s) => s.setProvider);
   const connectedProviders = useConnectedOwnAiProviders();
+  /**
+   * 고른 모델. 설정 > AI 연결의 드롭다운과 **같은 값**을 본다 — 두 군데가 서로 다른 값을
+   * 들고 있으면 "설정에서 바꿨는데 패널이 옛것을 쓴다"가 된다.
+   *
+   * ★모델은 질문마다 바꾸고 싶은 값이다(간단한 조회 vs 생기부 초안). 그래서 설정까지
+   * 들어갔다 나오지 않아도 되게 여기에 둔다. 설정 쪽은 기본값 성격으로 그대로 남긴다.
+   */
+  // 서버가 준 최신 목록(못 받으면 앱 기본값). 연결된 게 있을 때만 받아 온다.
+  const modelCatalog = useOwnAiModelCatalog(connectedProviders.length > 0);
+  const ownAiModels = useAssistStore((s) => s.ownAiModels);
+  const setOwnAiModel = useAssistStore((s) => s.setOwnAiModel);
+  const changeModel = (p: 'claude' | 'codex', model: string): void => {
+    setOwnAiModel(p, model);
+    // 실제로 CLI 를 띄우는 쪽(main)은 이 값을 따로 기억한다 — 알리지 않으면 화면과 어긋난다.
+    void window.electronAPI?.ownAi?.setModel?.(p, model);
+  };
   const usage = useOwnAiStatusStore((s) => s.usage);
   // ★[실행] 저장이 진행 중이면 [새 대화]를 잠근다 — 지우면 결과 문구가 적힐 턴이
   //   사라져 "저장은 됐는데 아무 말이 없는" 상태가 된다. 스토어(clearConversation)도
@@ -208,6 +225,24 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
                 {connectedProviders.map((p) => (
                   <option key={p} value={p}>
                     {answererLabel(p)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {/* 모델 — 구독 AI 를 고른 동안에만 보인다. 쌤핀 AI 는 고를 모델이 없다. */}
+          {provider !== 'ssampin' && connectedProviders.includes(provider) && (
+            <label className="flex items-center gap-1 text-xs text-sp-muted">
+              <span className="sr-only">모델 고르기</span>
+              <select
+                value={ownAiModels[provider]}
+                onChange={(e) => changeModel(provider, e.target.value)}
+                disabled={busy}
+                className="rounded-lg border border-sp-border bg-sp-bg px-1.5 py-0.5 text-xs text-sp-text disabled:opacity-50"
+              >
+                {modelCatalog[provider].map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
                   </option>
                 ))}
               </select>

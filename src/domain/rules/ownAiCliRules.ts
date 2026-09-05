@@ -80,11 +80,22 @@ export function stripOwnAiEnv<T extends Record<string, string | undefined>>(env:
 /** `--permission-prompts none` 을 붙일 수 있는 최소 버전(claude 전용). */
 export const CLAUDE_PERMISSION_PROMPTS_MIN = '2.1.259';
 
+/**
+ * 모델 목록의 **기본값(폴백)**. 평소에는 서버가 준 목록을 쓰고(`AiModelCatalogClient`),
+ * 서버를 못 받았을 때만 이 값이 쓰인다.
+ *
+ * ★claude 는 **별칭**을 쓴다. 별칭은 그 계열의 최신을 가리키므로(CLI 도움말 원문:
+ * "an alias for the latest model"), 계열 안에서 새 모델이 나오면 여기를 안 고쳐도 따라간다.
+ * 실측(2026-09-05): fable→claude-fable-5-1 · opus→claude-opus-5 · sonnet→claude-sonnet-5 ·
+ * haiku→claude-haiku-4-5-20251001.
+ * → 서버 목록이 필요한 건 **계열 자체가 새로 생길 때**다.
+ */
 export const OWN_AI_MODELS: Readonly<Record<OwnAiProviderId, readonly OwnAiModelOption[]>> = {
   claude: [
     { id: '', label: '기본 (권장)' },
-    { id: 'sonnet', label: 'Sonnet — 빠름' },
+    { id: 'fable', label: 'Fable — 최신' },
     { id: 'opus', label: 'Opus — 꼼꼼함' },
+    { id: 'sonnet', label: 'Sonnet — 빠름' },
     { id: 'haiku', label: 'Haiku — 가장 빠름' },
   ],
   codex: [

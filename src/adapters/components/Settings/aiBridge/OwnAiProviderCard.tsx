@@ -14,7 +14,7 @@ import { useState } from 'react';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { useOwnAiStatusStore, isOwnAiConnected } from '@adapters/stores/useOwnAiStatusStore';
 import { OWN_AI_PROVIDER_LABELS, type OwnAiProviderId } from '@domain/entities/OwnAiProvider';
-import { OWN_AI_MODELS } from '@domain/rules/ownAiCliRules';
+import { useOwnAiModelCatalog } from '@adapters/hooks/useOwnAiModelCatalog';
 
 interface Props {
   readonly provider: OwnAiProviderId;
@@ -40,6 +40,8 @@ export function OwnAiProviderCard({ provider }: Props) {
   const label = OWN_AI_PROVIDER_LABELS[provider];
   const connection = useOwnAiStatusStore((s) => s.connections[provider]);
   const refreshOne = useOwnAiStatusStore((s) => s.refreshOne);
+  // 서버가 준 최신 모델 목록. 못 받으면 앱 기본값이 그대로 온다(빈 목록이 되지 않는다).
+  const modelCatalog = useOwnAiModelCatalog(true);
   const setConnection = useOwnAiStatusStore((s) => s.setConnection);
   const model = useAssistStore((s) => s.ownAiModels[provider]);
   const setOwnAiModel = useAssistStore((s) => s.setOwnAiModel);
@@ -183,7 +185,7 @@ export function OwnAiProviderCard({ provider }: Props) {
             onChange={(e) => onModelChange(e.target.value)}
             className="rounded-lg border border-sp-border bg-sp-bg px-2 py-1 text-sm text-sp-text"
           >
-            {OWN_AI_MODELS[provider].map((m) => (
+            {modelCatalog[provider].map((m) => (
               <option key={m.id} value={m.id}>
                 {m.label}
               </option>
