@@ -9,7 +9,7 @@
 ## 🚨 지금 상태
 
 - **출시 버전 v2.4.9** (2026-09-04). 릴리즈 기록 → [2026-09](docs/progress/2026-09.md).
-- **워킹트리 미커밋**: 생기부 초안 3차(v3) + 근거 정리 보드 2차(board-v2) 구현분이 한 덩어리로 있다. 오너 실기기 확인 뒤 오너가 직접 커밋. 상세는 아래 두 섹션.
+- **워킹트리 정리됨**(2026-09-07): v3·board-v2 는 `ed760331` 로, 관찰 입력 S1·S2 는 `74f9473d`·`880a82c4` 로 커밋됐다. 실기기 확인은 여전히 잔여.
 - **운영 DB 주의**: 060(상담·설문 익명 접근 차단 마지막 단계)은 다음 릴리즈 확산 후 적용. 그 전까지 `supabase db push` 금지(060이 같이 나간다).
 
 ## 🎯 진행 중 · 대기
@@ -18,11 +18,14 @@
   기존 관련 테스트 4파일 99/99 통과. 앱 구현·실제 AI 품질 검증은 미실행.
   [검토](docs/03-analysis/record-draft-length-adjustment.analysis.md) · [기록](docs/progress/2026-09.md).
 
-- **관찰 입력 → 주제별 근거 연결 UIUX** — ralplan 2차 합의 승인, 구현 전. 본문 우선·선택 주제·같은 학생 보드 왕복·원본/근거 비교.
-  기존 보드 변경 인수 → 저장 안정성 → 입력/이동 → 비교/삭제 안내 → QA 순차 계획, AC 20개.
-  [계획](docs/01-plan/features/observation-evidence-flow.plan.md) · [기록](docs/progress/2026-09.md). 앱 코드 변경 없음.
+- **관찰 입력 → 주제별 근거 연결 UIUX** — **S0~S2 완료·커밋**(`74f9473d`·`880a82c4`). 잔여 S3~S5.
+  S1 저장 안정성: 근거·주제에 파일 잠금, 저장 성공 후 게시, 원본당 근거 1개 관문, 첨부 파일별 결과.
+  **담임 저장 실패 시 본문이 사라지던 결함 수정.** S2: 두 입력 화면을 본문 우선 순서로 재배치 + 주제 연결 선택기.
+  게이트 전통과(vitest 692파일 9244통과). [계획](docs/01-plan/features/observation-evidence-flow.plan.md) ·
+  [설계](docs/02-design/features/observation-input-topic-picker.design.md) ·
+  [분석](docs/03-analysis/observation-evidence-flow.analysis.md) · [기록](docs/progress/2026-09.md).
 - **생기부 초안 3차 (record-draft-uiux-v3)** — 구현·게이트 완료, 미커밋. 실기기 확인 + 서랍(덮기 vs 나란히) 오너 판단. ADR-085. → 아래 섹션.
-- **근거 정리 보드 2차 (record-evidence-board-v2)** — 구현·게이트 완료, 미커밋. 실기기 확인(설계서 §8) + **서버 모델 목록 배포**(오너 승인) 남음. → 아래 섹션.
+- **근거 정리 보드 2차 (record-evidence-board-v2)** — 구현·게이트 완료, **커밋·푸시·배포 완료(2026-09-07)**. 실기기 확인(설계서 §8)만 남음. → 아래 섹션.
 - **내 AI로 실행(선생님 본인 구독 CLI)** — 구현 완료(2026-09-05, ADR-082·084). 잔여: 생기부 T6 한 줄 삽입 · 디자인 검토 · 실기기 QA. 계획서 원문 → [2026-09](docs/progress/2026-09.md).
 - **생기부 흐름 T6 통합** — T0~T5 완료(ADR-083). 잔여: 브릿지 `write.ts` 한 줄 · `get_record_guidelines` 문구 · `RecordDraft.threadId?` 칸 · 동봉 번들 재생성. 분석 원문 → [2026-09](docs/progress/2026-09.md).
 - **사용 통계 구멍 메우기** (2026-09-01) — 게이트 통과, 실기기 확인 대기. → [2026-09](docs/progress/2026-09.md).
@@ -40,7 +43,7 @@
 ## ➡️ 다음
 
 1. 오너 실기기 확인 → v3 커밋(다중 세션이므로 `git commit -m "..." -- <경로>` 로 파일을 지정).
-2. 근거 정리 보드 2차 — 오너 실기기 확인(설계서 §8 8줄) → v3 와 함께 커밋 → `supabase functions deploy ssampin-ai-models`(모델 이름 정리 반영).
+2. 근거 정리 보드 2차 — 오너 실기기 확인(설계서 §8 8줄) → v3 와 함께 커밋 → `supabase functions deploy ssampin-ai-models` ✅ 완료(2026-09-07, 실제 호출로 확인).
 3. 다음 릴리즈 — 060 포함 여부 판단. 릴리즈 노트에 "완전히 차단" 문구 금지(아직 사실 아님).
 
 ## 📚 기록 보관
@@ -74,7 +77,8 @@
   열 머리 두 줄·두 번 클릭 이름 고치기 · [줄기 보기] · 토스트 + 삭제 5초 되돌리기 · 영역 1개면 칩 숨김 · [가져오기 ▾] → [엑셀 ▾] · em 대시 → 쌍점 · 모델 이름만.
 - **새 파일**: `usecases/studentRecords/collectEvidenceCandidates.ts`(순수) · `adapters/hooks/useEvidenceCandidates.ts` · `RecordDraft/EvidenceCard.tsx`·`EvidenceColumn.tsx`·`evidenceBoardStyles.ts` · 메타 테스트 `recordDraftNoEmDash.meta.test.ts`.
 - **게이트(2026-09-06 19:00)**: tsc 0 · lint 0 에러 · vitest(RecordDraft+domain+stores+usecases) 신규 실패 0(기존 메타 테스트 2파일 5초 타임아웃만, 단독 통과) · regression-check · `landing docs:check`+`build`. 상세 수치는 월별 기록.
-- ★**배포 필요**: `supabase/functions/ssampin-ai-models`(모델 라벨 이름만, `CATALOG_VERSION` 2)는 코드만 고쳤다. `supabase functions deploy ssampin-ai-models` 전까지 화면의 모델 이름은 예전 그대로. 서버에 `OWN_AI_MODEL_CATALOG` 환경변수 덮어쓰기가 있으면 그것도 같이 고쳐야 한다.
+- ✅ **배포 완료(2026-09-07)**: `supabase functions deploy ssampin-ai-models`. 실제 호출로 확인 — 라벨이 모델명만, `version` 1→2, 설명 잔재 0. `OWN_AI_MODEL_CATALOG` 덮어쓰기는 설정돼 있지 않다.
+  ★클라이언트 캐시는 모듈 변수라 앱을 껐다 켜면 즉시, 켜 둔 채면 최대 6시간 뒤 반영된다.
 - ★확인 필요(그대로): 사진 제출 카드의 출처 칩이 빈 알약으로 뜰던 것 — 실기기 `record-evidence.json` 의 `sourceType` 값 확인(설계서 §5-g).
 
 ## ✅ 생기부 초안 3차 (record-draft-uiux-v3) — 구현 완료, **미커밋** (2026-09-06)
