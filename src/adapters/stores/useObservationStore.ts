@@ -97,8 +97,10 @@ export const useObservationStore = create<ObservationState>((set, get) => {
         ...(normalizedSlots.length > 0 ? { slots: normalizedSlots } : {}),
         ...(threadId !== undefined ? { threadId } : {}),
       };
-      set((s) => ({ records: [...s.records, record] }));
+      // ★저장이 성공한 **뒤에** 게시한다. 먼저 게시하면 저장이 실패해도 화면에는 남고,
+      //   다음 통째 저장이 그 유령을 파일에 굳힌다(계획 §5.1-1).
       await manage.add(record);
+      set((s) => ({ records: [...s.records, record] }));
       trackEventSafely('record_observation_save', {
         context: 'teaching',
         slotCount: normalizedSlots.length,
@@ -109,13 +111,13 @@ export const useObservationStore = create<ObservationState>((set, get) => {
 
     updateRecord: async (record) => {
       const updated: ObservationRecord = { ...record, updatedAt: Date.now() };
-      set((s) => ({ records: s.records.map((r) => (r.id === updated.id ? updated : r)) }));
       await manage.update(updated);
+      set((s) => ({ records: s.records.map((r) => (r.id === updated.id ? updated : r)) }));
     },
 
     deleteRecord: async (id) => {
-      set((s) => ({ records: s.records.filter((r) => r.id !== id) }));
       await manage.delete(id);
+      set((s) => ({ records: s.records.filter((r) => r.id !== id) }));
       // 기록에 연결된 첨부(메타+바이너리)도 함께 정리(고아 방지)
       await useObservationAttachmentStore.getState().deleteByObservationId(id);
     },
@@ -124,8 +126,8 @@ export const useObservationStore = create<ObservationState>((set, get) => {
       const removedIds = get()
         .records.filter((r) => r.classId === classId)
         .map((r) => r.id);
-      set((s) => ({ records: s.records.filter((r) => r.classId !== classId) }));
       await manage.deleteByClassId(classId);
+      set((s) => ({ records: s.records.filter((r) => r.classId !== classId) }));
       const attStore = useObservationAttachmentStore.getState();
       for (const rid of removedIds) {
         await attStore.deleteByObservationId(rid);

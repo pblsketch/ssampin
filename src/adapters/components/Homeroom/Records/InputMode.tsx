@@ -29,6 +29,12 @@ import {
   type PendingAttachment,
 } from '@adapters/components/ClassManagement/PendingAttachmentArea';
 import {
+  commitObservationAttachments,
+  keepFailed,
+  newPendingKey,
+  partialAttachmentMessage,
+} from '@adapters/hooks/observationAttachmentCommit';
+import {
   OBSERVATION_ATTACHMENT_LIMITS,
   validateAttachmentFile,
   canAddAttachment,
@@ -87,15 +93,22 @@ function InputMode({
   useEffect(() => {
     pendingFilesRef.current = pendingFiles;
   }, [pendingFiles]);
+  /**
+   * 대기 첨부를 저장된 기록에 붙인다. **파일별 성공/실패를 돌려받아** 성공한 것만 목록에서 빼고
+   * 실패한 것은 남겨 다시 시도할 수 있게 한다. 반환 = 전부 성공했는지.
+   */
   const commitPendingAttachments = useCallback(
-    async (recordId: string): Promise<void> => {
-      for (const { file, source } of pendingFilesRef.current) {
-        try {
-          await addAttachment({ observationId: recordId, file, source });
-        } catch (e) {
-          showToast(e instanceof Error ? e.message : '첨부 저장 실패', 'error');
-        }
-      }
+    async (recordId: string): Promise<boolean> => {
+      const items = pendingFilesRef.current;
+      if (items.length === 0) return true;
+      const result = await commitObservationAttachments(recordId, items, addAttachment);
+      if (result.failed.length === 0) return true;
+      // 성공한 파일은 이미 붙었다 — 재시도가 그것들을 또 올리지 않도록 실패분만 남긴다.
+      const remaining = keepFailed(items, result);
+      pendingFilesRef.current = remaining;
+      setPendingFiles(remaining);
+      showToast(partialAttachmentMessage(result) ?? '첨부 저장 실패', 'error');
+      return false;
     },
     [addAttachment, showToast],
   );
@@ -116,7 +129,7 @@ function InputMode({
             showToast(v.reason, 'error');
             continue;
           }
-          next.push({ file: f, source });
+          next.push({ pendingKey: newPendingKey(), file: f, source });
         }
         return next;
       });
@@ -415,14 +428,16 @@ function InputMode({
 
   // 단일 날짜 저장
   const handleSave = useCallback(async () => {
-    await wrapSave(async () => {
+    const ok = await wrapSave(async () => {
       const { recordIds } = await saveForDate(selectedDate);
       // 단일 학생·비출결 1건일 때만 첨부 커밋(대상 record 가 명확). 다중/출결이면 첨부 영역이 비활성이라 pending 이 비어있다.
       if (pendingFilesRef.current.length > 0 && recordIds.length === 1) {
         await commitPendingAttachments(recordIds[0]!);
       }
     });
-    resetForm();
+    // ★저장이 실패했으면 폼을 비우지 않는다 — 교사가 쓴 본문과 고른 첨부가 그대로 사라진다(계획 §5.2).
+    //   실패 상태(saveStatus=error)로 남겨 두면 같은 폼에서 곧바로 다시 저장할 수 있다.
+    if (ok) resetForm();
   }, [saveForDate, selectedDate, resetForm, commitPendingAttachments, wrapSave]);
 
   // 여러 날 일괄 저장 (확인 모달에서 호출)
@@ -437,16 +452,21 @@ function InputMode({
       setSkippedDates([]);
       let totalCreated = 0;
       const newSkipped: string[] = [];
-      for (let i = 0; i < effectiveRangeDates.length; i++) {
-        const date = effectiveRangeDates[i]!;
-        const { affected } = await saveForDate(date);
-        if (affected === 0) newSkipped.push(date);
-        else totalCreated += affected;
-        setBatchProgress({ current: i + 1, total: effectiveRangeDates.length });
+      try {
+        for (let i = 0; i < effectiveRangeDates.length; i++) {
+          const date = effectiveRangeDates[i]!;
+          const { affected } = await saveForDate(date);
+          if (affected === 0) newSkipped.push(date);
+          else totalCreated += affected;
+          setBatchProgress({ current: i + 1, total: effectiveRangeDates.length });
+        }
+      } finally {
+        // 중간에 실패해도 진행 표시는 걷는다 — 남겨 두면 저장 버튼이 영원히 잠긴다.
+        // 앞서 성공한 날짜는 이미 저장됐으므로 되돌리지 않는다(부분 성공 보존).
+        setBatchSaving(false);
+        setBatchProgress(null);
+        setSkippedDates(newSkipped);
       }
-      setBatchSaving(false);
-      setBatchProgress(null);
-      setSkippedDates(newSkipped);
       setShowBatchConfirm(false);
       resetForm();
 

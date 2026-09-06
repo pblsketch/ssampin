@@ -20,6 +20,20 @@ import {
   attachmentKindOf,
 } from '@domain/rules/observationAttachmentRules';
 import type { ObservationAttachmentSource } from '@domain/entities/ObservationAttachment';
+import type { PendingAttachment } from '@adapters/components/ClassManagement/PendingAttachmentArea';
+import {
+  ObservationTopicPicker,
+  type TopicSelection,
+} from '@adapters/components/RecordDraft/ObservationTopicPicker';
+import { teachingStudentRef } from '@domain/entities/RecordDraft';
+import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
+import {
+  commitObservationAttachments,
+  keepFailed,
+  newPendingKey,
+  partialAttachmentMessage,
+  type AttachmentCommitResult,
+} from '@adapters/hooks/observationAttachmentCommit';
 
 const DRAFT_TTL_MS = 5 * 60 * 1000;
 const DRAFT_LRU_MAX = 50;
@@ -94,14 +108,26 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   );
 
   const addAttachment = useObservationAttachmentStore((s) => s.addAttachment);
+  const ensureEvidenceFromSource = useRecordEvidenceStore((s) => s.ensureEvidenceFromSource);
+  const moveToNewThread = useRecordEvidenceStore((s) => s.moveToNewThread);
   // 작성 중 담아두는 첨부(아직 미저장). '기록 저장' 또는 학생 전환 자동저장 시 생성된 기록에 커밋된다.
-  const [pendingFiles, setPendingFiles] = useState<
-    { file: File; source: ObservationAttachmentSource }[]
-  >([]);
-  const pendingFilesRef = useRef<{ file: File; source: ObservationAttachmentSource }[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<PendingAttachment[]>([]);
+  const pendingFilesRef = useRef<PendingAttachment[]>([]);
+  /**
+   * 붙이지 못한 첨부를 **어느 학생의 어느 기록** 것인지와 함께 들고 있는다.
+   * 학생을 넘긴 뒤 실패를 알게 되므로 현재 화면 학생이 아니다 — 맥락을 잃으면 남의 기록에 붙는다.
+   */
+  const attachmentRetryRef = useRef<
+    Map<string, { readonly recordId: string; readonly items: readonly PendingAttachment[] }>
+  >(new Map());
   const attachInputRef = useRef<HTMLInputElement>(null);
   const pendingSourceRef = useRef<ObservationAttachmentSource>('teacher');
   const [dragOver, setDragOver] = useState(false);
+  /** 저장 시 이어 붙일 주제. 학생을 바꾸면 반드시 지운다 - 남의 학생 주제에 붙으면 사고다. */
+  const [selectedTopic, setSelectedTopic] = useState<TopicSelection | null>(null);
+  /** 분류·태그 접힘 상태. 기본은 접힌 상태다(본문을 먼저 쓰게 한다). */
+  const [detailOpen, setDetailOpen] = useState(false);
+  const topicStudentRef = teachingStudentRef(classId, studentId);
 
   useEffect(() => {
     dateRef.current = date;
@@ -128,20 +154,92 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
   }, [pendingFiles]);
 
   // 생성된 기록에 대기 중 첨부를 커밋한다(개별 실패는 토스트로 안내, 나머지는 계속).
+  /**
+   * 대기 첨부를 저장된 기록에 붙이고 **파일별 결과**를 돌려준다.
+   * 실패를 토스트로만 흘리고 void 를 반환하면 화면이 "3개 중 2개만 붙었다"를 알 수 없다(계획 §5.1-2).
+   */
   const commitPendingAttachments = useCallback(
     async (
       recordId: string,
-      files: { file: File; source: ObservationAttachmentSource }[],
+      files: readonly PendingAttachment[],
+    ): Promise<AttachmentCommitResult> =>
+      commitObservationAttachments(recordId, files, addAttachment),
+    [addAttachment],
+  );
+
+  /**
+   * 붙지 못한 첨부만 **원래 기록에** 다시 붙인다. 새 기록을 만들지 않는다 —
+   * 확보한 recordId 로 그 단계부터 이어서 시도하는 것이 재시도의 뜻이다(계획 §5.1-8).
+   */
+  /**
+   * 저장된 원본을 근거로 올리고 고른 주제에 잇는다.
+   *
+   * ★원본 저장이 성공한 뒤에만 부른다(계획 §5.1-1). 연결이 실패해도 **원본은 되돌리지 않는다** -
+   *   되돌리면 교사가 쓴 기록이 사라진다. 연결만 다시 하면 되는 일이다.
+   * ★새 주제는 여기서 처음 만들어진다. 고를 때는 이름만 들고 있었다(확정 전 저장소 쓰기 0회).
+   */
+  const linkSavedRecordToTopic = useCallback(
+    async (
+      recordId: string,
+      savedContent: string,
+      savedSlots: readonly string[],
+      savedDate: string,
     ): Promise<void> => {
-      for (const { file, source } of files) {
-        try {
-          await addAttachment({ observationId: recordId, file, source });
-        } catch (e) {
-          useToastStore.getState().show(e instanceof Error ? e.message : '첨부 저장 실패', 'error');
+      const topic = selectedTopic;
+      if (topic === null) return;
+      try {
+        const { evidenceId } = await ensureEvidenceFromSource({
+          studentRef: topicStudentRef,
+          areas: [],
+          content: savedContent,
+          sourceType: 'observation',
+          sourceId: recordId,
+          classId,
+          date: savedDate,
+          ...(savedSlots.length > 0 ? { slots: [...savedSlots] } : {}),
+          ...(topic.kind === 'existing' ? { threadId: topic.threadId } : {}),
+        });
+        if (topic.kind === 'new') {
+          // 주제 생성 + 이동 + 실패 시 보상까지 한 동작으로 처리하는 관문을 그대로 쓴다.
+          await moveToNewThread({
+            studentRef: topicStudentRef,
+            evidenceIds: [evidenceId],
+            title: topic.title,
+            classId,
+          });
         }
+      } catch (e) {
+        useToastStore
+          .getState()
+          .show(
+            e instanceof Error
+              ? `기록은 저장됐습니다 · ${e.message}`
+              : '기록은 저장됐지만 주제에 연결하지 못했습니다',
+            'error',
+          );
       }
     },
-    [addAttachment],
+    [selectedTopic, topicStudentRef, classId, ensureEvidenceFromSource, moveToNewThread],
+  );
+
+  const retryFailedAttachments = useCallback(
+    async (ownerStudentId: string): Promise<void> => {
+      const checkpoint = attachmentRetryRef.current.get(ownerStudentId);
+      if (!checkpoint || checkpoint.items.length === 0) return;
+      const result = await commitPendingAttachments(checkpoint.recordId, checkpoint.items);
+      const partial = partialAttachmentMessage(result);
+      if (partial) {
+        attachmentRetryRef.current.set(ownerStudentId, {
+          recordId: checkpoint.recordId,
+          items: keepFailed(checkpoint.items, result),
+        });
+        useToastStore.getState().show(partial, 'error');
+        return;
+      }
+      attachmentRetryRef.current.delete(ownerStudentId);
+      useToastStore.getState().show('첨부를 모두 붙였습니다.', 'success');
+    },
+    [commitPendingAttachments],
   );
 
   const handleAddFiles = useCallback((files: File[], source: ObservationAttachmentSource) => {
@@ -162,7 +260,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           useToastStore.getState().show(v.reason, 'error');
           continue;
         }
-        next.push({ file: f, source });
+        next.push({ pendingKey: newPendingKey(), file: f, source });
       }
       return next;
     });
@@ -209,7 +307,9 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
 
       if (savedContent && savingRef.current !== prevId) {
         savingRef.current = prevId;
-        // 이전 학생의 대기 첨부를 캡처 후 즉시 비운다(학생 전환 race·중복 커밋 방지).
+        // 이전 학생의 대기 첨부를 캡처한다. 대기 목록은 비워 새 학생이 물려받지 않게 하되,
+        // ★캡처한 목록은 커밋이 끝날 때까지 살아 있다 — 먼저 버리고 결과를 기다리지 않으면
+        //   무엇이 붙고 무엇이 실패했는지 영원히 알 수 없다(계획 §5.1-2).
         const filesToCommit = pendingFilesRef.current;
         pendingFilesRef.current = [];
         addRecord({
@@ -222,8 +322,23 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           // ★자동저장에도 슬롯을 싣는다. 빠뜨리면 학생을 넘기는 순간 고른 장면이 조용히 사라진다.
           slots: savedSlots,
         })
-          .then((recordId) => {
-            void commitPendingAttachments(recordId, filesToCommit);
+          .then(async (recordId) => {
+            // ★완료를 기다린다. void 로 떼어 놓으면 실패해도 "자동 저장됨"만 뜬다.
+            if (filesToCommit.length > 0) {
+              const result = await commitPendingAttachments(recordId, filesToCommit);
+              const partial = partialAttachmentMessage(result);
+              if (partial) {
+                // 이 시점의 화면 학생은 이미 다음 학생이다 — 실패분을 **이전 학생 맥락과 함께** 남긴다.
+                attachmentRetryRef.current.set(prevId, {
+                  recordId,
+                  items: keepFailed(filesToCommit, result),
+                });
+                useToastStore.getState().show(partial, 'error', {
+                  label: '첨부 다시 시도',
+                  onClick: () => void retryFailedAttachments(prevId),
+                });
+              }
+            }
             const draft = draftMapRef.current.get(prevId);
             if (
               draft &&
@@ -260,11 +375,23 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
       setSelectedSlots(nextDraft?.slots ?? []);
       setSelectedCategory(DEFAULT_OBSERVATION_CATEGORIES[0]);
       setPendingFiles([]);
+      // ★반드시 지운다. 앞 학생에게 고른 주제가 남으면 **다른 학생의 근거가 남의 주제에 묶인다**
+      //   - 슬롯 오염(위)과 같은 종류의 사고이고, 이쪽이 더 조용하다.
+      setSelectedTopic(null);
+      setDetailOpen(false);
       prevStudentIdRef.current = studentId;
     }
 
     textareaRef.current?.focus();
-  }, [addRecord, classId, cleanupDrafts, deleteRecord, studentId, commitPendingAttachments]);
+  }, [
+    addRecord,
+    classId,
+    cleanupDrafts,
+    deleteRecord,
+    studentId,
+    commitPendingAttachments,
+    retryFailedAttachments,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -348,15 +475,26 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         category: selectedCategory,
         slots: selectedSlots,
       });
-      await commitPendingAttachments(recordId, pendingFilesRef.current);
-      pendingFilesRef.current = [];
+      const items = pendingFilesRef.current;
+      const result = await commitPendingAttachments(recordId, items);
+      // 주제를 골랐을 때만 근거로 올린다. 안 골랐으면 원본은 보드에 거울 카드로 보인다(계획 §5.1-3).
+      if (selectedTopic !== null) {
+        await linkSavedRecordToTopic(recordId, trimmed.slice(0, 500), selectedSlots, date);
+      }
+      const partial = partialAttachmentMessage(result);
+      // 기록은 저장됐다. 붙지 못한 첨부만 대기 목록에 남겨 다시 시도할 수 있게 한다 —
+      // 여기서 통째로 비우면 성공한 파일과 실패한 파일을 구별할 수 없다(계획 §5.1-2).
+      const remaining = partial ? keepFailed(items, result) : [];
+      pendingFilesRef.current = remaining;
       draftMapRef.current.delete(studentId);
       setContent('');
       setSelectedTags([]);
       setSelectedSlots([]);
       setSelectedCategory(DEFAULT_OBSERVATION_CATEGORIES[0]);
       setDate(todayString());
-      setPendingFiles([]);
+      setPendingFiles(remaining);
+      setSelectedTopic(null);
+      if (partial) useToastStore.getState().show(partial, 'error');
     } finally {
       setSaving(false);
     }
@@ -366,10 +504,12 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
     selectedTags,
     selectedSlots,
     selectedCategory,
+    selectedTopic,
     studentId,
     classId,
     addRecord,
     commitPendingAttachments,
+    linkSavedRecordToTopic,
   ]);
 
   const handleKeyDown = useCallback(
@@ -395,84 +535,17 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         <span className="text-caption text-sp-muted">{content.length}/500</span>
       </div>
 
-      {/* 분류 (S4 통합 입력 — 단일 선택, 태그와 별도 축. 사용자 추가 가능) */}
-      <div className="flex flex-wrap items-center gap-1">
-        <span className="text-caption text-sp-muted mr-0.5">분류</span>
-        {allCategories.map((cat) => (
-          <button
-            key={cat}
-            type="button"
-            onClick={() => setSelectedCategory(cat)}
-            aria-pressed={selectedCategory === cat}
-            className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
-              selectedCategory === cat
-                ? 'bg-sp-accent text-white'
-                : 'bg-sp-surface text-sp-muted hover:text-sp-text'
-            }`}
-          >
-            {cat}
-          </button>
-        ))}
-        <input
-          type="text"
-          value={newCategoryInput}
-          onChange={(e) => setNewCategoryInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const v = newCategoryInput.trim();
-              if (!v) return;
-              void addCustomCategory(v);
-              setSelectedCategory(v);
-              setNewCategoryInput('');
-            }
-          }}
-          placeholder="+ 분류"
-          aria-label="분류 직접 추가"
-          className="w-16 px-2 py-0.5 rounded-full text-caption bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
-        />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-1">
-        {allTags.map((tag) => (
-          <button
-            key={tag}
-            onClick={() => toggleTag(tag)}
-            className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
-              selectedTags.includes(tag)
-                ? 'bg-sp-accent text-white'
-                : 'bg-sp-surface text-sp-muted hover:text-sp-text'
-            }`}
-          >
-            {tag}
-          </button>
-        ))}
-        <input
-          type="text"
-          value={newTagInput}
-          onChange={(e) => setNewTagInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault();
-              const v = newTagInput.trim();
-              if (!v) return;
-              if (!allTags.includes(v)) void addCustomTag(v);
-              if (!selectedTags.includes(v)) toggleTag(v);
-              setNewTagInput('');
-            }
-          }}
-          placeholder="+ 태그"
-          aria-label="태그 직접 추가"
-          className="w-16 px-2 py-0.5 rounded-full text-caption bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
-        />
-      </div>
-
+      {/* 관찰 내용 — 첫 과업은 구체적인 사실 기록이다(계획 §4.1). 분류를 먼저 고민하지 않게 맨 앞에 둔다. */}
+      <label htmlFor="observation-content" className="block text-caption text-sp-muted mb-1.5">
+        관찰 내용
+      </label>
       <textarea
+        id="observation-content"
         ref={textareaRef}
         value={content}
         onChange={(e) => handleContentChange(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="관찰한 내용이나 학생부에 참고할 내용을 적어 주세요"
+        placeholder="학생이 한 말과 행동, 그 뒤 달라진 점을 적어 주세요"
         maxLength={500}
         rows={3}
         className="w-full bg-sp-bg border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text placeholder:text-sp-muted resize-none focus:outline-none focus:border-sp-accent"
@@ -515,6 +588,113 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
           aria-label="장면 직접 추가"
           className="w-16 px-2 py-0.5 rounded-full text-caption bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
         />
+      </div>
+
+      {/* 주제 연결(선택) - 본문·장면 다음, 부가 정보 앞(계획 §4.1 순서). */}
+      <ObservationTopicPicker
+        studentRef={topicStudentRef}
+        content={content}
+        multiTarget={false}
+        selected={selectedTopic}
+        onSelect={setSelectedTopic}
+      />
+
+      {/* 분류·태그 — 접어 둔다(계획 §4.1). 교과는 분류에 기본값이 있고 저장을 막지 않으므로
+          통째로 접어도 안전하다. 접힌 줄에 현재 선택값을 그대로 보여 준다. */}
+      <div>
+        <button
+          type="button"
+          aria-expanded={detailOpen}
+          onClick={() => setDetailOpen((v) => !v)}
+          className="flex items-center gap-1.5 text-caption text-sp-muted hover:text-sp-text transition-colors"
+        >
+          <span>
+            분류: {selectedCategory} · 태그 {selectedTags.length}개
+          </span>
+          <span
+            aria-hidden="true"
+            className={`material-symbols-outlined text-sm transition-transform ${
+              detailOpen ? 'rotate-180' : ''
+            }`}
+          >
+            expand_more
+          </span>
+        </button>
+        {detailOpen && (
+          <div className="mt-1.5 space-y-2">
+            {/* 분류 (S4 통합 입력 — 단일 선택, 태그와 별도 축. 사용자 추가 가능) */}
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="text-caption text-sp-muted mr-0.5">분류</span>
+              {allCategories.map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat)}
+                  aria-pressed={selectedCategory === cat}
+                  className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
+                    selectedCategory === cat
+                      ? 'bg-sp-accent text-white'
+                      : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+              <input
+                type="text"
+                value={newCategoryInput}
+                onChange={(e) => setNewCategoryInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const v = newCategoryInput.trim();
+                    if (!v) return;
+                    void addCustomCategory(v);
+                    setSelectedCategory(v);
+                    setNewCategoryInput('');
+                  }
+                }}
+                placeholder="+ 분류"
+                aria-label="분류 직접 추가"
+                className="w-16 px-2 py-0.5 rounded-full text-caption bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1">
+              {allTags.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => toggleTag(tag)}
+                  className={`px-2 py-0.5 rounded-full text-caption font-medium transition-colors ${
+                    selectedTags.includes(tag)
+                      ? 'bg-sp-accent text-white'
+                      : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  {tag}
+                </button>
+              ))}
+              <input
+                type="text"
+                value={newTagInput}
+                onChange={(e) => setNewTagInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const v = newTagInput.trim();
+                    if (!v) return;
+                    if (!allTags.includes(v)) void addCustomTag(v);
+                    if (!selectedTags.includes(v)) toggleTag(v);
+                    setNewTagInput('');
+                  }
+                }}
+                placeholder="+ 태그"
+                aria-label="태그 직접 추가"
+                className="w-16 px-2 py-0.5 rounded-full text-caption bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 첨부 자료 (작성 중 담아두고 저장 시 함께 커밋) */}

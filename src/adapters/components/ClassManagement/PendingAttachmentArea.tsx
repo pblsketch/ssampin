@@ -1,11 +1,13 @@
 import { useRef, useState } from 'react';
 import { attachmentKindOf } from '@domain/rules/observationAttachmentRules';
 import type { ObservationAttachmentSource } from '@domain/entities/ObservationAttachment';
+import type { PendingAttachmentItem } from '@adapters/hooks/observationAttachmentCommit';
 
-export interface PendingAttachment {
-  readonly file: File;
-  readonly source: ObservationAttachmentSource;
-}
+/**
+ * 작성 중 첨부 한 건. **pendingKey 를 포함한다** — 부분 실패 뒤 성공분만 목록에서 빼려면
+ * 이름·위치가 아니라 고른 순간 붙인 키로 식별해야 한다(계획 §5.1-2).
+ */
+export type PendingAttachment = PendingAttachmentItem;
 
 interface PendingAttachmentAreaProps {
   readonly pendingFiles: readonly PendingAttachment[];

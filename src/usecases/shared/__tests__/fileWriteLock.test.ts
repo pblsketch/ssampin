@@ -118,5 +118,7 @@ describe('SYNC_FILE_KEYS — 락 키 정본 정합', () => {
     expect(SYNC_FILE_KEYS.attendance).toBe('attendance');
     expect(SYNC_FILE_KEYS.observations).toBe('observations');
     expect(SYNC_FILE_KEYS.curriculumProgress).toBe('curriculum-progress');
+    expect(SYNC_FILE_KEYS.recordEvidence).toBe('record-evidence');
+    expect(SYNC_FILE_KEYS.inquiryThreads).toBe('inquiry-threads');
   });
 });

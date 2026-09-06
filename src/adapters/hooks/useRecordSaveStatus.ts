@@ -19,8 +19,12 @@ export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 export interface UseRecordSaveStatusReturn {
   saveStatus: SaveStatus;
   markDirty: () => void;
-  /** 저장 함수 fn을 실행하면서 상태 전이를 처리. fn이 throw하면 error 상태. */
-  wrapSave: (fn: () => Promise<void>) => Promise<void>;
+  /**
+   * 저장 함수 fn을 실행하면서 상태 전이를 처리. fn이 throw하면 error 상태.
+   * **반환값 = 성공 여부.** 호출부는 이 값으로 폼 리셋 여부를 정한다 — 실패했는데 리셋하면
+   * 교사가 쓴 본문이 사라진다(계획 §5.2).
+   */
+  wrapSave: (fn: () => Promise<void>) => Promise<boolean>;
   reset: () => void;
   /** 현재 dirty 또는 error(미저장 변경)인지 */
   isDirty: () => boolean;
@@ -41,14 +45,16 @@ export function useRecordSaveStatus(): UseRecordSaveStatusReturn {
     });
   }, []);
 
-  const wrapSave = useCallback(async (fn: () => Promise<void>): Promise<void> => {
+  const wrapSave = useCallback(async (fn: () => Promise<void>): Promise<boolean> => {
     dirtyDuringSaveRef.current = false;
     setSaveStatus('saving');
     try {
       await fn();
       setSaveStatus(dirtyDuringSaveRef.current ? 'dirty' : 'saved');
+      return true;
     } catch {
       setSaveStatus('error');
+      return false;
     }
   }, []);
 

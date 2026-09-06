@@ -366,10 +366,19 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     strategy: 'snapshot',
     reload: async () => {
       const { useRecordEvidenceStore } = await import('@adapters/stores/useRecordEvidenceStore');
-      // 이 스토어의 load 는 loaded 가드가 있어 force 인자가 없다. 내려받은 내용을 반영하려면
-      // loaded 를 내려 다시 읽게 한다(스토어 API 를 바꾸지 않는 최소 변경).
-      useRecordEvidenceStore.setState({ loaded: false });
-      await useRecordEvidenceStore.getState().load();
+      // ★loaded 를 내렸다가 load() 를 다시 부르면 **락 밖에서** 읽는다 — 사용자 저장과 겹칠 때
+      //   이미 낡은 스냅샷을 뒤늦게 게시할 수 있다. 쓰기와 같은 파일 락 안에서 읽는
+      //   전용 진입점을 쓴다(계획 §5.2).
+      await useRecordEvidenceStore.getState().forceReload();
+    },
+  },
+  // 28-d. record-ai-drafts ─ 구독 AI 가 쓴 초안 판(버전) 목록. 초안(record-drafts)과 같은 축·같은 수위(ADR-085).
+  {
+    fileName: 'record-ai-drafts',
+    strategy: 'snapshot',
+    reload: async () => {
+      const { useRecordAiDraftStore } = await import('@adapters/stores/useRecordAiDraftStore');
+      await useRecordAiDraftStore.getState().load(true);
     },
   },
   // 28-c. inquiry-threads ─ 탐구 흐름(근거·관찰 낱장을 주제로 묶는 단위).
@@ -381,7 +390,8 @@ export const SYNC_REGISTRY: SyncDomain[] = [
     strategy: 'snapshot',
     reload: async () => {
       const { useInquiryThreadStore } = await import('@adapters/stores/useInquiryThreadStore');
-      await useInquiryThreadStore.getState().load(true);
+      // 근거와 같은 계약 — 쓰기와 같은 파일 락 안에서 최신을 읽어 게시한다(계획 §5.2).
+      await useInquiryThreadStore.getState().forceReload();
     },
   },
   // 29. observation-attachments ─ 관찰 첨부 메타(JSON). useObservationAttachmentStore 대표 키.
@@ -491,4 +501,8 @@ export const SYNC_FILE_KEYS = {
   attendance: 'attendance',
   observations: 'observations',
   curriculumProgress: 'curriculum-progress',
+  // 근거·주제도 '읽기→변형→통째 쓰기' 구조라 같은 직렬화가 필요하다. 동기화 reload 와
+  // 사용자 저장이 겹치면 나중 쓰기가 앞 쓰기를 삼킨다(계획 §5.2).
+  recordEvidence: 'record-evidence',
+  inquiryThreads: 'inquiry-threads',
 } as const;

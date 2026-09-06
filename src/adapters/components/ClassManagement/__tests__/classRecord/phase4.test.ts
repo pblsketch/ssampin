@@ -34,7 +34,8 @@ describe('class record phase 4 a11y and refactor safeguards', () => {
 
   it('keeps observation actions available on keyboard focus and improves microcopy', () => {
     expect(cardSource()).toContain('group-focus-within:opacity-100');
-    expect(formSource()).toContain('관찰한 내용이나 학생부에 참고할 내용을 적어 주세요');
+    // 계획 §4.1 로 안내 문구가 바뀌었다: 무엇을 적을지가 아니라 **무엇을 관찰했는지**를 묻는다.
+    expect(formSource()).toContain('학생이 한 말과 행동, 그 뒤 달라진 점을 적어 주세요');
     expect(inputSource()).toContain('기록할 학생을 왼쪽 리스트에서 선택해 주세요');
   });
 

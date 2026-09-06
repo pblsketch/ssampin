@@ -39,7 +39,7 @@ describe('useRecordSaveStatus — 상태 전이 (UT-1)', () => {
       resolvePromise = res;
     });
 
-    let savePromise: Promise<void>;
+    let savePromise: Promise<boolean>;
     act(() => {
       savePromise = result.current.wrapSave(() => pendingSave);
     });
@@ -111,7 +111,7 @@ describe('useRecordSaveStatus — 상태 전이 (UT-1)', () => {
       resolvePromise = res;
     });
 
-    let savePromise: Promise<void>;
+    let savePromise: Promise<boolean>;
     act(() => {
       savePromise = result.current.wrapSave(() => pendingSave);
     });
