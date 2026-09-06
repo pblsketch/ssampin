@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
@@ -78,6 +79,8 @@ interface ClassRecordInputViewProps {
   initialStudentViewMode?: 'list' | 'seating';
   onGoToRosterTab?: () => void;
   onGoToSeatingTab?: () => void;
+  /** 왕복 이동 요청을 상위(ClassRecordTab)에 올린다. 직접 탭을 바꾸지 않는다(계획 §4.3). */
+  onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
 }
 
 export function ClassRecordInputView({
@@ -85,6 +88,7 @@ export function ClassRecordInputView({
   initialStudentViewMode = 'list',
   onGoToRosterTab,
   onGoToSeatingTab,
+  onRequestFlow,
 }: ClassRecordInputViewProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const getAttendanceRecord = useTeachingClassStore((s) => s.getAttendanceRecord);
@@ -663,7 +667,11 @@ export function ClassRecordInputView({
                 </h4>
               </div>
 
-              <ObservationForm classId={classId} studentId={selectedStudentKey} />
+              <ObservationForm
+                classId={classId}
+                studentId={selectedStudentKey}
+                {...(onRequestFlow ? { onRequestFlow } : {})}
+              />
 
               {/* 최근 기록 (토글) */}
               {selectedObservations.length > 0 && (

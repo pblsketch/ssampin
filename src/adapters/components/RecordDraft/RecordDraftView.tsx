@@ -18,6 +18,11 @@ import {
 } from '@adapters/stores/useRecordDraftsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { registerDraftFlush } from '@adapters/components/RecordDraft/draftFlushRegistry';
+import { useToastStore } from '@adapters/components/common/Toast';
+import {
+  resolveRecordFlowIntent,
+  type RecordFlowIntent,
+} from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
 import { recordDraftFlagLabel } from '@domain/rules/recordDraftFlagLabels';
@@ -81,6 +86,15 @@ interface RecordDraftViewProps {
   readonly classSubject?: string;
   /** 표시용 학급/수업반 이름(breadcrumb·내보내기). */
   readonly className?: string;
+  /**
+   * 다른 화면이 보낸 왕복 요청(계획 §4.3). 명단이 준비된 뒤 **한 번만** 소비한다.
+   * 저장 직후 [근거 보드에서 보기] 로 들어오는 길이다.
+   */
+  readonly flowIntent?: RecordFlowIntent | null;
+  /** 요청을 처리했다고 상위에 알린다. 상위는 이걸 받고 요청을 비운다. */
+  readonly onFlowIntentConsumed?: (requestId: string) => void;
+  /** 명단이 실제로 로드됐는지. false 면 요청 판정을 미룬다(없는 학생으로 단정하지 않는다). */
+  readonly rosterLoaded?: boolean;
 }
 
 type DraftFilter = 'all' | 'unwritten' | 'unreviewed';
@@ -126,6 +140,9 @@ export function RecordDraftView({
   classId,
   classSubject,
   className,
+  flowIntent,
+  onFlowIntentConsumed,
+  rosterLoaded = true,
 }: RecordDraftViewProps) {
   const author = context === 'homeroom' ? 'homeroom' : 'teaching';
   const areas = useMemo(() => areasForContext(level, author), [level, author]);
@@ -184,6 +201,32 @@ export function RecordDraftView({
       setSelectedStudentRef(students[0]?.studentRef ?? null);
     }
   }, [students, selectedStudentRef]);
+
+  /**
+   * 왕복 요청 처리 — 명단이 준비되면 그 학생을 고르고 **요청을 한 번만** 소비한다.
+   * ★소비 기록을 ref 에 둔다. state 로 두면 갱신이 비동기라 같은 렌더 흐름에서 두 번 처리된다.
+   */
+  const consumedIntentsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const resolution = resolveRecordFlowIntent({
+      intent: flowIntent ?? null,
+      rosterLoaded,
+      knownStudentRefs: new Set(students.map((s) => s.studentRef)),
+      consumedRequestIds: consumedIntentsRef.current,
+    });
+    if (resolution.status === 'ready') {
+      consumedIntentsRef.current.add(resolution.intent.requestId);
+      setSelectedStudentRef(resolution.intent.studentRef);
+      onFlowIntentConsumed?.(resolution.intent.requestId);
+      return;
+    }
+    if (resolution.status === 'student-missing') {
+      // 첫 학생에게 묵시적으로 붙이지 않는다. 남의 기록을 열어 주는 사고다(계획 §4.3).
+      consumedIntentsRef.current.add(flowIntent?.requestId ?? '');
+      useToastStore.getState().show('학생을 찾을 수 없습니다.', 'error');
+      if (flowIntent) onFlowIntentConsumed?.(flowIntent.requestId);
+    }
+  }, [flowIntent, students, rosterLoaded, onFlowIntentConsumed]);
 
   const subject = areaSubject(activeArea, classSubject);
   const limit = resolveAreaLimit(activeArea, level);

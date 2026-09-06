@@ -26,6 +26,10 @@ import {
   type TopicSelection,
 } from '@adapters/components/RecordDraft/ObservationTopicPicker';
 import { teachingStudentRef } from '@domain/entities/RecordDraft';
+import {
+  createRecordFlowIntent,
+  type RecordFlowIntent,
+} from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import {
   commitObservationAttachments,
@@ -41,6 +45,8 @@ const DRAFT_LRU_MAX = 50;
 interface ObservationFormProps {
   classId: string;
   studentId: string;
+  /** 저장 뒤 [근거 보드에서 보기] 를 눌렀을 때 상위에 올리는 이동 요청(계획 §4.3). */
+  onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
 }
 
 interface ObservationDraft {
@@ -66,7 +72,7 @@ function isDraftEmpty(draft: ObservationDraft): boolean {
   );
 }
 
-export function ObservationForm({ classId, studentId }: ObservationFormProps) {
+export function ObservationForm({ classId, studentId, onRequestFlow }: ObservationFormProps) {
   const [date, setDate] = useState(todayString);
   const [content, setContent] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -184,9 +190,9 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
       savedContent: string,
       savedSlots: readonly string[],
       savedDate: string,
-    ): Promise<void> => {
+    ): Promise<{ readonly evidenceId: string; readonly threadId?: string } | null> => {
       const topic = selectedTopic;
-      if (topic === null) return;
+      if (topic === null) return null;
       try {
         const { evidenceId } = await ensureEvidenceFromSource({
           studentRef: topicStudentRef,
@@ -201,13 +207,15 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
         });
         if (topic.kind === 'new') {
           // 주제 생성 + 이동 + 실패 시 보상까지 한 동작으로 처리하는 관문을 그대로 쓴다.
-          await moveToNewThread({
+          const made = await moveToNewThread({
             studentRef: topicStudentRef,
             evidenceIds: [evidenceId],
             title: topic.title,
             classId,
           });
+          return { evidenceId, ...(made.threadId !== null ? { threadId: made.threadId } : {}) };
         }
+        return { evidenceId, threadId: topic.threadId };
       } catch (e) {
         useToastStore
           .getState()
@@ -217,6 +225,7 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
               : '기록은 저장됐지만 주제에 연결하지 못했습니다',
             'error',
           );
+        return null;
       }
     },
     [selectedTopic, topicStudentRef, classId, ensureEvidenceFromSource, moveToNewThread],
@@ -478,8 +487,40 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
       const items = pendingFilesRef.current;
       const result = await commitPendingAttachments(recordId, items);
       // 주제를 골랐을 때만 근거로 올린다. 안 골랐으면 원본은 보드에 거울 카드로 보인다(계획 §5.1-3).
-      if (selectedTopic !== null) {
-        await linkSavedRecordToTopic(recordId, trimmed.slice(0, 500), selectedSlots, date);
+      const linked =
+        selectedTopic !== null
+          ? await linkSavedRecordToTopic(recordId, trimmed.slice(0, 500), selectedSlots, date)
+          : null;
+
+      // 저장 결과를 알리고 **보드로 가는 길**을 같이 준다. 저장만으로 탭을 강제로 옮기지
+      // 않는다(계획 §4.3) - 교사가 계속 입력할 수도 있다.
+      if (onRequestFlow) {
+        const topicTitle = selectedTopic?.kind === 'new' ? selectedTopic.title : null;
+        useToastStore.getState().show(
+          linked !== null && topicTitle !== null
+            ? `기록을 저장하고 "${topicTitle}"에 연결했습니다`
+            : linked !== null
+              ? '기록을 저장하고 주제에 연결했습니다'
+              : '기록을 저장했습니다',
+          'success',
+          {
+            label: '근거 보드에서 보기',
+            onClick: () => {
+              void onRequestFlow(
+                createRecordFlowIntent({
+                  context: 'teaching',
+                  classId,
+                  studentRef: topicStudentRef,
+                  mode: 'board',
+                  sourceId: recordId,
+                  ...(linked !== null ? { evidenceId: linked.evidenceId } : {}),
+                  ...(linked?.threadId !== undefined ? { threadId: linked.threadId } : {}),
+                }),
+              );
+            },
+          },
+          6000,
+        );
       }
       const partial = partialAttachmentMessage(result);
       // 기록은 저장됐다. 붙지 못한 첨부만 대기 목록에 남겨 다시 시도할 수 있게 한다 —
@@ -510,6 +551,8 @@ export function ObservationForm({ classId, studentId }: ObservationFormProps) {
     addRecord,
     commitPendingAttachments,
     linkSavedRecordToTopic,
+    onRequestFlow,
+    topicStudentRef,
   ]);
 
   const handleKeyDown = useCallback(

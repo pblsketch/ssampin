@@ -3,13 +3,25 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { coerceSchoolLevel, teachingStudentRef } from '@domain/entities/RecordDraft';
+import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
 import {
   RecordDraftView,
   type RecordDraftStudentRow,
 } from '@adapters/components/RecordDraft/RecordDraftView';
 
+interface ClassRecordDraftViewProps {
+  readonly classId: string;
+  /** 입력 화면에서 넘어온 왕복 요청(계획 §4.3). */
+  readonly flowIntent?: RecordFlowIntent | null;
+  readonly onFlowIntentConsumed?: (requestId: string) => void;
+}
+
 /** 수업반(교과) 생활기록부 초안 — 과목세특·개인세특·동아리 영역. */
-export function ClassRecordDraftView({ classId }: { classId: string }) {
+export function ClassRecordDraftView({
+  classId,
+  flowIntent,
+  onFlowIntentConsumed,
+}: ClassRecordDraftViewProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const load = useTeachingClassStore((s) => s.load);
   const schoolLevel = useSettingsStore((s) => s.settings.schoolLevel);
@@ -50,6 +62,10 @@ export function ClassRecordDraftView({ classId }: { classId: string }) {
       classId={cls.id}
       classSubject={cls.subject}
       className={`${cls.name} (${cls.subject})`}
+      flowIntent={flowIntent}
+      onFlowIntentConsumed={onFlowIntentConsumed}
+      // 수업반을 찾았다는 것이 곧 명단을 읽었다는 뜻이다. 학생 0명인 반도 로드된 상태다.
+      rosterLoaded
     />
   );
 }

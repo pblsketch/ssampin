@@ -1,4 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { flushAllDrafts } from '@adapters/components/RecordDraft/draftFlushRegistry';
+import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { ClassRecordInputView } from './ClassRecordInputView';
 import { ClassRecordStatsView } from './ClassRecordStatsView';
 import { ClassRecordSearchView } from './ClassRecordSearchView';
@@ -27,6 +30,32 @@ export function ClassRecordTab({
   onGoToSeatingTab,
 }: ClassRecordTabProps) {
   const [viewMode, setViewMode] = useState<RecordViewMode>('input');
+  /**
+   * 화면 왕복 요청(계획 §4.3). 교과 맥락의 주인은 이 탭이다 - 입력과 보드가 서로를 직접
+   * 부르지 않고 여기를 거친다. 그래야 이동 보호(dirty guard·초안 flush)를 한 자리에서 건다.
+   */
+  const [flowIntent, setFlowIntent] = useState<RecordFlowIntent | null>(null);
+
+  /**
+   * 모든 왕복 이동이 지나는 **하나의 전환 함수**(계획 §4.3).
+   * ★새 CTA 가 기존 보호를 우회하지 않게 여기로 모은다. 초안 자동저장 대기분을 먼저 밀어 넣고
+   *   실패하면 이동하지 않고 원래 화면에 머문다.
+   */
+  const goWithIntent = useCallback(async (intent: RecordFlowIntent): Promise<void> => {
+    const flushed = await flushAllDrafts();
+    if (!flushed) {
+      useToastStore.getState().show('저장하지 못한 초안이 있어 이동하지 않았습니다.', 'error');
+      return;
+    }
+    setFlowIntent(intent);
+    if (intent.mode === 'board') setViewMode('draft');
+    else if (intent.mode === 'source' || intent.mode === 'compose') setViewMode('input');
+  }, []);
+
+  const handleIntentConsumed = useCallback((requestId: string) => {
+    // 처리된 요청은 비운다. 남겨 두면 리렌더마다 같은 이동이 되살아난다.
+    setFlowIntent((prev) => (prev?.requestId === requestId ? null : prev));
+  }, []);
 
   return (
     <div className="h-full flex flex-col gap-3">
@@ -62,11 +91,18 @@ export function ClassRecordTab({
             initialStudentViewMode={initialStudentViewMode}
             onGoToRosterTab={onGoToRosterTab}
             onGoToSeatingTab={onGoToSeatingTab}
+            onRequestFlow={goWithIntent}
           />
         )}
         {viewMode === 'stats' && <ClassRecordStatsView classId={classId} />}
         {viewMode === 'search' && <ClassRecordSearchView classId={classId} />}
-        {viewMode === 'draft' && <ClassRecordDraftView classId={classId} />}
+        {viewMode === 'draft' && (
+          <ClassRecordDraftView
+            classId={classId}
+            flowIntent={flowIntent}
+            onFlowIntentConsumed={handleIntentConsumed}
+          />
+        )}
       </div>
     </div>
   );
