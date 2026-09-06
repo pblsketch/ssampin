@@ -13,6 +13,10 @@ landing/node_modules
 package-lock.json
 public/release-notes.json
 
+# 동봉 AI 브릿지 서버 — esbuild 번들 생성물(직접 수정 금지).
+# 서식을 건드리면 재생성할 때마다 실제 변경과 무관한 거대한 diff 가 난다.
+electron/ai-bridge/index.mjs
+
 # AI 브릿지 쓰기 계약 — 생성 파일(직접 수정 금지, byte-단위 정합 검사 대상)
 src/domain/contracts/aiBridgeWriteContract.ts
 electron/ipc/_generated/aiBridgeWriteContract.ts
