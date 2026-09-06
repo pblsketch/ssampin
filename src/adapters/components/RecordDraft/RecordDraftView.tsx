@@ -17,6 +17,7 @@ import {
   type RecordDraftUpsertInput,
 } from '@adapters/stores/useRecordDraftsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { registerDraftFlush } from '@adapters/components/RecordDraft/draftFlushRegistry';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
 import { recordDraftFlagLabel } from '@domain/rules/recordDraftFlagLabels';
@@ -854,7 +855,7 @@ function RecordDraftRow({
   const barCls =
     bytes > limit && verified ? 'bg-red-500' : ratio > 0.8 ? 'bg-amber-500' : 'bg-emerald-500';
 
-  const persist = (value: string): void => {
+  const persist = (value: string): Promise<boolean> => {
     const input: RecordDraftUpsertInput = {
       area,
       studentRef: student.studentRef,
@@ -869,12 +870,17 @@ function RecordDraftRow({
     };
     setSaveState('saving');
     setSaveError(null);
-    upsert(input)
-      .then(() => setSaveState('saved'))
+    // 성공 여부를 돌려준다 - 화면 이동이 이 값을 기다린다(계획 §4.3). 실패하면 이동하지 않는다.
+    return upsert(input)
+      .then(() => {
+        setSaveState('saved');
+        return true;
+      })
       .catch((err: unknown) => {
         setSaveState('idle');
         // 조용히 삼키면 선생님은 저장된 줄 안다. 한도 초과는 이유를 그대로 보여 준다.
         setSaveError(err instanceof RecordDraftLimitError ? err.message : '저장하지 못했습니다.');
+        return false;
       });
   };
 
@@ -884,18 +890,27 @@ function RecordDraftRow({
     saveTimer.current = setTimeout(() => persist(value), 700);
   };
 
-  const flush = (): void => {
+  const flush = (): Promise<boolean> => {
     setFocused(false);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     if (taRef.current) {
       try {
         localStorage.setItem(HEIGHT_KEY(student.studentRef, area), taRef.current.style.height);
       } catch {
-        /* localStorage 불가 — 무시 */
+        /* localStorage 불가 - 무시 */
       }
     }
-    if (text.trim().length > 0 && text !== (draft?.content ?? '')) persist(text);
+    // 저장할 것이 없으면 성공으로 본다(대기분 없음).
+    if (text.trim().length > 0 && text !== (draft?.content ?? '')) return persist(text);
+    return Promise.resolve(true);
   };
+
+  // ★이동 전에 대기분을 밀어 넣을 수 있게 등록한다(계획 §4.3). 등록은 마운트당 한 번이고,
+  //   실제로 부를 때는 ref 를 통해 **가장 최신 flush** 를 쓴다 - 매 렌더마다 등록/해제하면
+  //   이동이 걸린 순간 등록이 잠깐 비어 저장을 놓친다.
+  const flushRef = useRef(flush);
+  flushRef.current = flush;
+  useEffect(() => registerDraftFlush(() => flushRef.current()), []);
 
   const status: RecordDraftStatus | null = draft?.status ?? null;
   // ?? [] 는 매 렌더 새 배열을 만든다 — 아래 useMemo 의 의존이 매번 바뀌므로 memo 로 고정한다.
