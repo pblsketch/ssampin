@@ -57,6 +57,7 @@ import type { IPhotoRosterParserPort } from '@domain/ports/IPhotoRosterParserPor
 import type { IRecordDraftsRepository } from '@domain/repositories/IRecordDraftsRepository';
 import type { IRecordEvidenceRepository } from '@domain/repositories/IRecordEvidenceRepository';
 import type { IInquiryThreadRepository } from '@domain/repositories/IInquiryThreadRepository';
+import type { IRecordAiDraftRepository } from '@domain/repositories/IRecordAiDraftRepository';
 import type { IReminderFireRepository } from '@domain/repositories/IReminderFireRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
@@ -138,6 +139,7 @@ import { PhotoRosterParserAdapter } from '@infrastructure/parse/PhotoRosterParse
 import { JsonRecordDraftsRepository } from '@adapters/repositories/JsonRecordDraftsRepository';
 import { JsonRecordEvidenceRepository } from '@adapters/repositories/JsonRecordEvidenceRepository';
 import { JsonInquiryThreadRepository } from '@adapters/repositories/JsonInquiryThreadRepository';
+import { JsonRecordAiDraftRepository } from '@adapters/repositories/JsonRecordAiDraftRepository';
 import { JsonReminderFireRepository } from '@adapters/repositories/JsonReminderFireRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
@@ -292,6 +294,11 @@ export const recordDraftsRepository: IRecordDraftsRepository = new JsonRecordDra
 );
 
 export const recordEvidenceRepository: IRecordEvidenceRepository = new JsonRecordEvidenceRepository(
+  storage,
+);
+
+// === AI 초안 판(RecordAiDraft) — 구독 AI 가 쓴 초안을 판마다 남긴다. record-ai-drafts.json (ADR-085) ===
+export const recordAiDraftRepository: IRecordAiDraftRepository = new JsonRecordAiDraftRepository(
   storage,
 );
 

@@ -122,7 +122,7 @@ export function InquiryThreadPanel({
           />
         )}
         {closed && (
-          <span className="rounded-full bg-sp-card px-2 py-0.5 text-[0.6rem] font-semibold text-sp-muted ring-1 ring-sp-border">
+          <span className="rounded-full bg-sp-card px-2 py-0.5 text-xs font-semibold text-sp-muted ring-1 ring-sp-border">
             닫힌 주제
           </span>
         )}
@@ -136,24 +136,24 @@ export function InquiryThreadPanel({
               ? '다시 열면 새 근거를 이 주제로 묶을 수 있습니다.'
               : '학기가 끝난 주제를 닫습니다. 닫아도 근거는 그대로 남습니다.'
           }
-          className="rounded-md px-2 py-1 text-[0.65rem] font-medium text-sp-muted ring-1 ring-sp-border transition-colors hover:text-sp-text"
+          className="rounded-md px-2 py-1 text-xs font-medium text-sp-muted ring-1 ring-sp-border transition-colors hover:text-sp-text"
         >
           {closed ? '주제 다시 열기' : '주제 닫기'}
         </button>
         {confirmRemove ? (
           <>
-            <span className="text-[0.65rem] text-red-500">근거는 미분류로 돌아갑니다.</span>
+            <span className="text-xs text-red-500">근거는 미분류로 돌아갑니다.</span>
             <button
               type="button"
               onClick={onRemove}
-              className="rounded-md bg-red-500/10 px-2 py-1 text-[0.65rem] font-semibold text-red-500 ring-1 ring-red-500/20 hover:bg-red-500/20"
+              className="rounded-md bg-red-500/10 px-2 py-1 text-xs font-semibold text-red-500 ring-1 ring-red-500/20 hover:bg-red-500/20"
             >
               정말 삭제
             </button>
             <button
               type="button"
               onClick={() => setConfirmRemove(false)}
-              className="rounded-md px-2 py-1 text-[0.65rem] font-medium text-sp-muted hover:text-sp-text"
+              className="rounded-md px-2 py-1 text-xs font-medium text-sp-muted hover:text-sp-text"
             >
               취소
             </button>
@@ -162,7 +162,7 @@ export function InquiryThreadPanel({
           <button
             type="button"
             onClick={() => setConfirmRemove(true)}
-            className="rounded-md px-2 py-1 text-[0.65rem] font-medium text-red-500 ring-1 ring-red-500/20 transition-colors hover:bg-red-500/5"
+            className="rounded-md px-2 py-1 text-xs font-medium text-red-500 ring-1 ring-red-500/20 transition-colors hover:bg-red-500/5"
           >
             주제 삭제
           </button>
@@ -171,18 +171,18 @@ export function InquiryThreadPanel({
 
       {/* 매칭 키워드 — "이것도 이 주제?" 제안의 근거가 되는 낱말 */}
       <div className="flex flex-wrap items-center gap-1.5">
-        <span className="text-[0.65rem] text-sp-muted">키워드</span>
+        <span className="text-xs text-sp-muted">키워드</span>
         {thread.keywords.map((k) => (
           <span
             key={k}
-            className="inline-flex items-center gap-1 rounded-full bg-sp-accent/10 px-2 py-0.5 text-[0.65rem] font-medium text-sp-accent ring-1 ring-sp-accent/20"
+            className="inline-flex items-center gap-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-sp-accent ring-1 ring-blue-500/20"
           >
             {k}
             <button
               type="button"
               onClick={() => removeKeyword(k)}
               aria-label={`${k} 키워드 빼기`}
-              className="material-symbols-outlined text-[0.8rem] leading-none hover:text-red-500"
+              className="material-symbols-outlined text-xs leading-none hover:text-red-500"
             >
               close
             </button>
@@ -200,10 +200,10 @@ export function InquiryThreadPanel({
           onBlur={addKeyword}
           placeholder="낱말을 적고 Enter"
           aria-label="주제 키워드 추가"
-          className="w-32 rounded-md border border-sp-border bg-sp-card px-2 py-0.5 text-[0.65rem] text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
+          className="w-32 rounded-md border border-sp-border bg-sp-card px-2 py-0.5 text-xs text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
         />
         {thread.keywords.length === 0 && (
-          <span className="text-[0.6rem] text-sp-muted">
+          <span className="text-xs text-sp-muted">
             키워드를 적으면 같은 낱말이 든 미분류 근거를 찾아 드립니다.
           </span>
         )}
@@ -228,16 +228,16 @@ export function InquiryThreadPanel({
                 aria-hidden="true"
                 className="absolute -left-4 top-2 h-1.5 w-1.5 rounded-full bg-sp-accent"
               />
-              <span className="w-9 shrink-0 pt-1.5 text-right text-[0.6rem] tabular-nums text-sp-muted">
+              <span className="w-9 shrink-0 pt-1.5 text-right text-xs tabular-nums text-sp-muted">
                 {shortDate(n.date)}
               </span>
               <div className="flex min-w-0 flex-1 items-start gap-2 rounded-lg bg-sp-card px-2.5 py-1.5 ring-1 ring-sp-border">
                 {n.slot ? (
-                  <span className="mt-0.5 shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-[0.6rem] font-medium text-sp-muted">
+                  <span className="mt-0.5 shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-xs font-medium text-sp-muted">
                     {n.slot}
                   </span>
                 ) : (
-                  <span className="mt-0.5 shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-[0.6rem] text-sp-muted">
+                  <span className="mt-0.5 shrink-0 rounded bg-sp-surface px-1.5 py-0.5 text-xs text-sp-muted">
                     {EVIDENCE_SOURCE_LABELS[n.sourceType]}
                   </span>
                 )}
@@ -260,13 +260,13 @@ export function InquiryThreadPanel({
 
       {/* 빈 고리 힌트 — 경고가 아니라 다음 수업의 실마리 */}
       {hints.length > 0 && (
-        <div className="flex flex-col gap-1 rounded-lg bg-sp-accent/5 px-3 py-2 ring-1 ring-sp-accent/20">
+        <div className="flex flex-col gap-1 rounded-lg bg-blue-500/5 px-3 py-2 ring-1 ring-blue-500/20">
           {hints.map((code) => (
-            <p key={code} className="flex items-start gap-1.5 text-[0.7rem] leading-snug">
+            <p key={code} className="flex items-start gap-1.5 text-xs leading-snug">
               <span className="material-symbols-outlined text-sm text-sp-accent">lightbulb</span>
               <span className="text-sp-text">
                 <b className="font-semibold">{EMPTY_LINK_LABELS[code]}</b>
-                <span className="text-sp-muted"> — {EMPTY_LINK_HELPS[code]}</span>
+                <span className="text-sp-muted">: {EMPTY_LINK_HELPS[code]}</span>
               </span>
             </p>
           ))}
@@ -276,11 +276,11 @@ export function InquiryThreadPanel({
       {/* 교사의 평가적 기술 — 역량 키워드 */}
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[0.65rem] text-sp-muted">역량 키워드(선생님이 적습니다)</span>
+          <span className="text-xs text-sp-muted">역량 키워드(선생님이 적습니다)</span>
           {(thread.competencyKeywords ?? []).map((k) => (
             <span
               key={k}
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.65rem] font-medium ring-1 ${
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
                 competencyKeywordHasField(k)
                   ? 'bg-emerald-500/10 text-emerald-600 ring-emerald-500/20'
                   : 'bg-sp-card text-sp-muted ring-sp-border'
@@ -296,7 +296,7 @@ export function InquiryThreadPanel({
                 type="button"
                 onClick={() => removeCompetency(k)}
                 aria-label={`${k} 빼기`}
-                className="material-symbols-outlined text-[0.8rem] leading-none hover:text-red-500"
+                className="material-symbols-outlined text-xs leading-none hover:text-red-500"
               >
                 close
               </button>
@@ -314,12 +314,12 @@ export function InquiryThreadPanel({
             onBlur={addCompetency}
             placeholder={competencyKeywordExample(subject)}
             aria-label="역량 키워드 추가"
-            className="w-56 rounded-md border border-sp-border bg-sp-card px-2 py-0.5 text-[0.65rem] text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
+            className="w-56 rounded-md border border-sp-border bg-sp-card px-2 py-0.5 text-xs text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
           />
         </div>
         {competencyInput.trim().length > 0 && !competencyKeywordHasField(competencyInput) && (
-          <p className="text-[0.6rem] text-sp-muted">
-            ‘{competencyInput.trim()}’ 앞에 분야를 붙여 보세요 — 그래야 다른 학생 학생부에 옮겨도
+          <p className="text-xs text-sp-muted">
+            ‘{competencyInput.trim()}’ 앞에 분야를 붙여 보세요: 그래야 다른 학생 학생부에 옮겨도
             말이 되는 문장을 피할 수 있습니다.
           </p>
         )}
@@ -327,8 +327,8 @@ export function InquiryThreadPanel({
 
       {/* 다음 탐구 메모 */}
       <label className="flex flex-col gap-1">
-        <span className="text-[0.65rem] text-sp-muted">
-          다음 탐구 메모 — 남은 질문, 다음 학기에 이어 볼 것
+        <span className="text-xs text-sp-muted">
+          다음 탐구 메모: 남은 질문, 다음 학기에 이어 볼 것
         </span>
         <textarea
           defaultValue={thread.nextNotes ?? ''}
@@ -337,7 +337,7 @@ export function InquiryThreadPanel({
             if (v !== (thread.nextNotes ?? '')) onPatch({ nextNotes: v });
           }}
           placeholder="예: 광고 문구 규제 → 2학기 법과정치에서 이어 볼 것"
-          className="min-h-[40px] w-full resize-y rounded-lg border border-sp-border bg-sp-card px-2.5 py-1.5 text-xs leading-relaxed text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-sp-accent/30"
+          className="min-h-[40px] w-full resize-y rounded-lg border border-sp-border bg-sp-card px-2.5 py-1.5 text-xs leading-relaxed text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         />
       </label>
     </section>

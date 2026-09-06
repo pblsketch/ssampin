@@ -95,22 +95,26 @@ export const CLAUDE_PERMISSION_PROMPTS_MIN = '2.1.259';
  *
  * ★한때 codex 목록에 `gpt-5.3-codex-spark` 가 있었는데 **실제로는 거부되는 이름**이었다.
  *   바이너리 문자열만 보고 넣었던 탓이다 — 반드시 돌려 보고 넣을 것.
+ *
+ * ★라벨은 **모델명만** 적는다(오너 결정 2026-09-06, ADR-085 보강 2 R4). "가장 강력함" 같은
+ *   부연 설명을 붙이지 않는다. `기본 (권장)` 은 모델명이 아니라 "고르지 않음"이라 예외다.
+ *   서버 목록(`supabase/functions/ssampin-ai-models`)도 같은 규칙이다.
  */
 export const OWN_AI_MODELS: Readonly<Record<OwnAiProviderId, readonly OwnAiModelOption[]>> = {
   claude: [
     { id: '', label: '기본 (권장)' },
-    { id: 'claude-fable-5-1', label: 'Fable 5.1 — 가장 강력함' },
-    { id: 'claude-opus-5', label: 'Opus 5 — 꼼꼼함' },
-    { id: 'claude-sonnet-5', label: 'Sonnet 5 — 일상 작업' },
-    { id: 'claude-haiku-4-5', label: 'Haiku 4.5 — 가장 빠름' },
+    { id: 'claude-fable-5-1', label: 'Fable 5.1' },
+    { id: 'claude-opus-5', label: 'Opus 5' },
+    { id: 'claude-sonnet-5', label: 'Sonnet 5' },
+    { id: 'claude-haiku-4-5', label: 'Haiku 4.5' },
   ],
   codex: [
     { id: '', label: '기본 (권장)' },
-    { id: 'gpt-6-astra', label: 'GPT-6 Astra — 가장 강력함' },
-    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol — 두루 좋음' },
-    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra — 균형' },
-    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna — 빠름' },
-    { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini — 가장 빠름' },
+    { id: 'gpt-6-astra', label: 'GPT-6 Astra' },
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol' },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna' },
+    { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
   ],
 };
 

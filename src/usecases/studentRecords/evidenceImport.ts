@@ -54,7 +54,7 @@ function withDate(base: Omit<ImportedEvidence, 'date'>, date?: string): Imported
 function missingBodyNote(fileName: string): string {
   const ext = extensionOf(fileName);
   return FILE_TYPE_EXTENSIONS.image.includes(ext)
-    ? '(사진 파일 — 본문 추출 불가)'
+    ? '(사진 파일: 본문 추출 불가)'
     : '(본문 추출 안 됨)';
 }
 
@@ -112,7 +112,7 @@ export function rubricGradingToEvidence(g: RubricGrading, rubric?: Rubric): Impo
       const level = crit.levels.find((l) => l.id === levelId);
       // 수준 "이름"과 "성취 설명"만 — 배점(level.score)은 의도적으로 읽지 않는다.
       const levelText = level
-        ? `${level.name}${level.description?.trim() ? ` — ${level.description.trim()}` : ''}`
+        ? `${level.name}${level.description?.trim() ? `: ${level.description.trim()}` : ''}`
         : g.status === 'absent'
           ? '결시'
           : '미채점';

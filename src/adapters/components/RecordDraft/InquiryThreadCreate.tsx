@@ -62,7 +62,7 @@ export function InquiryThreadCreate({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md px-2 py-1 text-[0.65rem] font-medium text-sp-muted hover:text-sp-text"
+          className="rounded-lg px-2 py-1 text-xs font-medium text-sp-muted transition-colors hover:bg-sp-card hover:text-sp-text"
         >
           닫기
         </button>
@@ -70,7 +70,7 @@ export function InquiryThreadCreate({
 
       {candidates.length > 0 ? (
         <div className="flex flex-col gap-1.5">
-          <p className="text-[0.65rem] text-sp-muted">
+          <p className="text-xs text-sp-muted">
             이미 정해 두신 이름에서 고르면 학기 내내 같은 말로 부를 수 있습니다.
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -79,17 +79,17 @@ export function InquiryThreadCreate({
                 key={`${c.source}:${c.title}`}
                 type="button"
                 onClick={() => submit(c.title)}
-                className="inline-flex items-center gap-1 rounded-full bg-sp-card px-2.5 py-1 text-[0.7rem] font-medium text-sp-text ring-1 ring-sp-border transition-colors hover:bg-sp-accent/10 hover:text-sp-accent hover:ring-sp-accent/30"
+                className="inline-flex items-center gap-1 rounded-full bg-sp-card px-2.5 py-1 text-xs font-medium text-sp-text ring-1 ring-sp-border transition-colors hover:bg-blue-500/10 hover:text-sp-accent hover:ring-blue-500/30"
               >
-                <span className="text-[0.6rem] text-sp-muted">{SOURCE_LABELS[c.source]}</span>
+                <span className="text-xs text-sp-muted">{SOURCE_LABELS[c.source]}</span>
                 {c.title}
               </button>
             ))}
           </div>
         </div>
       ) : (
-        <p className="text-[0.65rem] text-sp-muted">
-          가져올 수 있는 이름이 아직 없습니다 — 수행평가나 과제를 만들면 여기 후보로 뜹니다. 직접
+        <p className="text-xs text-sp-muted">
+          가져올 수 있는 이름이 아직 없습니다: 수행평가나 과제를 만들면 여기 후보로 뜹니다. 직접
           적으셔도 됩니다.
         </p>
       )}
@@ -105,15 +105,15 @@ export function InquiryThreadCreate({
             }
             if (e.key === 'Escape') onCancel();
           }}
-          placeholder="직접 적기 — 예: 할인 문구와 선택"
+          placeholder="직접 적기: 예) 할인 문구와 선택"
           aria-label="새 주제 이름"
-          className="min-w-0 flex-1 rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-sp-accent/30"
+          className="min-w-0 flex-1 rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-blue-500/30"
         />
         <button
           type="button"
           onClick={() => submit(text)}
           disabled={text.trim().length === 0}
-          className="shrink-0 rounded-lg bg-sp-accent px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-sp-accent/90 disabled:opacity-40"
+          className="shrink-0 rounded-lg bg-sp-accent px-3 py-1.5 text-xs font-semibold text-sp-accent-fg transition-colors hover:opacity-90 disabled:opacity-40"
         >
           만들기
         </button>

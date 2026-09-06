@@ -20,6 +20,7 @@ import {
   type NarrativeEvidenceBasis,
 } from '@domain/rules/recordNarrativeChecks';
 import { academicTermForDate } from '@domain/rules/academicCalendar';
+import type { RoleMark } from '@domain/rules/narrativeParagraphs';
 import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
@@ -68,6 +69,10 @@ export interface RecordDraftUpsertInput {
    * 주제를 **떼려면 `null`** 을 명시한다(`term` 과 같은 태도).
    */
   threadId?: string | null;
+  /**
+   * 형광펜 표식(ADR-085). **미지정은 "바꾸지 않는다"** — 자동저장이 표식을 떨구지 않게. 떼려면 `null`.
+   */
+  roleMarks?: readonly RoleMark[] | null;
 }
 
 /**
@@ -257,6 +262,14 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
           : input.threadId === null
             ? {}
             : { threadId: input.threadId }),
+        // 형광펜 표식 — 미지정이면 기존 값을 지킨다. null 이면 뗀다(threadId 와 같은 태도).
+        ...(input.roleMarks === undefined
+          ? existing?.roleMarks !== undefined
+            ? { roleMarks: existing.roleMarks }
+            : {}
+          : input.roleMarks === null
+            ? {}
+            : { roleMarks: input.roleMarks.map((m) => ({ role: m.role, text: m.text })) }),
         // 학기 표식 — 기존 초안의 term 은 유지하고, 없을 때만 저장 시각의 학기를 붙인다.
         // (구 데이터에 소급해 추측 부착하지 않는다는 원칙과, "처음 만든 학기"를 남기려는 뜻이 같다.)
         ...(existing?.term !== undefined

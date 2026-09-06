@@ -8,6 +8,8 @@
  * 모든 레코드는 requiresTeacherReview=true — 자동 확정 경로는 없으며 교사 최종 검토가 강제된다.
  */
 
+import type { RoleMark } from '../rules/narrativeParagraphs';
+
 /** 학교급. */
 export type SchoolLevel = 'elementary' | 'middle' | 'high';
 
@@ -95,6 +97,12 @@ export interface RecordDraft {
    *   앱에서 되짚기 위한 것이다.
    */
   readonly threadId?: string;
+  /**
+   * [반영] 시점의 문단별 서사 역할(형광펜, ADR-085). `content` 에는 표식이 없고 여기에만 남는다.
+   * 선택 필드 — 부재는 "표식 없음"이지 빈 값이 아니다(병합에서 덮지 말 것). 편집 칸은 현재 문단과
+   * 이 목록을 순서대로 맞춰 같으면 진하게, 다르면 흐리게 칠한다.
+   */
+  readonly roleMarks?: readonly RoleMark[];
   readonly createdAt: number;
   readonly updatedAt: number;
 }

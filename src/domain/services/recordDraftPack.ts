@@ -21,6 +21,7 @@ import {
 import { createMaskSession } from '../privacy/maskEngine';
 import type { KeywordGroup, MaskMapping } from '../privacy/types';
 import { redactQuestion } from '../rules/redactOutbound';
+import { NARRATIVE_MARK_INSTRUCTION } from '../rules/narrativeParagraphs';
 
 /** 꾸러미에 넣을 근거 한 건(엔티티 전체가 아니라 필요한 것만 받는다). */
 export interface DraftPackEvidence {
@@ -185,6 +186,10 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
     parts.push(mask(input.teacherPrompt.trim()));
   }
 
+  // 형광펜 표식(ADR-085) — 문단마다 [동기]/[과정]/[결과]/[평가]. 앱이 색으로 바꾸고 저장 본문에서는 뗀다.
+  // ★근거로 되짚기 지시보다 **앞**에 둔다 — 맨 끝(최신성)은 지어내기를 막는 지시의 자리다.
+  parts.push('');
+  parts.push(NARRATIVE_MARK_INSTRUCTION);
   parts.push('');
   parts.push(
     '위 근거만 보고 쓰세요. 활동을 나열하지 말고 하나의 탐구 흐름으로 이어 주세요. ' +
@@ -207,4 +212,32 @@ export function summarizeExclusions(exclusions: readonly DraftPackExclusion[]): 
   const reasons = new Set<string>();
   for (const x of exclusions) reasons.add(DRAFT_PACK_EXCLUSION_LABELS[x.reason]);
   return `제외됨 ${exclusions.length}건 (${[...reasons].join(' · ')})`;
+}
+
+/**
+ * [다시 표시] 꾸러미 — 선생님이 고친 초안에 **표식만** 다시 붙여 달라는 짧은 요청(ADR-085 §7-3).
+ *
+ * 근거는 싣지 않는다(본문을 바꾸는 요청이 아니다). 실명·학번은 초안 꾸러미와 같은 명단으로 가리고,
+ * 답이 오면 `mappings` 로 되돌린다. 답의 본문이 원문과 다르면 화면이 버린다(`sameNarrativeBody`).
+ */
+export interface NarrativeRemarkPack {
+  readonly text: string;
+  readonly mappings: readonly MaskMapping[];
+}
+
+export function buildNarrativeRemarkPack(input: {
+  readonly content: string;
+  readonly roster: readonly KeywordGroup[];
+}): NarrativeRemarkPack {
+  const session = createMaskSession();
+  const r = redactQuestion(input.content.trim(), input.roster, session);
+  const text = [
+    '아래 글의 **문장은 한 글자도 바꾸지 말고**, 문단마다 첫머리에 역할 표식만 붙여서 그대로 돌려주세요.',
+    NARRATIVE_MARK_INSTRUCTION,
+    '설명이나 다른 말은 덧붙이지 마세요.',
+    '',
+    '글:',
+    r.masked,
+  ].join('\n');
+  return { text, mappings: r.mappings };
 }

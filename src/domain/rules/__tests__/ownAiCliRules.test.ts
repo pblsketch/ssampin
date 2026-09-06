@@ -298,6 +298,20 @@ describe('★모델 목록은 실제로 되는 것만, 실제 이름으로 올�
     expect(OWN_AI_MODELS.codex.map((m) => m.label).join(' ')).toContain('GPT-6 Astra');
   });
 
+  it('★모델 라벨에 설명이 붙어 있지 않다 — 이름만(오너 결정 2026-09-06, ADR-085 보강 2 R4)', () => {
+    for (const p of OWN_AI_PROVIDERS) {
+      for (const m of OWN_AI_MODELS[p]) {
+        if (m.id === '') continue; // `기본 (권장)` 은 모델명이 아니라 예외
+        expect(m.label, `${p}/${m.id} 라벨에 부연 설명이 붙어 있다: ${m.label}`).not.toMatch(
+          /[—·(:]/,
+        );
+        expect(m.label, `${p}/${m.id} 라벨에 한글 설명이 붙어 있다: ${m.label}`).not.toMatch(
+          /[가-힣]/,
+        );
+      }
+    }
+  });
+
   it('★id 는 실제 모델 이름이다 — 별칭은 화면에 몇 판인지 못 보여 준다', () => {
     const ids = OWN_AI_MODELS.claude.map((m) => m.id).filter((x) => x.length > 0);
     expect(ids.every((id) => id.startsWith('claude-'))).toBe(true);

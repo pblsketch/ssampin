@@ -123,6 +123,8 @@ export const YEAR_TRANSITION_FILES: readonly YearTransitionFileSpec[] = [
   { key: 'record-evidence', reset: { kind: 'empty-envelope', envelope: { records: [] } } },
   // 탐구 흐름 — 근거와 같은 축. 새 학년도에는 백지(지난 흐름은 보관함에서 본다).
   { key: 'inquiry-threads', reset: { kind: 'empty-envelope', envelope: { records: [] } } },
+  // AI 초안 판 — 초안과 같은 축. 새 학년도에는 백지.
+  { key: 'record-ai-drafts', reset: { kind: 'empty-envelope', envelope: { records: [] } } },
   // F7b: `[]` 쓰기(F7a로 유효). RL-a 정정: seating-snapshots는 **SYNC_REGISTRY 미등재**
   // (동기화 표면 자체가 없음 — 업로드·다운로드 모두 안 됨) → 다운로드 게이트(guardDownloads)
   // 불요. 빈 값 쓰기는 로컬 정합용이다. (구 주석 "SYNC_REGISTRY 등재 파일"은 오기였다.)

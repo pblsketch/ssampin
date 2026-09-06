@@ -717,6 +717,11 @@ export interface Settings {
   readonly eventAlertEnabled?: boolean;
   /** 학생 관찰 기록 알림 설정. 미설정 시 DEFAULT_REMINDER_SETTINGS(전체 OFF). */
   readonly recordReminder?: ReminderSettings;
+  /**
+   * 생기부 초안 화면의 서사 역할 형광펜 스위치(ADR-085). 미설정=꺼짐.
+   * 켰을 때만 미리보기·편집 칸에 문단 색과 범례가 보인다.
+   */
+  readonly recordHighlightOn?: boolean;
   /** AI 도우미 챗봇 표시 여부 (기본: true) */
   readonly showChatbot?: boolean;
   /** 온보딩에서 선택한 교사 역할 (복수) */

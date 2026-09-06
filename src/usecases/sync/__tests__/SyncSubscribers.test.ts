@@ -17,7 +17,7 @@ import { SYNC_REGISTRY, SYNC_FILES } from '../syncRegistry';
  *  (d) settings 도메인이 subscribeExcluded:true인지 (무한루프 방지)
  *  (e) 모든 도메인에 reload 함수가 정의되어 있는지
  *  (f) isDynamic이면 enumerateDynamic 함수가 반드시 존재하는지
- *  (g) 36개 도메인이 빠짐없이 명시적 동기화 전략을 갖는지
+ *  (g) 37개 도메인이 빠짐없이 명시적 동기화 전략을 갖는지
  *
  * 새 SYNC_REGISTRY 항목을 추가할 때:
  *   1. syncRegistry.ts에 SyncDomain 항목 추가
@@ -98,8 +98,9 @@ describe('syncRegistry 구조적 정합성', () => {
     ).toEqual([]);
   });
 
-  it('(g) 등록된 36개 도메인이 정적/동적 성격과 맞는 전략을 가져야 한다', () => {
-    expect(SYNC_REGISTRY).toHaveLength(36);
+  it('(g) 등록된 37개 도메인이 정적/동적 성격과 맞는 전략을 가져야 한다', () => {
+    // 37 = 36 + record-ai-drafts(ADR-085, 구독 AI 초안 판 목록 — record-drafts 와 같은 snapshot 전략).
+    expect(SYNC_REGISTRY).toHaveLength(37);
 
     const staticStrategies = new Set(['snapshot', 'record-merge']);
     const invalid = SYNC_REGISTRY.filter((domain) =>

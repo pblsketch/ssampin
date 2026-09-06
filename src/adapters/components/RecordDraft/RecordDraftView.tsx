@@ -17,6 +17,7 @@ import {
   type RecordDraftUpsertInput,
 } from '@adapters/stores/useRecordDraftsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
 import { recordDraftFlagLabel } from '@domain/rules/recordDraftFlagLabels';
 import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
@@ -27,13 +28,30 @@ import { useCurriculumStandards } from '@adapters/hooks/useCurriculumStandards';
 import { standardKeywords, standardsForCodes } from '@domain/rules/curriculumStandardRules';
 import { isClassified } from '@domain/rules/threadSuggest';
 import type { ObservationRecord } from '@domain/entities/Observation';
-import type { KeywordGroup } from '@domain/privacy/types';
-import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
-import { RecordEvidenceView } from '@adapters/components/RecordDraft/RecordEvidenceView';
 import {
-  RecordDraftAiButton,
+  NARRATIVE_ROLES,
+  NARRATIVE_ROLE_LABELS,
+  type RoleMark,
+} from '@domain/rules/narrativeParagraphs';
+import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
+import { RecordEvidenceBoard } from '@adapters/components/RecordDraft/RecordEvidenceBoard';
+import {
+  useEvidenceCandidateCounts,
+  useEvidenceCandidates,
+} from '@adapters/hooks/useEvidenceCandidates';
+import {
+  RecordDraftAiPanel,
   type DraftTarget,
-} from '@adapters/components/RecordDraft/RecordDraftAiButton';
+} from '@adapters/components/RecordDraft/RecordDraftAiPanel';
+import {
+  RecordDraftSidePanel,
+  type SidePanelTab,
+} from '@adapters/components/RecordDraft/RecordDraftSidePanel';
+import {
+  DRAFT_TEXT_METRICS,
+  RoleHighlightLayer,
+} from '@adapters/components/RecordDraft/RoleHighlightLayer';
+import { ROLE_DOT } from '@adapters/components/RecordDraft/narrativeRoleStyles';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 
 import { rosterFromAll } from '@domain/rules/redactOutbound';
@@ -116,14 +134,29 @@ export function RecordDraftView({
   const upsertDraft = useRecordDraftsStore((s) => s.upsert);
   const observations = useObservationStore((s) => s.records);
   const loadObservations = useObservationStore((s) => s.load);
+  const evidenceRecords = useRecordEvidenceStore((s) => s.records);
   const loadEvidence = useRecordEvidenceStore((s) => s.load);
+  const allThreads = useInquiryThreadStore((s) => s.records);
   const loadThreads = useInquiryThreadStore((s) => s.load);
+  const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
 
   const [activeArea, setActiveArea] = useState<RecordArea>(areas[0] ?? 'autonomy');
   const [filter, setFilter] = useState<DraftFilter>('all');
   const [showExport, setShowExport] = useState(false);
-  /** 서브페이지 모드 — '초안'(기존) ↔ '근거 자료'(신규). */
+  /** 서브페이지 모드 — '초안' ↔ '근거 정리'. */
   const [viewMode, setViewMode] = useState<'draft' | 'evidence'>('draft');
+  /**
+   * 고른 학생(P1). 행 클릭·편집 칸 포커스·[AI ▸] 클릭이 바꾸고, 오른쪽 패널과 보드는 이 값을
+   * **props 로 받는다** — 각자 `students[0]` 로 시작하지 않는다.
+   */
+  const [selectedStudentRef, setSelectedStudentRef] = useState<string | null>(
+    students[0]?.studentRef ?? null,
+  );
+  const [sideTab, setSideTab] = useState<SidePanelTab>('ai');
+
+  /** 형광펜 스위치 — 설정에 기억한다. 켰을 때만 색·범례가 보인다. */
+  const highlightOn = useSettingsStore((s) => s.settings.recordHighlightOn === true);
+  const updateSettings = useSettingsStore((s) => s.update);
 
   useEffect(() => {
     void load();
@@ -144,15 +177,18 @@ export function RecordDraftView({
     if (!areas.includes(activeArea)) setActiveArea(areas[0] ?? 'autonomy');
   }, [areas, activeArea]);
 
+  // 명단이 바뀌어 고른 학생이 사라지면 첫 학생으로.
+  useEffect(() => {
+    if (selectedStudentRef !== null && !students.some((s) => s.studentRef === selectedStudentRef)) {
+      setSelectedStudentRef(students[0]?.studentRef ?? null);
+    }
+  }, [students, selectedStudentRef]);
+
   const subject = areaSubject(activeArea, classSubject);
   const limit = resolveAreaLimit(activeArea, level);
 
   /**
    * 성취기준 복사 검사(K1)의 재료 — **이 수업반이 실제로 가르친 성취기준의 원문**.
-   *
-   * T4 가 만든 `checkStandardCopy` 는 초안이 성취기준 문장을 옮겨 적었는지 어절 겹침으로 본다.
-   * 그런데 그 재료를 넘겨줄 자리가 이 화면이라, 지금까지 검사는 `skipped` 로만 보고돼 왔다
-   * (계획서 §6 T4 항목). 코드는 T3 가 루브릭·진도에 심어 뒀으니 여기서 원문으로 풀어 넘긴다.
    *
    * ★**원문은 앱 안에만 머문다.** 여기서 나온 문장은 로컬 점검 함수로만 가고 AI 에는 절대
    *   실리지 않는다 — 원문을 모델에 보이면 그대로 옮겨 적어 "성취기준 복사형" 세특이 된다
@@ -200,8 +236,7 @@ export function RecordDraftView({
 
   /**
    * AI 로 나가는 쪽 — **키워드만.** 위의 `standardTexts`(원문)와 이름이 비슷하지만 하는 일이
-   * 정반대다: 원문은 앱 안 복사 검사용이고, 이쪽만 밖으로 나간다. 섞으면 모델이 성취기준
-   * 문장을 그대로 옮겨 적는다(분석 §4-1, 실측 C 사례).
+   * 정반대다: 원문은 앱 안 복사 검사용이고, 이쪽만 밖으로 나간다.
    */
   const standardKeywordList = useMemo(() => {
     if (!standardsData || standardCodes.length === 0) return undefined;
@@ -218,9 +253,7 @@ export function RecordDraftView({
 
   /**
    * "남은 학생 모두"의 대상 — 이 영역에 아직 초안이 없는 학생.
-   *
-   * ★이미 쓴 초안을 덮지 않는다. 눌러 놓고 자리를 뜨는 기능이라, 덮어쓰면 선생님이 손으로 쓴
-   *   글이 소리 없이 사라진다.
+   * ★이미 쓴 초안을 덮지 않는다. 덮어쓰면 선생님이 손으로 쓴 글이 소리 없이 사라진다.
    */
   const unwrittenStudents = useMemo(
     () => students.filter((s) => (draftFor(s.studentRef)?.content ?? '').trim().length === 0),
@@ -230,40 +263,53 @@ export function RecordDraftView({
 
   /**
    * AI 가 쓴 초안을 저장한다. **어느 학생 칸인지 `studentRef` 로만 찾는다.**
-   *
-   * ★목록 위치(index)로 찾으면 안 된다 — 필터가 걸려 있으면 화면 순서와 명단 순서가 다르고,
-   *   그러면 남의 학생 칸에 저장된다(같은 실수를 상담예약에서 한 적이 있다).
+   * ★목록 위치(index)로 찾으면 안 된다 — 필터가 걸려 있으면 화면 순서와 명단 순서가 다르다.
+   * roleMarks: 표식(형광펜). null 이면 뗀다, undefined 면 그대로 둔다.
    */
-  const applyAiDraft = async (studentRef: string, content: string): Promise<void> => {
-    const row = students.find((s) => s.studentRef === studentRef);
-    if (!row) return;
-    await upsertDraft({
-      area: activeArea,
-      studentRef: row.studentRef,
-      content,
-      ...(classId !== undefined ? { classId } : {}),
-      ...(row.studentKey !== undefined ? { studentKey: row.studentKey } : {}),
-      ...(row.studentId !== undefined ? { studentId: row.studentId } : {}),
-      ...(subject !== undefined ? { subject } : {}),
-      ...(standardTexts !== undefined && standardTexts.length > 0 ? { standardTexts } : {}),
-      level,
-    });
-  };
+  const applyAiDraft = useCallback(
+    async (
+      studentRef: string,
+      content: string,
+      roleMarks?: readonly RoleMark[] | null,
+    ): Promise<void> => {
+      const row = students.find((s) => s.studentRef === studentRef);
+      if (!row) return;
+      await upsertDraft({
+        area: activeArea,
+        studentRef: row.studentRef,
+        content,
+        ...(classId !== undefined ? { classId } : {}),
+        ...(row.studentKey !== undefined ? { studentKey: row.studentKey } : {}),
+        ...(row.studentId !== undefined ? { studentId: row.studentId } : {}),
+        ...(subject !== undefined ? { subject } : {}),
+        ...(standardTexts !== undefined && standardTexts.length > 0 ? { standardTexts } : {}),
+        ...(roleMarks !== undefined ? { roleMarks } : {}),
+        level,
+      });
+    },
+    [students, upsertDraft, activeArea, classId, subject, standardTexts, level],
+  );
+
+  /** [다시 표시] — 본문은 그대로, 표식만 갱신한다. */
+  const remarkDraft = useCallback(
+    async (studentRef: string, roleMarks: readonly RoleMark[]): Promise<void> => {
+      const current = getDraft(activeArea, studentRef, subject);
+      if (!current) return;
+      await applyAiDraft(studentRef, current.content, roleMarks);
+    },
+    [getDraft, activeArea, subject, applyAiDraft],
+  );
 
   /**
    * AI 초안을 만드는 중인 학생 — 필터가 걸려 있어도 **행을 붙들어 둔다.**
-   *
    * ★"미작성" 필터에서 "남은 학생 모두"를 누르면 첫 [반영] 순간 그 학생이 필터에서 빠져
-   *   행이 사라지고, 행 안의 버튼·큐가 함께 사라졌다(UltraQA P1). 실행이 끝날 때까지 붙든다.
+   *   행이 사라졌다(UltraQA P1). 실행이 끝날 때까지 붙든다.
    */
   const [aiActiveRefs, setAiActiveRefs] = useState<ReadonlySet<string>>(() => new Set());
-  const setAiActive = useCallback((studentRef: string, active: boolean) => {
+  const setAiActive = useCallback((refs: readonly string[]) => {
     setAiActiveRefs((prev) => {
-      if (prev.has(studentRef) === active) return prev;
-      const next = new Set(prev);
-      if (active) next.add(studentRef);
-      else next.delete(studentRef);
-      return next;
+      if (prev.size === refs.length && refs.every((r) => prev.has(r))) return prev;
+      return new Set(refs);
     });
   }, []);
 
@@ -274,6 +320,91 @@ export function RecordDraftView({
     if (filter === 'unwritten') return (d?.content ?? '').trim().length === 0;
     return d === undefined || d.status !== 'confirmed'; // unreviewed
   });
+
+  // ── 고른 학생의 패널 재료 ─────────────────────────────────
+  const selectedStudent = students.find((s) => s.studentRef === selectedStudentRef) ?? null;
+  const selectedDraft = selectedStudent ? draftFor(selectedStudent.studentRef) : undefined;
+  const selectedEvidences = useMemo(
+    () =>
+      selectedStudent
+        ? evidenceRecords.filter((e) => e.studentRef === selectedStudent.studentRef)
+        : [],
+    [evidenceRecords, selectedStudent],
+  );
+  const selectedAreaEvidences = useMemo(
+    () => selectedEvidences.filter((e) => e.areas.includes(activeArea)),
+    [selectedEvidences, activeArea],
+  );
+  const selectedThreads = useMemo(
+    () =>
+      selectedStudent ? allThreads.filter((t) => t.studentRef === selectedStudent.studentRef) : [],
+    [allThreads, selectedStudent],
+  );
+  /**
+   * 거울 카드(아직 근거로 안 넣은 원본 기록) — 보드와 같은 계산. 행의 [미분류 N건]과 오른쪽 패널이
+   * 저장 미분류에 이것을 더해 보여야 보드와 수가 어긋나지 않는다(설계서 §4-1). ★세기만 하고 저장하지 않는다.
+   */
+  const mirrorCounts = useEvidenceCandidateCounts({
+    students,
+    context,
+    ...(classId !== undefined ? { classId } : {}),
+  });
+  const selectedMirrors = useEvidenceCandidates({
+    student: selectedStudent,
+    context,
+    ...(classId !== undefined ? { classId } : {}),
+  });
+  /**
+   * [AI로 초안 쓰기]에 넘길 재료 — 실명은 여기서 가리지 않는다(꾸러미가 한 세션으로 가린다).
+   * "AI 에 보내지 않기" 근거와 기재 금지 근거는 `recordDraftPack` 이 뺀다(거르는 자리를 한 곳에 둔다).
+   */
+  const aiTarget = useMemo<DraftTarget | null>(() => {
+    if (!selectedStudent) return null;
+    const existing = selectedDraft?.content ?? '';
+    return {
+      studentRef: selectedStudent.studentRef,
+      displayName: selectedStudent.name,
+      evidences: selectedAreaEvidences,
+      ...(standardKeywordList !== undefined ? { standardKeywords: standardKeywordList } : {}),
+      ...(existing.trim().length > 0 ? { existingText: existing } : {}),
+    };
+  }, [selectedStudent, selectedDraft?.content, selectedAreaEvidences, standardKeywordList]);
+  /** "남은 학생 모두" 대상. 자기 자신은 뺀다. 주제는 걸지 않는다 — 각자 영역 전체 근거를 본다. */
+  const aiRemaining = useMemo<readonly DraftTarget[]>(
+    () =>
+      unwrittenStudents
+        .filter((s) => s.studentRef !== selectedStudentRef)
+        .map((s) => ({
+          studentRef: s.studentRef,
+          displayName: s.name,
+          evidences: evidenceRecords.filter(
+            (e) => e.studentRef === s.studentRef && e.areas.includes(activeArea),
+          ),
+          ...(standardKeywordList !== undefined ? { standardKeywords: standardKeywordList } : {}),
+        })),
+    [unwrittenStudents, selectedStudentRef, evidenceRecords, activeArea, standardKeywordList],
+  );
+  const aiDraftKey = useMemo(
+    () => ({
+      area: activeArea,
+      studentRef: selectedStudentRef ?? '',
+      ...(subject !== undefined ? { subject } : {}),
+      ...(classId !== undefined ? { classId } : {}),
+    }),
+    [activeArea, selectedStudentRef, subject, classId],
+  );
+
+  const selectStudent = useCallback((studentRef: string) => {
+    setSelectedStudentRef(studentRef);
+  }, []);
+  const openAiFor = (studentRef: string): void => {
+    setSelectedStudentRef(studentRef);
+    setSideTab('ai');
+  };
+  const openBoardFor = (studentRef: string): void => {
+    setSelectedStudentRef(studentRef);
+    setViewMode('evidence');
+  };
 
   // ── 파워유저 가속 ─────────────────────────────────────────
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -308,7 +439,7 @@ export function RecordDraftView({
       await navigator.clipboard.writeText(tsv);
       flashCopyMsg(`${rows.length}명 복사됨`, true);
     } catch {
-      flashCopyMsg('복사 실패 — 브라우저 권한을 확인하세요', false);
+      flashCopyMsg('복사 실패: 브라우저 권한을 확인하세요', false);
     }
   };
 
@@ -354,16 +485,16 @@ export function RecordDraftView({
 
   return (
     <div className="h-full flex flex-col rounded-xl bg-sp-card ring-1 ring-sp-border overflow-hidden">
-      {/* 상단 바 — breadcrumb + 모드 토글 + (초안)복사·내보내기 + 컨텍스트 칩 */}
+      {/* 상단 바 — breadcrumb + 모드 토글 + 형광펜 + (초안)복사·내보내기 + 컨텍스트 칩 */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-sp-border">
         <div className="flex items-center gap-1.5 truncate">
           {className ? <span className="text-sm text-sp-muted">{className}</span> : null}
           {className ? <span className="text-sm text-sp-muted">›</span> : null}
           <h2 className="text-base font-bold text-sp-text">
-            {viewMode === 'draft' ? '생활기록부 초안' : '근거 자료'}
+            {viewMode === 'draft' ? '생활기록부 초안' : '근거 정리'}
           </h2>
         </div>
-        {/* 초안 ↔ 근거 자료 서브페이지 토글 */}
+        {/* 초안 ↔ 근거 정리 서브페이지 토글 */}
         <div className="inline-flex overflow-hidden rounded-full text-xs font-medium ring-1 ring-sp-border">
           <button
             type="button"
@@ -377,9 +508,22 @@ export function RecordDraftView({
             onClick={() => setViewMode('evidence')}
             className={`px-3 py-1 transition-colors ${viewMode === 'evidence' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
           >
-            근거 자료
+            근거 정리
           </button>
         </div>
+        {viewMode === 'draft' && (
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-sp-muted">
+            <input
+              type="checkbox"
+              role="switch"
+              aria-checked={highlightOn}
+              checked={highlightOn}
+              onChange={(e) => void updateSettings({ recordHighlightOn: e.target.checked })}
+              className="h-3.5 w-3.5 accent-current text-sp-accent"
+            />
+            <span className="material-symbols-outlined text-base">ink_highlighter</span>형광펜
+          </label>
+        )}
         <div className="flex-1" />
         {viewMode === 'draft' && (
           <>
@@ -419,14 +563,17 @@ export function RecordDraftView({
       </div>
 
       {viewMode === 'evidence' ? (
-        <RecordEvidenceView
+        /* 근거 정리 보드 — 고른 학생·현재 영역을 넘긴다. 보드가 학생을 바꾸면 초안 쪽 선택도 같이 바뀐다. */
+        <RecordEvidenceBoard
           context={context}
           level={level}
           students={students}
           {...(classId !== undefined ? { classId } : {})}
           {...(className !== undefined ? { className } : {})}
           {...(classSubject !== undefined ? { classSubject } : {})}
-          headless
+          selectedStudentRef={selectedStudentRef}
+          onSelectStudent={selectStudent}
+          initialArea={activeArea}
         />
       ) : (
         <>
@@ -461,11 +608,11 @@ export function RecordDraftView({
                   }`}
                 >
                   {RECORD_AREA_LABELS[area]}
-                  <span className="text-[0.65rem] font-semibold text-sp-muted">
+                  <span className="text-xs font-semibold text-sp-muted">
                     {Math.round(resolveAreaLimit(area, level) / 3)}자
                   </span>
                   <span
-                    className={`rounded-full px-1.5 py-0.5 text-[0.65rem] font-semibold ${on ? 'bg-sp-accent/15 text-sp-accent' : 'bg-sp-surface text-sp-muted'}`}
+                    className={`rounded-full px-1.5 py-0.5 text-xs font-semibold ${on ? 'bg-blue-500/15 text-sp-accent' : 'bg-sp-surface text-sp-muted'}`}
                   >
                     {cnt}
                   </span>
@@ -475,7 +622,7 @@ export function RecordDraftView({
           </div>
 
           {/* 영역 정보 바 */}
-          <div className="flex flex-wrap items-center gap-3 px-4 py-2 bg-sp-surface/50 border-b border-sp-border text-xs text-sp-muted">
+          <div className="flex flex-wrap items-center gap-3 px-4 py-2 bg-sp-surface border-b border-sp-border text-xs text-sp-muted">
             <span>
               <span className="material-symbols-outlined text-sm align-middle mr-1">
                 description
@@ -500,7 +647,18 @@ export function RecordDraftView({
                 />
               </span>
             </span>
-            <div className="ml-auto inline-flex overflow-hidden rounded-full ring-1 ring-sp-border text-[0.7rem] font-medium">
+            {/* 형광펜 범례 — 켰을 때만 */}
+            {highlightOn && (
+              <span className="inline-flex items-center gap-2" aria-label="형광펜 범례">
+                {NARRATIVE_ROLES.map((r) => (
+                  <span key={r} className="inline-flex items-center gap-1">
+                    <span className={`h-2 w-2 rounded-full ${ROLE_DOT[r]}`} />
+                    {NARRATIVE_ROLE_LABELS[r]}
+                  </span>
+                ))}
+              </span>
+            )}
+            <div className="ml-auto inline-flex overflow-hidden rounded-full ring-1 ring-sp-border text-xs font-medium">
               {FILTERS.map((f) => (
                 <button
                   key={f.id}
@@ -514,49 +672,88 @@ export function RecordDraftView({
             </div>
           </div>
 
-          {/* 입력창 안내 — 목록 전체에 1회만 노출(행마다 반복 제거) */}
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 text-[0.7rem] text-sp-muted border-b border-sp-border">
-            <span className="inline-flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">open_in_full</span>
-              입력창 우하단을 끌어 크기를 조절할 수 있습니다.
-            </span>
-            <span className="inline-flex items-center gap-1">
-              <span className="material-symbols-outlined text-sm">keyboard_return</span>
-              <kbd className="rounded bg-sp-surface px-1 font-semibold text-sp-text">
-                Ctrl+Enter
-              </kbd>
-              로 다음 학생 칸으로 이동합니다.
-            </span>
-          </p>
+          <div className="flex min-h-0 flex-1">
+            <div className="flex min-w-0 flex-1 flex-col">
+              {/* 입력창 안내 — 목록 전체에 1회만 노출(행마다 반복 제거) */}
+              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 text-xs text-sp-muted border-b border-sp-border">
+                <span className="inline-flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">open_in_full</span>
+                  입력창 우하단을 끌어 크기를 조절할 수 있습니다.
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">keyboard_return</span>
+                  <kbd className="rounded bg-sp-surface px-1 font-semibold text-sp-text">
+                    Ctrl+Enter
+                  </kbd>
+                  로 다음 학생 칸으로 이동합니다.
+                </span>
+              </p>
 
-          {/* 학생 세로 스크롤 리스트 */}
-          <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
-            {visibleStudents.length === 0 ? (
-              <p className="py-10 text-center text-sm text-sp-muted">표시할 학생이 없습니다.</p>
-            ) : (
-              visibleStudents.map((s, i) => (
-                <RecordDraftRow
-                  key={`${s.studentRef}:${activeArea}:${subject ?? ''}`}
-                  student={s}
-                  area={activeArea}
-                  level={level}
-                  subject={subject}
-                  classId={classId}
-                  draft={draftFor(s.studentRef)}
-                  obsById={obsById}
-                  index={i}
-                  {...(standardTexts !== undefined ? { standardTexts } : {})}
-                  {...(standardKeywordList !== undefined
-                    ? { standardKeywords: standardKeywordList }
-                    : {})}
-                  unwrittenStudents={unwrittenStudents}
-                  roster={roster}
-                  onAiApply={applyAiDraft}
-                  onAiActive={setAiActive}
-                  onJumpNext={() => focusRowTextarea(i + 1)}
-                />
-              ))
-            )}
+              {/* 학생 세로 스크롤 리스트 */}
+              <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
+                {visibleStudents.length === 0 ? (
+                  <p className="py-10 text-center text-sm text-sp-muted">표시할 학생이 없습니다.</p>
+                ) : (
+                  visibleStudents.map((s, i) => (
+                    <RecordDraftRow
+                      key={`${s.studentRef}:${activeArea}:${subject ?? ''}`}
+                      student={s}
+                      area={activeArea}
+                      level={level}
+                      subject={subject}
+                      classId={classId}
+                      draft={draftFor(s.studentRef)}
+                      index={i}
+                      selected={s.studentRef === selectedStudentRef}
+                      mirrorCount={mirrorCounts.get(s.studentRef) ?? 0}
+                      highlightOn={highlightOn}
+                      showAiButton={ownAiEnabled}
+                      {...(standardTexts !== undefined ? { standardTexts } : {})}
+                      onSelect={selectStudent}
+                      onOpenAi={openAiFor}
+                      onOpenBoard={openBoardFor}
+                      onJumpNext={() => focusRowTextarea(i + 1)}
+                    />
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 오른쪽 패널 — 고른 학생의 [AI 초안 | 근거] */}
+            <RecordDraftSidePanel
+              studentName={selectedStudent?.name ?? null}
+              area={activeArea}
+              tab={sideTab}
+              onTabChange={setSideTab}
+              evidences={selectedAreaEvidences}
+              mirrors={selectedMirrors}
+              threads={selectedThreads}
+              {...(selectedDraft !== undefined ? { draft: selectedDraft } : {})}
+              obsById={obsById}
+              onOpenBoard={() => selectedStudent && openBoardFor(selectedStudent.studentRef)}
+              aiPanel={
+                aiTarget && selectedStudent ? (
+                  <RecordDraftAiPanel
+                    key={`${selectedStudent.studentRef}:${activeArea}:${subject ?? ''}`}
+                    areaLabel={RECORD_AREA_LABELS[activeArea]}
+                    roster={roster}
+                    target={aiTarget}
+                    threads={selectedThreads}
+                    studentEvidences={selectedEvidences}
+                    remaining={aiRemaining}
+                    draftKey={aiDraftKey}
+                    {...(selectedDraft?.roleMarks !== undefined
+                      ? { existingRoleMarks: selectedDraft.roleMarks }
+                      : {})}
+                    highlightOn={highlightOn}
+                    onApply={applyAiDraft}
+                    onRemark={remarkDraft}
+                    onActiveChange={setAiActive}
+                    onFocusStudent={selectStudent}
+                  />
+                ) : null
+              }
+            />
           </div>
 
           {showExport && (
@@ -586,14 +783,15 @@ function RecordDraftRow({
   subject,
   classId,
   draft,
-  obsById,
   index,
+  selected,
+  mirrorCount,
+  highlightOn,
+  showAiButton,
   standardTexts,
-  standardKeywords: standardKeywordList,
-  unwrittenStudents,
-  roster,
-  onAiApply,
-  onAiActive,
+  onSelect,
+  onOpenAi,
+  onOpenBoard,
   onJumpNext,
 }: {
   student: RecordDraftStudentRow;
@@ -602,20 +800,20 @@ function RecordDraftRow({
   subject?: string;
   classId?: string;
   draft?: RecordDraft;
-  obsById: ReadonlyMap<string, ObservationRecord>;
   index: number;
+  /** 오른쪽 패널이 보고 있는 학생인가. */
+  selected: boolean;
+  /** 거울 카드 수 — 저장 미분류에 더해 [미분류 N건]을 만든다. */
+  mirrorCount: number;
+  /** 형광펜 스위치 — 켜져 있을 때만 편집 칸 뒤에 거울 레이어를 깐다. */
+  highlightOn: boolean;
+  /** [AI ▸] 버튼 노출 — 실험실 스위치(내 AI로 실행)를 켠 선생님에게만. */
+  showAiButton: boolean;
   /** 이 수업반이 가르친 성취기준 원문 — 복사 검사에만 쓴다(AI 에는 안 간다). */
   standardTexts?: readonly string[];
-  /** 성취기준 **키워드** — 이쪽만 AI 로 나간다. 위의 원문과 헷갈리지 말 것. */
-  standardKeywords?: readonly string[];
-  /** 이 영역에 아직 초안이 없는 학생들("남은 학생 모두"의 대상). */
-  unwrittenStudents: readonly RecordDraftStudentRow[];
-  /** 실명·학번을 가릴 명단 — AI 로 나가는 글 전부가 이걸 지난다. */
-  roster: readonly KeywordGroup[];
-  /** AI 가 쓴 초안을 저장한다. 저장 자리는 부모가 안다(다른 학생 칸도 여기로 간다). */
-  onAiApply: (studentRef: string, content: string) => Promise<void>;
-  /** 이 행의 AI 실행이 시작/끝났다 — 부모가 필터와 무관하게 행을 붙들어 두는 데 쓴다. */
-  onAiActive: (studentRef: string, active: boolean) => void;
+  onSelect: (studentRef: string) => void;
+  onOpenAi: (studentRef: string) => void;
+  onOpenBoard: (studentRef: string) => void;
   onJumpNext: () => void;
 }) {
   const upsert = useRecordDraftsStore((s) => s.upsert);
@@ -623,14 +821,14 @@ function RecordDraftRow({
 
   const [text, setText] = useState(draft?.content ?? '');
   const [focused, setFocused] = useState(false);
-  const [showBasis, setShowBasis] = useState(false);
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   /** 저장이 거부된 이유(한도 초과 등). 조용한 실패를 만들지 않기 위한 자리. */
   const [saveError, setSaveError] = useState<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const layerRef = useRef<HTMLDivElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 외부(AI loopback)로 초안이 갱신되면 편집 중이 아닐 때 반영(자동 입력).
+  // 외부(AI 패널·loopback)로 초안이 갱신되면 편집 중이 아닐 때 반영(자동 입력).
   useEffect(() => {
     if (!focused) setText(draft?.content ?? '');
   }, [draft?.content, draft?.updatedAt, focused]);
@@ -712,7 +910,7 @@ function RecordDraftRow({
     [flags, text],
   );
 
-  // 근거 준비도(US-4) — 현재 영역의 근거 건수·최근 날짜·작성 준비/검토 신호.
+  // 근거 준비도(US-4) — 현재 영역의 근거 건수·최근 날짜 + 미분류 건수(보드로 가는 버튼).
   const evidenceRecords = useRecordEvidenceStore((s) => s.records);
   const evidenceForArea = useMemo(
     () =>
@@ -720,114 +918,15 @@ function RecordDraftRow({
     [evidenceRecords, student.studentRef, area],
   );
   const evidenceCount = evidenceForArea.length;
-
-  /**
-   * "이 주제로" — 이 학생의 탐구 흐름 중 하나를 골라 **그 주제의 근거만** 보게 한다.
-   *
-   * ★고른 값을 초안에 저장하지는 않는다(오너 결정 2026-09-04 — `RecordDraft` 엔티티와 초안 저장
-   *   관문은 다른 작업이 쓰는 중이라 이번엔 건드리지 않는다. 계획서 §6 요청).
-   *   AI 는 `get_inquiry_threads` → `get_record_evidence(threadId)` 로 주제를 직접 읽으므로
-   *   주제별 초안 자체는 이 칸 없이도 된다. 여기서는 **교사가 무엇을 보고 쓰는지**를 맞춘다.
-   * ★행 컴포넌트는 `studentRef:area:subject` 로 key 가 걸려 학생이 바뀌면 통째로 새로 만들어진다 —
-   *   앞 학생의 주제 선택이 따라붙을 길이 없다.
-   */
   const allThreads = useInquiryThreadStore((s) => s.records);
   const threadIdSet = useMemo(() => new Set(allThreads.map((t) => t.id)), [allThreads]);
-  const studentThreads = useMemo(
-    () => allThreads.filter((t) => t.studentRef === student.studentRef),
-    [allThreads, student.studentRef],
-  );
-  const [pickedThreadId, setPickedThreadId] = useState<string>('');
-  const pickedThread = studentThreads.find((t) => t.id === pickedThreadId) ?? null;
-  const threadEvidenceCount = useMemo(
-    () =>
-      pickedThread === null
-        ? 0
-        : evidenceRecords.filter(
-            (e) => e.studentRef === student.studentRef && e.threadId === pickedThread.id,
-          ).length,
-    [evidenceRecords, student.studentRef, pickedThread],
-  );
+  // 저장 미분류 + 거울(아직 근거로 안 넣은 원본) — 보드의 미분류 열과 같은 수.
   const unclassifiedCount = useMemo(
     () =>
       evidenceRecords.filter(
         (e) => e.studentRef === student.studentRef && !isClassified(e, threadIdSet),
-      ).length,
-    [evidenceRecords, student.studentRef, threadIdSet],
-  );
-
-  /**
-   * AI 에게 "이 주제로 써 달라"고 말할 문장 — **다른 AI 앱에 붙여 넣어 쓰는 길**이다.
-   *
-   * 구독을 연결한 선생님은 아래 [AI로 초안 쓰기]로 앱 안에서 바로 만들 수 있다(T6).
-   * 이 복사 버튼은 AI 브릿지로 클로드·GPT 를 따로 쓰는 선생님을 위해 그대로 둔다.
-   */
-  const copyThreadPrompt = async (): Promise<void> => {
-    if (!pickedThread) return;
-    const text = `'${pickedThread.title}' 주제로 ${RECORD_AREA_LABELS[area]} 초안을 써 주세요. 그 주제의 근거만 보고, 활동을 나열하지 말고 하나의 탐구 흐름으로 써 주세요.`;
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* 클립보드 불가 — 무시 */
-    }
-  };
-  /**
-   * [AI로 초안 쓰기]에 넘길 재료.
-   *
-   * ★실명은 여기서 가리지 않는다 — 꾸러미(`recordDraftPack`)가 이름·근거·주제를 한 세션으로
-   *   가린다. 이 화면은 실명을 그대로 넘기고, 되돌리기는 [반영] 직전에 버튼이 한다.
-   * ★주제를 골랐으면 **그 주제의 근거만** 보낸다. 안 골랐으면 이 영역 전체.
-   * ★"AI 에 보내지 않기"로 표시한 근거와 기재 금지 항목이 든 근거는 꾸러미를 만드는
-   *   `recordDraftPack` 이 뺀다 — 여기서 거르지 않는다(거르는 자리를 한 곳에 둔다).
-   */
-  const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
-  const onAiActiveChange = useCallback(
-    (active: boolean) => onAiActive(student.studentRef, active),
-    [onAiActive, student.studentRef],
-  );
-
-  const aiTarget = useMemo<DraftTarget>(() => {
-    const picked = pickedThreadId
-      ? evidenceRecords.filter(
-          (e) => e.studentRef === student.studentRef && e.threadId === pickedThreadId,
-        )
-      : evidenceForArea;
-    return {
-      studentRef: student.studentRef,
-      displayName: student.name,
-      evidences: picked,
-      ...(standardKeywordList !== undefined ? { standardKeywords: standardKeywordList } : {}),
-      ...(text.trim().length > 0 ? { existingText: text } : {}),
-    };
-  }, [
-    pickedThreadId,
-    evidenceRecords,
-    evidenceForArea,
-    student.studentRef,
-    student.name,
-    standardKeywordList,
-    text,
-  ]);
-
-  /**
-   * "남은 학생 모두" 대상. 자기 자신은 뺀다(이미 `target` 으로 먼저 간다).
-   *
-   * ★여기서는 주제를 걸지 않는다 — 주제 고르기는 이 행의 선택이라, 남의 학생에게
-   *   같은 주제를 씌우면 엉뚱한 근거로 쓰게 된다. 각자 영역 전체 근거를 본다.
-   */
-  const aiRemaining = useMemo<readonly DraftTarget[]>(
-    () =>
-      unwrittenStudents
-        .filter((s) => s.studentRef !== student.studentRef)
-        .map((s) => ({
-          studentRef: s.studentRef,
-          displayName: s.name,
-          evidences: evidenceRecords.filter(
-            (e) => e.studentRef === s.studentRef && e.areas.includes(area),
-          ),
-          ...(standardKeywordList !== undefined ? { standardKeywords: standardKeywordList } : {}),
-        })),
-    [unwrittenStudents, student.studentRef, evidenceRecords, area, standardKeywordList],
+      ).length + mirrorCount,
+    [evidenceRecords, student.studentRef, threadIdSet, mirrorCount],
   );
 
   const recentEvidenceDate = useMemo(() => {
@@ -848,8 +947,15 @@ function RecordDraftRow({
     }
   };
 
+  const showLayer = highlightOn && draft?.roleMarks !== undefined && draft.roleMarks.length > 0;
+
   return (
-    <div className="grid grid-cols-[140px_1fr_128px] gap-3 border-b border-sp-border px-4 py-3">
+    <div
+      onClick={() => onSelect(student.studentRef)}
+      className={`grid grid-cols-[140px_1fr_128px] gap-3 border-b border-sp-border px-4 py-3 transition-colors ${
+        selected ? 'bg-blue-500/5' : ''
+      }`}
+    >
       {/* 학생 + 상태 + 근거 */}
       <div className="flex flex-col gap-2 pt-0.5">
         <div className="flex items-center gap-2 text-sm font-semibold text-sp-text">
@@ -862,18 +968,18 @@ function RecordDraftRow({
           <button
             type="button"
             onClick={() => draft && void setStatus(draft.id, NEXT_STATUS[status])}
-            className={`w-fit rounded-full px-2 py-0.5 text-[0.65rem] font-semibold ${STATUS_META[status].cls}`}
+            className={`w-fit rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_META[status].cls}`}
             title="클릭하여 상태 변경 (작성 중 → 검토 중 → 검토 완료)"
           >
             {STATUS_META[status].label}
           </button>
         ) : (
-          <span className="w-fit rounded-full bg-sp-surface px-2 py-0.5 text-[0.65rem] font-semibold text-sp-muted">
+          <span className="w-fit rounded-full bg-sp-surface px-2 py-0.5 text-xs font-semibold text-sp-muted">
             초안 없음
           </span>
         )}
-        {/* 근거 준비도(US-4): 근거 건수·최근 날짜 + 작성 준비/검토 신호 */}
-        <span className="inline-flex items-center gap-0.5 text-[0.6rem] text-sp-muted">
+        {/* 근거 준비도(US-4): 근거 창고 건수·최근 날짜 — 이 행의 "근거 N건"은 이것 하나뿐이다(P5). */}
+        <span className="inline-flex items-center gap-0.5 text-xs text-sp-muted">
           <span className="material-symbols-outlined text-xs">inventory_2</span>
           근거{' '}
           <b className={evidenceCount > 0 ? 'text-sp-accent' : 'text-sp-muted'}>
@@ -881,106 +987,72 @@ function RecordDraftRow({
           </b>
           {recentEvidenceDate ? ` · 최근 ${formatObsDate(recentEvidenceDate)}` : ''}
         </span>
-        {/* 이 주제로 — 주제가 하나라도 있을 때만 보인다(흐름을 안 쓰면 화면이 그대로다). */}
-        {studentThreads.length > 0 && (
-          <div className="flex flex-col gap-1">
-            <select
-              value={pickedThreadId}
-              onChange={(e) => setPickedThreadId(e.target.value)}
-              aria-label={`${student.name} 초안에 쓸 주제 고르기`}
-              className="w-full rounded-md border border-sp-border bg-sp-surface px-1.5 py-0.5 text-[0.6rem] text-sp-text focus:border-sp-accent focus:outline-none"
-            >
-              <option value="">이 주제로… (전체 근거)</option>
-              {studentThreads.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.status === 'closed' ? `${t.title} (닫힘)` : t.title}
-                </option>
-              ))}
-            </select>
-            {pickedThread && (
-              <button
-                type="button"
-                onClick={() => void copyThreadPrompt()}
-                title="AI에게 이 주제로 써 달라고 할 문장을 복사합니다."
-                className="flex w-fit items-center gap-0.5 rounded-md bg-sp-accent/10 px-1.5 py-0.5 text-[0.55rem] font-medium text-sp-accent ring-1 ring-sp-accent/20 hover:bg-sp-accent/20"
-              >
-                <span className="material-symbols-outlined text-[0.7rem]">content_copy</span>
-                주제 근거 {threadEvidenceCount}건 · 요청문 복사
-              </button>
-            )}
-          </div>
-        )}
         {unclassifiedCount > 0 && (
-          <span
-            title="아직 주제로 묶지 않은 근거입니다. ‘근거 자료’ 탭에서 묶을 수 있습니다."
-            className="w-fit rounded-full bg-sp-surface px-1.5 py-0.5 text-[0.55rem] font-medium text-sp-muted"
+          <button
+            type="button"
+            onClick={() => onOpenBoard(student.studentRef)}
+            title="아직 주제로 묶지 않은 근거입니다. 눌러서 근거 정리 보드로 갑니다."
+            className="w-fit rounded-full bg-sp-surface px-2 py-0.5 text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text"
           >
             미분류 {unclassifiedCount}건
-          </span>
+          </button>
         )}
         {needsReview && (
-          <span className="w-fit rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[0.55rem] font-semibold text-amber-600">
+          <span className="w-fit rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-600">
             검토 필요
           </span>
         )}
-        {draft && draft.basisObservationIds.length > 0 && (
+        {showAiButton && (
           <button
             type="button"
-            onClick={() => setShowBasis((v) => !v)}
-            className="flex w-fit items-center gap-1 text-[0.65rem] text-sp-muted"
+            onClick={() => onOpenAi(student.studentRef)}
+            aria-label={`${student.name} AI 초안`}
+            className="flex w-fit items-center gap-1 rounded-md bg-sp-card px-2 py-1 text-xs font-medium text-sp-accent ring-1 ring-sp-border hover:bg-sp-surface"
           >
-            <span className="material-symbols-outlined text-xs">link</span>근거{' '}
-            <span className="font-semibold text-sp-accent">
-              {draft.basisObservationIds.length}건
-            </span>
-            <span className="material-symbols-outlined text-xs">
-              {showBasis ? 'expand_more' : 'chevron_right'}
-            </span>
+            <span className="material-symbols-outlined text-sm">auto_awesome</span>AI ▸
           </button>
         )}
       </div>
 
-      {/* 입력창 + 근거/플래그 */}
+      {/* 입력창 + 플래그 */}
       <div className="flex flex-col gap-1.5">
-        <textarea
-          ref={taRef}
-          value={text}
-          data-rd-index={index}
-          onChange={(e) => onChange(e.target.value)}
-          onFocus={() => setFocused(true)}
-          onBlur={flush}
-          onKeyDown={(e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-              e.preventDefault();
-              onJumpNext(); // 다음 입력창으로 포커스 이동 → 현재 칸 blur+자동저장
-            }
-          }}
-          aria-label={`${student.name} ${RECORD_AREA_LABELS[area]} 초안`}
-          placeholder="AI에게 초안을 요청하면 자동 입력됩니다 — 또는 직접 작성하세요"
-          className="min-h-[48px] w-full resize-y rounded-lg border border-sp-border bg-sp-surface px-3 py-2 text-sm leading-relaxed text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-sp-accent/30"
-        />
-        {/* [AI로 초안 쓰기] — 실험실 스위치를 켠 선생님에게만 보인다.
-            꺼져 있으면 화면은 예전 그대로다. */}
-        {ownAiEnabled && (
-          <RecordDraftAiButton
-            areaLabel={RECORD_AREA_LABELS[area]}
-            roster={roster}
-            {...(pickedThread ? { threadTitle: pickedThread.title } : {})}
-            target={aiTarget}
-            remaining={aiRemaining}
-            onApply={onAiApply}
-            onActiveChange={onAiActiveChange}
+        <div className="relative">
+          {showLayer && <RoleHighlightLayer ref={layerRef} text={text} marks={draft?.roleMarks} />}
+          <textarea
+            ref={taRef}
+            value={text}
+            data-rd-index={index}
+            onChange={(e) => onChange(e.target.value)}
+            onFocus={() => {
+              setFocused(true);
+              onSelect(student.studentRef);
+            }}
+            onBlur={flush}
+            onScroll={(e) => {
+              if (layerRef.current) layerRef.current.scrollTop = e.currentTarget.scrollTop;
+            }}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                onJumpNext(); // 다음 입력창으로 포커스 이동 → 현재 칸 blur+자동저장
+              }
+            }}
+            aria-label={`${student.name} ${RECORD_AREA_LABELS[area]} 초안`}
+            placeholder="AI에게 초안을 요청하면 자동 입력됩니다: 또는 직접 작성하세요"
+            className={`relative min-h-[48px] w-full resize-y border-sp-border text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${DRAFT_TEXT_METRICS} ${
+              showLayer ? 'bg-transparent' : 'bg-sp-surface'
+            }`}
           />
-        )}
+        </div>
         {saveError !== null && (
-          <div className="flex items-start gap-1 rounded-lg bg-red-500/5 px-2.5 py-1.5 text-[0.7rem] leading-snug text-red-500 ring-1 ring-red-500/20">
+          <div className="flex items-start gap-1 rounded-lg bg-red-500/5 px-2.5 py-1.5 text-xs leading-snug text-red-500 ring-1 ring-red-500/20">
             <span className="material-symbols-outlined text-sm">error</span>
             <span>{saveError}</span>
           </div>
         )}
         {saveState !== 'idle' && (
           <span
-            className={`flex w-fit items-center gap-1 text-[0.65rem] ${
+            className={`flex w-fit items-center gap-1 text-xs ${
               saveState === 'saved' ? 'text-emerald-500' : 'text-sp-muted'
             }`}
           >
@@ -990,28 +1062,9 @@ function RecordDraftRow({
             {saveState === 'saved' ? '저장됨' : '저장 중…'}
           </span>
         )}
-        {showBasis && draft && draft.basisObservationIds.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 text-[0.65rem] text-sp-muted">
-            {draft.basisObservationIds.map((id, i) => {
-              const obs = obsById.get(id);
-              const snippet = obs
-                ? `${formatObsDate(obs.date)} · ${obs.content.slice(0, 18)}${obs.content.length > 18 ? '…' : ''}`
-                : `관찰기록 ${i + 1}`;
-              return (
-                <span
-                  key={id}
-                  className="rounded-md bg-sp-surface px-2 py-1 ring-1 ring-sp-border"
-                  {...(obs ? { title: obs.content } : {})}
-                >
-                  {snippet}
-                </span>
-              );
-            })}
-          </div>
-        )}
         {flags.length > 0 && (
           <div
-            className={`flex items-start gap-1 rounded-lg px-2.5 py-1.5 text-[0.7rem] leading-snug ring-1 ${
+            className={`flex items-start gap-1 rounded-lg px-2.5 py-1.5 text-xs leading-snug ring-1 ${
               hasRisk
                 ? 'bg-red-500/5 text-red-500 ring-red-500/20'
                 : 'bg-amber-500/5 text-amber-600 ring-amber-500/20'
@@ -1020,8 +1073,8 @@ function RecordDraftRow({
             <span className="material-symbols-outlined text-sm">warning</span>
             <span>
               검토 필요 · {flags.map(flagLabel).join(', ')}
-              {prohibitedWhy.length > 0 ? ` (${prohibitedWhy.join(', ')})` : ''} — 모든 문장은
-              교사가 사실을 직접 확인해야 합니다.
+              {prohibitedWhy.length > 0 ? ` (${prohibitedWhy.join(', ')})` : ''}: 모든 문장은 교사가
+              사실을 직접 확인해야 합니다.
             </span>
           </div>
         )}
@@ -1042,7 +1095,7 @@ function RecordDraftRow({
           type="button"
           onClick={() => void copyNeis()}
           disabled={text.trim().length === 0}
-          className="flex items-center gap-1 rounded-lg bg-sp-accent/10 px-3 py-1.5 text-xs font-medium text-sp-accent ring-1 ring-sp-accent/20 transition-colors hover:bg-sp-accent/20 disabled:opacity-40"
+          className="flex items-center gap-1 rounded-lg bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-sp-accent ring-1 ring-blue-500/20 transition-colors hover:bg-blue-500/20 disabled:opacity-40"
         >
           <span className="material-symbols-outlined text-sm">content_copy</span>복사
         </button>

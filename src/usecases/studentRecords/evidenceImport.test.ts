@@ -72,7 +72,7 @@ describe('submissionToEvidence', () => {
       assignment,
     );
     expect(ev.content).toContain('활동사진.jpg');
-    expect(ev.content).toContain('(사진 파일 — 본문 추출 불가)');
+    expect(ev.content).toContain('(사진 파일: 본문 추출 불가)');
   });
 
   it('문서인데 본문을 못 뽑았으면 "본문 추출 안 됨"을 남긴다', () => {

@@ -27,7 +27,7 @@ import {
 } from '../_shared/cors.ts';
 
 /** 목록이 바뀌면 올린다. 클라이언트가 캐시를 무를지 정하는 값. */
-const CATALOG_VERSION = 1;
+const CATALOG_VERSION = 2;
 
 /** 클라이언트가 메모리에 들고 있어도 되는 시간. 모델은 자주 안 바뀐다. */
 const TTL_SEC = 6 * 60 * 60;
@@ -36,24 +36,25 @@ const TTL_SEC = 6 * 60 * 60;
  * 기본 목록.
  *
  * ★`id: ''` = "CLI 가 알아서" — 아무것도 안 붙이면 그 CLI 의 기본 모델이 쓰인다.
- * ★라벨은 **선생님이 고르는 기준**으로 적는다(빠름/꼼꼼함). 모델 이름만 적으면
- *   무엇을 골라야 할지 알 수 없다.
+ * ★라벨은 **모델명만** 적는다(오너 결정 2026-09-06, ADR-085 보강 2 R4). "가장 강력함" 같은
+ *   부연 설명을 붙이지 않는다. `기본 (권장)` 은 모델명이 아니라 "고르지 않음"이라 예외다.
+ *   앱 안 대비용 목록(`src/domain/rules/ownAiCliRules.ts`)과 같게 유지한다.
  */
 const CATALOG: Record<string, { id: string; label: string }[]> = {
   claude: [
     { id: '', label: '기본 (권장)' },
-    { id: 'claude-fable-5-1', label: 'Fable 5.1 — 가장 강력함' },
-    { id: 'claude-opus-5', label: 'Opus 5 — 꼼꼼함' },
-    { id: 'claude-sonnet-5', label: 'Sonnet 5 — 일상 작업' },
-    { id: 'claude-haiku-4-5', label: 'Haiku 4.5 — 가장 빠름' },
+    { id: 'claude-fable-5-1', label: 'Fable 5.1' },
+    { id: 'claude-opus-5', label: 'Opus 5' },
+    { id: 'claude-sonnet-5', label: 'Sonnet 5' },
+    { id: 'claude-haiku-4-5', label: 'Haiku 4.5' },
   ],
   codex: [
     { id: '', label: '기본 (권장)' },
-    { id: 'gpt-6-astra', label: 'GPT-6 Astra — 가장 강력함' },
-    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol — 두루 좋음' },
-    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra — 균형' },
-    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna — 빠름' },
-    { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini — 가장 빠름' },
+    { id: 'gpt-6-astra', label: 'GPT-6 Astra' },
+    { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol' },
+    { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
+    { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna' },
+    { id: 'gpt-5.4-mini', label: 'GPT-5.4 Mini' },
   ],
 };
 
