@@ -8,6 +8,16 @@ self-contained 로 번들한 산출물입니다. 쌤핀이 `ELECTRON_RUN_AS_NODE
 > 메인 프로세스(`electron/ipc/aiBridge.ts`)가 패키징 시 `process.resourcesPath`, 개발 시
 > `app.getAppPath()/electron/ai-bridge` 로 경로를 해석합니다.
 
+## 지원 규격
+
+**2026-07-28 신규격과 2025 계열 구규격을 함께** 제공합니다. 브릿지가 연결을 여는 요청을 보고
+규격을 고르므로, 기존 Claude Desktop · Codex · Antigravity 설정을 그대로 두어도 됩니다.
+
+재생성한 뒤에는 반드시 `npm run check:ai-bridge-protocol` 로 확인하세요.
+이 검사는 번들을 **node_modules 가 없는 임시 폴더로 복사해서** 띄우고 두 규격 각각
+도구 조회·호출·거부·종료를 봅니다(`npm run build` 의 postbuild 에도 걸려 있습니다).
+아래 external 사고를 자동으로 잡는 장치입니다.
+
 ## 재생성
 
 브릿지 레포를 빌드한 뒤 esbuild 로 **완전 self-contained** 번들을 만듭니다(sdk/zod 포함 모든 의존 인라인):
@@ -18,7 +28,7 @@ cd E:/github/ssampin-ai-bridge && pnpm -r build
 
 # 2) 번들 → 이 폴더의 index.mjs 로 출력 (sdk/zod 도 함께 인라인 — external 사용 금지)
 cd E:/github/ssampin
-node --input-type=module -e "import {build} from 'esbuild'; await build({entryPoints:['E:/github/ssampin-ai-bridge/packages/mcp/dist/index.js'],bundle:true,platform:'node',format:'esm',target:'node18',outfile:'electron/ai-bridge/index.mjs',legalComments:'none'});"
+node --input-type=module -e "import {build} from 'esbuild'; await build({entryPoints:['E:/github/ssampin-ai-bridge/packages/mcp/dist/index.js'],bundle:true,platform:'node',format:'esm',target:'node20',outfile:'electron/ai-bridge/index.mjs',legalComments:'none'});"
 # (선두 셰뱅 1개만 유지. 결과 ~1MB.)
 ```
 
