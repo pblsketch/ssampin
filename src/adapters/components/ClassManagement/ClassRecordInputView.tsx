@@ -1,5 +1,9 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
+import {
+  resolveRecordFlowIntent,
+  type RecordFlowIntent,
+} from '@adapters/components/RecordDraft/recordFlowIntent';
+import { teachingStudentRef } from '@domain/entities/RecordDraft';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
@@ -81,6 +85,9 @@ interface ClassRecordInputViewProps {
   onGoToSeatingTab?: () => void;
   /** 왕복 이동 요청을 상위(ClassRecordTab)에 올린다. 직접 탭을 바꾸지 않는다(계획 §4.3). */
   onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
+  /** 보드에서 돌아온 요청(관찰 이어 쓰기·원본 보기). */
+  flowIntent?: RecordFlowIntent | null;
+  onFlowIntentConsumed?: (requestId: string) => void;
 }
 
 export function ClassRecordInputView({
@@ -89,6 +96,8 @@ export function ClassRecordInputView({
   onGoToRosterTab,
   onGoToSeatingTab,
   onRequestFlow,
+  flowIntent,
+  onFlowIntentConsumed,
 }: ClassRecordInputViewProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const getAttendanceRecord = useTeachingClassStore((s) => s.getAttendanceRecord);
@@ -241,6 +250,40 @@ export function ClassRecordInputView({
     const exists = students.some((s) => studentKey(s) === selectedStudentKey);
     if (!exists) setSelectedStudentKey(null);
   }, [selectedStudentKey, students]);
+
+  /**
+   * 보드에서 돌아온 요청 처리(계획 §4.3) — 그 학생을 고르고 한 번만 소비한다.
+   * `compose` 는 빈 본문 입력, `source` 는 최근 기록을 펼쳐 원본을 찾게 한다.
+   */
+  const consumedFlowRef = useRef<Set<string>>(new Set());
+  const [composeThreadId, setComposeThreadId] = useState<string | null>(null);
+  useEffect(() => {
+    const resolution = resolveRecordFlowIntent({
+      intent: flowIntent ?? null,
+      rosterLoaded: students.length > 0,
+      knownStudentRefs: new Set(students.map((s) => teachingStudentRef(classId, studentKey(s)))),
+      consumedRequestIds: consumedFlowRef.current,
+    });
+    if (resolution.status === 'ready') {
+      const { intent } = resolution;
+      consumedFlowRef.current.add(intent.requestId);
+      const target = students.find(
+        (s) => teachingStudentRef(classId, studentKey(s)) === intent.studentRef,
+      );
+      if (target) setSelectedStudentKey(studentKey(target));
+      // 이어 쓰기는 **빈 본문**이다. 기존 글을 복사하지 않는다 - 주제만 미리 골라 준다.
+      setComposeThreadId(intent.mode === 'compose' ? (intent.threadId ?? null) : null);
+      // 원본을 보러 왔으면 최근 기록을 펼쳐 둔다.
+      if (intent.mode === 'source') setShowRecentRecords(true);
+      onFlowIntentConsumed?.(intent.requestId);
+      return;
+    }
+    if (resolution.status === 'student-missing' && flowIntent) {
+      consumedFlowRef.current.add(flowIntent.requestId);
+      useToastStore.getState().show('학생을 찾을 수 없습니다.', 'error');
+      onFlowIntentConsumed?.(flowIntent.requestId);
+    }
+  }, [flowIntent, students, classId, onFlowIntentConsumed]);
 
   const handleDateChange = useCallback((d: string) => {
     setDate(d);
@@ -671,6 +714,8 @@ export function ClassRecordInputView({
                 classId={classId}
                 studentId={selectedStudentKey}
                 {...(onRequestFlow ? { onRequestFlow } : {})}
+                {...(composeThreadId !== null ? { initialThreadId: composeThreadId } : {})}
+                onInitialThreadApplied={() => setComposeThreadId(null)}
               />
 
               {/* 최근 기록 (토글) */}

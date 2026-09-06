@@ -38,6 +38,11 @@ export interface EvidenceColumnProps {
   onToggleStatus: () => void;
   /** 제목을 두 번 클릭해 고쳤을 때. 빈 값·같은 값이면 부르지 않는다. */
   onRename: (title: string) => void;
+  /**
+   * [관찰 이어 쓰기] - 이 주제로 **빈 본문** 입력을 연다(계획 §4.3).
+   * 기존 글을 복사하지 않는다. 없으면 단추를 그리지 않는다.
+   */
+  onComposeObservation?: () => void;
 }
 
 export function EvidenceColumn({
@@ -52,6 +57,7 @@ export function EvidenceColumn({
   onToggleCollapsed,
   onOpenThread,
   onToggleStatus,
+  onComposeObservation,
   onRename,
 }: EvidenceColumnProps): ReactElement {
   const closed = thread !== undefined && thread.status === 'closed';
@@ -139,6 +145,17 @@ export function EvidenceColumn({
             >
               줄기 보기
             </button>
+            {/* 마친 주제에는 이어 쓰지 않는다 - 다시 열어야 새 근거를 묶을 수 있다. */}
+            {onComposeObservation !== undefined && !closed && (
+              <button
+                type="button"
+                onClick={onComposeObservation}
+                className={`${boardBtn} text-sp-muted hover:text-sp-text`}
+                title="이 학생·이 주제로 빈 관찰 입력을 엽니다. 기존 글을 복사하지 않습니다."
+              >
+                관찰 이어 쓰기
+              </button>
+            )}
             <button
               type="button"
               onClick={onToggleStatus}

@@ -80,6 +80,10 @@ import { InquiryThreadPanel } from '@adapters/components/RecordDraft/InquiryThre
 import { EvidenceDrawer } from '@adapters/components/RecordDraft/EvidenceDrawer';
 import { EvidenceCard } from '@adapters/components/RecordDraft/EvidenceCard';
 import {
+  createRecordFlowIntent,
+  type RecordFlowIntent,
+} from '@adapters/components/RecordDraft/recordFlowIntent';
+import {
   EvidenceColumn,
   UNCLASSIFIED_DROP_ID,
   threadDropId,
@@ -122,6 +126,11 @@ export interface RecordEvidenceBoardProps {
   onSelectStudent: (studentRef: string) => void;
   /** 어느 영역에서 왔는지 — 영역 필터 초기값. 없으면 전체. */
   readonly initialArea?: RecordArea | null;
+  /**
+   * 보드에서 입력·원본으로 되돌아가는 요청(계획 §4.3).
+   * 상위 화면이 이동을 결정한다 - 보드가 직접 탭을 바꾸지 않는다.
+   */
+  readonly onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
 }
 
 /** 폼 상태 — id=null 이면 신규 등록, 값이 있으면 해당 근거 수정. */
@@ -266,6 +275,7 @@ export function RecordEvidenceBoard({
   selectedStudentRef,
   onSelectStudent,
   initialArea,
+  onRequestFlow,
 }: RecordEvidenceBoardProps) {
   const author = context === 'homeroom' ? 'homeroom' : 'teaching';
   const areas = useMemo(() => areasForContext(level, author), [level, author]);
@@ -1083,6 +1093,22 @@ export function RecordEvidenceBoard({
       onRemove={() => void removeCard(ev)}
       onSetExcludedFromAi={(excluded) => void setCardExcluded(ev, excluded)}
       onSendTo={(threadId) => void sendTo(threadId, [ev.id])}
+      {...(onRequestFlow !== undefined && ev.sourceId !== undefined && selectedStudentRef !== null
+        ? {
+            onOpenSource: () => {
+              void onRequestFlow(
+                createRecordFlowIntent({
+                  context,
+                  ...(classId !== undefined ? { classId } : {}),
+                  studentRef: selectedStudentRef,
+                  mode: 'source',
+                  sourceId: ev.sourceId as string,
+                  evidenceId: ev.id,
+                }),
+              );
+            },
+          }
+        : {})}
     />
   );
 
@@ -1157,6 +1183,22 @@ export function RecordEvidenceBoard({
           .then(() => flash(`주제 이름을 ‘${title}’로 바꿨습니다`))
           .catch(fail);
       }}
+      {...(onRequestFlow !== undefined && thread !== undefined && selectedStudentRef !== null
+        ? {
+            onComposeObservation: () => {
+              // 빈 본문으로 연다. 기존 글을 복사하지 않는다(계획 §4.3).
+              void onRequestFlow(
+                createRecordFlowIntent({
+                  context,
+                  ...(classId !== undefined ? { classId } : {}),
+                  studentRef: selectedStudentRef,
+                  mode: 'compose',
+                  threadId: thread.id,
+                }),
+              );
+            },
+          }
+        : {})}
     />
   );
 

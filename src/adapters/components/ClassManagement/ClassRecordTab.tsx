@@ -92,6 +92,8 @@ export function ClassRecordTab({
             onGoToRosterTab={onGoToRosterTab}
             onGoToSeatingTab={onGoToSeatingTab}
             onRequestFlow={goWithIntent}
+            flowIntent={flowIntent}
+            onFlowIntentConsumed={handleIntentConsumed}
           />
         )}
         {viewMode === 'stats' && <ClassRecordStatsView classId={classId} />}
@@ -101,6 +103,7 @@ export function ClassRecordTab({
             classId={classId}
             flowIntent={flowIntent}
             onFlowIntentConsumed={handleIntentConsumed}
+            onRequestFlow={goWithIntent}
           />
         )}
       </div>

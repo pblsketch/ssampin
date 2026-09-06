@@ -47,6 +47,13 @@ interface ObservationFormProps {
   studentId: string;
   /** 저장 뒤 [근거 보드에서 보기] 를 눌렀을 때 상위에 올리는 이동 요청(계획 §4.3). */
   onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
+  /**
+   * 보드의 [관찰 이어 쓰기] 로 들어왔을 때 미리 골라 둘 주제(계획 §4.3).
+   * **본문은 비운 채**로 둔다 - 기존 글을 복사하지 않는다.
+   */
+  initialThreadId?: string;
+  /** 위 주제를 실제로 반영했다고 알린다. 상위는 이걸 받고 값을 비운다(한 번만 적용). */
+  onInitialThreadApplied?: () => void;
 }
 
 interface ObservationDraft {
@@ -72,7 +79,13 @@ function isDraftEmpty(draft: ObservationDraft): boolean {
   );
 }
 
-export function ObservationForm({ classId, studentId, onRequestFlow }: ObservationFormProps) {
+export function ObservationForm({
+  classId,
+  studentId,
+  onRequestFlow,
+  initialThreadId,
+  onInitialThreadApplied,
+}: ObservationFormProps) {
   const [date, setDate] = useState(todayString);
   const [content, setContent] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
@@ -134,6 +147,17 @@ export function ObservationForm({ classId, studentId, onRequestFlow }: Observati
   /** 분류·태그 접힘 상태. 기본은 접힌 상태다(본문을 먼저 쓰게 한다). */
   const [detailOpen, setDetailOpen] = useState(false);
   const topicStudentRef = teachingStudentRef(classId, studentId);
+
+  /**
+   * 보드에서 [관찰 이어 쓰기] 로 들어왔으면 그 주제를 미리 골라 둔다(계획 §4.3).
+   * ★본문은 건드리지 않는다 - 기존 글을 복사하지 않는 것이 이 동작의 요점이다.
+   * 한 번만 적용하고 상위에 알린다. 안 그러면 교사가 주제를 바꿔도 계속 되돌아온다.
+   */
+  useEffect(() => {
+    if (initialThreadId === undefined) return;
+    setSelectedTopic({ kind: 'existing', threadId: initialThreadId });
+    onInitialThreadApplied?.();
+  }, [initialThreadId, onInitialThreadApplied]);
 
   useEffect(() => {
     dateRef.current = date;

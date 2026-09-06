@@ -42,6 +42,11 @@ export interface EvidenceCardProps {
   onRemove: () => void;
   onSetExcludedFromAi: (excluded: boolean) => void;
   onSendTo: (threadId: string) => void;
+  /**
+   * [원본 보기·수정] - 이 근거가 온 원본 기록으로 이동한다(계획 §4.3).
+   * 원본이 없는 직접 입력 근거에는 부모가 넘기지 않는다.
+   */
+  onOpenSource?: () => void;
 }
 
 /** 자동 판정 갈래("학원·기관명" 등). 비어 있으면 교사가 직접 켠 것이다. */
@@ -69,6 +74,7 @@ export function EvidenceCard({
   onRemove,
   onSetExcludedFromAi,
   onSendTo,
+  onOpenSource,
 }: EvidenceCardProps): ReactElement {
   const excluded = ev.excludedFromAi === true;
   const why = autoExclusionWhy(ev);
@@ -152,6 +158,17 @@ export function EvidenceCard({
         >
           수정
         </button>
+        {/* 근거를 다듬는 일([수정])과 원본을 고치는 일을 구별한다(계획 §5.3). */}
+        {onOpenSource !== undefined && (
+          <button
+            type="button"
+            onClick={onOpenSource}
+            className={`${boardBtn} text-sp-muted hover:text-sp-text`}
+            title="이 근거가 온 원본 기록으로 갑니다. 근거 내용은 그대로 둡니다."
+          >
+            원본 보기·수정
+          </button>
+        )}
         {!mirror && (
           <button
             type="button"

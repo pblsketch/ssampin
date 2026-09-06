@@ -93,6 +93,8 @@ interface RecordDraftViewProps {
   readonly flowIntent?: RecordFlowIntent | null;
   /** 요청을 처리했다고 상위에 알린다. 상위는 이걸 받고 요청을 비운다. */
   readonly onFlowIntentConsumed?: (requestId: string) => void;
+  /** 보드에서 입력·원본으로 되돌아가는 요청을 상위로 올린다(계획 §4.3). */
+  readonly onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
   /** 명단이 실제로 로드됐는지. false 면 요청 판정을 미룬다(없는 학생으로 단정하지 않는다). */
   readonly rosterLoaded?: boolean;
 }
@@ -142,6 +144,7 @@ export function RecordDraftView({
   className,
   flowIntent,
   onFlowIntentConsumed,
+  onRequestFlow,
   rosterLoaded = true,
 }: RecordDraftViewProps) {
   const author = context === 'homeroom' ? 'homeroom' : 'teaching';
@@ -618,6 +621,7 @@ export function RecordDraftView({
           selectedStudentRef={selectedStudentRef}
           onSelectStudent={selectStudent}
           initialArea={activeArea}
+          {...(onRequestFlow !== undefined ? { onRequestFlow } : {})}
         />
       ) : (
         <>
