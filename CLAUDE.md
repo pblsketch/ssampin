@@ -61,15 +61,15 @@ npm run regression-check       # 회귀 체크 통과
 
 ### 시작 시
 
-1. `PROGRESS.md` 읽고 현재 상태 파악
-2. `DECISIONS.md` 읽고 기존 결정 확인
+1. `PROGRESS.md` 읽고 현재 상태 파악 — **상태판(300줄 상한)** 이다. 세션별 상세 기록은 `docs/progress/YYYY-MM.md`(월별, 최신이 위)에 있으니 필요한 달만 연다.
+2. `DECISIONS.md` 읽고 기존 결정 확인 — **목록**만 있다. 본문은 `docs/03-decisions/ADR-NNN.md`, 관련된 것만 연다.
 3. `git status` 확인 — 다른 세션 작업 중인 파일 건드리지 않기
 
 ### 종료 시
 
-1. `PROGRESS.md` 업데이트 (완료/진행/블록/다음)
-2. 새로운 결정이 있으면 `DECISIONS.md`에 ADR 추가
-3. 검증 게이트 결과 기록
+1. 이번 세션의 작업 기록은 `docs/progress/YYYY-MM.md` **맨 위**(안내문 아래)에 `## 제목 (YYYY-MM-DD)` 섹션으로 쓴다. 검증 게이트 결과도 여기에.
+2. `PROGRESS.md` 상태판은 항목당 3~5줄 + 월별 파일 링크만 갱신한다. 완료·출시된 항목은 상태판에서 지운다. 300줄을 넘기면 그 세션에서 줄인다.
+3. 새로운 결정이 있으면 `docs/03-decisions/ADR-NNN.md`(마지막 번호 + 1) 파일을 만들고 `DECISIONS.md` 맨 아래에 한 줄 추가한다.
 
 ## 개발 명령어
 

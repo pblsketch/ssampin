@@ -146,7 +146,10 @@ docs/*.eml
 
 ## ③ 도구·시험 작업 폴더
 /.dorms-check/
-/.gjc/
+# GJC: 세션·상태는 무시, 프로젝트 스킬·훅만 추적(AGENTS.md "GJC" 절)
+/.gjc/*
+!/.gjc/skills/
+!/.gjc/hooks/
 /.playwright-cli/
 /RESEARCH/
 /design examples/

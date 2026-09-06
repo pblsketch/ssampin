@@ -31,18 +31,18 @@
 
 ## 4. State (상태)
 
-| #   | 항목              | 기준                                         | 상태         |
-| --- | ----------------- | -------------------------------------------- | ------------ |
-| 13  | PROGRESS.md       | 4섹션: Completed, In Progress, Blocked, Next | ✅           |
-| 14  | DECISIONS.md      | ADR 형식, 시간순, superseded 규칙            | ✅ 6개 ADR   |
-| 15  | feature_list.json | behavior/verification/state 트리플           | ✅ 22개 기능 |
+| #   | 항목              | 기준                                                       | 상태                 |
+| --- | ----------------- | ---------------------------------------------------------- | -------------------- |
+| 13  | PROGRESS.md       | 상태판 300줄 상한 · 상세는 `docs/progress/YYYY-MM.md` 월별 | ✅ 2026-09-06 재구성 |
+| 14  | DECISIONS.md      | 목록만 · 본문은 `docs/03-decisions/ADR-NNN.md` 파일 하나씩 | ✅ 78개 ADR          |
+| 15  | feature_list.json | behavior/verification/state 트리플                         | ✅ 22개 기능         |
 
 ## 5. Feedback (피드백)
 
 | #   | 항목                | 기준                                                                 | 상태         |
 | --- | ------------------- | -------------------------------------------------------------------- | ------------ |
-| 16  | 세션 프로토콜 시작  | PROGRESS.md + DECISIONS.md + git status                              | ✅           |
-| 17  | 세션 프로토콜 종료  | PROGRESS 업데이트 + ADR 추가 + 검증 게이트 결과                      | ✅           |
+| 16  | 세션 프로토콜 시작  | PROGRESS.md(상태판) + DECISIONS.md(목록) + git status                | ✅           |
+| 17  | 세션 프로토콜 종료  | 월별 기록 파일에 세션 기록 + 상태판 3~5줄 + ADR 파일 추가            | ✅           |
 | 18  | PDCA 문서 구조      | 01-plan → 02-design → 03-analysis → 04-report                        | ✅ 81개 문서 |
 | 19  | 완료 선언 제한      | "검증 게이트를 모두 통과해야 완료" 명시                              | ✅           |
 | 20  | CLAUDE.md 중복 제거 | CLAUDE.md ↔ AGENTS.md 간 중복 없음 (핵심규칙/docs참조는 의도적 공유) | ✅           |

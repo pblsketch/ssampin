@@ -1,6 +1,6 @@
 # AGENTS.md — 쌤핀 (SsamPin) Codex 컨텍스트
 
-> Codex가 프로젝트를 이해할 때 참고하는 문서. Claude Code는 CLAUDE.md를 사용한다.
+> Codex·GJC(Gajae Code)가 프로젝트를 이해할 때 참고하는 문서. Claude Code는 CLAUDE.md를 사용한다.
 
 ## 프로젝트
 
@@ -12,11 +12,12 @@ Electron + React 18 + TypeScript strict + Tailwind CSS + Vite + Zustand.
 - `docs/architecture-rules.md` — Clean Architecture 4 레이어, import/의존성 규칙, 프로젝트 구조
 - `docs/design-system.md` — sp-\* 토큰, 폰트, 레이아웃
 - `docs/coding-conventions.md` — TypeScript, React, 스타일 규칙
+- `.impeccable.md` — 디자인 컨텍스트(브랜드 퍼스널리티, 미적 방향)
 
 ## 핵심 규칙
 
 1. `domain/` 레이어는 외부 의존성 import 절대 금지
-2. `any` 타입 사용 금지
+2. `any` 타입 사용 금지, TypeScript 에러 0개 유지
 3. 하드코딩 HEX 금지 — `sp-*` 토큰 사용
 4. 모든 UI 텍스트는 한국어
 5. `design examples/` 폴더 디자인을 최대한 재현
@@ -43,6 +44,8 @@ npm run test              # Vitest 통과
 npm run regression-check  # 회귀 체크
 ```
 
+검증 게이트를 모두 통과해야 완료로 간주한다. 에이전트가 자체 판단으로 완료를 선언하지 않는다.
+
 ## 릴리즈 문서 규칙
 
 - 새 버전, 핫픽스, 기능 공개 릴리즈 작업 시 Notion 사용자 가이드는 갱신 대상이 아니다.
@@ -51,11 +54,27 @@ npm run regression-check  # 회귀 체크
 - 앱과 랜딩의 사용자 가이드 링크는 `landing/src/config.ts`의 `GUIDE_URL` 또는 `https://www.ssampin.com/docs`만 사용한다. `supsori.notion.site` 사용자 가이드 링크는 재도입하지 않는다.
 - 릴리즈 전 `cd landing && npm run docs:check && npm run build` 결과를 확인한다.
 
+## 세션 프로토콜
+
+### 시작 시
+
+1. `PROGRESS.md` 읽고 현재 상태 파악 — **상태판(300줄 상한)** 이다. 세션별 상세 기록은 `docs/progress/YYYY-MM.md`(월별, 최신이 위)에 있으니 필요한 달만 연다.
+2. `DECISIONS.md` 읽고 기존 결정 확인 — **목록**만 있다. 본문은 `docs/03-decisions/ADR-NNN.md`, 관련된 것만 연다.
+3. `git status` 확인 — 다른 세션 작업 중인 파일 건드리지 않기
+
+### 종료 시
+
+1. 이번 세션의 작업 기록은 `docs/progress/YYYY-MM.md` **맨 위**(안내문 아래)에 `## 제목 (YYYY-MM-DD)` 섹션으로 쓴다. 검증 게이트 결과도 여기에.
+2. `PROGRESS.md` 상태판은 항목당 3~5줄 + 월별 파일 링크만 갱신한다. 완료·출시된 항목은 상태판에서 지운다. 300줄을 넘기면 그 세션에서 줄인다.
+3. 새로운 결정이 있으면 `docs/03-decisions/ADR-NNN.md`(마지막 번호 + 1) 파일을 만들고 `DECISIONS.md` 맨 아래에 한 줄 추가한다.
+
 ## 개발 명령어
 
 ```bash
-npm run dev              # 브라우저 모드
+npm run dev              # 브라우저 모드 (Vite dev server)
+npm run electron:dev     # Electron + Vite 동시 실행
 npm run build            # 프로덕션 빌드
+npm run electron:build   # Electron 인스톨러 빌드
 ```
 
 ---
@@ -95,9 +114,32 @@ git status --short         # 시작 전 기존 변경 확인
 
 ---
 
+## GJC(Gajae Code) 스킬·훅
+
+GJC 세션에서 쓰는 프로젝트 스킬과 훅은 `.gjc/` 아래에 두고 **git 으로 추적**한다(`.gitignore` 가 세션·상태만 무시).
+
+| 경로                           | 무엇                                                                                                                                                                                             | 호출                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| `.gjc/skills/ssampin-develop/` | 기능 개발 오케스트레이터. Clean Architecture 4레이어로 나눠 GJC 내장 에이전트(`planner`·`executor`·`architect`)에게 **순차**로 맡기고 검증 게이트까지 끝낸다. `roles/*.md` 가 레이어별 역할 지침 | `/skill:ssampin-develop` |
+| `.gjc/skills/insta-card/`      | 녹화 영상 → 인스타 카드뉴스                                                                                                                                                                      | `/skill:insta-card`      |
+| `.gjc/hooks/pre/bash.ts`       | git-guard — `git add -A`·`commit -a`·`stash`·`reset --hard`·`clean -f`·`checkout .`·미커밋 상태 브랜치 전환을 차단(다중 세션 보호). `.claude/hooks/git-guard.cjs` 와 같은 규칙                   | 자동                     |
+
+- GJC 내장 워크플로우 스킬은 `ultragoal`(장부 기반 장기 실행)·`ralplan`(합의 계획)·`deep-interview`(요구사항 인터뷰)·`autoresearch`(조사)다. 설계서가 이미 있는 다층 구현은 `/skill:ultragoal` 로 단계를 추적하고, 각 단계 구현은 `/skill:ssampin-develop` 규칙을 따른다.
+- `.claude/skills/*` 와 `.claude/agents/*` 는 Claude Code 전용이며 GJC 는 읽지 않는다. 스킬을 고칠 때는 두 곳을 같이 고친다.
+- ★GJC 안에서는 편집 도구(`edit`/`write`)가 `.gjc/**` 를 수정하지 못한다(런타임 소유 경로). 스킬·훅을 고칠 때는 다른 곳에서 작성한 뒤 셸 `cp` 로 옮긴다. 확인은 `gjc skills discover --source project`.
+
+---
+
+## PDCA 문서 구조
+
+- `docs/01-plan/features/` — 기능별 계획서 (.plan.md)
+- `docs/02-design/features/` — 기능별 설계서 (.design.md)
+- `docs/03-analysis/` — 기능별 분석/QA (.analysis.md)
+- `docs/04-report/features/` — 완료 보고서 (.report.md)
+
 ## 참고
 
 - `PRD.md` — 제품 요구사항
 - `SPEC.md` — 기술 명세
-- `PROGRESS.md` — 세션 연속성
-- `DECISIONS.md` — 아키텍처 결정 기록
+- `PROGRESS.md` — 상태판(300줄 상한). 세션 기록은 `docs/progress/YYYY-MM.md`
+- `DECISIONS.md` — 결정 목록. 본문은 `docs/03-decisions/ADR-NNN.md`
