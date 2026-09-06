@@ -10,6 +10,12 @@ import type { RecordPrefill } from '../HomeroomPage';
 import { useRecordSaveStatus } from '@adapters/hooks/useRecordSaveStatus';
 import { DEFAULT_TEMPLATES } from '@domain/valueObjects/DefaultTemplates';
 import { InlineRecordEditor } from './InlineRecordEditor';
+import {
+  ObservationTopicPicker,
+  type TopicSelection,
+} from '@adapters/components/RecordDraft/ObservationTopicPicker';
+import { homeroomStudentRef } from '@domain/entities/RecordDraft';
+import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import { VoiceTypingButton } from '@adapters/components/common/VoiceTypingButton';
 import { StudentRecordReferencePanel } from './StudentRecordReferencePanel';
 import {
@@ -145,6 +151,14 @@ function InputMode({
   const [editingCategory, setEditingCategory] = useState('');
   const [editingSubcat, setEditingSubcat] = useState('');
   const [editingTags, setEditingTags] = useState<string[]>([]);
+  /** 원본 수정의 관찰 장면. 이 화면은 useRecordInlineEdit 를 쓰지 않아 여기서 따로 든다. */
+  const [editingSlots, setEditingSlots] = useState<string[]>([]);
+  /** 분류·상세 정보 접힘 상태. 기본은 접힌 상태다(본문을 먼저 쓰게 한다). */
+  const [detailOpen, setDetailOpen] = useState(false);
+  const ensureEvidenceFromSource = useRecordEvidenceStore((s) => s.ensureEvidenceFromSource);
+  const moveToNewThread = useRecordEvidenceStore((s) => s.moveToNewThread);
+  /** 저장 시 이어 붙일 주제. 학생·날짜가 여럿이면 쓰지 않는다. */
+  const [selectedTopic, setSelectedTopic] = useState<TopicSelection | null>(null);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<{
     categoryId: string;
@@ -214,6 +228,16 @@ function InputMode({
 
   /** 일괄 저장이 실제로 도는 날짜 목록 */
   const effectiveRangeDates = rangeDates;
+
+  /**
+   * 주제 연결은 **학생 하나 · 날짜 하나**일 때만 제공한다(계획 §4.2).
+   * 여러 학생·여러 날짜는 저장 후 학생별 근거 보드에서 묶는다 - 한 주제를 여러 학생에게
+   * 복사하면 남의 주제에 남의 근거가 붙는다.
+   */
+  const isSingleTarget = selectedStudents.size === 1 && dateMode === 'single';
+  const singleTopicStudentRef = isSingleTarget
+    ? homeroomStudentRef(Array.from(selectedStudents)[0] ?? '')
+    : null;
 
   // 3컬럼 리사이즈 (퍼센트 기반)
   const [leftPct, setLeftPct] = useState(38);
@@ -408,6 +432,52 @@ function InputMode({
     ],
   );
 
+  /**
+   * 저장된 원본을 근거로 올리고 고른 주제에 잇는다(담임 단일 저장 전용).
+   * 연결이 실패해도 원본은 되돌리지 않는다 - 되돌리면 교사가 쓴 기록이 사라진다.
+   */
+  const linkSavedRecordToTopic = useCallback(
+    async (recordId: string, studentRef: string): Promise<void> => {
+      const topic = selectedTopic;
+      if (topic === null) return;
+      try {
+        const { evidenceId } = await ensureEvidenceFromSource({
+          studentRef,
+          areas: [],
+          content: memo,
+          sourceType: 'studentRecord',
+          sourceId: recordId,
+          date: selectedDate,
+          ...(selectedSlots.length > 0 ? { slots: [...selectedSlots] } : {}),
+          ...(topic.kind === 'existing' ? { threadId: topic.threadId } : {}),
+        });
+        if (topic.kind === 'new') {
+          await moveToNewThread({
+            studentRef,
+            evidenceIds: [evidenceId],
+            title: topic.title,
+          });
+        }
+      } catch (e) {
+        showToast(
+          e instanceof Error
+            ? `기록은 저장됐습니다 · ${e.message}`
+            : '기록은 저장됐지만 주제에 연결하지 못했습니다',
+          'error',
+        );
+      }
+    },
+    [
+      selectedTopic,
+      memo,
+      selectedDate,
+      selectedSlots,
+      ensureEvidenceFromSource,
+      moveToNewThread,
+      showToast,
+    ],
+  );
+
   const resetForm = useCallback(() => {
     setSelectedStudents(new Set());
     setSelectedSub(null);
@@ -423,6 +493,9 @@ function InputMode({
     setDateMode('single');
     setMultiDateSet(new Set());
     setPendingFiles([]);
+    // 장면과 같은 이유로 반드시 지운다 - 남으면 다음 기록이 앞 학생 주제에 묶인다.
+    setSelectedTopic(null);
+    setDetailOpen(false);
     resetSaveStatus();
   }, [resetSaveStatus]);
 
@@ -434,11 +507,24 @@ function InputMode({
       if (pendingFilesRef.current.length > 0 && recordIds.length === 1) {
         await commitPendingAttachments(recordIds[0]!);
       }
+      // 주제 연결도 단일 대상일 때만. 원본이 저장된 뒤에만 부른다(계획 §5.1-1).
+      if (selectedTopic !== null && singleTopicStudentRef !== null && recordIds.length === 1) {
+        await linkSavedRecordToTopic(recordIds[0]!, singleTopicStudentRef);
+      }
     });
     // ★저장이 실패했으면 폼을 비우지 않는다 — 교사가 쓴 본문과 고른 첨부가 그대로 사라진다(계획 §5.2).
     //   실패 상태(saveStatus=error)로 남겨 두면 같은 폼에서 곧바로 다시 저장할 수 있다.
     if (ok) resetForm();
-  }, [saveForDate, selectedDate, resetForm, commitPendingAttachments, wrapSave]);
+  }, [
+    saveForDate,
+    selectedDate,
+    resetForm,
+    commitPendingAttachments,
+    wrapSave,
+    selectedTopic,
+    singleTopicStudentRef,
+    linkSavedRecordToTopic,
+  ]);
 
   // 여러 날 일괄 저장 (확인 모달에서 호출)
   // 일괄([적용])은 자동저장 대상 아님 — 명시 [적용]=확정=저장으로 유지
@@ -696,136 +782,55 @@ function InputMode({
         {/* ── 중앙: 카테고리 + 메모 입력 ── */}
         <div className="flex flex-col min-h-0 relative min-w-0" style={{ width: `${centerPct}%` }}>
           <div className="rounded-xl bg-sp-card p-5 flex-1 overflow-y-auto pb-20">
-            {/* 카테고리 헤더 + 템플릿 */}
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
-                <span className="material-symbols-outlined text-base">category</span>
-                카테고리
-              </h3>
-              <select
-                onChange={(e) => {
-                  if (e.target.value) handleTemplateSelect(e.target.value);
-                  e.target.value = '';
-                }}
-                defaultValue=""
-                className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+            {/* 분류 상태 줄 — 항상 보인다. 담임은 분류가 상담 방법·후속 조치까지 정하므로
+                교과처럼 통째로 접을 수 없다. 고른 값은 위에서 바로 보이고 상세 입력만 접는다(계획 §4.1). */}
+            <button
+              type="button"
+              aria-expanded={detailOpen}
+              onClick={() => setDetailOpen((v) => !v)}
+              className="flex w-full items-center gap-2 rounded-lg bg-sp-surface/50 px-2.5 py-1.5 text-xs text-sp-text hover:bg-sp-surface transition-colors"
+            >
+              <span className={selectedSub === null ? 'text-sp-muted' : 'font-medium text-sp-text'}>
+                분류: {selectedSub === null ? '미선택' : selectedSub.subcategory}
+              </span>
+              <span className="text-sp-muted">· 태그 {selectedTags.length}개</span>
+              <span className="flex-1" />
+              <span
+                aria-hidden="true"
+                className={`material-symbols-outlined text-sm transition-transform ${
+                  detailOpen ? 'rotate-180' : ''
+                }`}
               >
-                <option value="">{'\uD83D\uDCDD'} 템플릿</option>
-                {DEFAULT_TEMPLATES.filter((tpl) => tpl.category !== 'attendance').map((tpl) => (
-                  <option key={tpl.id} value={tpl.id}>
-                    {tpl.name}
-                  </option>
-                ))}
-              </select>
+                expand_more
+              </span>
+            </button>
+
+            {/* 메모 */}
+            <div className="relative">
+              <textarea
+                ref={memoRef}
+                value={memo}
+                onChange={(e) => {
+                  setMemo(e.target.value);
+                  markDirty();
+                }}
+                placeholder="메모 입력 (선택사항)"
+                className="w-full h-20 bg-sp-surface border border-sp-border rounded-lg p-3 pr-9 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
+              />
+              <button
+                onClick={() => setShowMemoModal(true)}
+                className="absolute top-2 right-2 p-1 rounded text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10 transition-colors"
+                title="크게 보기"
+              >
+                <span className="material-symbols-outlined text-base">open_in_full</span>
+              </button>
             </div>
 
-            {/* 카테고리 목록 */}
-            <div className="space-y-3">
-              {/* 비출결 분류 — 단일 선택(Q2: 서브카테고리 칩 → 분류 선택, 세부는 아래 태그로) */}
-              <div>
-                <p className="text-xs font-semibold mb-1.5 text-sp-muted">분류</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {categories
-                    .filter((cat) => cat.id !== 'attendance')
-                    .map((cat) => {
-                      const isSelected = selectedSub?.categoryId === cat.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          onClick={() => handleCategoryClick(cat.id)}
-                          className={getSubcategoryChipClass(cat.color, isSelected)}
-                        >
-                          {isSelected && <span className="mr-1">✓</span>}
-                          {cat.name.split(' (')[0]}
-                        </button>
-                      );
-                    })}
-                </div>
-              </div>
+            {/* 말로 쓰기 — 커서를 메모 칸에 두고 OS 받아쓰기를 부른다.
+                데스크톱 앱이 아니면(브라우저 모드) 버튼 자체가 그려지지 않는다. */}
+            <div className="mt-1.5">
+              <VoiceTypingButton onFocusField={() => memoRef.current?.focus()} />
             </div>
-
-            {/* 구분선 */}
-            <div className="border-t border-sp-border my-4" />
-
-            {/* 상담 방법 (counseling일 때만) */}
-            {selectedSub?.categoryId === 'counseling' && (
-              <div className="mb-3">
-                <p className="text-xs text-sp-muted mb-1.5">상담 방법</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {METHOD_OPTIONS.map((opt) => {
-                    const isSelected = selectedMethod === opt.value;
-                    return (
-                      <button
-                        key={opt.value}
-                        onClick={() => setSelectedMethod(isSelected ? undefined : opt.value)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                          isSelected
-                            ? 'bg-sp-accent text-white'
-                            : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
-                        }`}
-                      >
-                        {opt.icon} {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* 태그 (S4 통합 입력 — 비출결 누가기록, 다중 선택, 분류와 별도 축) */}
-            {selectedSub && selectedSub.categoryId !== 'attendance' && (
-              <div className="mb-3">
-                <p className="text-xs text-sp-muted mb-1.5">태그 (선택)</p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {allHomeroomTags.map((tag) => {
-                    const isSelected = selectedTags.includes(tag);
-                    return (
-                      <button
-                        key={tag}
-                        type="button"
-                        aria-pressed={isSelected}
-                        onClick={() => {
-                          setSelectedTags((prev) =>
-                            prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
-                          );
-                          markDirty();
-                        }}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                          isSelected
-                            ? 'bg-sp-accent text-white'
-                            : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
-                        }`}
-                      >
-                        {tag}
-                      </button>
-                    );
-                  })}
-                  <input
-                    type="text"
-                    value={newTagInput}
-                    onChange={(e) => setNewTagInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const v = newTagInput.trim();
-                        if (!v) return;
-                        if (!allHomeroomTags.includes(v)) {
-                          void updateSettings({
-                            homeroomRecordTags: [...(customHomeroomTags ?? []), v],
-                          });
-                        }
-                        setSelectedTags((prev) => (prev.includes(v) ? prev : [...prev, v]));
-                        setNewTagInput('');
-                        markDirty();
-                      }
-                    }}
-                    placeholder="+ 태그"
-                    aria-label="태그 직접 추가"
-                    className="w-16 px-2 py-1 rounded-lg text-xs bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
-                  />
-                </div>
-              </div>
-            )}
 
             {/* 관찰 슬롯 — 태그 아래. HOMEROOM_SLOTS(행특용). ★tags 와 다른 칸에 저장된다. */}
             {selectedSub && selectedSub.categoryId !== 'attendance' && (
@@ -881,47 +886,182 @@ function InputMode({
               </div>
             )}
 
-            {/* 메모 */}
-            <div className="relative">
-              <textarea
-                ref={memoRef}
-                value={memo}
-                onChange={(e) => {
-                  setMemo(e.target.value);
-                  markDirty();
-                }}
-                placeholder="메모 입력 (선택사항)"
-                className="w-full h-20 bg-sp-surface border border-sp-border rounded-lg p-3 pr-9 text-sm text-sp-text placeholder-sp-muted resize-none focus:outline-none focus:ring-1 focus:ring-sp-accent"
-              />
-              <button
-                onClick={() => setShowMemoModal(true)}
-                className="absolute top-2 right-2 p-1 rounded text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10 transition-colors"
-                title="크게 보기"
-              >
-                <span className="material-symbols-outlined text-base">open_in_full</span>
-              </button>
-            </div>
+            {/* 주제 연결(선택) — 본문·장면 다음, 부가 정보 앞(계획 §4.1 순서).
+                학생이나 날짜가 여럿이면 선택 UI 자체를 그리지 않는다(계획 §4.2). */}
+            <ObservationTopicPicker
+              studentRef={singleTopicStudentRef}
+              content={memo}
+              multiTarget={!isSingleTarget}
+              selected={selectedTopic}
+              onSelect={setSelectedTopic}
+            />
 
-            {/* 말로 쓰기 — 커서를 메모 칸에 두고 OS 받아쓰기를 부른다.
-                데스크톱 앱이 아니면(브라우저 모드) 버튼 자체가 그려지지 않는다. */}
-            <div className="mt-1.5">
-              <VoiceTypingButton onFocusField={() => memoRef.current?.focus()} />
-            </div>
+            {/* 분류·상세 정보 — 위 상태 줄과 같은 펼침 상태를 공유한다. */}
+            {detailOpen && (
+              <div className="space-y-2">
+                {/* 카테고리 헤더 + 템플릿 */}
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-bold text-sp-text flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base">category</span>
+                    카테고리
+                  </h3>
+                  <select
+                    onChange={(e) => {
+                      if (e.target.value) handleTemplateSelect(e.target.value);
+                      e.target.value = '';
+                    }}
+                    defaultValue=""
+                    className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1 text-xs text-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                  >
+                    <option value="">{'\uD83D\uDCDD'} 템플릿</option>
+                    {DEFAULT_TEMPLATES.filter((tpl) => tpl.category !== 'attendance').map((tpl) => (
+                      <option key={tpl.id} value={tpl.id}>
+                        {tpl.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-            {/* 첨부 자료 (작성 중 담아두고 저장 시 함께 커밋) */}
-            <div className="mt-3">
-              <p className="text-xs text-sp-muted mb-1.5 flex items-center gap-1">
-                <span className="material-symbols-outlined text-sm">attach_file</span>
-                첨부 자료
-              </p>
-              <PendingAttachmentArea
-                pendingFiles={pendingFiles}
-                onAddFiles={handleAddPendingFiles}
-                onRemove={removePendingFile}
-                disabled={!canAttachHere}
-                disabledHint="학생 1명을 고르고 단일 날짜로 기록할 때 자료를 첨부할 수 있어요"
-              />
-            </div>
+                {/* 카테고리 목록 */}
+                <div className="space-y-3">
+                  {/* 비출결 분류 — 단일 선택(Q2: 서브카테고리 칩 → 분류 선택, 세부는 아래 태그로) */}
+                  <div>
+                    <p className="text-xs font-semibold mb-1.5 text-sp-muted">분류</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {categories
+                        .filter((cat) => cat.id !== 'attendance')
+                        .map((cat) => {
+                          const isSelected = selectedSub?.categoryId === cat.id;
+                          return (
+                            <button
+                              key={cat.id}
+                              onClick={() => handleCategoryClick(cat.id)}
+                              className={getSubcategoryChipClass(cat.color, isSelected)}
+                            >
+                              {isSelected && <span className="mr-1">✓</span>}
+                              {cat.name.split(' (')[0]}
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* 구분선 */}
+                <div className="border-t border-sp-border my-4" />
+
+                {/* 상담 방법 (counseling일 때만) */}
+                {selectedSub?.categoryId === 'counseling' && (
+                  <div className="mb-3">
+                    <p className="text-xs text-sp-muted mb-1.5">상담 방법</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {METHOD_OPTIONS.map((opt) => {
+                        const isSelected = selectedMethod === opt.value;
+                        return (
+                          <button
+                            key={opt.value}
+                            onClick={() => setSelectedMethod(isSelected ? undefined : opt.value)}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              isSelected
+                                ? 'bg-sp-accent text-white'
+                                : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
+                            }`}
+                          >
+                            {opt.icon} {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* 태그 (S4 통합 입력 — 비출결 누가기록, 다중 선택, 분류와 별도 축) */}
+                {selectedSub && selectedSub.categoryId !== 'attendance' && (
+                  <div className="mb-3">
+                    <p className="text-xs text-sp-muted mb-1.5">태그 (선택)</p>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {allHomeroomTags.map((tag) => {
+                        const isSelected = selectedTags.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            aria-pressed={isSelected}
+                            onClick={() => {
+                              setSelectedTags((prev) =>
+                                prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+                              );
+                              markDirty();
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                              isSelected
+                                ? 'bg-sp-accent text-white'
+                                : 'bg-sp-surface text-sp-muted hover:text-sp-text hover:bg-sp-surface/80'
+                            }`}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                      <input
+                        type="text"
+                        value={newTagInput}
+                        onChange={(e) => setNewTagInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const v = newTagInput.trim();
+                            if (!v) return;
+                            if (!allHomeroomTags.includes(v)) {
+                              void updateSettings({
+                                homeroomRecordTags: [...(customHomeroomTags ?? []), v],
+                              });
+                            }
+                            setSelectedTags((prev) => (prev.includes(v) ? prev : [...prev, v]));
+                            setNewTagInput('');
+                            markDirty();
+                          }
+                        }}
+                        placeholder="+ 태그"
+                        aria-label="태그 직접 추가"
+                        className="w-16 px-2 py-1 rounded-lg text-xs bg-sp-surface border border-dashed border-sp-border text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent focus:w-24 transition-all"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* 후속 조치 (인라인 토글) */}
+                <div className="mt-3">
+                  <button
+                    onClick={() => setShowFollowUp(!showFollowUp)}
+                    className="flex items-center gap-1.5 text-xs text-sp-muted hover:text-sp-text transition-colors"
+                  >
+                    <span
+                      className={`material-symbols-outlined text-sm transition-transform ${showFollowUp ? 'rotate-180' : ''}`}
+                    >
+                      expand_more
+                    </span>
+                    {'\uD83D\uDCCC'} 후속 조치 추가
+                  </button>
+                  {showFollowUp && (
+                    <div className="mt-2 flex gap-2">
+                      <input
+                        value={followUp}
+                        onChange={(e) => setFollowUp(e.target.value)}
+                        placeholder="후속 조치 내용"
+                        className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
+                      />
+                      <input
+                        type="date"
+                        value={followUpDate}
+                        onChange={(e) => setFollowUpDate(e.target.value)}
+                        className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent w-32"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* ── 여러 날 등록 — 비출결 분류 선택 시 노출 ── */}
             {selectedSub && selectedSub.categoryId !== 'attendance' && (
@@ -1032,35 +1172,19 @@ function InputMode({
               </div>
             )}
 
-            {/* 후속 조치 (인라인 토글) */}
+            {/* 첨부 자료 (작성 중 담아두고 저장 시 함께 커밋) */}
             <div className="mt-3">
-              <button
-                onClick={() => setShowFollowUp(!showFollowUp)}
-                className="flex items-center gap-1.5 text-xs text-sp-muted hover:text-sp-text transition-colors"
-              >
-                <span
-                  className={`material-symbols-outlined text-sm transition-transform ${showFollowUp ? 'rotate-180' : ''}`}
-                >
-                  expand_more
-                </span>
-                {'\uD83D\uDCCC'} 후속 조치 추가
-              </button>
-              {showFollowUp && (
-                <div className="mt-2 flex gap-2">
-                  <input
-                    value={followUp}
-                    onChange={(e) => setFollowUp(e.target.value)}
-                    placeholder="후속 조치 내용"
-                    className="flex-1 bg-sp-surface border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder-sp-muted focus:outline-none focus:ring-1 focus:ring-sp-accent"
-                  />
-                  <input
-                    type="date"
-                    value={followUpDate}
-                    onChange={(e) => setFollowUpDate(e.target.value)}
-                    className="bg-sp-surface border border-sp-border rounded-lg px-2 py-1.5 text-xs text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent w-32"
-                  />
-                </div>
-              )}
+              <p className="text-xs text-sp-muted mb-1.5 flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">attach_file</span>
+                첨부 자료
+              </p>
+              <PendingAttachmentArea
+                pendingFiles={pendingFiles}
+                onAddFiles={handleAddPendingFiles}
+                onRemove={removePendingFile}
+                disabled={!canAttachHere}
+                disabledHint="학생 1명을 고르고 단일 날짜로 기록할 때 자료를 첨부할 수 있어요"
+              />
             </div>
           </div>
 
@@ -1279,21 +1403,36 @@ function InputMode({
                         editTags={editingTags}
                         setEditTags={setEditingTags}
                         availableTags={allHomeroomTags}
+                        editSlots={editingSlots}
+                        setEditSlots={setEditingSlots}
+                        availableSlots={allHomeroomSlots}
                         onSave={async () => {
                           // Q2: 비출결은 category + tags 편집. subcategory 는 sentinel 로 자동 유지(편집기에서 보존).
+                          // ★장면은 정규화 후 빈 배열이면 키를 넣지 않는다. 부재 != 빈 배열 -
+                          //   빈 배열을 저장하면 병합에서 다른 기기의 장면을 덮는다(입력 경로와 같은 규칙).
+                          const normalizedEditSlots = normalizeSlots(
+                            editingSlots,
+                            'homeroom',
+                            customHomeroomSlots ?? [],
+                          );
                           await updateRecord({
                             ...editingRecord,
                             content: editingContent,
                             category: editingCategory,
                             subcategory: editingSubcat,
                             tags: editingTags.length > 0 ? [...editingTags] : undefined,
+                            ...(normalizedEditSlots.length > 0
+                              ? { slots: normalizedEditSlots }
+                              : {}),
                           });
                           setEditingRecordId(null);
                           setEditingTags([]);
+                          setEditingSlots([]);
                         }}
                         onCancel={() => {
                           setEditingRecordId(null);
                           setEditingTags([]);
+                          setEditingSlots([]);
                         }}
                       />
                     );
@@ -1347,6 +1486,7 @@ function InputMode({
                                   setEditingCategory(record.category);
                                   setEditingSubcat(record.subcategory);
                                   setEditingTags([...(record.tags ?? [])]);
+                                  setEditingSlots([...(record.slots ?? [])]);
                                 }}
                                 className="text-sp-muted hover:text-sp-accent transition-colors"
                                 title="수정"

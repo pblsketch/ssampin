@@ -45,6 +45,14 @@ export interface RecordEditProps {
   /** 출결 교시 편집 상태 (attendance 기록의 편집 UI에서 사용) */
   editAttendancePeriods?: readonly AttendancePeriodEntry[];
   setEditAttendancePeriods?: (next: AttendancePeriodEntry[]) => void;
+  /**
+   * 관찰 장면 편집 상태. 출결이 아닌 기록에서만 쓴다 - 장면은 비출결 개념이다.
+   * 선택(옵셔널)이라 이 값을 넘기지 않는 기존 호출부는 그대로 동작한다.
+   */
+  editSlots?: readonly string[];
+  setEditSlots?: (next: string[]) => void;
+  /** 고를 수 있는 장면 목록(기본 + 교사가 추가한 것). 입력 화면과 같은 목록이다. */
+  availableSlots?: readonly string[];
   /** 정규 교시 수 (settings.maxPeriods) */
   regularPeriodCount?: number;
   onEditSave: (record: StudentRecord) => Promise<void>;

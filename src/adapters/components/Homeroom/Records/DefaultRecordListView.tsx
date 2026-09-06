@@ -67,6 +67,9 @@ function DefaultRecordListView({
     editFollowUpDate,
     setEditFollowUpDate,
     editAttendancePeriods,
+    editSlots,
+    setEditSlots,
+    availableSlots,
     setEditAttendancePeriods,
     regularPeriodCount,
     onEditSave,
@@ -197,6 +200,9 @@ function DefaultRecordListView({
                         setAttendancePeriods={
                           record.category === 'attendance' ? setEditAttendancePeriods : undefined
                         }
+                        editSlots={editSlots}
+                        setEditSlots={setEditSlots}
+                        availableSlots={availableSlots}
                         regularPeriodCount={regularPeriodCount}
                         onSave={() => void onEditSave(record)}
                         onCancel={onEditCancel}

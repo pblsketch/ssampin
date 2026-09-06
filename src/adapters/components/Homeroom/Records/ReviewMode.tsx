@@ -518,6 +518,9 @@ export function ReviewMode({
                     setAttendancePeriods={
                       record.category === 'attendance' ? edit.setEditAttendancePeriods : undefined
                     }
+                    editSlots={edit.editSlots}
+                    setEditSlots={edit.setEditSlots}
+                    availableSlots={edit.availableSlots}
                     regularPeriodCount={edit.regularPeriodCount}
                     onSave={() => void edit.onEditSave(record)}
                     onCancel={edit.onEditCancel}

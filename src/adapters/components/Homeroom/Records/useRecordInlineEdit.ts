@@ -1,4 +1,5 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
+import { allSlotsForContext, normalizeSlots } from '@domain/rules/observationSlots';
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord, AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
@@ -22,6 +23,11 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
   handleEdit: (record: StudentRecord) => void;
 } {
   const updateRecord = useStudentRecordsStore((s) => s.updateRecord);
+  const customHomeroomSlots = useSettingsStore((st) => st.settings.homeroomRecordSlots);
+  const availableSlots = useMemo(
+    () => allSlotsForContext('homeroom', customHomeroomSlots ?? []),
+    [customHomeroomSlots],
+  );
   const updateAttendanceRecord = useStudentRecordsStore((s) => s.updateAttendanceRecord);
   const className = useSettingsStore((s) => s.settings.className);
   const regularPeriodCount = useSettingsStore((s) => s.settings.maxPeriods) ?? 7;
@@ -36,6 +42,8 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
   const [editFollowUp, setEditFollowUp] = useState('');
   const [editFollowUpDate, setEditFollowUpDate] = useState('');
   const [editAttendancePeriods, setEditAttendancePeriods] = useState<AttendancePeriodEntry[]>([]);
+  /** 관찰 장면 - 입력 화면과 같은 목록을 원본 수정에서도 고칠 수 있어야 한다(계획 §4.1). */
+  const [editSlots, setEditSlots] = useState<string[]>([]);
 
   const handleEdit = useCallback((record: StudentRecord) => {
     setEditingId(record.id);
@@ -46,6 +54,7 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
     setEditDocumentSubmitted(record.documentSubmitted ?? false);
     setEditFollowUp(record.followUp ?? '');
     setEditFollowUpDate(record.followUpDate ?? '');
+    setEditSlots([...(record.slots ?? [])]);
     if (record.category === 'attendance') {
       setEditAttendancePeriods(initEditAttendancePeriods(record));
     } else {
@@ -63,6 +72,7 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
     setEditFollowUp('');
     setEditFollowUpDate('');
     setEditAttendancePeriods([]);
+    setEditSlots([]);
   }, []);
 
   const onEditSave = useCallback(
@@ -110,6 +120,9 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
           return;
         }
       } else {
+        // ★정규화 후 빈 배열이면 키 자체를 넣지 않는다. 부재 != 빈 배열 -
+        //   빈 배열을 저장하면 병합에서 다른 기기의 장면을 덮는다(입력 경로와 같은 규칙).
+        const normalizedSlots = normalizeSlots(editSlots, 'homeroom', customHomeroomSlots ?? []);
         await updateRecord({
           ...record,
           content: editContent,
@@ -117,6 +130,7 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
           subcategory: editSubcategory,
           followUp: editFollowUp.trim() || undefined,
           followUpDate: editFollowUpDate || undefined,
+          ...(normalizedSlots.length > 0 ? { slots: normalizedSlots } : {}),
         });
         showToast('기록을 저장했습니다', 'success');
       }
@@ -131,6 +145,8 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
       editFollowUp,
       editFollowUpDate,
       editAttendancePeriods,
+      editSlots,
+      customHomeroomSlots,
       className,
       regularPeriodCount,
       studentMap,
@@ -159,6 +175,9 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
     setEditFollowUpDate,
     editAttendancePeriods,
     setEditAttendancePeriods,
+    editSlots,
+    setEditSlots,
+    availableSlots,
     regularPeriodCount,
     onEditSave,
     onEditCancel: resetEditState,

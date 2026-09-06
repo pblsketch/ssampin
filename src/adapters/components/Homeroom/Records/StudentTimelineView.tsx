@@ -74,6 +74,9 @@ function StudentTimelineView({
     editFollowUpDate,
     setEditFollowUpDate,
     editAttendancePeriods,
+    editSlots,
+    setEditSlots,
+    availableSlots,
     setEditAttendancePeriods,
     regularPeriodCount,
     onEditSave,
@@ -223,6 +226,9 @@ function StudentTimelineView({
                                   ? setEditAttendancePeriods
                                   : undefined
                               }
+                              editSlots={editSlots}
+                              setEditSlots={setEditSlots}
+                              availableSlots={availableSlots}
                               regularPeriodCount={regularPeriodCount}
                               onSave={() => void onEditSave(record)}
                               onCancel={onEditCancel}

@@ -35,6 +35,13 @@ export interface InlineRecordEditorProps {
   onSave: () => void;
   onCancel: () => void;
   compact?: boolean;
+  /**
+   * 관찰 장면 편집. 출결이 아닌 기록에서만 그린다 - 장면은 비출결 개념이다.
+   * 옵셔널이라 이 값을 안 넘기는 기존 호출부는 지금과 똑같이 동작한다.
+   */
+  editSlots?: readonly string[];
+  setEditSlots?: (next: string[]) => void;
+  availableSlots?: readonly string[];
   /** 편집 모드에서 attendance일 때 교시별 편집 UI를 쓰기 위한 props */
   attendancePeriods?: readonly AttendancePeriodEntry[];
   setAttendancePeriods?: (next: AttendancePeriodEntry[]) => void;
@@ -69,6 +76,9 @@ export function InlineRecordEditor({
   onSave,
   onCancel,
   compact,
+  editSlots,
+  setEditSlots,
+  availableSlots,
   attendancePeriods,
   setAttendancePeriods,
   regularPeriodCount,
@@ -312,6 +322,40 @@ export function InlineRecordEditor({
           }`}
         />
       </div>
+
+      {/* 관찰 장면 - 입력 화면과 같은 목록을 보여 준다(계획 §4.1).
+          원본을 고칠 때도 장면을 고칠 수 있어야 근거가 갈래를 잃지 않는다. */}
+      {editSlots !== undefined && setEditSlots !== undefined && !isAttendanceRecord && (
+        <div>
+          <p className={`text-sp-muted mb-1 ${compact ? 'text-caption' : 'text-detail'}`}>
+            어떤 장면인가요?
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {(availableSlots ?? []).map((slot) => {
+              const isSelected = editSlots.includes(slot);
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  aria-pressed={isSelected}
+                  onClick={() =>
+                    setEditSlots(
+                      isSelected ? editSlots.filter((s) => s !== slot) : [...editSlots, slot],
+                    )
+                  }
+                  className={`${chipSize} rounded-lg font-medium transition-all ${
+                    isSelected
+                      ? 'bg-sp-accent text-white'
+                      : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                  }`}
+                >
+                  {slot}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* 첨부 자료 (이 기록에 연결) */}
       <div>
