@@ -564,3 +564,60 @@ describe('★어느 AI·모델로 쓰는지 보이고 고를 수 있다 (ADR-084
     expect(screen.getByText(new RegExp(`Claude Code ${model}`))).toBeTruthy();
   });
 });
+
+describe('★C0 (ㄱ) 반영이 실패하면 실패라고 말한다', () => {
+  beforeEach(connectClaude);
+
+  /**
+   * `applyVersion` 에 try/catch 가 없어서, `onApply` 가 한도 초과로 던지면 그 뒤의
+   * `markApplied` 도 `continueQueue` 도 실행되지 않았다. 즉 **아무 일도 안 일어나고
+   * 아무 안내도 없다.** 선생님은 눌렀는데 반응이 없는 화면만 본다.
+   * ★이 결함은 검증 게이트 4종이 전부 초록인 채 존재했다.
+   */
+  it('한도 초과로 저장이 거부되면 이유가 뜨고, 판은 반영 표시가 붙지 않는다', async () => {
+    panel({
+      onApply: () => {
+        throw new Error('1,782바이트로 한도 1,500바이트를 넘었습니다.');
+      },
+    });
+    await startWith('이 학생만');
+    await finishWith('한도를 넘긴 긴 초안.');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+
+    expect(screen.getByText(/반영하지 못했습니다/)).toBeTruthy();
+    expect(screen.getByText(/한도 1,500바이트를 넘었습니다/)).toBeTruthy();
+    // ★반영되지 않았으므로 판에 반영 표시가 붙으면 안 된다(붙으면 다시 시도할 길이 흐려진다).
+    expect(useRecordAiDraftStore.getState().records[0]?.appliedAt).toBeUndefined();
+    // 미리보기는 그대로 남아 있어야 한다 — 결과를 잃지 않는다.
+    expect(screen.getByText(/미리보기/)).toBeTruthy();
+  });
+});
+
+describe('★C0 (ㄷ) 중복 실행 잠금은 참조로 막는다', () => {
+  beforeEach(connectClaude);
+
+  /**
+   * 상태(`useState`)로 만든 잠금은 갱신이 비동기라 빠르게 두 번 누르면 두 호출이
+   * **같은 옛 값**을 보고 둘 다 통과한다(이 저장소에서 실제로 뚫린 전례가 있다).
+   */
+  it('[다시 표시]를 연달아 눌러도 실행은 1회다', async () => {
+    panel({
+      highlightOn: true,
+      target: target({ existingText: '이미 쓴 초안 본문.' }),
+      onRemark: () => {},
+    });
+
+    // 한 번의 act 안에서 연달아 누른다 — 상태 갱신이 아직 반영되기 전이다.
+    await act(async () => {
+      const btn = screen.getByRole('button', { name: /다시 표시/ });
+      fireEvent.click(btn);
+      fireEvent.click(btn);
+      fireEvent.click(btn);
+    });
+
+    expect(runCalls).toHaveLength(1);
+  });
+});

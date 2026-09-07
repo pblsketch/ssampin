@@ -400,3 +400,75 @@ describe('★형광펜 스위치가 꺼져 있으면 편집 칸 뒤에 거울 �
     expect(screen.getByLabelText('형광펜 범례')).toBeTruthy();
   });
 });
+
+describe('★C0 (ㄴ) 저장이 거부된 글은 초점을 잃어도 화면에 남는다', () => {
+  /**
+   * 되돌리기 효과가 `focused` 를 의존 목록에 두고 있어 **초점이 빠지는 것만으로** 다시 돈다.
+   * 한도 초과로 저장이 거부되면 `draft.content` 는 옛 글이라, 막지 않으면 방금 쓴 글이 사라진다.
+   * 붉은 오류만 남고 글이 없어지므로 선생님은 무엇을 잃었는지도 모른다.
+   * ★이 결함은 검증 게이트 4종이 전부 초록인 채 존재했다.
+   */
+  const OLD = '저장되어 있던 옛 글.';
+  const TYPED = '한도를 넘겨 새로 쓴 긴 글.';
+
+  function withSavedDraft(): void {
+    drafts.byRef = {
+      sA: {
+        id: 'd-A',
+        area: 'subject',
+        studentRef: 'sA',
+        content: OLD,
+        status: 'draft',
+        basisObservationIds: [],
+        groundingFlags: [],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    };
+  }
+
+  it('저장이 거부되어도 방금 쓴 글이 그대로 있다', async () => {
+    withSavedDraft();
+    upsertSpy.mockRejectedValueOnce(new Error('1,782바이트로 한도 1,500바이트를 넘었습니다.'));
+    vi.useFakeTimers();
+    view();
+
+    const box = screen.getByRole('textbox', { name: /김지훈/ }) as HTMLTextAreaElement;
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: TYPED } });
+    // 자동저장(700밀리초)이 돌아 거부당한다.
+    await act(async () => {
+      vi.advanceTimersByTime(800);
+    });
+    vi.useRealTimers();
+
+    // 여기서 초점이 빠진다 — 되돌리기 효과가 다시 도는 순간이다.
+    await act(async () => {
+      fireEvent.blur(box);
+    });
+
+    expect(box.value).toBe(TYPED); // ★옛 글로 되돌아가면 안 된다
+    expect(box.value).not.toBe(OLD);
+  });
+
+  it('저장이 성공하면 자동 입력 경로는 그대로 산다 (AI 반영·동기화)', async () => {
+    withSavedDraft();
+    const r = view();
+    const box = screen.getByRole('textbox', { name: /김지훈/ }) as HTMLTextAreaElement;
+    expect(box.value).toBe(OLD);
+
+    // 저장 시각이 나중인 새 내용이 밖에서 들어오면(AI 반영·동기화) 화면이 따라가야 한다.
+    drafts.byRef['sA'] = {
+      ...(drafts.byRef['sA'] as Record<string, unknown>),
+      content: 'AI 가 반영한 글.',
+      updatedAt: Date.now() + 60_000,
+    };
+    await act(async () => {
+      r.rerender(element());
+    });
+
+    expect((screen.getByRole('textbox', { name: /김지훈/ }) as HTMLTextAreaElement).value).toBe(
+      'AI 가 반영한 글.',
+    );
+  });
+});

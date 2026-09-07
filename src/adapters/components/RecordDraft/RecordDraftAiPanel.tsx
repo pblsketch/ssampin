@@ -171,6 +171,13 @@ export function RecordDraftAiPanel({
   const [compareOn, setCompareOn] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [remarking, setRemarking] = useState(false);
+  /**
+   * 중복 실행 잠금 — **판정은 반드시 이 참조로 한다.**
+   * 상태(`useState`)는 갱신이 비동기라 빠르게 두 번 누르면 두 호출이 **같은 옛 값**을 보고
+   * 둘 다 통과한다(이 저장소에서 실제로 뚫린 전례가 있다). 위 상태는 화면 표시 전용이다.
+   * ★이 잠금은 뒤에 부모(`RecordDraftView`)로 올라가 초안 생성·분량 조절과 함께 묶인다.
+   */
+  const remarkingRef = useRef(false);
   const [undo, setUndo] = useState<{
     readonly studentRef: string;
     readonly previous: string;
@@ -394,7 +401,19 @@ export function RecordDraftAiPanel({
             ...marks,
           ]
         : marks;
-    await onApply(ref, mergedText, mergedMarks);
+    // ★조용히 삼키면 안 된다. `onApply` 는 한도 초과에서 `RecordDraftLimitError` 를 던지는데,
+    //   감싸지 않으면 아래 `markApplied` 도 `continueQueue` 도 실행되지 않아 **아무 일도 안 일어나고
+    //   아무 안내도 없다.** 미리보기와 원문은 그대로 두고 이유만 보여 준다(큐도 여기서 멈춘다).
+    try {
+      await onApply(ref, mergedText, mergedMarks);
+    } catch (err: unknown) {
+      setNotice(
+        err instanceof Error && err.message.trim().length > 0
+          ? `반영하지 못했습니다: ${err.message}`
+          : '반영하지 못했습니다. 글은 그대로입니다.',
+      );
+      return;
+    }
     await markApplied(selected.id);
     if (mode === 'replace') armUndo(ref, base);
     setCompareOn(false);
@@ -421,6 +440,8 @@ export function RecordDraftAiPanel({
     const api = runApi();
     const content = target.existingText ?? '';
     if (!api || !runProvider || content.trim().length === 0 || !onRemark) return;
+    if (remarkingRef.current) return;
+    remarkingRef.current = true;
     setRemarking(true);
     setNotice(null);
     try {
@@ -439,6 +460,8 @@ export function RecordDraftAiPanel({
       const k = (typeof kind === 'string' ? kind : 'crashed') as OwnAiErrorKind;
       setNotice(OWN_AI_ERROR_MESSAGES[k].draft);
     } finally {
+      // ★반드시 finally 에서 푼다. 여기서 안 풀면 다시 표시가 영영 잠긴다.
+      remarkingRef.current = false;
       setRemarking(false);
     }
   };

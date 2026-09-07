@@ -889,10 +889,24 @@ function RecordDraftRow({
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const layerRef = useRef<HTMLDivElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * 선생님이 이 칸을 마지막으로 고친 시각(렌더를 일으키지 않는 기억 상자).
+   * 아래 되돌리기 효과가 **저장이 거부된 글을 지우지 못하게** 막는 도장이다.
+   */
+  const lastEditAtRef = useRef(0);
 
   // 외부(AI 패널·loopback)로 초안이 갱신되면 편집 중이 아닐 때 반영(자동 입력).
   useEffect(() => {
-    if (!focused) setText(draft?.content ?? '');
+    if (focused) return;
+    // ★내 손글씨가 저장된 것보다 최신이면 되돌리지 않는다.
+    //   `focused` 가 의존 목록에 있어 **초점이 빠지는 것만으로** 이 효과가 다시 돈다.
+    //   저장이 성공했으면 같은 글이라 티가 안 나지만, **한도 초과로 저장이 거부되면**
+    //   `draft.content` 는 옛 글 그대로라 방금 쓴 글이 화면에서 사라진다(붉은 오류만 남는다).
+    //   `upsert` 는 성공할 때 `updatedAt` 을 저장 시각으로 찍으므로, 정상 저장·AI 반영·동기화
+    //   뒤에는 언제나 `updatedAt > lastEdit` 이 되어 **기존 자동 입력 경로는 그대로 산다.**
+    //   ★[편집칸에 넣기] 배달도 이 도장을 찍어야 한다 - 안 찍으면 배달한 글만 되돌아간다.
+    if (lastEditAtRef.current > (draft?.updatedAt ?? 0)) return;
+    setText(draft?.content ?? '');
   }, [draft?.content, draft?.updatedAt, focused]);
 
   // 저장된 입력창 높이 복원.
@@ -947,6 +961,8 @@ function RecordDraftRow({
 
   const onChange = (value: string): void => {
     setText(value);
+    // 되돌리기 효과가 이 글을 지우지 못하게 도장을 찍는다(위 lastEditAtRef 주석 참조).
+    lastEditAtRef.current = Date.now();
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => persist(value), 700);
   };
