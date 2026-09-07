@@ -23,6 +23,8 @@ const {
   setExcludedManySpy,
   addManySpy,
   setThreadSpy,
+  restoreRemovedSpy,
+  applySourceFieldsSpy,
   OBSERVATIONS,
 } = vi.hoisted(() => {
   const threads = [
@@ -188,6 +190,9 @@ const {
   }));
   const add = vi.fn(async (_input: Record<string, unknown>) => 'x');
   const remove = vi.fn(async () => {});
+  /** 되돌리기는 `add` 가 아니라 이쪽이다 — 있던 모습 그대로 넣는다(AC-16 (c)). */
+  const restoreRemoved = vi.fn(async (ev: { id: string }) => ({ id: ev.id, restored: true }));
+  const applySourceFields = vi.fn(async () => ({ ok: true as const }));
   const updateThread = vi.fn(async () => {});
   const setExcludedFromAi = vi.fn(async (_id: string, _excluded: boolean) => {});
   const setExcludedFromAiMany = vi.fn(async (_ids: readonly string[], _excluded: boolean) => {});
@@ -201,6 +206,8 @@ const {
     addMany,
     update: async () => {},
     remove,
+    restoreRemoved,
+    applySourceFields,
     setExcludedFromAi,
     setExcludedFromAiMany,
     setThread,
@@ -217,6 +224,8 @@ const {
     unclassifySpy: unclassify,
     addSpy: add,
     removeSpy: remove,
+    restoreRemovedSpy: restoreRemoved,
+    applySourceFieldsSpy: applySourceFields,
     updateThreadSpy: updateThread,
     setExcludedSpy: setExcludedFromAi,
     setExcludedManySpy: setExcludedFromAiMany,
@@ -348,6 +357,8 @@ beforeEach(() => {
   addManySpy.mockClear();
   setThreadSpy.mockClear();
   removeSpy.mockClear();
+  restoreRemovedSpy.mockClear();
+  applySourceFieldsSpy.mockClear();
   updateThreadSpy.mockClear();
   setExcludedSpy.mockClear();
   setExcludedManySpy.mockClear();
@@ -728,7 +739,7 @@ describe('2차 — 긴 주제 이름 · 영역 1개 · 삭제 되돌리기 (설�
     expect(column('미분류').getByText(/미분류 근거 둘/)).toBeTruthy();
   });
 
-  it('카드 [삭제] 뒤 토스트의 [되돌리기]를 누르면 같은 내용으로 add 가 1회 불린다', async () => {
+  it('카드 [삭제] 뒤 토스트의 [되돌리기]는 add 가 아니라 restoreRemoved 로 원래 레코드를 되돌린다', async () => {
     board();
     const card = screen.getByRole('button', { name: /미분류 근거 하나/ });
     await act(async () => {
@@ -741,13 +752,38 @@ describe('2차 — 긴 주제 이름 · 영역 1개 · 삭제 되돌리기 (설�
     await act(async () => {
       fireEvent.click(within(toast).getByRole('button', { name: '되돌리기' }));
     });
-    expect(addSpy).toHaveBeenCalledTimes(1);
-    expect(addSpy.mock.calls[0]?.[0]).toMatchObject({
+    // ★`add` 는 AI 제외를 다시 판정하고 같은 원본이 있으면 조용히 넘어간다. 되돌리기는 복원이지 판정이 아니다.
+    expect(addSpy).not.toHaveBeenCalled();
+    expect(restoreRemovedSpy).toHaveBeenCalledTimes(1);
+    expect(restoreRemovedSpy.mock.calls[0]?.[0]).toMatchObject({
+      id: 'e-A2',
       studentRef: 'sA',
       areas: ['subject'],
       content: 'A학생 미분류 근거 하나 — 박서연과 모둠에서 비교했다',
       sourceType: 'manual',
     });
+    expect(screen.getByRole('status', { name: '알림' }).textContent).toContain(
+      '지운 근거를 되돌렸습니다',
+    );
+  });
+
+  it('★되돌리려는데 같은 원본 근거가 이미 새로 저장돼 있으면 되돌렸다고 말하지 않는다(AC-16 (c))', async () => {
+    restoreRemovedSpy.mockResolvedValueOnce({ id: 'e-새것', restored: false });
+    board();
+    const card = screen.getByRole('button', { name: /미분류 근거 하나/ });
+    await act(async () => {
+      fireEvent.click(within(card).getByRole('button', { name: '삭제' }));
+    });
+    await act(async () => {
+      fireEvent.click(
+        within(screen.getByRole('status', { name: '알림' })).getByRole('button', {
+          name: '되돌리기',
+        }),
+      );
+    });
+    expect(screen.getByRole('status', { name: '알림' }).textContent).toContain(
+      '이미 새로 저장된 근거가 있어 되돌리지 않았습니다',
+    );
   });
 });
 

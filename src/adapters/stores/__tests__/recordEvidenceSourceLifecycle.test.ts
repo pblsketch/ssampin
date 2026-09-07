@@ -658,3 +658,88 @@ describe('AC-14 원본 내용으로 바꾸기 — 적용 직전 재검증', () =
     expect(disk()[0]?.excludedFromAi).toBe(true);
   });
 });
+
+describe('AC-16 (c) 5초 되돌리기 — 있던 모습 그대로, 남의 새 편집은 덮지 않는다', () => {
+  const deleted = {
+    id: 'ev-지운것',
+    studentRef: SRC.studentRef,
+    areas: ['subject'] as const,
+    content: '학원에서 배운 내용을 발표했다',
+    date: '2026-09-01',
+    sourceType: 'observation' as const,
+    sourceId: 'obs-1',
+    classId: 'c1',
+    slots: ['탐구'] as const,
+    threadId: 'thr-1',
+    // 금지 어휘가 있는데 교사가 일부러 꺼 뒀다 — 되돌리기가 이걸 다시 켜면 안 된다.
+    excludedFromAi: false,
+    createdAt: 100,
+    updatedAt: 200,
+  };
+
+  it('★주제·영역·AI 제외·출처를 그대로 되돌린다(다시 판정하지 않는다)', async () => {
+    evidenceRepo.stored = { records: [] };
+    const r = await store().restoreRemoved(deleted);
+    expect(r.restored).toBe(true);
+    const back = disk().find((x) => x.id === 'ev-지운것');
+    expect(back?.threadId).toBe('thr-1');
+    expect(back?.areas).toEqual(['subject']);
+    expect(back?.slots).toEqual(['탐구']);
+    expect(back?.sourceId).toBe('obs-1');
+    expect(back?.createdAt).toBe(100);
+    // ★핵심: 금지 어휘가 있어도 교사가 꺼 둔 제외를 되살리지 않는다.
+    expect(back?.excludedFromAi).toBe(false);
+  });
+
+  it('★그사이 같은 원본을 다시 저장했으면 쓰기 0회이고 기존 근거 id 를 돌려준다', async () => {
+    evidenceRepo.stored = {
+      records: [
+        {
+          id: 'ev-새로저장',
+          studentRef: SRC.studentRef,
+          areas: ['subject'],
+          content: '되살린 뒤 교사가 새로 다듬은 글',
+          sourceType: 'observation',
+          sourceId: 'obs-1',
+          createdAt: 300,
+          updatedAt: 300,
+        },
+      ],
+    };
+    evidenceRepo.saveCalls = 0;
+    const r = await store().restoreRemoved(deleted);
+    expect(r).toEqual({ id: 'ev-새로저장', restored: false });
+    expect(evidenceRepo.saveCalls).toBe(0);
+    expect(disk()).toHaveLength(1);
+    expect(disk()[0]?.content).toBe('되살린 뒤 교사가 새로 다듬은 글');
+  });
+
+  it('되돌리기를 두 번 눌러도 근거는 1개다', async () => {
+    evidenceRepo.stored = { records: [] };
+    await store().restoreRemoved(deleted);
+    const second = await store().restoreRemoved(deleted);
+    expect(second.restored).toBe(false);
+    expect(disk()).toHaveLength(1);
+  });
+
+  it('직접 입력 근거(출처 없음)는 같은 본문이 있어도 그대로 되돌린다', async () => {
+    const manual = { ...deleted, id: 'ev-직접', sourceType: 'manual' as const };
+    delete (manual as { sourceId?: string }).sourceId;
+    evidenceRepo.stored = {
+      records: [
+        {
+          id: 'ev-다른것',
+          studentRef: SRC.studentRef,
+          areas: ['subject'],
+          content: '학원에서 배운 내용을 발표했다',
+          sourceType: 'manual',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    };
+    const r = await store().restoreRemoved(manual);
+    expect(r.restored).toBe(true);
+    expect(disk()).toHaveLength(2);
+  });
+});

@@ -58,6 +58,14 @@ export interface EvidenceSourceFieldsPatch {
   readonly slots: readonly string[] | null;
 }
 
+/** 되돌리기 결과 - 화면이 "되돌렸다"와 "이미 다른 근거가 있다"를 다르게 말할 수 있게. */
+export interface EvidenceRestoreResult {
+  /** 되돌린 근거, 또는 그 자리를 이미 차지하고 있던 근거의 id. */
+  readonly id: string;
+  /** 실제로 되돌렸는가. `false` 면 **쓰기 0회**이고 기존 근거를 그대로 뒀다는 뜻이다. */
+  readonly restored: boolean;
+}
+
 /** 근거 자료 부분 수정 입력. id 로 대상 지정. */
 export interface RecordEvidencePatch {
   areas?: readonly RecordArea[];
@@ -222,6 +230,18 @@ interface RecordEvidenceState {
     >;
   }) => Promise<ComparisonRecheck>;
   remove: (id: string) => Promise<void>;
+  /**
+   * 방금 지운 근거를 **있던 모습 그대로** 되돌린다(5초 되돌리기, 계획 §5.3 · AC-16 (c)).
+   *
+   * 일반 `add` 를 쓰지 않는 이유가 둘이다.
+   *  1. `add` 는 새 근거를 조립하므로 **AI 제외를 다시 판정**한다. 교사가 일부러 꺼 둔 제외가
+   *     금지 어휘 때문에 되살아나고, 주제·영역도 입력으로 다시 넘겨야 한다. 되돌리기는 판정이
+   *     아니라 **복원**이라 원래 레코드를 통째로 다시 넣는다.
+   *  2. `add` 는 같은 원본이 이미 있으면 그 id 만 돌려주고 끝난다 - 화면은 "되돌렸다"고 말하지만
+   *     실제로는 아무것도 안 했다. 그사이 같은 원본을 다시 저장했다면 그 **새 편집을 덮지 않고**
+   *     기존 근거가 있다고 알려야 한다.
+   */
+  restoreRemoved: (evidence: RecordEvidence) => Promise<EvidenceRestoreResult>;
   exists: (id: string) => boolean;
 
   // 파생 조회
@@ -765,6 +785,21 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
         return { next: next.length === latest.length ? latest : next, result: undefined };
       });
     },
+
+    restoreRemoved: async (evidence) =>
+      write<EvidenceRestoreResult>((latest) => {
+        // 이미 같은 id 가 있다(되돌리기를 두 번 눌렀다). 두 벌로 만들지 않는다.
+        const sameId = latest.find((r) => r.id === evidence.id);
+        if (sameId) return { next: latest, result: { id: sameId.id, restored: false } };
+        if (evidence.sourceId !== undefined) {
+          // 그사이 같은 원본을 다시 저장했다 - 그 새 편집을 덮지 않고 **아무것도 쓰지 않는다.**
+          const taken = matchesSource(latest, evidence.studentRef, evidence.sourceId)[0];
+          if (taken) return { next: latest, result: { id: taken.id, restored: false } };
+        }
+        // 주제·영역·AI 제외·출처·createdAt 까지 **원래 레코드 그대로**. 새로 판정하지 않는다.
+        const restored: RecordEvidence = { ...evidence, updatedAt: Date.now() };
+        return { next: [...latest, restored], result: { id: restored.id, restored: true } };
+      }),
 
     exists: (id) => get().records.some((r) => r.id === id),
 

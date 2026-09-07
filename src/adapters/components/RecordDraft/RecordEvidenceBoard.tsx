@@ -19,7 +19,9 @@
  *  - 영역 필터는 카드를 숨길 뿐 열은 그대로다(주제는 영역을 모른다). 영역이 하나뿐인 컨텍스트에서는 필터 줄·칩을
  *    그리지 않는다(값은 그 영역으로 고정).
  *  - 상태 문구는 화면 하단 가운데 토스트다(도구줄이 밀리지 않게). 카드 [삭제]는 같은 토스트의 [되돌리기]로 5초 안에
- *    복구한다(메모리에만 들고 있다가 `add` 로 다시 넣는다).
+ *    복구한다(메모리에만 들고 있다가 `restoreRemoved` 로 **있던 모습 그대로** 다시 넣는다).
+ *  - 원본에서 온 근거는 지금 원본과 다르면 카드에 [비교하기]가 뜬다. 실제 반영은 비교창의 2단계 확인을 지나고,
+ *    쓰기 직전 재검증까지 통과해야 한다(계획 §5.3 · ADR-086 결정 5).
  *  - 카드는 `EvidenceCard`, 열은 `EvidenceColumn` 이 그린다. 둘 다 스토어를 모른다.
  */
 import {
@@ -94,7 +96,13 @@ import {
   shortDate,
 } from '@adapters/components/RecordDraft/evidenceBoardStyles';
 import { RecordEvidenceImportDrawer } from '@adapters/components/RecordDraft/RecordEvidenceImportDrawer';
+import { EvidenceSourceComparisonDialog } from '@adapters/components/RecordDraft/EvidenceSourceComparisonDialog';
 import { useEvidenceCandidates } from '@adapters/hooks/useEvidenceCandidates';
+import {
+  useEvidenceSourceState,
+  isComparableSourceType,
+} from '@adapters/hooks/useEvidenceSourceState';
+import { evidenceDeleteGuidance, isSameAsSource } from '@domain/rules/evidenceSourceComparison';
 import type { EvidenceCandidate } from '@usecases/studentRecords/collectEvidenceCandidates';
 import { hasProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
@@ -288,6 +296,8 @@ export function RecordEvidenceBoard({
   const addManyEvidence = useRecordEvidenceStore((s) => s.addMany);
   const updateEvidence = useRecordEvidenceStore((s) => s.update);
   const removeEvidence = useRecordEvidenceStore((s) => s.remove);
+  const restoreRemoved = useRecordEvidenceStore((s) => s.restoreRemoved);
+  const applySourceFields = useRecordEvidenceStore((s) => s.applySourceFields);
   const setExcludedFromAi = useRecordEvidenceStore((s) => s.setExcludedFromAi);
   const setExcludedFromAiMany = useRecordEvidenceStore((s) => s.setExcludedFromAiMany);
   const setThread = useRecordEvidenceStore((s) => s.setThread);
@@ -334,6 +344,8 @@ export function RecordEvidenceBoard({
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   /** 가져오기 서랍. */
   const [importing, setImporting] = useState<ImportState | null>(null);
+  /** 원본 비교 대화상자를 연 근거의 id. 근거 자체는 항상 스토어의 최신값에서 다시 찾는다. */
+  const [comparingId, setComparingId] = useState<string | null>(null);
   const [importMenuOpen, setImportMenuOpen] = useState(false);
   const importBtnRef = useRef<HTMLButtonElement | null>(null);
   /** 접힌(닫힌) 주제 열 가운데 펼쳐 둔 것. */
@@ -387,6 +399,7 @@ export function RecordEvidenceBoard({
     setDragging(null);
     setSuggest({ kind: 'idle' });
     setAnswerOpen(false);
+    setComparingId(null);
   }, [selectedStudentRef]);
   // 화면을 떠나면 토스트 타이머도 같이 정리한다.
   useEffect(
@@ -492,6 +505,40 @@ export function RecordEvidenceBoard({
   const mirrorBySourceId = useMemo(
     () => new Map(mirrors.map((c) => [c.sourceId, c] as const)),
     [mirrors],
+  );
+  /**
+   * 저장된 근거의 **원본이 지금 어떤 상태인가**(계획 §5.3). 거울 후보와 달리 여기는
+   * 이미 근거가 된 원본까지 본다 - 후보에서 빠졌다는 이유로 '원본 없음'이라고 하면 오진이다.
+   */
+  const sourceState = useEvidenceSourceState({
+    student: student ?? null,
+    context,
+    ...(classId !== undefined ? { classId } : {}),
+  });
+  /**
+   * 이 근거가 지금 원본과 다른가. **확인된 경우에만 참**이다 -
+   * 확인 중·확인 실패·원본 없음은 모두 거짓이다. 모르는 것을 "다르다"고 말하지 않는다.
+   */
+  /**
+   * 비교창이 보고 있는 근거. **id 로 매번 다시 찾는다** - 반영·동기화로 값이 바뀌면
+   * 열려 있는 창도 새 값을 봐야 한다. 지워졌으면 `undefined` 라 창이 저절로 닫힌다.
+   */
+  const comparing = useMemo(
+    () => (comparingId === null ? undefined : studentEvidence.find((r) => r.id === comparingId)),
+    [comparingId, studentEvidence],
+  );
+  const differsFromSource = useCallback(
+    (ev: RecordEvidence): boolean => {
+      if (isMirrorId(ev.id)) return false;
+      const got = sourceState.lookup(ev.sourceId, ev.sourceType);
+      if (got.state !== 'found') return false;
+      return !isSameAsSource(got.source, {
+        content: ev.content,
+        ...(ev.date !== undefined ? { date: ev.date } : {}),
+        ...(ev.slots !== undefined ? { slots: ev.slots } : {}),
+      });
+    },
+    [sourceState],
   );
   const mirrorCards = useMemo(
     () => (student ? mirrors.map((c) => mirrorToEvidence(student.studentRef, c)) : []),
@@ -1046,29 +1093,58 @@ export function RecordEvidenceBoard({
   };
 
   /**
+   * 삭제 뒤 문구 — **확인한 것만 약속한다**(계획 §5.3 "출처 있는 저장 근거 삭제", AC-16 (b)).
+   *
+   * "원본은 미분류에 다시 표시됩니다"는 원본이 실제로 있고 자동 거울 적격일 때만 참이다.
+   * 조회에 실패했으면 확인한 것이 없고, 출결·공백 본문이면 지워도 돌아오지 않는다.
+   * 그 상태에서 재노출을 약속하면 교사는 "지웠다가 다시 담으면 되겠지"로 판단한다.
+   */
+  const deleteToastText = (ev: RecordEvidence): string => {
+    const got = sourceState.lookup(ev.sourceId, ev.sourceType);
+    switch (
+      evidenceDeleteGuidance({
+        hasSource: ev.sourceId !== undefined,
+        inScope: isComparableSourceType(ev.sourceType),
+        sourceState: got.state === 'out-of-scope' ? 'missing' : got.state,
+        mirrorEligible: got.state === 'found' && got.source.mirrorEligible,
+      })
+    ) {
+      case 'reappears':
+        return '정리한 근거를 지웠습니다 · 원본은 미분류에 다시 표시됩니다';
+      case 'source-missing':
+        return '정리한 근거만 지웠습니다';
+      case 'evidence-only':
+        return '정리한 근거만 지웠습니다 · 원본은 이 동작으로 지우지 않았습니다';
+      case 'manual':
+        return '근거 1건을 지웠습니다';
+    }
+  };
+
+  /**
    * 카드 [삭제] — 바로 지우되, 5초 동안 토스트의 [되돌리기]로 복구할 수 있다(설계서 §5-a).
-   * 지운 근거는 이 클로저가 들고 있다가 `add` 로 다시 넣는다 — 같은 내용·영역·날짜·출처·주제. id 는 새로 받는다.
+   *
+   * ★되돌리기는 `add` 가 아니라 `restoreRemoved` 다. `add` 는 새 근거를 조립하며 AI 제외를 다시
+   *   판정하고, 같은 원본이 이미 있으면 조용히 그 id 만 돌려준다 - 화면은 "되돌렸다"고 하는데
+   *   실제로는 아무 일도 안 일어난다(AC-16 (c)).
    */
   const removeCard = async (ev: RecordEvidence): Promise<void> => {
+    // 문구 판정은 **지우기 전에** 한다. 지운 뒤에는 거울 후보가 되살아나 상태가 달라진다.
+    const text = deleteToastText(ev);
     try {
       await removeEvidence(ev.id);
       setSelectedIds((prev) => prev.filter((x) => x !== ev.id));
-      flash('근거 1건을 지웠습니다', {
+      flash(text, {
         label: '되돌리기',
         onClick: () => {
           closeToast();
-          void addEvidence({
-            studentRef: ev.studentRef,
-            areas: ev.areas,
-            content: ev.content,
-            ...(ev.date !== undefined ? { date: ev.date } : {}),
-            ...(ev.sourceType !== undefined ? { sourceType: ev.sourceType } : {}),
-            ...(ev.sourceId !== undefined ? { sourceId: ev.sourceId } : {}),
-            ...(ev.classId !== undefined ? { classId: ev.classId } : {}),
-            ...(ev.slots !== undefined ? { slots: ev.slots } : {}),
-            ...(ev.threadId !== undefined ? { threadId: ev.threadId } : {}),
-          })
-            .then(() => flash('지운 근거를 되돌렸습니다'))
+          void restoreRemoved(ev)
+            .then((r) =>
+              flash(
+                r.restored
+                  ? '지운 근거를 되돌렸습니다'
+                  : '이미 새로 저장된 근거가 있어 되돌리지 않았습니다 · 그 근거를 확인해 주세요',
+              ),
+            )
             .catch(fail);
         },
       });
@@ -1078,6 +1154,74 @@ export function RecordEvidenceBoard({
   };
 
   // ── 렌더 ───────────────────────────────────────────────────
+  /**
+   * [수정] 상세의 원본 상태 줄 — 카드보다 **더 많이** 말한다(계획 §5.3 "원본과 동일한 저장 근거").
+   *
+   * 카드에는 '다름'만 띄운다. 목록에 '같음'이 줄줄이 붙으면 정작 봐야 할 '다름'이 묻히기 때문이다.
+   * 상세는 한 건만 보는 자리라 확인 중·실패·없음·같음까지 다 말해도 시끄럽지 않다.
+   */
+  const sourceStatusRow = (evidenceId: string | null): ReactElement | null => {
+    if (evidenceId === null || isMirrorId(evidenceId)) return null;
+    const ev = studentEvidence.find((r) => r.id === evidenceId);
+    if (!ev || ev.sourceId === undefined) return null;
+    const got = sourceState.lookup(ev.sourceId, ev.sourceType);
+    if (got.state === 'out-of-scope') return null;
+    const line = (text: string, action?: ReactElement, tone = 'text-sp-muted'): ReactElement => (
+      <p
+        role="status"
+        aria-live="polite"
+        className={`flex flex-wrap items-center gap-1.5 text-xs ${tone}`}
+      >
+        {text}
+        {action}
+      </p>
+    );
+    const smallBtn = (label: string, onClick: () => void, tone: string): ReactElement => (
+      <button type="button" onClick={onClick} className={`${btn} ${tone}`}>
+        {label}
+      </button>
+    );
+    if (got.state === 'loading') return line('원본 확인 중');
+    if (got.state === 'error') {
+      return line(
+        '원본을 불러오지 못했습니다',
+        smallBtn('다시 시도', sourceState.retry, 'text-sp-accent'),
+      );
+    }
+    if (got.state === 'missing') return line('원본을 찾을 수 없습니다');
+    const openSource = (): void => {
+      if (onRequestFlow === undefined || selectedStudentRef === null) return;
+      void onRequestFlow(
+        createRecordFlowIntent({
+          context,
+          ...(classId !== undefined ? { classId } : {}),
+          studentRef: selectedStudentRef,
+          mode: 'source',
+          sourceId: ev.sourceId as string,
+          evidenceId: ev.id,
+        }),
+      );
+    };
+    // 원본이 비었거나 출결이면 비교가 의미 없다. 원본을 직접 보라고 안내한다.
+    if (got.source.blank || got.source.attendance) {
+      return line(
+        got.source.attendance ? '원본이 출결 기록으로 바뀌었습니다' : '원본 본문이 비어 있습니다',
+        onRequestFlow !== undefined
+          ? smallBtn('원본 보기', openSource, 'text-sp-muted hover:text-sp-text')
+          : undefined,
+        'text-amber-600',
+      );
+    }
+    if (differsFromSource(ev)) {
+      return line(
+        '원본과 내용이 달라요',
+        smallBtn('비교하기', () => setComparingId(ev.id), 'text-amber-600'),
+        'text-amber-600',
+      );
+    }
+    return line('원본과 내용 같음');
+  };
+
   const renderCard = (ev: RecordEvidence, inUnclassified: boolean): ReactElement => (
     <EvidenceCard
       key={ev.id}
@@ -1093,6 +1237,9 @@ export function RecordEvidenceBoard({
       onRemove={() => void removeCard(ev)}
       onSetExcludedFromAi={(excluded) => void setCardExcluded(ev, excluded)}
       onSendTo={(threadId) => void sendTo(threadId, [ev.id])}
+      // 다를 때만 배지가 뜬다. '같음'은 카드가 아니라 [수정] 상세에서만 말한다(계획 §5.3).
+      differsFromSource={differsFromSource(ev)}
+      onCompareSource={() => setComparingId(ev.id)}
       {...(onRequestFlow !== undefined && ev.sourceId !== undefined && selectedStudentRef !== null
         ? {
             onOpenSource: () => {
@@ -1567,6 +1714,7 @@ export function RecordEvidenceBoard({
             aria-label="근거 내용"
             className="min-h-[64px] w-full resize-y rounded-lg border border-sp-border bg-sp-card px-3 py-2 text-sm leading-relaxed text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none"
           />
+          {sourceStatusRow(form.id)}
           <div className="flex flex-wrap items-center gap-2">
             {singleArea === null && (
               <>
@@ -1799,6 +1947,32 @@ export function RecordEvidenceBoard({
             onUnlink={(evidenceId) => void sendToUnclassified([evidenceId])}
           />
         </EvidenceDrawer>
+      )}
+
+      {/* 원본 비교 대화상자 — 근거는 스토어의 최신값에서 다시 찾는다(반영·동기화로 바뀌었을 수 있다). */}
+      {comparing !== undefined && (
+        <EvidenceSourceComparisonDialog
+          evidence={comparing}
+          lookup={sourceState.lookup(comparing.sourceId, comparing.sourceType)}
+          onRetrySource={sourceState.retry}
+          onApply={(capture, fields) =>
+            applySourceFields({
+              evidenceId: comparing.id,
+              studentRef: comparing.studentRef,
+              capture,
+              fields,
+              readLatestSource: sourceState.readLatestSource(
+                capture.sourceId,
+                comparing.sourceType,
+              ),
+            })
+          }
+          onDeleteEvidence={() => {
+            setComparingId(null);
+            void removeCard(comparing);
+          }}
+          onClose={() => setComparingId(null)}
+        />
       )}
 
       {/* 엑셀 서랍 */}

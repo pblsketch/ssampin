@@ -10,6 +10,7 @@ import {
   isSameAsSource,
   normalizeForComparison,
   recheckBeforeApply,
+  evidenceDeleteGuidance,
   type ComparisonCapture,
 } from '../evidenceSourceComparison';
 
@@ -128,5 +129,45 @@ describe('recheckBeforeApply — 대화상자를 열어 둔 사이에 바뀌었�
       latest({ source: { content: '원본', date: '2026-09-01', studentRef: 'tc:c1:1-2-3' } }),
     );
     expect(r.ok).toBe(true);
+  });
+});
+
+describe('evidenceDeleteGuidance — AC-16(b) 지우면 다시 보인다고 약속해도 되는가', () => {
+  const g = (over: Partial<Parameters<typeof evidenceDeleteGuidance>[0]> = {}) =>
+    evidenceDeleteGuidance({
+      hasSource: true,
+      inScope: true,
+      sourceState: 'found',
+      mirrorEligible: true,
+      ...over,
+    });
+
+  it('(a) 원본을 확인했고 거울 적격이면 재노출을 약속한다', () => {
+    expect(g()).toBe('reappears');
+  });
+
+  it('원본이 정말 없으면 근거만 지운다고 말한다', () => {
+    expect(g({ sourceState: 'missing' })).toBe('source-missing');
+  });
+
+  it('★조회 실패는 "모르는 것"이다 — 재노출을 약속하지 않는다', () => {
+    expect(g({ sourceState: 'error' })).toBe('evidence-only');
+  });
+
+  it('★아직 확인 중(loading)에도 약속하지 않는다', () => {
+    expect(g({ sourceState: 'loading' })).toBe('evidence-only');
+  });
+
+  it('★출결·공백 본문(거울 부적격)은 지워도 돌아오지 않는다', () => {
+    expect(g({ mirrorEligible: false })).toBe('evidence-only');
+  });
+
+  it('평가·과제물·첨부처럼 범위 밖 출처도 약속하지 않는다', () => {
+    expect(g({ inScope: false })).toBe('evidence-only');
+  });
+
+  it('(d) 직접 입력 근거는 원본 이야기를 꺼내지 않는다', () => {
+    expect(g({ hasSource: false })).toBe('manual');
+    expect(g({ hasSource: false, sourceState: 'missing' })).toBe('manual');
   });
 });

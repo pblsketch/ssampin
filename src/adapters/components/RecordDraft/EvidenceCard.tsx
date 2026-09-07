@@ -47,6 +47,15 @@ export interface EvidenceCardProps {
    * 원본이 없는 직접 입력 근거에는 부모가 넘기지 않는다.
    */
   onOpenSource?: () => void;
+  /**
+   * 지금 원본과 내용이 다른가(계획 §5.3). **다를 때만 표시한다** -
+   * '같음'은 카드가 아니라 상세(근거 수정 폼)에서만 말한다. 목록에 "같음"이 줄줄이 붙으면
+   * 정작 봐야 할 "다름"이 묻힌다.
+   * 확인 중·확인 실패·원본 없음은 `false` 다. 모르는 것을 "다르다"고 말하지 않는다.
+   */
+  readonly differsFromSource?: boolean;
+  /** [비교하기] - 비교 대화상자를 연다. 없으면 배지 줄을 그리지 않는다. */
+  onCompareSource?: () => void;
 }
 
 /** 자동 판정 갈래("학원·기관명" 등). 비어 있으면 교사가 직접 켠 것이다. */
@@ -75,6 +84,8 @@ export function EvidenceCard({
   onSetExcludedFromAi,
   onSendTo,
   onOpenSource,
+  differsFromSource = false,
+  onCompareSource,
 }: EvidenceCardProps): ReactElement {
   const excluded = ev.excludedFromAi === true;
   const why = autoExclusionWhy(ev);
@@ -115,6 +126,28 @@ export function EvidenceCard({
           {EVIDENCE_SOURCE_LABELS[ev.sourceType ?? 'manual']}
         </span>
       </div>
+      {/* 원본과 다를 때만. 어느 쪽이 언제 바뀌었다고 말하지 않는다(ADR-086 결정 5).
+          거울 카드는 원본 그 자체라 비교 대상이 아니다. */}
+      {!mirror && differsFromSource && onCompareSource !== undefined && (
+        <div
+          className="flex flex-wrap items-center gap-1.5 border-t border-dashed border-amber-500/30 pt-2"
+          {...stop}
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-sm text-amber-600">
+            sync_problem
+          </span>
+          <span className="text-xs font-medium text-amber-600">원본과 내용이 달라요</span>
+          <div className="flex-1" />
+          <button
+            type="button"
+            onClick={onCompareSource}
+            aria-label={`${ev.content.slice(0, 20)} 근거의 원본과 비교`}
+            className="rounded-lg px-2.5 py-1 text-xs font-medium text-amber-600 ring-1 ring-amber-500/30 transition-colors hover:bg-amber-500/10"
+          >
+            비교하기
+          </button>
+        </div>
+      )}
       {/* 유형 토글 · AI 제외 · 수정 · 삭제 — 카드 클릭(선택)·끌기와 겹치지 않게 전파를 끊는다. */}
       <div className="flex flex-wrap items-center gap-1.5 border-t border-sp-border pt-2" {...stop}>
         {areas.length > 1 &&
@@ -175,7 +208,8 @@ export function EvidenceCard({
             onClick={onRemove}
             className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 ring-1 ring-red-500/20 hover:bg-red-500/10"
           >
-            삭제
+            {/* 원본에서 온 근거는 "지우는 것이 원본이 아니다"를 라벨에서 먼저 말한다(계획 §5.3). */}
+            {ev.sourceId !== undefined ? '정리한 근거 삭제' : '삭제'}
           </button>
         )}
       </div>

@@ -125,3 +125,40 @@ export function recheckBeforeApply(
   }
   return { ok: true };
 }
+
+/**
+ * 정리한 근거를 지울 때 **무엇을 약속해도 되는가**(계획 §5.3 "출처 있는 저장 근거 삭제").
+ *
+ * 지운 근거가 미분류 거울로 다시 보이려면 원본이 (1) 실제로 있고 (2) 자동 거울 후보로 적격
+ * 이어야 한다. 그걸 확인하지 못한 채 "원본은 남고 미분류에 다시 표시됩니다"라고 말하면
+ * **거짓말**이 된다: 읽기에 실패했으면 확인한 것이 없고, 출결·공백 본문이면 적격이 아니라
+ * 지워도 돌아오지 않는다. 그래서 확인된 경우에만 재노출을 약속한다.
+ */
+export type EvidenceDeleteGuidance =
+  /** 원본 확인 완료·적격: 지우면 미분류 거울로 다시 보인다. */
+  | 'reappears'
+  /** 원본이 정말 없다: 근거만 지운다. */
+  | 'source-missing'
+  /** 확인하지 못했거나 적격이 아니다: 근거만 지우고 **재노출을 약속하지 않는다.** */
+  | 'evidence-only'
+  /** 직접 입력 근거(출처 없음): 기존 삭제 그대로. 원본 이야기를 꺼내지 않는다. */
+  | 'manual';
+
+export function evidenceDeleteGuidance(input: {
+  /** 이 근거에 `sourceId` 가 있는가. */
+  readonly hasSource: boolean;
+  /** 비교·재노출을 따질 수 있는 출처인가(관찰기록·누가기록만). */
+  readonly inScope: boolean;
+  /** 원본을 지금 어떻게 보고 있는가. */
+  readonly sourceState: 'loading' | 'error' | 'missing' | 'found';
+  /** 원본이 자동 거울 후보로 적격인가(출결 아님·본문 있음). `found` 일 때만 뜻이 있다. */
+  readonly mirrorEligible: boolean;
+}): EvidenceDeleteGuidance {
+  if (!input.hasSource) return 'manual';
+  // 범위 밖 출처(평가·과제물·첨부)는 원본이 있어도 거울로 돌아오는 대상이 아니다.
+  if (!input.inScope) return 'evidence-only';
+  if (input.sourceState === 'missing') return 'source-missing';
+  // 확인 전(loading)·확인 실패(error)는 **모르는 것**이다. 모르면 약속하지 않는다.
+  if (input.sourceState !== 'found') return 'evidence-only';
+  return input.mirrorEligible ? 'reappears' : 'evidence-only';
+}
