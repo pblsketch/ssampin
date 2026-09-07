@@ -15,6 +15,11 @@ import {
   type TopicSelection,
 } from '@adapters/components/RecordDraft/ObservationTopicPicker';
 import { homeroomStudentRef } from '@domain/entities/RecordDraft';
+import {
+  createRecordFlowIntent,
+  resolveRecordFlowIntent,
+  type RecordFlowIntent,
+} from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import { VoiceTypingButton } from '@adapters/components/common/VoiceTypingButton';
 import { StudentRecordReferencePanel } from './StudentRecordReferencePanel';
@@ -54,6 +59,11 @@ export interface InputModeProps extends ModeProps {
   onPrefillConsumed?: () => void;
   /** dirty(미저장 변경) 상태가 바뀔 때 호출 — 이탈 경고용 */
   onDirtyChange?: (dirty: boolean) => void;
+  /** 저장 뒤 [근거 보드에서 보기] 요청을 상위로 올린다(계획 §4.3). */
+  onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
+  /** 보드에서 돌아온 요청(관찰 이어 쓰기·원본 보기). */
+  flowIntent?: RecordFlowIntent | null;
+  onFlowIntentConsumed?: (requestId: string) => void;
 }
 
 type RightTab = 'today' | 'history';
@@ -66,6 +76,9 @@ function InputMode({
   prefill,
   onPrefillConsumed,
   onDirtyChange,
+  onRequestFlow,
+  flowIntent,
+  onFlowIntentConsumed,
 }: InputModeProps) {
   const { addRecord, deleteRecord, updateRecord } = useStudentRecordsStore();
   const customHomeroomTags = useSettingsStore((s) => s.settings.homeroomRecordTags);
@@ -234,6 +247,34 @@ function InputMode({
    * 여러 학생·여러 날짜는 저장 후 학생별 근거 보드에서 묶는다 - 한 주제를 여러 학생에게
    * 복사하면 남의 주제에 남의 근거가 붙는다.
    */
+  /** 보드에서 돌아온 요청 처리(계획 §4.3) - 그 학생을 고르고 한 번만 소비한다. */
+  const consumedFlowRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const resolution = resolveRecordFlowIntent({
+      intent: flowIntent ?? null,
+      rosterLoaded: students.length > 0,
+      knownStudentRefs: new Set(students.map((s) => homeroomStudentRef(s.id))),
+      consumedRequestIds: consumedFlowRef.current,
+    });
+    if (resolution.status === 'ready') {
+      const { intent } = resolution;
+      consumedFlowRef.current.add(intent.requestId);
+      const target = students.find((s) => homeroomStudentRef(s.id) === intent.studentRef);
+      if (target) setSelectedStudents(new Set([target.id]));
+      // 이어 쓰기는 **빈 본문**이다. 주제만 미리 골라 주고 메모는 건드리지 않는다.
+      if (intent.mode === 'compose' && intent.threadId !== undefined) {
+        setSelectedTopic({ kind: 'existing', threadId: intent.threadId });
+      }
+      onFlowIntentConsumed?.(intent.requestId);
+      return;
+    }
+    if (resolution.status === 'student-missing' && flowIntent) {
+      consumedFlowRef.current.add(flowIntent.requestId);
+      showToast('학생을 찾을 수 없습니다.', 'error');
+      onFlowIntentConsumed?.(flowIntent.requestId);
+    }
+  }, [flowIntent, students, onFlowIntentConsumed, showToast]);
+
   const isSingleTarget = selectedStudents.size === 1 && dateMode === 'single';
   const singleTopicStudentRef = isSingleTarget
     ? homeroomStudentRef(Array.from(selectedStudents)[0] ?? '')
@@ -511,6 +552,24 @@ function InputMode({
       if (selectedTopic !== null && singleTopicStudentRef !== null && recordIds.length === 1) {
         await linkSavedRecordToTopic(recordIds[0]!, singleTopicStudentRef);
       }
+      // 저장 결과와 함께 **보드로 가는 길**을 준다. 저장만으로 탭을 옮기지는 않는다(계획 §4.3).
+      if (onRequestFlow && singleTopicStudentRef !== null && recordIds.length === 1) {
+        const goRef = singleTopicStudentRef;
+        const savedId = recordIds[0]!;
+        showToast('기록을 저장했습니다', 'success', {
+          label: '근거 보드에서 보기',
+          onClick: () => {
+            void onRequestFlow(
+              createRecordFlowIntent({
+                context: 'homeroom',
+                studentRef: goRef,
+                mode: 'board',
+                sourceId: savedId,
+              }),
+            );
+          },
+        });
+      }
     });
     // ★저장이 실패했으면 폼을 비우지 않는다 — 교사가 쓴 본문과 고른 첨부가 그대로 사라진다(계획 §5.2).
     //   실패 상태(saveStatus=error)로 남겨 두면 같은 폼에서 곧바로 다시 저장할 수 있다.
@@ -524,6 +583,8 @@ function InputMode({
     selectedTopic,
     singleTopicStudentRef,
     linkSavedRecordToTopic,
+    onRequestFlow,
+    showToast,
   ]);
 
   // 여러 날 일괄 저장 (확인 모달에서 호출)

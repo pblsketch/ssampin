@@ -2,6 +2,9 @@ import { useState, useCallback, useEffect } from 'react';
 import type { CounselingMethod } from '@domain/entities/StudentRecord';
 import { HomeroomTabBar, type HomeroomTab } from './HomeroomTabBar';
 import { HOMEROOM_OPEN_TAB_EVENT, consumePendingHomeroomTab } from './homeroomTabIntent';
+import { flushAllDrafts } from '@adapters/components/RecordDraft/draftFlushRegistry';
+import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { RecordsTab } from './Records/RecordsTab';
 import { HomeroomRecordDraftTab } from './Records/HomeroomRecordDraftTab';
 import { SurveyTab } from './Survey/SurveyTab';
@@ -28,6 +31,26 @@ export function HomeroomPage() {
   const [prefillRecord, setPrefillRecord] = useState<RecordPrefill | null>(null);
   // S3 저장 시맨틱 통일 — 담임 기록 입력 dirty 상태 (이탈 경고용)
   const [recordInputDirty, setRecordInputDirty] = useState(false);
+  /**
+   * 화면 왕복 요청(계획 §4.3). 담임 맥락의 주인은 이 페이지다 - 기록 탭과 초안 탭이
+   * 서로를 직접 부르지 않고 여기를 거친다. 이동 보호를 한 자리에서 걸기 위해서다.
+   */
+  const [flowIntent, setFlowIntent] = useState<RecordFlowIntent | null>(null);
+
+  /** 모든 왕복 이동이 지나는 하나의 전환 함수. 초안 대기분을 먼저 밀어 넣고 실패하면 머문다. */
+  const goWithIntent = useCallback(async (intent: RecordFlowIntent): Promise<void> => {
+    const flushed = await flushAllDrafts();
+    if (!flushed) {
+      useToastStore.getState().show('저장하지 못한 초안이 있어 이동하지 않았습니다.', 'error');
+      return;
+    }
+    setFlowIntent(intent);
+    setActiveTab(intent.mode === 'board' ? 'recordDraft' : 'records');
+  }, []);
+
+  const handleIntentConsumed = useCallback((requestId: string) => {
+    setFlowIntent((prev) => (prev?.requestId === requestId ? null : prev));
+  }, []);
 
   // roster-sample-data-removal Phase 2 — 샘플 의심 배너 노출 판정.
   // 세션 store가 'banner' 결과를 보유하고, 사용자가 3일 안에 닫지 않았으면 표시.
@@ -120,9 +143,18 @@ export function HomeroomPage() {
             prefill={prefillRecord}
             onPrefillConsumed={() => setPrefillRecord(null)}
             onRecordDirtyChange={setRecordInputDirty}
+            onRequestFlow={goWithIntent}
+            flowIntent={flowIntent}
+            onFlowIntentConsumed={handleIntentConsumed}
           />
         )}
-        {activeTab === 'recordDraft' && <HomeroomRecordDraftTab />}
+        {activeTab === 'recordDraft' && (
+          <HomeroomRecordDraftTab
+            flowIntent={flowIntent}
+            onFlowIntentConsumed={handleIntentConsumed}
+            onRequestFlow={goWithIntent}
+          />
+        )}
         {activeTab === 'survey' && <SurveyTab />}
         {activeTab === 'assignment' && <AssignmentTab />}
         {activeTab === 'consultation' && <ConsultationTab onWriteRecord={handleWriteRecord} />}

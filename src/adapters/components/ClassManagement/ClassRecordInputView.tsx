@@ -739,7 +739,11 @@ export function ClassRecordInputView({
                   {showRecentRecords && (
                     <div className="space-y-2">
                       {selectedObservations.map((r) => (
-                        <ObservationCard key={r.id} record={r} />
+                        <ObservationCard
+                          key={r.id}
+                          record={r}
+                          studentRef={teachingStudentRef(classId, r.studentId)}
+                        />
                       ))}
                     </div>
                   )}

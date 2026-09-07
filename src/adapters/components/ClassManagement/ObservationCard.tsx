@@ -2,13 +2,18 @@ import { useMemo, useState, useCallback } from 'react';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { allSlotsForContext } from '@domain/rules/observationSlots';
+import { resolveRecordTopic } from '@domain/services/recordTopicLabel';
+import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
+import { useInquiryThreadStore } from '@adapters/stores/useInquiryThreadStore';
 import { ObservationAttachmentList } from './ObservationAttachmentList';
 
 interface ObservationCardProps {
   record: ObservationRecord;
+  /** 이 기록의 주인. 주제 소속을 근거에서 찾을 때 학생을 한 번 더 거르는 데 쓴다. */
+  studentRef?: string;
 }
 
-export function ObservationCard({ record }: ObservationCardProps) {
+export function ObservationCard({ record, studentRef }: ObservationCardProps) {
   const [editing, setEditing] = useState(false);
   // 관찰 슬롯 — 저장한 장면을 **보고 고칠 수 있어야** 한다. 되돌릴 길이 없으면 탭을 망설이게 된다.
   const customSlots = useObservationStore((s) => s.customSlots);
@@ -19,6 +24,17 @@ export function ObservationCard({ record }: ObservationCardProps) {
 
   const updateRecord = useObservationStore((s) => s.updateRecord);
   const deleteRecord = useObservationStore((s) => s.deleteRecord);
+
+  // 주제 소속은 **저장된 근거**에서 찾는다. 원본에 남은 옛 threadId 를 믿지 않는다(계획 §4.3).
+  const evidenceRecords = useRecordEvidenceStore((s) => s.records);
+  const threads = useInquiryThreadStore((s) => s.records);
+  const topic = useMemo(
+    () =>
+      studentRef === undefined
+        ? null
+        : resolveRecordTopic(record.id, studentRef, evidenceRecords, threads),
+    [record.id, studentRef, evidenceRecords, threads],
+  );
 
   const handleSaveEdit = useCallback(async () => {
     const trimmed = editContent.trim();
@@ -55,6 +71,23 @@ export function ObservationCard({ record }: ObservationCardProps) {
               {tag}
             </span>
           ))}
+          {/* 주제 소속 — 저장된 근거 기준. 고아 주제는 "없다"가 아니라 "확인 중"이다. */}
+          {topic !== null && (
+            <span
+              className="shrink-0 rounded-full px-1.5 py-0.5 text-xs font-medium text-sp-accent ring-1 ring-blue-500/30"
+              title={
+                topic.kind === 'unknown-thread'
+                  ? '연결된 주제를 찾지 못했습니다. 다른 기기의 변경이 아직 안 왔을 수 있습니다.'
+                  : '이 기록이 묶인 주제'
+              }
+            >
+              {topic.kind === 'thread'
+                ? topic.title
+                : topic.kind === 'unknown-thread'
+                  ? '주제 확인 중'
+                  : '주제 미지정'}
+            </span>
+          )}
           {/* 슬롯은 태그와 다른 축이라 테두리형으로 구분한다(색 하나 더 쓰지 않는다). */}
           {(record.slots ?? []).map((slot) => (
             <span

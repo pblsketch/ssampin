@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { RecordCategoryManagementModal } from '@adapters/components/StudentRecords/RecordCategoryManagementModal';
@@ -27,9 +28,21 @@ interface RecordsTabProps {
   onPrefillConsumed?: () => void;
   /** 담임 기록 입력 dirty 상태 변경 콜백 — 이탈 경고용 */
   onRecordDirtyChange?: (dirty: boolean) => void;
+  /** 저장 뒤 [근거 보드에서 보기] 요청을 상위(HomeroomPage)로 올린다(계획 §4.3). */
+  onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
+  /** 보드에서 돌아온 요청(관찰 이어 쓰기·원본 보기). */
+  flowIntent?: RecordFlowIntent | null;
+  onFlowIntentConsumed?: (requestId: string) => void;
 }
 
-export function RecordsTab({ prefill, onPrefillConsumed, onRecordDirtyChange }: RecordsTabProps) {
+export function RecordsTab({
+  prefill,
+  onPrefillConsumed,
+  onRecordDirtyChange,
+  onRequestFlow,
+  flowIntent,
+  onFlowIntentConsumed,
+}: RecordsTabProps) {
   const { records, loaded, load, viewMode, setViewMode, categories } = useStudentRecordsStore();
   const {
     students,
@@ -152,6 +165,9 @@ export function RecordsTab({ prefill, onPrefillConsumed, onRecordDirtyChange }: 
           prefill={prefill}
           onPrefillConsumed={onPrefillConsumed}
           onDirtyChange={onRecordDirtyChange}
+          {...(onRequestFlow !== undefined ? { onRequestFlow } : {})}
+          flowIntent={flowIntent}
+          onFlowIntentConsumed={onFlowIntentConsumed}
         />
       )}
       {viewMode === 'progress' && (
