@@ -63,6 +63,7 @@ import { fetchRecordPromptL1 } from '@adapters/di/container';
 import { useConnectedOwnAiProviders } from '@adapters/stores/useOwnAiStatusStore';
 import { useRecordAiDraftStore } from '@adapters/stores/useRecordAiDraftStore';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
+import type { OwnAiErrorKind } from '@domain/entities/OwnAiProvider';
 import { goalFloor, type LengthAdjustKind } from '@domain/rules/recordLengthGoal';
 import { aiDraftText } from '@domain/entities/RecordAiDraft';
 import type { DraftPackEvidence } from '@domain/services/recordDraftPack';
@@ -483,8 +484,19 @@ export function RecordDraftView({
       if (aiBusyRef.current) throw new Error('다른 AI 작업이 끝나면 이어서 할 수 있어요.');
 
       // ★규정(1층 프롬프트)을 먼저 받는다. 없으면 실행하지 않는다 - 조절도 같은 게이트를 받는다.
-      const systemPrompt = await fetchRecordPromptL1(installId);
-      if (systemPrompt === null) throw new Error(OWN_AI_ERROR_MESSAGES['prompt-unavailable'].draft);
+      //   ★한도(429)와 그 밖의 실패는 안내가 달라야 한다 — "인터넷을 확인하라"고 하면
+      //     선생님이 계속 다시 눌러 요청이 더 몰린다(ADR-089).
+      const promptResult = await fetchRecordPromptL1(installId);
+      if (!promptResult.ok) {
+        const kind: OwnAiErrorKind =
+          promptResult.reason === 'rate-limited-minute'
+            ? 'prompt-rate-limited-minute'
+            : promptResult.reason === 'rate-limited-day'
+              ? 'prompt-rate-limited-day'
+              : 'prompt-unavailable';
+        throw new Error(OWN_AI_ERROR_MESSAGES[kind].draft);
+      }
+      const systemPrompt = promptResult.prompt;
 
       aiBusyRef.current = true;
       aiRunTokenRef.current += 1;

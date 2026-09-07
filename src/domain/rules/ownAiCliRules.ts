@@ -14,6 +14,10 @@
  *
  * 2. **stdin 을 닫지 않으면 멈춘다.** claude 는 3초를 버리고(경고 후 진행),
  *    codex 는 **무한 대기**한다(실측 184초 타임아웃, 출력 0줄). 러너는 stdin 을 반드시 닫는다.
+ *    ★이건 "열어 둔 채 아무것도 안 준" 경우다. **써 넣고 `end()` 로 닫는 것은 다른 경우이고,
+ *    정상 동작한다**(2026-09-07 실측: claude 2.1.258 텍스트만 stdin → exit 0·7초).
+ *    지금은 프롬프트를 **stdin 으로 넘기는 쪽이 기본**이다 — 명령줄에 학생 근거 본문이
+ *    실리지 않게 하기 위해서다(ADR-089 후속 6). `buildClaudeArgv` 주석 참조.
  *
  * ★`--bare` 금지: CLI `--help` 원문이 "Anthropic auth is strictly ANTHROPIC_API_KEY …
  *   (OAuth and keychain are never read)" 라, 구독 로그인을 아예 안 읽는다.
@@ -79,6 +83,20 @@ export function stripOwnAiEnv<T extends Record<string, string | undefined>>(env:
 
 /** `--permission-prompts none` 을 붙일 수 있는 최소 버전(claude 전용). */
 export const CLAUDE_PERMISSION_PROMPTS_MIN = '2.1.259';
+
+/**
+ * codex 가 프롬프트를 **stdin 으로** 받게 할 수 있는 최소 버전(`codex exec … -`).
+ *
+ * ★**실측한 버전만 적는다.** 0.153.4 에서 완주를 확인했다(2026-09-07: exit 0 · 6초 ·
+ *   `turn.completed` · 응답 도착). `--help` 원문도 *"If not provided as an argument
+ *   (or if `-` is used), instructions are read from stdin"* 이라고 말한다.
+ * ★그 아래 버전은 **확인한 적이 없다.** 안 되면 `-` 를 프롬프트 글자로 읽어 엉뚱한 답을
+ *   내놓을 수 있는데 그건 조용한 오작동이라 더 나쁘다 → 옛 경로(위치 인자)로 둔다.
+ * ★**`OWN_AI_VERSION_FLOOR` 를 올리지 않는다.** 하한을 올리면 구버전 선생님은 명령줄 노출이
+ *   남는 게 아니라 **코덱스로 아무것도 못 하게** 된다. 여기서 갈라 주는 것이 옳다
+ *   (`CLAUDE_PERMISSION_PROMPTS_MIN` 과 같은 모양).
+ */
+export const CODEX_STDIN_MIN = '0.153.4';
 
 /**
  * 모델 목록의 **기본값(폴백)**. 평소에는 서버가 준 목록을 쓰고(`AiModelCatalogClient`),
@@ -156,6 +174,16 @@ export const OWN_AI_ERROR_MESSAGES: Readonly<
     panel: '지금은 이 기능을 쓸 수 없어요. 잠시 뒤 다시 시도해 주세요.',
     draft:
       '생기부 작성 규정을 서버에서 받아오지 못해 초안을 만들지 않았어요. 인터넷 연결을 확인하고 잠시 뒤 다시 눌러 주세요.',
+  },
+  // ★위 문구는 원인을 "인터넷"으로 단정한다 — 한도에 걸린 경우에는 틀린 안내이고,
+  //   그대로 두면 선생님이 인터넷을 의심해 계속 다시 눌러 요청이 더 몰린다(ADR-089).
+  'prompt-rate-limited-minute': {
+    panel: '지금 요청이 몰렸어요. 1분 뒤에 다시 시도해 주세요.',
+    draft: '지금 요청이 몰렸어요. 1분 뒤에 다시 눌러 주세요.',
+  },
+  'prompt-rate-limited-day': {
+    panel: '오늘 받을 수 있는 횟수를 다 썼어요. 내일 다시 시도해 주세요.',
+    draft: '오늘은 작성 규정을 받아올 수 있는 횟수를 다 썼어요. 내일 다시 눌러 주세요.',
   },
   cancelled: { panel: '중단했어요.', draft: '중단했어요.' },
   crashed: {
@@ -272,16 +300,39 @@ export interface ClaudeArgvOptions {
   readonly appendSystemPrompt?: string;
   /** 설치된 CLI 버전 — `--permission-prompts` 를 붙일지 정한다. */
   readonly version?: string | null;
+  /**
+   * 프롬프트를 argv 가 아니라 **stdin 의 stream-json 메시지**로 넘긴다.
+   * 이때 `o.prompt` 는 argv 에 실리지 않는다 — `buildClaudeStdinMessage` 가 만든 한 줄을
+   * 실행기가 stdin 에 쓰고 바로 닫는다.
+   *
+   * ★**러너는 claude 에 항상 이 값을 켠다**(ADR-089 후속 6). 처음엔 이미지 첨부 때만
+   *   켰는데(ADR-090), 첨부가 없어도 같은 경로가 그대로 동작한다 — 그래서 **프롬프트가
+   *   명령줄에 실릴 이유가 없어졌다.** 아래 `buildClaudeArgv` 주석 참조.
+   */
+  readonly promptViaStdin?: boolean;
 }
 
 /**
- * claude argv. **프롬프트는 argv 가 아니라 `-p <프롬프트>` 로 넘긴다.**
- * (stdin 은 닫아야 하므로 파이프로 넣지 않는다.)
+ * claude argv.
+ *
+ * ★**프롬프트를 argv 에 싣지 않는다**(`promptViaStdin`, ADR-089 후속 6).
+ *   윈도우에서 명령줄은 다른 프로세스가 읽을 수 있고(작업 관리자 "명령줄" 열,
+ *   `Get-CimInstance Win32_Process`, 백신·EDR 텔레메트리), 여기 실리는 것은 규정만이
+ *   아니라 **선생님이 넣은 학생 근거 본문**이다. 이름 가림은 그 반 명단 안에서만 작동하므로
+ *   **다른 반 학생 이름은 가려지지 않은 채** 명령줄에 실릴 수 있었다.
+ *   → `-p --input-format stream-json` 으로 바꾸고 메시지 한 줄을 stdin 에 쓴 뒤 **즉시 닫는다.**
+ *
+ * ★실측(2026-09-07, claude 2.1.258): 첨부 **없이** 텍스트만 stdin 으로 넘겨도 정상 동작한다
+ *   (exit 0, 7초, 응답 도착). 파일 머리말 2번의 "stdin 을 닫지 않으면 멈춘다"는 **열어 둔 채
+ *   아무것도 안 준** 경우이고, 써 넣고 `end()` 로 닫는 것은 다른 경우다.
+ *
+ * ★`promptViaStdin` 이 꺼져 있으면 옛 경로(`-p <프롬프트>`)를 그대로 쓴다 — 테스트와
+ *   되돌리기를 위해 남겨 둔다.
  */
 export function buildClaudeArgv(o: ClaudeArgvOptions): readonly string[] {
   const argv: string[] = [
     '-p',
-    o.prompt,
+    ...(o.promptViaStdin ? ['--input-format', 'stream-json'] : [o.prompt]),
     '--output-format',
     'stream-json',
     '--verbose',
@@ -328,6 +379,20 @@ export interface CodexArgvOptions {
     readonly args: readonly string[];
     readonly env: Readonly<Record<string, string>>;
   };
+  /**
+   * 첨부 이미지의 임시 파일 경로(실행기가 풀어 놓은 것). `-i <경로>` 로 붙인다.
+   *
+   * ★`-i` 는 여러 값을 받는 옵션이라 **프롬프트보다 앞에, 다른 옵션 사이에** 둔다.
+   *   맨 뒤에 두면 위치 인자인 프롬프트까지 이미지 파일로 먹고 "No prompt provided" 로
+   *   죽는다(2026-09-07 실측, 0.153.4).
+   */
+  readonly imagePaths?: readonly string[];
+  /**
+   * 프롬프트를 argv 가 아니라 **stdin** 으로 넘긴다(`codex exec … -`).
+   * 러너가 `buildCodexStdinText` 로 만든 글을 stdin 에 쓰고 **즉시 닫는다.**
+   * 켤지 말지는 설치 버전이 정한다 — `CODEX_STDIN_MIN` 참조.
+   */
+  readonly promptViaStdin?: boolean;
 }
 
 /** TOML 문자열 리터럴로 감싼다. 역슬래시·따옴표만 이스케이프하면 된다. */
@@ -335,7 +400,29 @@ function toml(value: string): string {
   return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
 }
 
-/** codex argv. 프롬프트는 위치 인자로 넘긴다(stdin 을 닫아야 하므로). */
+/**
+ * codex 로 실제로 나가는 글 — 규정 + 프롬프트를 이어 붙인 한 덩어리.
+ *
+ * argv 로 가든 stdin 으로 가든 **내용은 같다.** 한 자리에서 만들어야 두 경로가 어긋나지 않고,
+ * 실명 유출 가드도 여기 하나만 보면 된다.
+ *
+ * ★규정을 맨 앞에 두는 이유: "이 조건으로 써라"라서 재료보다 먼저 와야 한다.
+ *   claude 는 시스템 자리에 들어가므로 이미 앞이다 — 두 CLI 의 순서를 맞춘다.
+ */
+export function buildCodexStdinText(o: Pick<CodexArgvOptions, 'prompt' | 'appendSystemPrompt'>) {
+  return o.appendSystemPrompt ? `${o.appendSystemPrompt}\n\n---\n\n${o.prompt}` : o.prompt;
+}
+
+/**
+ * codex argv.
+ *
+ * ★`promptViaStdin` 이면 프롬프트 자리에 **`-` 만** 넣는다 — 본문은 러너가 stdin 에 쓴다.
+ *   명령줄에 규정과 학생 근거 본문이 실리지 않게 하려는 것이다(ADR-089 후속 6).
+ *   실측 2026-09-07(codex-cli 0.153.4): exit 0 · 6초 · `turn.completed`. **무한 대기 없음** —
+ *   파일 머리말 2번의 경고는 stdin 을 열어 둔 채 아무것도 안 준 경우다.
+ * ★꺼져 있으면 옛 경로(위치 인자)를 그대로 쓴다. 구버전에서 `-` 가 프롬프트 글자로 읽히면
+ *   조용한 오작동이 되므로, 확인한 버전에서만 켠다(`CODEX_STDIN_MIN`).
+ */
 export function buildCodexArgv(o: CodexArgvOptions): readonly string[] {
   const argv: string[] = [
     'exec',
@@ -348,6 +435,9 @@ export function buildCodexArgv(o: CodexArgvOptions): readonly string[] {
     // ~/.codex/config.toml 을 무시한다. 인증(auth.json)은 그대로 살아 있다(실측 확인).
     '--ignore-user-config',
   ];
+  // 이미지는 한 장마다 `-i` 를 따로 붙인다 — 값을 여러 개 받는 옵션이라 붙여 두면
+  // 뒤따르는 프롬프트까지 삼킨다. 프롬프트는 여전히 맨 뒤 위치 인자다.
+  for (const p of o.imagePaths ?? []) argv.push('-i', p);
   if (o.model) argv.push('-m', o.model);
   if (o.kind === 'panel' && o.bridge) {
     const key = `mcp_servers.${OWN_AI_MCP_SERVER_NAME}`;
@@ -359,8 +449,7 @@ export function buildCodexArgv(o: CodexArgvOptions): readonly string[] {
     argv.push('-c', `${key}.args=[${args}]`);
     argv.push('-c', `${key}.env={${env}}`);
   }
-  // ★붙이는 자리가 맨 앞인 이유: 규정은 "이 조건으로 써라"라서 재료보다 먼저 와야 한다.
-  //   claude 는 시스템 자리에 들어가므로 이미 앞이다 — 두 CLI 의 순서를 맞춘다.
-  argv.push(o.appendSystemPrompt ? `${o.appendSystemPrompt}\n\n---\n\n${o.prompt}` : o.prompt);
+  // ★`-` 는 "stdin 에서 읽어라"라는 뜻이다. 본문은 명령줄에 실리지 않는다.
+  argv.push(o.promptViaStdin ? '-' : buildCodexStdinText(o));
   return argv;
 }

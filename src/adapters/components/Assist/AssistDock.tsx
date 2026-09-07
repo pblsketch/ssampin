@@ -9,7 +9,7 @@
  *
  * 설계: docs/02-design/features/inapp-ai-assist.design.md §3
  */
-import { useLayoutEffect, useMemo, useState } from 'react';
+import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { AssistThread } from './AssistThread';
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
@@ -29,6 +29,14 @@ import {
 import { answererLabel } from './answererLabels';
 import { useOwnAiModelCatalog } from '@adapters/hooks/useOwnAiModelCatalog';
 import { OwnAiProposalCards } from './OwnAiProposalCards';
+import { AttachmentStrip } from './AttachmentStrip';
+import { imageFilesFrom, readAttachmentFiles } from './readAttachmentFiles';
+import {
+  ASSIST_ATTACHMENT_ACCEPT,
+  ATTACHMENT_ONLY_QUESTION,
+  ATTACHMENT_REJECTION_MESSAGES,
+  attachmentsAllowedFor,
+} from '@domain/rules/assistAttachmentRules';
 
 /**
  * 제안 칩 — **장식이 아니라 1층 방어**다.
@@ -138,7 +146,24 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
   // 답을 기다리는 동안 새 질문을 막는다. 대화 이력을 싣기 시작하면서(ADR-067)
   // 진행 중에 겹쳐 보내면 이력이 반쪽으로 실리고, 서버 분당 상한(6회)도 쉽게 닿는다.
   const busy = turns.some((t) => t.status === 'thinking');
-  const canSend = draft.trim().length > 0 && !busy;
+
+  // ── 이미지 첨부(ADR-090) — "내 AI"(구독 CLI)로 답할 때만 ──
+  const attachments = useAssistStore((s) => s.attachments);
+  const addAttachments = useAssistStore((s) => s.addAttachments);
+  const removeAttachment = useAssistStore((s) => s.removeAttachment);
+  /** 방금 거절된 파일의 사유. 다음에 하나라도 붙으면 지운다. */
+  const [attachRejection, setAttachRejection] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 글만 있어도, 이미지만 있어도 보낼 수 있다(이미지만이면 기본 질문을 싣는다).
+  const canSend = (draft.trim().length > 0 || attachments.length > 0) && !busy;
+
+  const attachFiles = async (files: readonly File[]): Promise<void> => {
+    if (files.length === 0) return;
+    const candidates = await readAttachmentFiles(files);
+    const rejection = addAttachments(candidates);
+    setAttachRejection(rejection === null ? null : ATTACHMENT_REJECTION_MESSAGES[rejection]);
+  };
 
   // "내 AI로 실행" — 연결된 공급자와 남은 사용량. 없으면 아래 UI 는 그리지 않는다.
   const provider = useAssistStore((s) => s.provider);
@@ -165,6 +190,11 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
   //   사라져 "저장은 됐는데 아무 말이 없는" 상태가 된다. 스토어(clearConversation)도
   //   같은 조건으로 거부하므로, 이 버튼은 그 사실을 눈에 보이게 하는 쪽이다.
   const saving = turns.some((t) => t.proposalState === 'running');
+  /**
+   * 첨부 버튼을 그릴까 — "내 AI"를 골랐고 실제로 연결돼 있을 때만.
+   * 쌤핀 AI(Solar)를 고른 동안에는 버튼도, 붙여넣기도 통하지 않는다(스토어가 막는다).
+   */
+  const canAttach = attachmentsAllowedFor(provider) && connectedProviders.includes(provider);
 
   const remainingHint = useMemo(
     () => (turns.length === 0 ? '숫자는 이 컴퓨터에서 찾고, 설명만 AI가 씁니다' : ''),
@@ -175,8 +205,10 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
   if (!enabled || !open) return null;
 
   const send = (): void => {
-    const question = draft.trim();
-    if (question.length === 0 || busy) return;
+    if (!canSend) return;
+    // 이미지만 붙이고 글을 안 썼으면 기본 질문을 싣는다 — 빈 질문은 보낼 수 없다.
+    const question = draft.trim() || ATTACHMENT_ONLY_QUESTION;
+    setAttachRejection(null);
     onAsk(question);
   };
 
@@ -308,13 +340,35 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
       <OwnAiProposalCards />
 
       {/* 입력부 */}
-      <div className="shrink-0 border-t border-sp-border p-3">
+      <div
+        className="shrink-0 border-t border-sp-border p-3"
+        // 이미지를 입력부 어디에 놓아도 붙는다 — "내 AI"일 때만. 글 파일을 놓으면 거절 문구가 뜬다.
+        onDragOver={canAttach ? (e) => e.preventDefault() : undefined}
+        onDrop={
+          canAttach
+            ? (e) => {
+                e.preventDefault();
+                void attachFiles(Array.from(e.dataTransfer?.files ?? []));
+              }
+            : undefined
+        }
+      >
         <OutboundLine
           text={draft}
           screening={screening}
           roster={roster}
           onRemoveFinding={handleRemoveFinding}
         />
+
+        {canAttach && (
+          <AttachmentStrip
+            attachments={attachments}
+            providerLabel={answererLabel(provider)}
+            rejection={attachRejection}
+            onRemove={removeAttachment}
+            disabled={busy}
+          />
+        )}
 
         <textarea
           value={draft}
@@ -327,6 +381,14 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
               send();
             }
           }}
+          onPaste={(e) => {
+            // 스크린샷을 Ctrl+V 로 붙이는 길. 글을 붙여넣는 건 그대로 둔다.
+            if (!canAttach) return;
+            const files = imageFilesFrom(e.clipboardData);
+            if (files.length === 0) return;
+            e.preventDefault();
+            void attachFiles(files);
+          }}
           maxLength={ASSIST_MAX_QUESTION_CHARS}
           placeholder={`예: ${ASSIST_PLACEHOLDER_EXAMPLE}`}
           aria-label="쌤핀 AI에게 물어보기"
@@ -334,12 +396,56 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
         />
 
         <div className="mt-2 flex items-center justify-between gap-2">
-          {/* 상한에 가까워질 때만 알린다 — 평소에 숫자를 띄우면 글자 수를 세게 만든다. */}
-          <span className="text-xs text-sp-muted">
-            {draft.length > ASSIST_MAX_QUESTION_CHARS - 200
-              ? `${ASSIST_MAX_QUESTION_CHARS - draft.length}자 더 쓸 수 있어요`
-              : '이름은 보내기 전에 가려집니다'}
-          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            {/* 이미지 붙이기 — "내 AI"를 고른 동안만. 쌤핀 AI 는 이미지를 못 받는다(ADR-090). */}
+            {canAttach && (
+              <>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ASSIST_ATTACHMENT_ACCEPT}
+                  multiple
+                  className="hidden"
+                  aria-hidden="true"
+                  tabIndex={-1}
+                  onChange={(e) => {
+                    void attachFiles(Array.from(e.target.files ?? []));
+                    // 같은 파일을 다시 고를 수 있게 비운다.
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={busy}
+                  aria-label="이미지 붙이기"
+                  title="이미지 붙이기 (붙여넣기·끌어다 놓기도 돼요)"
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-sp-muted hover:bg-sp-card hover:text-sp-text disabled:opacity-50 disabled:hover:bg-transparent"
+                >
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 20 20"
+                    className="h-4 w-4"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect x="3" y="4" width="14" height="12" rx="2" />
+                    <circle cx="7.5" cy="8.5" r="1.3" />
+                    <path d="M17 13.5l-4-4-6 6M3 15l3.5-3.5" />
+                  </svg>
+                </button>
+              </>
+            )}
+            {/* 상한에 가까워질 때만 알린다 — 평소에 숫자를 띄우면 글자 수를 세게 만든다. */}
+            <span className="truncate text-xs text-sp-muted">
+              {draft.length > ASSIST_MAX_QUESTION_CHARS - 200
+                ? `${ASSIST_MAX_QUESTION_CHARS - draft.length}자 더 쓸 수 있어요`
+                : '이름은 보내기 전에 가려집니다'}
+            </span>
+          </div>
           <button
             type="button"
             onClick={send}

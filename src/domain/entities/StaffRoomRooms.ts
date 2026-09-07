@@ -193,7 +193,42 @@ export interface StaffRoomTask {
   /** 끝난 시각. 안 끝났으면 null */
   readonly doneAt: string | null;
   readonly authorEmail: string;
+
+  // ── 인수인계 때 진짜 넘어가야 하는 것 (066) ──────────────────────
+  //
+  // 2월에 부서가 바뀔 때 파일은 넘어가는데 **아는 것**은 안 넘어간다.
+  // "매주 금요일 무엇을 하는지", "어떤 순서로 처리하는지", "모르면 사고 나는
+  // 주의사항" — 이 셋이 그 자리다. 순서가 뜻을 가지므로 배열로 둔다.
+
+  /** 반복 업무 — 주기와 할 일 한 쌍씩 */
+  readonly routines: readonly StaffRoomTaskRoutine[];
+  /** 처리 절차 — 순서대로 따라 할 수 있게 */
+  readonly howto: readonly string[];
+  /** 인수인계 메모 — 다음 담당자가 모르면 사고 나는 것들 */
+  readonly handoverNotes: readonly string[];
 }
+
+/** 반복 업무 한 줄 — "매주 금요일 / 주간 출결 통계 정리" */
+export interface StaffRoomTaskRoutine {
+  readonly cycle: string;
+  readonly what: string;
+}
+
+/**
+ * 업무에 걸어 둔 서식.
+ *
+ * 파일 자체는 자료실에 있고 여기는 가리키기만 한다. `fileId` 가 null 이면
+ * **자료실에서 지워진 것**이다 — 줄은 남겨서 "지워진 파일"로 알린다.
+ * 조용히 사라지면 업무가 고쳐진 줄 안다(글 첨부와 같은 판단).
+ */
+export interface StaffRoomTaskForm {
+  readonly id: string;
+  readonly fileId: string | null;
+  readonly fileName: string;
+}
+
+/** 업무 하나에 담을 수 있는 반복 업무·절차·메모 줄 수 */
+export const STAFFROOM_TASK_KNOWLEDGE_MAX_ITEMS = 10;
 
 /** 업무 입력 */
 export interface WriteStaffRoomTaskInput {
@@ -201,28 +236,59 @@ export interface WriteStaffRoomTaskInput {
   readonly assigneeEmail: string | null;
   readonly dueOn: string | null;
   readonly memo: string;
+  readonly routines: readonly StaffRoomTaskRoutine[];
+  readonly howto: readonly string[];
+  readonly handoverNotes: readonly string[];
 }
 
 // ══════════════════════════════════════════════════════════════════
 // 모듈 이름 붙이기 (§6)
 // ══════════════════════════════════════════════════════════════════
 
-/** 모듈 종류별 기본 이름 — 관리자가 바꾸기 전까지 쓰는 값 */
+/**
+ * 모듈 종류 **정본**.
+ *
+ * 같은 목록이 여섯 군데에 흩어져 있다 — 여기 · `StaffRoomModuleKind` union ·
+ * 서버 `MODULE_KINDS` · 화면이 고르게 하는 목록 · 아래 이름·아이콘 맵 두 개 ·
+ * 그리고 데이터베이스의 CHECK 제약. 한 곳만 고치면 나머지가 조용히 어긋나므로
+ * `staffroomModuleKindDrift.meta.test.ts` 가 여섯을 함께 견준다.
+ *
+ * ★ 화면 파일이 아니라 여기에 두는 이유 — 이름·아이콘 맵과 같은 자리여야
+ *   드리프트 검사가 JSX 를 뒤지지 않아도 된다.
+ */
+export const ALL_MODULE_KINDS = [
+  'board',
+  'archive',
+  'discussion',
+  'gallery',
+  'minutes',
+  'submission',
+] as const;
+
+/**
+ * 모듈 종류별 기본 이름 — 관리자가 바꾸기 전까지 쓰는 값.
+ *
+ * ★ `Record<string, string>` 이라 종류를 늘리면서 여기를 빠뜨려도
+ *   타입 검사가 안 잡는다(부르는 쪽이 `?? '새 공간'` 으로 받는다).
+ *   그래서 드리프트 테스트가 **키 목록**을 위 정본과 견준다.
+ */
 export const STAFFROOM_MODULE_DEFAULT_NAMES: Readonly<Record<string, string>> = {
   board: '게시판',
   archive: '자료실',
   discussion: '토론방',
   gallery: '갤러리',
   minutes: '회의록',
+  submission: '제출 과제',
 };
 
-/** 모듈 종류별 아이콘 (Material Symbols) */
+/** 모듈 종류별 아이콘 (Material Symbols). 위와 같은 이유로 드리프트 검사를 받는다 */
 export const STAFFROOM_MODULE_ICONS: Readonly<Record<string, string>> = {
   board: 'forum',
   archive: 'folder',
   discussion: 'how_to_vote',
   gallery: 'photo_library',
   minutes: 'gavel',
+  submission: 'assignment_turned_in',
 };
 
 /** 모듈 이름 최대 길이 */

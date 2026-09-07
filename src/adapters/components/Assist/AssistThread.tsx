@@ -484,9 +484,24 @@ export function AssistThread({
         <div key={turn.id} className="flex flex-col gap-2">
           {/* 사용자 질문 — 오른쪽 정렬, 최대 88% */}
           <div className="flex justify-end">
-            <p className="max-w-[88%] rounded-lg bg-sp-card px-3 py-2 text-sm text-sp-text">
-              {turn.question}
-            </p>
+            <div className="max-w-[88%] rounded-lg bg-sp-card px-3 py-2 text-sm text-sp-text">
+              {/* 붙여 보낸 이미지는 글 위에 작게 남는다 — 무엇을 보고 답했는지 나중에도 알 수 있게. */}
+              {turn.attachments && turn.attachments.length > 0 && (
+                <ul className="mb-1.5 flex flex-wrap gap-1.5" aria-label="붙여 보낸 이미지">
+                  {turn.attachments.map((a) => (
+                    <li key={a.id}>
+                      <img
+                        src={`data:${a.mediaType};base64,${a.dataBase64}`}
+                        alt={a.name}
+                        title={a.name}
+                        className="h-16 w-16 rounded-lg border border-sp-border object-cover"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <p>{turn.question}</p>
+            </div>
           </div>
 
           {turn.cards.map((card, index) => (

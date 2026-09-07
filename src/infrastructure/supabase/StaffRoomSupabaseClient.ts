@@ -16,6 +16,13 @@
  *  - staffroom-plan             {action: list|mine|addEvent|addTask|toggleTask|..., ...}
  */
 import type {
+  StaffRoomMySubmission,
+  StaffRoomSubmission,
+  StaffRoomSubmissionSaveResult,
+  StaffRoomSubmissionTargets,
+  WriteStaffRoomSubmissionInput,
+} from '@domain/entities/StaffRoomSubmission';
+import type {
   CreateStaffRoomDepartmentInput,
   CreateStaffRoomInviteInput,
   StaffRoomDepartment,
@@ -43,6 +50,7 @@ import type {
   StaffRoomTally,
   StaffRoomEvent,
   StaffRoomTask,
+  StaffRoomTaskForm,
   StaffRoomVote,
   WriteStaffRoomEventInput,
   WriteStaffRoomMinutesInput,
@@ -945,7 +953,12 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
   async listMyPlan(
     googleAccessToken: string,
     departmentIds: readonly string[],
-  ): Promise<{ events: StaffRoomEvent[]; tasks: StaffRoomTask[] }> {
+  ): Promise<{
+    events: StaffRoomEvent[];
+    tasks: StaffRoomTask[];
+    submissions: StaffRoomMySubmission[];
+    submissionsTruncated: boolean;
+  }> {
     return this.invoke('staffroom-plan', { action: 'mine', googleAccessToken, departmentIds });
   }
 
@@ -1044,6 +1057,141 @@ export class StaffRoomSupabaseClient implements IStaffRoomPort {
       googleAccessToken,
       departmentId,
       taskId,
+    });
+  }
+
+  // ── 제출 과제 (066) ─────────────────────────────────────────────
+
+  async listSubmissions(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+  ): Promise<StaffRoomSubmission[]> {
+    const res = await this.invoke<{ submissions: StaffRoomSubmission[] }>('staffroom-rooms', {
+      action: 'submissions',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+    });
+    return res.submissions;
+  }
+
+  async addSubmission(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    input: WriteStaffRoomSubmissionInput,
+  ): Promise<StaffRoomSubmissionSaveResult> {
+    return this.invoke('staffroom-rooms', {
+      action: 'addSubmission',
+      googleAccessToken,
+      departmentId,
+      moduleId,
+      ...input,
+    });
+  }
+
+  async updateSubmission(
+    googleAccessToken: string,
+    departmentId: string,
+    submissionId: string,
+    input: WriteStaffRoomSubmissionInput,
+  ): Promise<StaffRoomSubmissionSaveResult> {
+    return this.invoke('staffroom-rooms', {
+      action: 'updateSubmission',
+      googleAccessToken,
+      departmentId,
+      submissionId,
+      ...input,
+    });
+  }
+
+  async deleteSubmission(
+    googleAccessToken: string,
+    departmentId: string,
+    submissionId: string,
+  ): Promise<void> {
+    await this.invoke('staffroom-rooms', {
+      action: 'deleteSubmission',
+      googleAccessToken,
+      departmentId,
+      submissionId,
+    });
+  }
+
+  async toggleSubmissionDone(
+    googleAccessToken: string,
+    departmentId: string,
+    submissionId: string,
+    done: boolean,
+    targetEmail?: string,
+  ): Promise<StaffRoomSubmission> {
+    const res = await this.invoke<{ submission: StaffRoomSubmission }>('staffroom-rooms', {
+      action: 'toggleSubmission',
+      googleAccessToken,
+      departmentId,
+      submissionId,
+      done,
+      targetEmail,
+    });
+    return res.submission;
+  }
+
+  async listSubmissionTargets(
+    googleAccessToken: string,
+    departmentId: string,
+    submissionId: string,
+  ): Promise<StaffRoomSubmissionTargets> {
+    const res = await this.invoke<{ targets: StaffRoomSubmissionTargets }>('staffroom-rooms', {
+      action: 'submissionTargets',
+      googleAccessToken,
+      departmentId,
+      submissionId,
+    });
+    return res.targets;
+  }
+
+  // ── 업무 서식 (066) ─────────────────────────────────────────────
+
+  async listTaskForms(
+    googleAccessToken: string,
+    departmentId: string,
+    taskId: string,
+  ): Promise<StaffRoomTaskForm[]> {
+    const res = await this.invoke<{ forms: StaffRoomTaskForm[] }>('staffroom-plan', {
+      action: 'taskForms',
+      googleAccessToken,
+      departmentId,
+      taskId,
+    });
+    return res.forms;
+  }
+
+  async setTaskForms(
+    googleAccessToken: string,
+    departmentId: string,
+    taskId: string,
+    fileIds: readonly string[],
+  ): Promise<{ forms: StaffRoomTaskForm[]; droppedFiles: number }> {
+    return this.invoke('staffroom-plan', {
+      action: 'setTaskForms',
+      googleAccessToken,
+      departmentId,
+      taskId,
+      fileIds,
+    });
+  }
+
+  async addEvents(
+    googleAccessToken: string,
+    departmentId: string,
+    events: readonly { startsOn: string; title: string; place: string; memo: string }[],
+  ): Promise<{ events: StaffRoomEvent[]; rejected: number }> {
+    return this.invoke('staffroom-plan', {
+      action: 'addEvents',
+      googleAccessToken,
+      departmentId,
+      events,
     });
   }
 }

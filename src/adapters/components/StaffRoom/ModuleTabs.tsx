@@ -28,20 +28,22 @@ import {
   defaultModuleName,
 } from '@domain/rules/staffRoomRoomRules';
 import {
+  ALL_MODULE_KINDS,
   STAFFROOM_MODULE_ICONS,
   STAFFROOM_MODULE_NAME_MAX_LENGTH,
 } from '@domain/entities/StaffRoomRooms';
 import type { StaffRoomModule, StaffRoomModuleKind } from '@domain/entities/StaffRoomBoard';
 import type { StaffRoomRole } from '@domain/entities/StaffRoom';
 
-/** 만들 수 있는 종류 — 계획서 §6 의 다섯 가지 전부 */
-const ADDABLE_KINDS: readonly StaffRoomModuleKind[] = [
-  'board',
-  'archive',
-  'discussion',
-  'gallery',
-  'minutes',
-];
+/**
+ * 만들 수 있는 종류 — 정본(`ALL_MODULE_KINDS`)이 곧 목록이다.
+ *
+ * 여섯 곳(여기·도메인 union·서버 `MODULE_KINDS`·데이터베이스 CHECK·기본 이름 맵·
+ * 아이콘 맵)이 함께 움직이는지는 `staffroomModuleKindDrift.meta.test.ts` 가 본다.
+ * 한 곳만 고치면 조용히 어긋난다 — 특히 이름·아이콘 맵은 `??` 폴백 때문에
+ * 타입 검사도 못 잡고 탭이 "새 공간"에 톱니바퀴로 뜬다.
+ */
+const ADDABLE_KINDS: readonly StaffRoomModuleKind[] = ALL_MODULE_KINDS;
 
 interface ModuleTabListProps {
   modules: readonly StaffRoomModule[];

@@ -40,6 +40,12 @@ vi.mock('./ownAiRunner', () => ({
     ownAiActiveUntil: () => 0,
   }),
   defaultKillTreeSync: () => undefined,
+  // 이미지 첨부 임시 파일 보관소(ADR-090) — 이 테스트는 디스크를 건드리지 않는다.
+  createFsAttachmentStore: () => ({
+    stage: () => [],
+    discard: () => undefined,
+    sweep: () => undefined,
+  }),
 }));
 
 // CLI 는 이 테스트의 관심이 아니다 — 찾지 못한 것으로 두고, 실행 여부만 본다.

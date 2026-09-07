@@ -95,7 +95,12 @@ async function finishWith(text: string): Promise<void> {
 
 beforeEach(() => {
   fetchRecordPromptL1.mockReset();
-  fetchRecordPromptL1.mockResolvedValue('[생기부 작성 규정 본문]');
+  fetchRecordPromptL1.mockResolvedValue({
+    ok: true,
+    prompt: '[생기부 작성 규정 본문]',
+    version: 1,
+    stale: false,
+  });
   runCalls.length = 0;
   eventHandler = null;
   lastRunId = '';
@@ -352,7 +357,7 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
   });
 
   it('★규정을 못 받아 오면 실행이 0회다 — 초안을 만들지 않고 안내만 한다', async () => {
-    fetchRecordPromptL1.mockResolvedValue(null);
+    fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'unavailable' });
     panel();
     await startWith('이 학생만');
     expect(runCalls).toHaveLength(0);
@@ -360,17 +365,74 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
   });
 
   it('규정을 못 받아도 학생을 잃지 않는다 — [이어 하기] 로 전원 다시 시도한다', async () => {
-    fetchRecordPromptL1.mockResolvedValue(null);
+    fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'unavailable' });
     panel({ remaining: [target({ studentRef: 's2', displayName: '박서연' })] });
     await startWith(/남은 학생 모두/);
     expect(screen.getByRole('button', { name: /이어 하기 \(2명 남음\)/ })).toBeTruthy();
   });
 
   it('★규정 본문을 화면에 보여 주지 않는다', async () => {
-    fetchRecordPromptL1.mockResolvedValue('절대로 화면에 뜨면 안 되는 규정 본문');
+    fetchRecordPromptL1.mockResolvedValue({
+      ok: true,
+      prompt: '절대로 화면에 뜨면 안 되는 규정 본문',
+      version: 1,
+      stale: false,
+    });
     const { container } = panel();
     await startWith('이 학생만');
     expect(container.textContent).not.toContain('절대로 화면에 뜨면 안 되는');
+  });
+
+  // ── 배급 한도(ADR-089) ────────────────────────────────────────────────
+  //
+  // ★분당·일간 안내가 달라야 한다. "인터넷을 확인하라"고 말하면 선생님이 인터넷을 의심해
+  //   계속 다시 눌러 요청이 더 몰린다.
+
+  it('분당 한도에 걸리면 "1분 뒤" 로 안내한다 — 인터넷 탓을 하지 않는다', async () => {
+    fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'rate-limited-minute' });
+    panel();
+    await startWith('이 학생만');
+    expect(runCalls).toHaveLength(0);
+    expect(screen.getByText(/1분 뒤에 다시 눌러/)).toBeTruthy();
+    expect(screen.queryByText(/인터넷 연결을 확인/)).toBeNull();
+  });
+
+  it('일간 한도는 분당과 다른 안내다 — "내일" 이라고 말한다', async () => {
+    fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'rate-limited-day' });
+    panel();
+    await startWith('이 학생만');
+    expect(screen.getByText(/내일 다시 눌러/)).toBeTruthy();
+  });
+
+  it('★한도로 멈추면 [이어 하기] 가 잠긴다 — 안 잠그면 눌러서 요청이 더 몰린다', async () => {
+    fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'rate-limited-minute' });
+    panel({ remaining: [target({ studentRef: 's2', displayName: '박서연' })] });
+    await startWith(/남은 학생 모두/);
+
+    const btn = screen.getByRole('button', { name: /초 뒤에 이어 할 수 있어요/ });
+    expect((btn as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('한도가 아닌 실패에는 잠그지 않는다 — 바로 이어 할 수 있다', async () => {
+    fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'unavailable' });
+    panel({ remaining: [target({ studentRef: 's2', displayName: '박서연' })] });
+    await startWith(/남은 학생 모두/);
+
+    const btn = screen.getByRole('button', { name: /이어 하기 \(2명 남음\)/ });
+    expect((btn as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('★만료된 규정으로도 초안은 만들어진다 — 서버가 죽었다고 멈추지 않는다', async () => {
+    fetchRecordPromptL1.mockResolvedValue({
+      ok: true,
+      prompt: '[조금 낡은 규정 본문]',
+      version: 1,
+      stale: true,
+    });
+    panel();
+    await startWith('이 학생만');
+    expect(runCalls).toHaveLength(1);
+    expect(runCalls[0]?.appendSystemPrompt).toBe('[조금 낡은 규정 본문]');
   });
 });
 

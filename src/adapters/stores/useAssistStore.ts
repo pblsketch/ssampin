@@ -36,6 +36,16 @@ import type { AssistProposalState, AssistWriteProposal } from '@domain/entities/
 import { combineWriteProposals, isWriteProposal } from '@domain/entities/AssistWrite';
 import { isWriteTool } from '@usecases/assist/writes/buildWriteProposal';
 import { mentionsWriteIntent } from '@domain/rules/assistWriteIntent';
+import type {
+  AssistAttachment,
+  AssistAttachmentCandidate,
+} from '@domain/entities/AssistAttachment';
+import {
+  acceptAttachment,
+  attachmentsAllowedFor,
+  isAssistAttachmentMediaType,
+  type AttachmentRejection,
+} from '@domain/rules/assistAttachmentRules';
 
 /** 고지문이 바뀌면 이 숫자를 올린다. 다음에 켤 때 안내가 다시 뜬다. */
 export const ASSIST_NOTICE_VERSION = 1;
@@ -106,6 +116,11 @@ export interface AssistTurn {
    */
   readonly answeredBy?: AssistAnsweredBy;
   /**
+   * 이 질문에 붙여 보낸 이미지(ADR-090). 화면에 작은 미리보기로 남는다.
+   * 다음 질문의 이력에는 실리지 않는다 — CLI 는 매 실행이 새 대화다.
+   */
+  readonly attachments?: readonly AssistAttachment[];
+  /**
    * "내 AI"(선생님 구독 CLI) 실행이 실패해 답을 못 받은 사유.
    * 쌤핀 AI 폴백이 없을 때(동의 안 함)만 채워진다. 문구는 `OWN_AI_ERROR_MESSAGES` 에서 꺼낸다.
    */
@@ -162,9 +177,22 @@ interface AssistState {
   readonly open: boolean;
   readonly turns: readonly AssistTurn[];
   readonly draft: string;
+  /**
+   * 다음 질문에 붙을 이미지(ADR-090). 저장하지 않는다(partialize 밖).
+   * ★"내 AI"를 고른 동안만 채워진다 — 쌤핀 AI 로 돌리면 비운다(`setProvider`).
+   */
+  readonly attachments: readonly AssistAttachment[];
 }
 
 interface AssistActions {
+  /**
+   * 이미지를 붙인다. 한 장이라도 거절되면 그 사유를 돌려주고, 통과한 것만 붙인다.
+   * ★쌤핀 AI(Solar)를 고른 동안에는 아무것도 붙이지 않는다 — 화면이 버튼을 숨기지만
+   *   붙여넣기·끌어다 놓기 경로가 남아 있어 여기서도 막는다.
+   */
+  addAttachments: (items: readonly AssistAttachmentCandidate[]) => AttachmentRejection | null;
+  removeAttachment: (id: string) => void;
+  clearAttachments: () => void;
   setEnabled: (value: boolean) => void;
   setProvider: (value: OwnAiProviderId | 'ssampin') => void;
   setOwnAiEnabled: (value: boolean) => void;
@@ -353,15 +381,44 @@ export const useAssistStore = create<AssistStore>()(
       open: false,
       turns: [],
       draft: '',
+      attachments: [],
 
-      setProvider: (value) => set({ provider: value }),
+      setProvider: (value) =>
+        set((s) => ({
+          provider: value,
+          // 쌤핀 AI 로 돌리면 붙여 둔 이미지를 내려놓는다 — 그 통로는 이미지를 못 받는다.
+          attachments: attachmentsAllowedFor(value) ? s.attachments : [],
+        })),
 
       setOwnAiEnabled: (value) =>
         set((s) => ({
           ownAiEnabled: value,
           // 끄면 선택도 되돌린다 — 꺼진 통로를 가리킨 채 남겨 두면 다음 질문이 어디로 가는지 알 수 없다.
           provider: value ? s.provider : 'ssampin',
+          attachments: value ? s.attachments : [],
         })),
+
+      addAttachments: (items) => {
+        if (!attachmentsAllowedFor(get().provider)) return null;
+        let rejection: AttachmentRejection | null = null;
+        const next = [...get().attachments];
+        for (const item of items) {
+          const r = acceptAttachment({ mediaType: item.mediaType, bytes: item.bytes }, next);
+          // 판정이 통과했으면 형식도 이미지 4종 중 하나다 — 타입 가드로 좁혀서 넣는다(as 없음).
+          if (!r.ok || !isAssistAttachmentMediaType(item.mediaType)) {
+            rejection ??= r.ok ? 'not-image' : r.reason;
+            continue;
+          }
+          next.push({ ...item, mediaType: item.mediaType });
+        }
+        set({ attachments: next });
+        return rejection;
+      },
+
+      removeAttachment: (id) =>
+        set((s) => ({ attachments: s.attachments.filter((a) => a.id !== id) })),
+
+      clearAttachments: () => set({ attachments: [] }),
 
       setOwnAiModel: (provider, model) =>
         set((s) => ({ ownAiModels: { ...s.ownAiModels, [provider]: model } })),
@@ -418,7 +475,7 @@ export const useAssistStore = create<AssistStore>()(
         //   결과 문구가 뜬 뒤에 지우면 된다. 화면의 [새 대화] 버튼도 같은 조건으로
         //   비활성화된다(AssistDock).
         if (get().turns.some((t) => t.proposalState === 'running')) return;
-        set({ turns: [], draft: '' });
+        set({ turns: [], draft: '', attachments: [] });
       },
 
       settleProposal: (turnId, state, message) =>
@@ -518,6 +575,9 @@ export const useAssistStore = create<AssistStore>()(
           provider: chosenProvider,
           model: chosenProvider === 'ssampin' ? '' : get().ownAiModels[chosenProvider],
         };
+        // ★이미지는 "내 AI"를 고른 질문에만 실린다(ADR-090). 그 외에는 상태에 남아 있어도
+        //   싣지 않는다 — Solar 포트는 이미지가 오면 거절하므로, 여기서 안 실으면 조용히 빠진다.
+        const attachments = attachmentsAllowedFor(chosenProvider) ? get().attachments : [];
         // 숫자 카드를 **먼저** 넣는다. 모델이 느려도, 심지어 죽어도 답의 절반은 이미 보인다.
         set((s) => ({
           turns: [
@@ -535,9 +595,11 @@ export const useAssistStore = create<AssistStore>()(
               maskedCount,
               blankedCount,
               answeredBy,
+              ...(attachments.length > 0 ? { attachments } : {}),
             },
           ].slice(-MAX_TURNS_KEPT),
           draft: '',
+          attachments: [],
         }));
 
         const patch = (next: Partial<AssistTurn>): void => {
@@ -573,6 +635,16 @@ export const useAssistStore = create<AssistStore>()(
               data: c.data,
             })),
             ...(wantsToolSelection ? { tools: toModelToolSchemas() } : {}),
+            // 화면용 id·이름은 빼고 모델이 볼 것만 싣는다.
+            ...(attachments.length > 0
+              ? {
+                  attachments: attachments.map((a) => ({
+                    name: a.name,
+                    mediaType: a.mediaType,
+                    dataBase64: a.dataBase64,
+                  })),
+                }
+              : {}),
           });
 
           // ── Phase 3: 쓰기 도구를 골랐으면 **실행하지 않고 제안만 만든다** ──

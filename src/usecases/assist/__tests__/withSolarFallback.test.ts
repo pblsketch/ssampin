@@ -152,3 +152,20 @@ describe('★[중단]을 누른 것은 폴백하지 않는다', () => {
     await expect(composite.ask(PAYLOAD)).resolves.toMatchObject({ degraded: 'own-ai-fallback' });
   });
 });
+
+describe('★이미지가 붙은 질문은 폴백하지 않는다 (ADR-090)', () => {
+  it('내 AI 가 실패해도 Solar 를 부르지 않고 원래 오류를 올린다 — Solar 는 이미지를 못 받는다', async () => {
+    const err = Object.assign(new Error('한도'), { name: 'OwnAiRunError', kind: 'usage-limit' });
+    const primary = port(boom(err));
+    const solar = port(ok('Solar 답'));
+    const composed = withSolarFallback(primary, solar, { solarEnabled: () => true });
+
+    await expect(
+      composed.ask({
+        ...PAYLOAD,
+        attachments: [{ name: 'a.png', mediaType: 'image/png', dataBase64: 'AAAA' }],
+      }),
+    ).rejects.toBe(err);
+    expect(solar.calls).toBe(0);
+  });
+});

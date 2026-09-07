@@ -19,6 +19,12 @@ import {
   type StaffRoomTally,
 } from '@domain/entities/StaffRoomRooms';
 import type { StaffRoomRole } from '@domain/entities/StaffRoom';
+import {
+  STAFFROOM_SUBMISSION_GUIDE_MAX_LENGTH,
+  STAFFROOM_SUBMISSION_TARGET_MAX,
+  STAFFROOM_SUBMISSION_TITLE_MAX_LENGTH,
+  type StaffRoomSubmissionDueState,
+} from '@domain/entities/StaffRoomSubmission';
 
 /** 지메일 비교용 정규화 */
 function norm(email: string): string {
@@ -313,6 +319,135 @@ export function canEditTask(
   authorEmail: string,
 ): boolean {
   return canEditRoomItem(viewerEmail, viewerRole, authorEmail);
+}
+
+// ═════════════════════════════════════════════════════════════════
+// 제출 과제 (계획서 D2 · R8)
+//
+// ★ 서버에도 같은 판정이 있다 — supabase/functions/_shared/staffroomSubmissions.ts
+//   Deno 는 src/ 를 import 할 수 없어 일부러 두 벌이다. 어긋나면 화면은 막는데
+//   서버는 통과하거나 그 반대가 되므로, 두 테스트가 **같은 케이스 표 한 벌**을
+//   함께 돌린다 — src/domain/rules/__tests__/fixtures/submissionAuthzCases.ts
+// ═════════════════════════════════════════════════════════════════
+
+/**
+ * "냈음" 표시를 켜고 끌 수 있는가 — **본인 · 만든 사람(취합자) · 관리자**.
+ *
+ * 취합자가 들어가는 이유: 종이나 메신저로 받은 것을 대신 체크할 수 있어야
+ * 현황판이 실제와 맞는다. 그 밖의 멤버는 남의 칸을 건드릴 수 없다.
+ */
+export function canToggleSubmissionDone(
+  viewerEmail: string,
+  viewerRole: StaffRoomRole | null,
+  targetEmail: string,
+  authorEmail: string,
+): boolean {
+  if (viewerRole === null) return false;
+  if (viewerRole === 'admin') return true;
+  if (norm(viewerEmail) === norm(targetEmail)) return true;
+  return norm(viewerEmail) === norm(authorEmail);
+}
+
+/**
+ * "누가 안 냈는지" 명단을 볼 수 있는가 — **만든 사람과 관리자뿐**.
+ *
+ * 일반 멤버에게는 진행률 숫자와 자기 상태만 보인다.
+ * ★ 화면이 단추를 감추는 것과 별개로 **서버가 명단을 안 보낸다.**
+ */
+export function canSeeUnsubmittedList(
+  viewerEmail: string,
+  viewerRole: StaffRoomRole | null,
+  authorEmail: string,
+): boolean {
+  if (viewerRole === null) return false;
+  if (viewerRole === 'admin') return true;
+  return norm(viewerEmail) === norm(authorEmail);
+}
+
+/**
+ * 제출 과제 만들기·고치기 입력 검사.
+ *
+ * 만들기는 멤버 누구나 할 수 있다(취합이 부장만의 일이 아니라서) — 그래서 여기는
+ * `viewerRole` 을 받지 않는다. 누가 할 수 있는지는 화면이 "만들기" 단추를 항상 보여주는
+ * 것으로 이미 표현돼 있다.
+ */
+export function checkSubmission(input: {
+  readonly title: unknown;
+  readonly dueOn: unknown;
+  readonly guide: unknown;
+  readonly docUrl: unknown;
+  readonly targetEmails: unknown;
+}): EventCheck {
+  if (typeof input.title !== 'string' || input.title.trim().length === 0) {
+    return { ok: false, message: '제목을 입력해주세요.' };
+  }
+  if (input.title.length > STAFFROOM_SUBMISSION_TITLE_MAX_LENGTH) {
+    return {
+      ok: false,
+      message: `제목은 ${STAFFROOM_SUBMISSION_TITLE_MAX_LENGTH}자까지 쓸 수 있습니다.`,
+    };
+  }
+  if (input.dueOn !== null && input.dueOn !== undefined && input.dueOn !== '') {
+    if (!isDateString(input.dueOn)) {
+      return { ok: false, message: '마감일을 올바르게 골라주세요.' };
+    }
+  }
+  if (
+    typeof input.guide === 'string' &&
+    input.guide.length > STAFFROOM_SUBMISSION_GUIDE_MAX_LENGTH
+  ) {
+    return {
+      ok: false,
+      message: `안내 문구는 ${STAFFROOM_SUBMISSION_GUIDE_MAX_LENGTH}자까지 쓸 수 있습니다.`,
+    };
+  }
+  if (typeof input.docUrl !== 'string' || input.docUrl.trim().length === 0) {
+    return { ok: false, message: '제출할 문서·시트 주소를 입력해주세요.' };
+  }
+  if (!/^https?:\/\//i.test(input.docUrl.trim())) {
+    return { ok: false, message: '문서 주소는 http:// 또는 https:// 로 시작해야 합니다.' };
+  }
+  if (
+    Array.isArray(input.targetEmails) &&
+    input.targetEmails.length > STAFFROOM_SUBMISSION_TARGET_MAX
+  ) {
+    return {
+      ok: false,
+      message: `제출 주체는 ${STAFFROOM_SUBMISSION_TARGET_MAX}명까지 걸 수 있습니다.`,
+    };
+  }
+  return { ok: true };
+}
+
+/** YYYY-MM-DD 두 날짜 사이의 날 수(UTC 기준) — `to` 가 `from` 보다 미래면 양수 */
+function daysBetween(from: string, to: string): number {
+  const toUtcDays = (dateStr: string): number => {
+    const [y, m, d] = dateStr.split('-').map(Number);
+    return Date.UTC(y ?? 0, (m ?? 1) - 1, d ?? 0) / 86_400_000;
+  };
+  return toUtcDays(to) - toUtcDays(from);
+}
+
+/** 마감까지 남은 날 수. dueOn 이 today 보다 미래일 때 화면의 "N일 남음" 문구에 쓴다 */
+export function daysUntilSubmissionDue(dueOn: string, today: string): number {
+  return daysBetween(today, dueOn);
+}
+
+/**
+ * 마감까지 남은 날로 과제 상태를 가른다 — 화면이 배지 색을 고를 때 쓴다.
+ *
+ * 넷으로 나눈 이유는 타입 정의(`StaffRoomSubmissionDueState`)에 적어 두었다 —
+ * "지났다"와 "오늘까지"는 성격이 다르고(하나는 사고, 하나는 재촉), "내일까지"는
+ * 오늘 손대야 하는 것이다. 그보다 멀면 다 같다.
+ */
+export function submissionDueState(
+  dueOn: string | null,
+  today: string,
+): StaffRoomSubmissionDueState {
+  if (dueOn === null) return 'none';
+  if (dueOn < today) return 'over';
+  if (dueOn === today) return 'today';
+  return daysUntilSubmissionDue(dueOn, today) === 1 ? 'tomorrow' : 'later';
 }
 
 /**

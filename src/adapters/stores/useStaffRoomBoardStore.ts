@@ -24,6 +24,35 @@ import type {
 const DRAFT_SAVE_DELAY_MS = 1_500;
 
 /** 실패 원인을 한국어 한 줄로 — 서버가 준 문구가 있으면 그대로 */
+/**
+ * 이 글의 읽음 현황을 볼 수 있는가 — **쓴 사람 또는 관리자**.
+ *
+ * 서버 `canEditPost`(= `staffRoomBoardPermission.canEditPost`)와 같은 기준이다.
+ * 여기서 미리 걸러 헛요청을 없앨 뿐이고, **막는 것은 서버다.**
+ *
+ * 이 스토어에는 내 이메일도 내 권한도 없어서 두 곳을 가져다 쓴다 —
+ * 부서 권한은 `useStaffRoomStore.currentDepartment.myRole`, 내 지메일은
+ * `useGoogleAccountStore.email`.
+ */
+async function canSeeReadStatus(departmentId: string, postAuthorEmail: string): Promise<boolean> {
+  try {
+    const [{ useStaffRoomStore }, { useGoogleAccountStore }] = await Promise.all([
+      import('@adapters/stores/useStaffRoomStore'),
+      import('@adapters/stores/useGoogleAccountStore'),
+    ]);
+    const department = useStaffRoomStore.getState().currentDepartment;
+    if (department === null || department.id !== departmentId) return false;
+    if (department.myRole === 'admin') return true;
+
+    const myEmail = useGoogleAccountStore.getState().email;
+    if (!myEmail) return false;
+    return myEmail.trim().toLowerCase() === postAuthorEmail.trim().toLowerCase();
+  } catch {
+    // 판단할 수 없으면 안 부른다 — 서버가 어차피 막는다
+    return false;
+  }
+}
+
 function messageOf(err: unknown): string {
   if (err instanceof Error && err.message) return err.message;
   return '요청 처리 중 오류가 발생했습니다.';
@@ -303,12 +332,18 @@ export const useStaffRoomBoardStore = create<StaffRoomBoardState>((set, get) => 
       ]);
 
       // 읽음 현황은 필독 글에만 있다(§3.5-나). 일반 글에는 부르지 않는다.
-      const readStatus = detail.post.isRequired
-        ? await staffRoomPort.getPostReaders(token, departmentId, postId).catch((e: unknown) => {
-            console.error('[StaffRoomBoard] 읽음 현황 조회 실패:', e);
-            return null;
-          })
-        : null;
+      //
+      // ★ 그리고 **쓴 사람·관리자만** 본다(2026-09-07 오너 결정). 서버가 막지만
+      //   여기서도 미리 걸러야 한다 — 안 그러면 볼 수 없는 멤버 전원이 글을 열
+      //   때마다 403 을 받고 콘솔에 오류만 쌓인다(기능은 안 깨지지만 헛요청이다).
+      const canSeeReaders = await canSeeReadStatus(departmentId, detail.post.authorEmail);
+      const readStatus =
+        detail.post.isRequired && canSeeReaders
+          ? await staffRoomPort.getPostReaders(token, departmentId, postId).catch((e: unknown) => {
+              console.error('[StaffRoomBoard] 읽음 현황 조회 실패:', e);
+              return null;
+            })
+          : null;
 
       set({ currentPost: detail.post, comments, readStatus, isLoading: false });
 

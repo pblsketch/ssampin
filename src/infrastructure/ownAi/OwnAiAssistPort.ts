@@ -11,6 +11,7 @@
  * ★서버(Supabase)를 부르지 않는다. 이 경로는 100% 로컬이다.
  */
 import type { AssistAnswer, AssistPort, AssistRequestPayload } from '@domain/ports/AssistPort';
+import type { AssistAttachmentPayload } from '@domain/entities/AssistAttachment';
 import type {
   OwnAiErrorKind,
   OwnAiProviderId,
@@ -37,6 +38,7 @@ interface OwnAiBridgeApi {
     kind: 'panel' | 'draft';
     prompt: string;
     appendSystemPrompt?: string;
+    attachments?: readonly AssistAttachmentPayload[];
   }): Promise<{ ok: boolean; reason?: string }>;
   cancel(runId: string): void;
   onEvent(handler: (event: unknown) => void): () => void;
@@ -120,6 +122,10 @@ export class OwnAiAssistPort implements AssistPort {
           prompt: question,
           ...(this.options.appendSystemPrompt
             ? { appendSystemPrompt: this.options.appendSystemPrompt }
+            : {}),
+          // 이미지는 이번 질문에만 붙는다 — CLI 는 매 실행이 새 대화라 이력에 실을 것이 없다.
+          ...(payload.attachments && payload.attachments.length > 0
+            ? { attachments: payload.attachments }
             : {}),
         })
         .then((r) => {

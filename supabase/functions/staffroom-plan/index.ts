@@ -44,7 +44,20 @@ import {
   ROOM_TITLE_MAX_LENGTH,
 } from '../_shared/staffroomAccess.ts';
 import {
+  doneWindowStart,
+  toSubmissionSummary,
+  type SubmissionRow,
+  type SubmissionTargetRow,
+} from '../_shared/staffroomSubmissions.ts';
+import {
+  loadFormsByTask,
+  loadMySubmissionTargets,
+  normalizeRoutines,
+  normalizeTextList,
+  replaceTaskForms,
+  resolveDepartmentFiles,
   serviceClient,
+  toAttachmentResponse,
   loadMembers,
   nameMapOf,
   toAccessMembers,
@@ -52,6 +65,15 @@ import {
 } from '../_shared/staffroomDb.ts';
 
 const MEMO_MAX = 2_000;
+
+/**
+ * 붙여넣기로 한 번에 올릴 수 있는 줄 수.
+ *
+ * 앱의 `STAFFROOM_PASTE_MAX_ROWS`(`domain/rules/staffRoomSchedulePaste.ts`)와
+ * **같은 값이어야 한다.** 어긋나면 앱에서는 올라가는데 서버가 되돌린다.
+ * `staffroomLimitsDrift.meta.test.ts` 가 두 값을 견준다.
+ */
+const PASTE_MAX_ROWS = 200;
 const PAGE_SIZE = 300;
 
 /** 한 번에 훑을 수 있는 부서 수 — 내 달력이 부서 수만큼 무거워지지 않게 */
@@ -78,12 +100,15 @@ interface TaskRow {
   due_on: string | null;
   memo: string;
   done_at: string | null;
+  routines: { cycle: string; what: string }[] | null;
+  howto: string[] | null;
+  handover_notes: string[] | null;
 }
 
 const EVENT_COLUMNS =
   'id, department_id, author_email, title, starts_on, ends_on, start_time, place, memo';
 const TASK_COLUMNS =
-  'id, department_id, author_email, title, assignee_email, due_on, memo, done_at';
+  'id, department_id, author_email, title, assignee_email, due_on, memo, done_at, routines, howto, handover_notes';
 
 function toEvent(row: EventRow, departmentName: string, names: Map<string, string | null>) {
   return {
@@ -101,20 +126,42 @@ function toEvent(row: EventRow, departmentName: string, names: Map<string, strin
   };
 }
 
-function toTask(row: TaskRow, departmentName: string, names: Map<string, string | null>) {
+/**
+ * 업무 한 줄을 응답 형태로.
+ *
+ * ★ `hideOtherAssignee` 는 개인 화면(`mine`)용이다. 그 응답은 **여러 부서를
+ *   한꺼번에** 실어 나르므로, 내 것이 아닌 담당자의 지메일까지 함께 나가면
+ *   화면에 쓰지도 않는 남의 신원이 매번 흘러간다. 이름은 이미 비우고 있었는데
+ *   지메일은 그대로 나가고 있었다.
+ *   부서 화면(`list`)에서는 원래 서로 보이는 값이라 그대로 둔다.
+ */
+function toTask(
+  row: TaskRow,
+  departmentName: string,
+  names: Map<string, string | null>,
+  options?: { readonly hideOtherAssignee?: string },
+) {
+  const me = options?.hideOtherAssignee?.trim().toLowerCase() ?? null;
+  const assigneeEmail =
+    me !== null && row.assignee_email !== null && row.assignee_email.trim().toLowerCase() !== me
+      ? null
+      : row.assignee_email;
+
   return {
     id: row.id,
     departmentId: row.department_id,
     departmentName,
     title: row.title,
-    assigneeEmail: row.assignee_email,
-    assigneeName: row.assignee_email
-      ? (names.get(row.assignee_email.trim().toLowerCase()) ?? null)
-      : null,
+    assigneeEmail,
+    assigneeName: assigneeEmail ? (names.get(assigneeEmail.trim().toLowerCase()) ?? null) : null,
     dueOn: row.due_on,
     memo: row.memo,
     doneAt: row.done_at,
     authorEmail: row.author_email,
+    // 인수인계 때 진짜 넘어가야 하는 것 — 파일이 아니라 아는 것이다
+    routines: row.routines ?? [],
+    howto: row.howto ?? [],
+    handoverNotes: row.handover_notes ?? [],
   };
 }
 
@@ -186,7 +233,14 @@ serve(async (req: Request) => {
       const ids = requested
         .filter((id: unknown): id is string => typeof id === 'string')
         .slice(0, MINE_DEPARTMENT_MAX);
-      if (ids.length === 0) return jsonResponse({ events: [], tasks: [] });
+      if (ids.length === 0) {
+        return jsonResponse({
+          events: [],
+          tasks: [],
+          submissions: [],
+          submissionsTruncated: false,
+        });
+      }
 
       // ★ 요청한 부서 중 **내가 실제 멤버인 것만** 남긴다.
       //   안 거르면 남의 부서 id 를 보내 그 부서 일정을 훔쳐볼 수 있다.
@@ -200,10 +254,19 @@ serve(async (req: Request) => {
       const allowed = ((mineRows ?? []) as Array<{ department_id: string }>).map(
         (r) => r.department_id,
       );
-      if (allowed.length === 0) return jsonResponse({ events: [], tasks: [] });
+      if (allowed.length === 0) {
+        return jsonResponse({
+          events: [],
+          tasks: [],
+          submissions: [],
+          submissionsTruncated: false,
+        });
+      }
 
       const nameByDept = await departmentNames(db, allowed);
 
+      // ★ 오름차순 + limit 이라 **날짜가 늦은 것부터 잘린다.** 200줄을 붙여넣은
+      //   바로 그 학기 일정이 안 보일 수 있으므로, 상한에 닿으면 알린다.
       const { data: eventRows } = await db
         .from('staffroom_events')
         .select(EVENT_COLUMNS)
@@ -218,14 +281,50 @@ serve(async (req: Request) => {
         .order('due_on', { ascending: true })
         .limit(PAGE_SIZE);
 
+      // ★ 내가 주체인 제출 과제 — **미완료 전부 + 최근에 낸 것**만.
+      //   완료분을 아예 빼면 방금 누른 것을 되돌릴 수 없고(줄이 사라진다),
+      //   전부 실으면 해마다 쌓여 개인 화면을 덮는다.
+      const mySubmissions = await loadMySubmissionTargets(
+        db,
+        myEmail,
+        allowed,
+        doneWindowStart(new Date()),
+      );
+
       const emptyNames = new Map<string, string | null>();
       return jsonResponse({
         events: ((eventRows ?? []) as EventRow[]).map((r) =>
           toEvent(r, nameByDept.get(r.department_id) ?? '', emptyNames),
         ),
         tasks: ((taskRows ?? []) as TaskRow[]).map((r) =>
-          toTask(r, nameByDept.get(r.department_id) ?? '', emptyNames),
+          // ★ 개인 화면에는 남의 담당자 지메일을 내리지 않는다
+          toTask(r, nameByDept.get(r.department_id) ?? '', emptyNames, {
+            hideOtherAssignee: myEmail,
+          }),
         ),
+        // ★ 진행률 숫자와 **내 상태만** 담는다. 다른 주체의 지메일·이름은
+        //   `toSubmissionSummary` 의 반환 타입에 자리가 없어 담을 수 없다.
+        submissions: mySubmissions.rows.map((raw) => {
+          const joined = raw as unknown as {
+            member_email: string;
+            display_name_snapshot: string | null;
+            done_at: string | null;
+            staffroom_submissions: SubmissionRow;
+          };
+          const target: SubmissionTargetRow = {
+            member_email: joined.member_email,
+            display_name_snapshot: joined.display_name_snapshot,
+            done_at: joined.done_at,
+          };
+          const row = joined.staffroom_submissions;
+          return {
+            ...toSubmissionSummary(row, [target], myEmail, [myEmail]),
+            departmentId: row.department_id,
+            departmentName: nameByDept.get(row.department_id) ?? '',
+          };
+        }),
+        // 상한에 닿으면 알린다 — 조용히 잘리면 "분명히 걸었는데 없다"가 된다
+        submissionsTruncated: mySubmissions.truncated,
       });
     }
 
@@ -246,6 +345,7 @@ serve(async (req: Request) => {
     const departmentName = nameByDept.get(departmentId) ?? '';
 
     if (action === 'list') {
+      // ★ 여기도 오름차순 + limit 이다 — 잘리면 날짜가 늦은 것이 사라진다
       const { data: eventRows, error: eventError } = await db
         .from('staffroom_events')
         .select(EVENT_COLUMNS)
@@ -342,6 +442,9 @@ serve(async (req: Request) => {
           assignee_email: normalizeAssignee(access, body?.assigneeEmail),
           due_on: dueOn,
           memo: typeof body?.memo === 'string' ? body.memo.slice(0, MEMO_MAX) : '',
+          routines: normalizeRoutines(body?.routines),
+          howto: normalizeTextList(body?.howto),
+          handover_notes: normalizeTextList(body?.handoverNotes),
         })
         .select(TASK_COLUMNS)
         .single();
@@ -394,6 +497,9 @@ serve(async (req: Request) => {
                 assignee_email: normalizeAssignee(access, body?.assigneeEmail),
                 due_on: dueOn,
                 memo: typeof body?.memo === 'string' ? body.memo.slice(0, MEMO_MAX) : '',
+                routines: normalizeRoutines(body?.routines),
+                howto: normalizeTextList(body?.howto),
+                handover_notes: normalizeTextList(body?.handoverNotes),
               };
             })();
 
@@ -408,6 +514,119 @@ serve(async (req: Request) => {
         .single();
       if (error) throw new Error(`업무 저장 실패: ${error.message}`);
       return jsonResponse({ task: toTask(data as TaskRow, departmentName, names) });
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // 업무에 걸어 둔 서식 (066)
+    //
+    // 자료실은 파일이 한 더미로 쌓인다. "결석계 서식"을 찾으려고 자료실을
+    // 뒤지는 대신 **"출결 관리" 업무를 열면 거기 있게** 한다.
+    //
+    // ★ 파일 자체는 자료실에 있고 여기는 가리키기만 한다. 내려받기도 자료실의
+    //   기존 경로(staffroom-library 의 download)를 그대로 쓴다 — 권한을 내주는
+    //   길을 두 벌로 만들지 않는다.
+    // ══════════════════════════════════════════════════════════════
+
+    if (action === 'taskForms') {
+      const taskId = typeof body?.taskId === 'string' ? body.taskId : '';
+      const existing = await loadOne<TaskRow>(
+        db,
+        'staffroom_tasks',
+        TASK_COLUMNS,
+        taskId,
+        departmentId,
+      );
+      if (!existing) return errorResponse('업무를 찾을 수 없습니다', 404);
+
+      const forms = await loadFormsByTask(db, [taskId]);
+      return jsonResponse({
+        forms: (forms.get(taskId) ?? []).map(toAttachmentResponse),
+      });
+    }
+
+    // 서식을 걸고 떼는 것은 **업무를 고칠 수 있는 사람**과 같다(만든이·관리자)
+    if (action === 'setTaskForms') {
+      const taskId = typeof body?.taskId === 'string' ? body.taskId : '';
+      const existing = await loadOne<TaskRow>(
+        db,
+        'staffroom_tasks',
+        TASK_COLUMNS,
+        taskId,
+        departmentId,
+      );
+      if (!existing) return errorResponse('업무를 찾을 수 없습니다', 404);
+
+      const allowed = canEditRoomItem(access, identity.email, existing.author_email);
+      if (!allowed.ok) {
+        return errorResponse(denialMessage(allowed.reason), denialStatus(allowed.reason));
+      }
+
+      // ★ 보낸 파일 id 가 **이 부서 자료실 것인지** 서버가 확인한다.
+      //   남의 부서 파일 id 를 보내도 통하면 업무에 남의 부서 파일 이름이 뜨고,
+      //   누르는 순간 자료실이 권한을 내주려 시도한다.
+      const rawIds = Array.isArray(body?.fileIds) ? body.fileIds : [];
+      const fileIds = rawIds.filter((id: unknown): id is string => typeof id === 'string');
+      const files = await resolveDepartmentFiles(db, fileIds, departmentId);
+      await replaceTaskForms(db, taskId, departmentId, files);
+
+      const forms = await loadFormsByTask(db, [taskId]);
+      return jsonResponse({
+        forms: (forms.get(taskId) ?? []).map(toAttachmentResponse),
+        // 자료실에 없는 id 를 보냈으면 몇 개가 빠졌는지 알린다 — 조용히 버리지 않는다
+        droppedFiles: fileIds.length - files.length,
+      });
+    }
+
+    // ── 일정 여러 건 한 번에 (붙여넣기) ────────────────────────────
+    //
+    // ★ 파싱은 앱이 한다(`domain/rules/staffRoomSchedulePaste.ts`). 사람이
+    //   미리보기로 확인하고 올리는 것이 이 기능의 안전장치인데, 미리보기마다
+    //   서버를 부르면 글자를 고칠 때마다 왕복이 생긴다. 서버는 **다듬어진 줄**을
+    //   받아 다시 검사만 한다 — 앱을 안 거치는 경로가 있어도 막히도록.
+    if (action === 'addEvents') {
+      const raw = Array.isArray(body?.events) ? body.events : [];
+      if (raw.length === 0) return errorResponse('올릴 일정이 없습니다', 400);
+      if (raw.length > PASTE_MAX_ROWS) {
+        return errorResponse(`한 번에 ${PASTE_MAX_ROWS}건까지 올릴 수 있습니다`, 400);
+      }
+
+      const rows: Record<string, unknown>[] = [];
+      let rejected = 0;
+      for (const item of raw) {
+        if (typeof item !== 'object' || item === null) {
+          rejected += 1;
+          continue;
+        }
+        const entry = item as Record<string, unknown>;
+        const titled = checkText(entry.title, ROOM_TITLE_MAX_LENGTH, '제목');
+        const startsOn = typeof entry.startsOn === 'string' ? entry.startsOn : '';
+        if (!titled.ok || !isDateString(startsOn)) {
+          rejected += 1;
+          continue;
+        }
+        rows.push({
+          department_id: departmentId,
+          author_email: myEmail,
+          title: titled.value,
+          starts_on: startsOn,
+          ends_on: null,
+          start_time: null,
+          place: typeof entry.place === 'string' ? entry.place.slice(0, MEMO_MAX) : '',
+          memo: typeof entry.memo === 'string' ? entry.memo.slice(0, MEMO_MAX) : '',
+        });
+      }
+
+      if (rows.length === 0) return errorResponse('올릴 수 있는 일정이 없습니다', 400);
+
+      const { data, error } = await db.from('staffroom_events').insert(rows).select(EVENT_COLUMNS);
+      if (error) throw new Error(`일정 저장 실패: ${error.message}`);
+
+      return jsonResponse({
+        events: ((data ?? []) as EventRow[]).map((r) => toEvent(r, departmentName, names)),
+        // ★ 서버가 되돌린 줄 수. 앱이 이미 걸렀으므로 보통 0 이지만,
+        //   0 이 아니면 앱과 서버의 기준이 어긋났다는 신호다.
+        rejected,
+      });
     }
 
     return errorResponse('알 수 없는 요청입니다', 400);

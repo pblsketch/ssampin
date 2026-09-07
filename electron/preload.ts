@@ -73,6 +73,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       kind: 'panel' | 'draft';
       prompt: string;
       appendSystemPrompt?: string;
+      /** 이미지 첨부(base64). 패널에서만, "내 AI" 로 답할 때만 온다(ADR-090). */
+      attachments?: readonly { name: string; mediaType: string; dataBase64: string }[];
     }): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke('ownAi:run', payload),
     cancel: (runId: string): void => {
       ipcRenderer.send('ownAi:cancel', runId);

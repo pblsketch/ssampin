@@ -317,3 +317,44 @@ describe('★모델 목록은 실제로 되는 것만, 실제 이름으로 올�
     expect(ids.every((id) => id.startsWith('claude-'))).toBe(true);
   });
 });
+
+describe('이미지 첨부 argv (ADR-090)', () => {
+  it('claude: promptViaStdin 이면 -p 뒤에 프롬프트 대신 --input-format stream-json 이 온다', () => {
+    const argv = buildClaudeArgv({
+      kind: 'panel',
+      prompt: '이 표 읽어 줘',
+      mcpConfigPath: 'C:\\tmp\\mcp.json',
+      version: '2.1.258',
+      promptViaStdin: true,
+    });
+    expect(argv.slice(0, 3)).toEqual(['-p', '--input-format', 'stream-json']);
+    expect(argv).not.toContain('이 표 읽어 줘');
+    // 나머지 안전장치는 그대로다.
+    expect(argv).toContain('--restricted');
+    expect(argv).toContain('--no-session-persistence');
+    expect(argv[argv.indexOf('--tools') + 1]).toBe('');
+  });
+
+  it('★codex: -i 는 프롬프트보다 앞, 다른 옵션 사이에 둔다 — 맨 뒤에 두면 프롬프트를 삼킨다(0.153.4 실측)', () => {
+    const argv = buildCodexArgv({
+      kind: 'panel',
+      prompt: '이 표 읽어 줘',
+      cwd: 'C:\\tmp',
+      bridge: BRIDGE,
+      imagePaths: ['C:\\tmp\\a.png', 'C:\\tmp\\b.jpg'],
+    });
+    const first = argv.indexOf('-i');
+    expect(first).toBeGreaterThan(-1);
+    expect(argv[first + 1]).toBe('C:\\tmp\\a.png');
+    expect(argv[first + 2]).toBe('-i');
+    expect(argv[first + 3]).toBe('C:\\tmp\\b.jpg');
+    // -i 다음에는 반드시 다른 옵션이 와야 한다(위치 인자가 바로 오면 이미지로 읽힌다).
+    expect(argv[first + 4]?.startsWith('-')).toBe(true);
+    expect(argv[argv.length - 1]).toBe('이 표 읽어 줘');
+  });
+
+  it('첨부가 없으면 -i 가 없다', () => {
+    const argv = buildCodexArgv({ kind: 'draft', prompt: 'x', cwd: 'C:\\tmp' });
+    expect(argv).not.toContain('-i');
+  });
+});

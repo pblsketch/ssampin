@@ -178,6 +178,15 @@ export function restoreAliases(text: string, mappings: readonly MaskMapping[]): 
 
 const UNDO_MS = 30_000;
 
+/**
+ * 배급 한도로 멈춘 뒤 [이어 하기] 를 잠가 두는 시간 (ADR-089).
+ *
+ * ★문구만으로는 재시도 폭주를 못 막는다 — 그 버튼은 `runQueue` 를 즉시 다시 부르므로
+ *   "1분 뒤에 다시" 라고 써 놓아도 곧바로 눌리면 또 429 가 되고 요청이 더 몰린다.
+ * ★[AI로 초안 쓰기] 새 시작까지 막지는 않는다(알려진 한계).
+ */
+const RETRY_COOLDOWN_MS = 60_000;
+
 /** [내 글과 비교] 문단 짝 — 왼쪽 내 글 / 오른쪽 고른 판. */
 function pairParagraphs(
   mine: readonly string[],
@@ -219,6 +228,17 @@ export function RecordDraftAiPanel({
   const [compareOn, setCompareOn] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [remarking, setRemarking] = useState(false);
+  /** 배급 한도로 멈춘 뒤 [이어 하기] 를 다시 누를 수 있는 시각(ms). 0 이면 잠금 없음. */
+  const [retryBlockedUntil, setRetryBlockedUntil] = useState(0);
+  /** 잠금이 남은 초를 화면에 보여 주기 위한 1초 시계. 잠겨 있을 때만 돈다. */
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    if (retryBlockedUntil <= Date.now()) return;
+    const id = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [retryBlockedUntil]);
+  const retryLeftSec =
+    retryBlockedUntil > nowTick ? Math.ceil((retryBlockedUntil - nowTick) / 1000) : 0;
   /**
    * 중복 실행 잠금 — **판정은 반드시 이 참조로 한다.**
    * 상태(`useState`)는 갱신이 비동기라 빠르게 두 번 누르면 두 호출이 **같은 옛 값**을 보고
@@ -345,15 +365,26 @@ export function RecordDraftAiPanel({
 
       // ★규정(1층 프롬프트)을 먼저 받는다 — 없으면 초안을 만들지 않는다(D7).
       //   본문은 여기 지역 변수에만 있고, 디스크에 쓰지 않는다.
-      const systemPrompt = await fetchRecordPromptL1(installId);
-      if (systemPrompt === null) {
-        setPhase({
-          kind: 'stopped',
-          message: OWN_AI_ERROR_MESSAGES['prompt-unavailable'].draft,
-          queue,
-        });
+      //   ★전에 받아 둔 값이 있으면 서버가 잠깐 죽어도 계속 만든다(ADR-089) — 그 판단은
+      //     `fetchRecordPromptL1` 안에 있고, 여기서는 `ok` 만 본다.
+      const promptResult = await fetchRecordPromptL1(installId);
+      if (!promptResult.ok) {
+        const kind: OwnAiErrorKind =
+          promptResult.reason === 'rate-limited-minute'
+            ? 'prompt-rate-limited-minute'
+            : promptResult.reason === 'rate-limited-day'
+              ? 'prompt-rate-limited-day'
+              : 'prompt-unavailable';
+        // ★한도로 멈춘 경우에만 [이어 하기] 를 잠깐 잠근다. 그 버튼은 `runQueue` 를 즉시
+        //   다시 부르므로, 안 잠그면 429 → 누름 → 429 로 요청이 더 몰린다.
+        if (kind !== 'prompt-unavailable') {
+          setRetryBlockedUntil(Date.now() + RETRY_COOLDOWN_MS);
+        }
+        setPhase({ kind: 'stopped', message: OWN_AI_ERROR_MESSAGES[kind].draft, queue });
         return;
       }
+      const systemPrompt = promptResult.prompt;
+      const promptVersion = promptResult.version;
 
       for (let i = 0; i < queue.length; i += 1) {
         const t = queue[i];
@@ -367,6 +398,7 @@ export function RecordDraftAiPanel({
           const id = await addVersion({
             draftKey: { ...draftKey, studentRef: t.studentRef },
             provider: runProvider,
+            promptVersion,
             ...(ownAiModels[runProvider] ? { model: ownAiModels[runProvider] } : {}),
             ...(pickedThread !== null && t.studentRef === target.studentRef
               ? { threadId: pickedThread.id }
@@ -667,10 +699,13 @@ export function RecordDraftAiPanel({
           {phase.queue.length > 0 && (
             <button
               type="button"
+              disabled={retryLeftSec > 0}
               onClick={() => void runQueue(phase.queue, phase.queue.length)}
-              className={`mt-1.5 bg-sp-bg text-sp-accent ${btn}`}
+              className={`mt-1.5 bg-sp-bg text-sp-accent disabled:opacity-50 ${btn}`}
             >
-              이어 하기 ({phase.queue.length}명 남음)
+              {retryLeftSec > 0
+                ? `${retryLeftSec}초 뒤에 이어 할 수 있어요`
+                : `이어 하기 (${phase.queue.length}명 남음)`}
             </button>
           )}
         </div>

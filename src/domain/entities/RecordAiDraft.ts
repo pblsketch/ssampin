@@ -31,6 +31,16 @@ export interface RecordAiDraft {
   readonly threadId?: string;
   readonly provider: 'claude' | 'codex';
   readonly model?: string;
+  /**
+   * 이 초안을 만들 때 쓴 **작성 규정(1층 프롬프트)의 판본**. 서버가 배급하면서 함께 준다.
+   *
+   * ★없을 수 있다: 이 칸이 생기기 전에 만들어진 판, 그리고 규정을 못 받아 만료된 캐시로
+   *   쓴 경우(그때도 그 캐시의 판본이 들어간다). 부재는 "옛 판"이라는 뜻이다.
+   * ★왜 남기나: 규정은 학사 기재요령을 따르므로 고쳐질 수 있고, 고친 뒤에 **어느 초안이
+   *   옛 규정으로 만들어졌는지** 골라낼 수 있어야 한다(ADR-089). 서버는 전부터 판본을
+   *   내려보내고 있었는데 앱이 버리고 있었다.
+   */
+  readonly promptVersion?: number;
   /** 실명 복원·표식 분리가 끝난 문단들. 표식이 없던 문단은 role=null. */
   readonly paragraphs: readonly NarrativeParagraph[];
   /** "제외됨 N건 (…)" 요약. 빠진 게 없으면 빈 문자열. */

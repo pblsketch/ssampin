@@ -16,6 +16,8 @@ export interface RecordAiDraftAddInput {
   threadId?: string;
   provider: 'claude' | 'codex';
   model?: string;
+  /** 이 초안을 만들 때 쓴 작성 규정의 판본(서버가 배급하며 함께 준다). */
+  promptVersion?: number;
   paragraphs: readonly NarrativeParagraph[];
   excluded: string;
   /** 분량 조절로 만든 판이면 그 내역. 없으면 새로 쓴 판. */
@@ -84,6 +86,7 @@ export const useRecordAiDraftStore = create<RecordAiDraftState>((set, get) => {
         // ★여기에 안 넣으면 입력 타입만 고친 채 값이 **조용히 사라진다** — 이 생성부는 필드를
         //   하나씩 열거해 새 객체를 만들기 때문이다(스프레드가 아니다).
         ...(input.adjust !== undefined ? { adjust: input.adjust } : {}),
+        ...(input.promptVersion !== undefined ? { promptVersion: input.promptVersion } : {}),
       };
       await persist(enforceAiDraftCap([...get().records, rec], rec.draftKey));
       return rec.id;

@@ -25,6 +25,7 @@ import {
   type OwnAiCliDeps,
 } from './ownAiCli';
 import {
+  createFsAttachmentStore,
   createOwnAiRunner,
   defaultKillTreeSync,
   type OwnAiRunner,
@@ -38,6 +39,11 @@ import {
   type OwnAiRunEvent,
 } from '../../src/domain/entities/OwnAiProvider';
 import { OWN_AI_MCP_SERVER_NAME } from '../../src/domain/rules/ownAiCliRules';
+import {
+  isAssistAttachmentMediaType,
+  validateAttachmentPayloads,
+} from '../../src/domain/rules/assistAttachmentRules';
+import type { AssistAttachmentPayload } from '../../src/domain/entities/AssistAttachment';
 import type { LiveSyncReadiness } from './aiBridgeLiveSyncHost';
 
 /** 로그인 창을 무한정 열어 두지 않는다 — 브라우저 왕복에 넉넉한 5분. */
@@ -84,6 +90,25 @@ function writeMcpConfig(): string {
   return file;
 }
 
+/**
+ * IPC 로 온 첨부를 도메인 모양으로 되읽는다. 모양이 틀리거나 한도를 넘으면 `null`.
+ * 없으면 빈 배열 — "첨부 없음"과 "잘못된 첨부"를 구분해야 실행을 막을 수 있다.
+ */
+function readAttachments(raw: unknown): AssistAttachmentPayload[] | null {
+  if (raw === undefined || raw === null) return [];
+  if (!Array.isArray(raw)) return null;
+  const out: AssistAttachmentPayload[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) return null;
+    const { name, mediaType, dataBase64 } = item as Record<string, unknown>;
+    if (typeof name !== 'string' || typeof mediaType !== 'string' || typeof dataBase64 !== 'string')
+      return null;
+    if (!isAssistAttachmentMediaType(mediaType)) return null;
+    out.push({ name, mediaType, dataBase64 });
+  }
+  return validateAttachmentPayloads(out).ok ? out : null;
+}
+
 function bridgeEntryForCodex(): { command: string; args: string[]; env: Record<string, string> } {
   const e = buildEntry(
     { exePath: app.getPath('exe'), serverPath: bridgeServerPath(), dataDir: ssampinDataDir() },
@@ -120,6 +145,12 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
     if (win && !win.isDestroyed()) win.webContents.send('ownAi:event', event);
   }
 
+  // codex 이미지 첨부 임시 폴더. 앱을 켤 때 지난 잔재부터 비운다 — 강제 종료로 남았을 수 있다.
+  const attachmentStore = createFsAttachmentStore(
+    path.join(app.getPath('userData'), 'own-ai', 'attachments'),
+  );
+  attachmentStore.sweep();
+
   runner = createOwnAiRunner({
     launch: (p) => resolveCliLaunch(p, cliDeps),
     version: lastKnownVersion,
@@ -129,6 +160,7 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
     now: () => Date.now(),
     spawnChild: spawn,
     killTreeSync: (pid) => defaultKillTreeSync(pid),
+    attachmentStore,
   });
 
   /**
@@ -287,8 +319,16 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
         kind: 'panel' | 'draft';
         prompt: string;
         appendSystemPrompt?: string;
+        attachments?: unknown;
       },
     ): Promise<{ ok: boolean; reason?: string }> => {
+      // ★첨부는 렌더러가 이미 걸렀지만 IPC 경계에서 한 번 더 본다 — 패널에서만, 이미지만, 한도 안.
+      const attachments = readAttachments(payload.attachments);
+      if (attachments === null || (attachments.length > 0 && payload.kind !== 'panel')) {
+        emit({ type: 'error', runId: payload.runId, kind: 'crashed' });
+        return { ok: false, reason: 'crashed' };
+      }
+
       // ★패널은 쓰기가 열려 있을 수 있다. 그 상태에서 loopback 서버가 못 떴다면
       //   브릿지가 "앱이 없다"고 보고 파일을 직접 쓴다 — 그래서 **실행 자체를 하지 않는다**.
       if (payload.kind === 'panel') {
@@ -307,6 +347,7 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
         prompt: payload.prompt,
         ...(model ? { model } : {}),
         ...(payload.appendSystemPrompt ? { appendSystemPrompt: payload.appendSystemPrompt } : {}),
+        ...(attachments.length > 0 ? { attachments } : {}),
         ...(payload.kind === 'panel'
           ? payload.provider === 'claude'
             ? { mcpConfigPath: writeMcpConfig() }

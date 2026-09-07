@@ -608,7 +608,22 @@ serve(async (req: Request) => {
     }
 
     // ── 누가 봤나 (필독 글) ────────────────────────────────────────
+    //
+    // ★ 쓴 사람과 관리자만 본다 (2026-09-07 오너 결정).
+    //
+    //   전에는 부서 멤버 누구나 "안 읽은 사람" 이름을 통째로 받아 갔다.
+    //   공지를 아직 안 읽었다는 것이 부서 전원에게 이름으로 드러나는 것은
+    //   계획서 §8-E 가 피하려던 것과 같은 성격이다. 제출 과제의 미제출 명단을
+    //   만든이·관리자에게만 보내면서, 같은 교무실 안에서 필독 글만 전원 공개로
+    //   남으면 막으려던 노출이 옆문으로 그대로 일어난다.
+    //
+    //   ★ 화면이 단추를 감추는 것과 별개로 **서버가 명단을 안 보낸다.**
     if (action === 'readers') {
+      const seeable = canEditPost(access, identity.email, target.author_email);
+      if (!seeable.ok) {
+        return errorResponse(denialMessage(seeable.reason), denialStatus(seeable.reason));
+      }
+
       if (!target.is_required) {
         // 일반 글에는 사람별 기록을 쌓지 않는다(§3.5-나). 없는 걸 있는 척하지 않는다.
         return jsonResponse({ postId, isRequired: false, read: [], unread: [] });

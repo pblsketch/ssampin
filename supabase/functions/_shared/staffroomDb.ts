@@ -847,3 +847,295 @@ export async function loadTallies(
   }
   return map;
 }
+
+// ══════════════════════════════════════════════════════════════════
+// 제출 과제 (066)
+//
+// ★ 판정·투영은 여기 두지 않는다 — `staffroomSubmissions.ts` 가 순수 파일이고,
+//   이 파일은 URL import 와 Deno 전역을 물고 있어 `src/` 테스트가 못 부른다.
+//   여기는 **읽고 쓰기만** 한다.
+// ══════════════════════════════════════════════════════════════════
+
+/**
+ * 한 번에 읽어 오는 줄 수 상한.
+ *
+ * ★ 상한에 닿으면 `truncated` 를 함께 돌려준다. 조용히 잘리면 "분명히 걸었는데
+ *   목록에 없다"가 되고, 그건 이 저장소가 반복해 겪은 사고 모양이다.
+ */
+const SUBMISSION_PAGE_SIZE = 200;
+
+export const SUBMISSION_COLUMNS =
+  'id, module_id, department_id, author_email, title, due_on, guide, doc_url, created_at, updated_at';
+
+const TARGET_COLUMNS = 'submission_id, member_email, display_name_snapshot, done_at';
+
+/**
+ * 이 모듈이 이 부서의 **이 종류** 인가.
+ *
+ * ★ `moduleBelongsTo` 는 부서만 보고 종류를 안 본다. 제출 과제 동작에 회의록
+ *   모듈 id 를 보내도 통과하므로, 종류까지 확인하는 길이 따로 필요하다.
+ */
+export async function moduleOfKind(
+  db: Db,
+  moduleId: string,
+  departmentId: string,
+  kind: string,
+): Promise<boolean> {
+  const { data, error } = await db
+    .from('staffroom_modules')
+    .select('id, kind')
+    .eq('id', moduleId)
+    .eq('department_id', departmentId)
+    .maybeSingle();
+
+  if (error) throw new Error(`공간 확인 실패: ${error.message}`);
+  return (data as { kind: string } | null)?.kind === kind;
+}
+
+/** 이 공간의 제출 과제 목록 */
+export async function loadSubmissions(db: Db, moduleId: string, departmentId: string) {
+  const { data, error } = await db
+    .from('staffroom_submissions')
+    .select(SUBMISSION_COLUMNS)
+    .eq('module_id', moduleId)
+    .eq('department_id', departmentId)
+    .order('due_on', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(SUBMISSION_PAGE_SIZE);
+
+  if (error) throw new Error(`제출 과제 목록 조회 실패: ${error.message}`);
+  return data ?? [];
+}
+
+/** 제출 과제 하나 — 남의 부서 id 를 보내도 통하지 않게 부서로 좁혀 읽는다 */
+export async function loadSubmission(db: Db, submissionId: string, departmentId: string) {
+  if (!submissionId) return null;
+  const { data, error } = await db
+    .from('staffroom_submissions')
+    .select(SUBMISSION_COLUMNS)
+    .eq('id', submissionId)
+    .eq('department_id', departmentId)
+    .maybeSingle();
+
+  if (error) throw new Error(`제출 과제 조회 실패: ${error.message}`);
+  return data ?? null;
+}
+
+/** 여러 과제의 제출 주체를 한 번에 — 과제마다 부르면 목록 한 번에 왕복이 N 번 된다 */
+export async function loadTargetsBySubmission(db: Db, submissionIds: readonly string[]) {
+  const map = new Map<
+    string,
+    Array<{ member_email: string; display_name_snapshot: string | null; done_at: string | null }>
+  >();
+  for (const id of submissionIds) map.set(id, []);
+  if (submissionIds.length === 0) return map;
+
+  const { data, error } = await db
+    .from('staffroom_submission_targets')
+    .select(TARGET_COLUMNS)
+    .in('submission_id', submissionIds);
+
+  if (error) throw new Error(`제출 주체 조회 실패: ${error.message}`);
+  for (const row of (data ?? []) as Array<{
+    submission_id: string;
+    member_email: string;
+    display_name_snapshot: string | null;
+    done_at: string | null;
+  }>) {
+    map.get(row.submission_id)?.push({
+      member_email: row.member_email,
+      display_name_snapshot: row.display_name_snapshot,
+      done_at: row.done_at,
+    });
+  }
+  return map;
+}
+
+/**
+ * 제출 주체를 갈아끼운다.
+ *
+ * ★ 이미 낸 표시는 **살린다.** 만든이가 주체 한 명을 더하려고 목록을 다시
+ *   저장했을 뿐인데 앞서 낸 분들의 표시가 지워지면, 그분들은 두 번 내야 한다.
+ */
+export async function replaceSubmissionTargets(
+  db: Db,
+  submissionId: string,
+  emails: readonly string[],
+  nameOf: Readonly<Record<string, string | null>>,
+): Promise<void> {
+  const existing = await loadTargetsBySubmission(db, [submissionId]);
+  const kept = new Map(
+    (existing.get(submissionId) ?? []).map((t) => [t.member_email.toLowerCase(), t]),
+  );
+
+  const { error: delError } = await db
+    .from('staffroom_submission_targets')
+    .delete()
+    .eq('submission_id', submissionId);
+  if (delError) throw new Error(`제출 주체 정리 실패: ${delError.message}`);
+
+  if (emails.length === 0) return;
+
+  const rows = emails.map((email) => {
+    const before = kept.get(email.toLowerCase());
+    return {
+      submission_id: submissionId,
+      member_email: email,
+      display_name_snapshot: nameOf[email] ?? before?.display_name_snapshot ?? null,
+      done_at: before?.done_at ?? null,
+    };
+  });
+
+  const { error } = await db.from('staffroom_submission_targets').insert(rows);
+  if (error) throw new Error(`제출 주체 저장 실패: ${error.message}`);
+}
+
+/** "냈음" 표시를 켜고 끈다 */
+export async function setSubmissionDone(
+  db: Db,
+  submissionId: string,
+  targetEmail: string,
+  done: boolean,
+  byEmail: string,
+): Promise<void> {
+  const { error } = await db
+    .from('staffroom_submission_targets')
+    .update({
+      done_at: done ? new Date().toISOString() : null,
+      done_by_email: done ? byEmail : null,
+    })
+    .eq('submission_id', submissionId)
+    .eq('member_email', targetEmail);
+
+  if (error) throw new Error(`제출 표시 실패: ${error.message}`);
+}
+
+/**
+ * 내가 주체인 제출 과제 — 개인 할 일 화면용.
+ *
+ * ★ **미완료 전부 + 최근에 낸 것**만 싣는다. 완료분을 아예 빼면 방금 누른 것을
+ *   되돌릴 수 없고(줄이 사라진다), 전부 실으면 해마다 쌓여 화면을 덮는다.
+ *   경계 시각은 순수 함수 `doneWindowStart` 가 계산한다.
+ */
+export async function loadMySubmissionTargets(
+  db: Db,
+  email: string,
+  departmentIds: readonly string[],
+  sinceDoneAt: string,
+) {
+  if (departmentIds.length === 0) return { rows: [], truncated: false };
+
+  const { data, error } = await db
+    .from('staffroom_submission_targets')
+    .select(`${TARGET_COLUMNS}, done_by_email, staffroom_submissions!inner(${SUBMISSION_COLUMNS})`)
+    .eq('member_email', email)
+    .in('staffroom_submissions.department_id', departmentIds as string[])
+    .or(`done_at.is.null,done_at.gte.${sinceDoneAt}`)
+    .limit(SUBMISSION_PAGE_SIZE);
+
+  if (error) throw new Error(`내 제출 과제 조회 실패: ${error.message}`);
+  const rows = data ?? [];
+  return { rows, truncated: rows.length >= SUBMISSION_PAGE_SIZE };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// 업무에 걸어 둔 서식 (066)
+//
+// 글 첨부(`loadAttachmentsByPost` · `replacePostAttachments`)와 같은 모양이지만
+// `post_id` 대신 `task_id` 로 묶인다. 그 둘은 글에 붙박여 있어 그대로 못 쓴다.
+// 응답 조립(`toAttachmentResponse`)은 모양이 같으므로 **재사용한다.**
+// ══════════════════════════════════════════════════════════════════
+
+export interface TaskFormRow {
+  id: string;
+  task_id: string;
+  file_id: string | null;
+  file_name: string;
+  position: number;
+}
+
+/** 업무 여러 개의 서식을 한 번에 — 업무마다 따로 부르면 목록이 느려진다 */
+export async function loadFormsByTask(
+  db: Db,
+  taskIds: readonly string[],
+): Promise<Map<string, TaskFormRow[]>> {
+  const map = new Map<string, TaskFormRow[]>();
+  if (taskIds.length === 0) return map;
+
+  const { data, error } = await db
+    .from('staffroom_task_forms')
+    .select('id, task_id, file_id, file_name, position')
+    .in('task_id', taskIds as string[])
+    .order('position', { ascending: true });
+
+  if (error) throw new Error(`서식 조회 실패: ${error.message}`);
+  for (const row of (data ?? []) as TaskFormRow[]) {
+    const list = map.get(row.task_id) ?? [];
+    list.push(row);
+    map.set(row.task_id, list);
+  }
+  return map;
+}
+
+/** 업무의 서식을 통째로 바꾼다 (지우고 다시 넣기) — 글 첨부와 같은 방식 */
+export async function replaceTaskForms(
+  db: Db,
+  taskId: string,
+  departmentId: string,
+  files: readonly { id: string; name: string }[],
+): Promise<void> {
+  const { error: delError } = await db.from('staffroom_task_forms').delete().eq('task_id', taskId);
+  if (delError) throw new Error(`서식 정리 실패: ${delError.message}`);
+
+  if (files.length === 0) return;
+  const { error } = await db.from('staffroom_task_forms').insert(
+    files.map((f, index) => ({
+      task_id: taskId,
+      department_id: departmentId,
+      file_id: f.id,
+      file_name: f.name,
+      position: index,
+    })),
+  );
+  if (error) throw new Error(`서식 저장 실패: ${error.message}`);
+}
+
+/**
+ * 업무의 인수인계 지식 세 칸을 다듬는다.
+ *
+ * ★ 개수 상한을 서버가 검사한다 — 앱만 믿으면 앱을 안 거치는 경로로 백 줄이
+ *   들어올 수 있고, 그러면 그 업무를 여는 사람 화면이 통째로 늘어진다.
+ */
+export const TASK_KNOWLEDGE_MAX_ITEMS = 10;
+const TASK_KNOWLEDGE_TEXT_MAX = 200;
+
+export function normalizeRoutines(raw: unknown): { cycle: string; what: string }[] {
+  if (!Array.isArray(raw)) return [];
+  const out: { cycle: string; what: string }[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'object' || item === null) continue;
+    const entry = item as { cycle?: unknown; what?: unknown };
+    const cycle =
+      typeof entry.cycle === 'string' ? entry.cycle.trim().slice(0, TASK_KNOWLEDGE_TEXT_MAX) : '';
+    const what =
+      typeof entry.what === 'string' ? entry.what.trim().slice(0, TASK_KNOWLEDGE_TEXT_MAX) : '';
+    // 둘 다 비면 빈 줄이라 버린다. 한쪽만 적은 것은 살린다 — 쓰다 만 것도 뜻이 있다
+    if (cycle === '' && what === '') continue;
+    out.push({ cycle, what });
+    if (out.length >= TASK_KNOWLEDGE_MAX_ITEMS) break;
+  }
+  return out;
+}
+
+export function normalizeTextList(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item !== 'string') continue;
+    const text = item.trim().slice(0, TASK_KNOWLEDGE_TEXT_MAX);
+    if (text === '') continue;
+    out.push(text);
+    if (out.length >= TASK_KNOWLEDGE_MAX_ITEMS) break;
+  }
+  return out;
+}

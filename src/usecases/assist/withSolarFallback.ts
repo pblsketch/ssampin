@@ -58,6 +58,9 @@ export function withSolarFallback(
         const kind = ownAiErrorKind(error);
         if (kind !== null && !canFallbackToSolar(kind)) throw error;
         if (!options.solarEnabled()) throw error;
+        // ★이미지가 붙은 질문은 폴백하지 않는다 — Solar 는 이미지를 못 받는다. 글만 보내면
+        //   "무슨 사진이요?" 같은 답이 오고, 선생님은 왜 그런지 알 수 없다. 원래 오류를 올린다.
+        if (payload.attachments && payload.attachments.length > 0) throw error;
 
         options.onFallback?.(error);
         const answer = await solar.ask(payload);

@@ -22,6 +22,16 @@ class FakeChild extends EventEmitter {
     setEncoding: (e: string) => void;
   };
   pid: number | undefined = 4242;
+  /** stdin 에 쓰인 것. `end(데이터)` 한 번으로 끝나야 한다(열어 두면 안 된다). */
+  readonly stdinWrites: string[] = [];
+  stdinEnded = false;
+  readonly stdin = {
+    on: () => {},
+    end: (data?: string) => {
+      if (data !== undefined) this.stdinWrites.push(data);
+      this.stdinEnded = true;
+    },
+  };
   constructor() {
     super();
     (this.stdout as unknown as { setEncoding: () => void }).setEncoding = () => {};
@@ -45,6 +55,9 @@ interface Harness {
   readonly killed: number[];
   readonly spawnOpts: Record<string, unknown>[];
   readonly spawnArgs: string[][];
+  /** 가짜 첨부 보관소가 받은 호출 — stage 는 runId, discard 도 runId. */
+  readonly staged: string[];
+  readonly discarded: string[];
   now: number;
 }
 
@@ -54,12 +67,24 @@ function harness(over: Partial<OwnAiRunnerDeps> = {}): Harness {
   const killed: number[] = [];
   const spawnOpts: Record<string, unknown>[] = [];
   const spawnArgs: string[][] = [];
-  const h = { events, children, killed, spawnOpts, spawnArgs, now: 1_000_000 } as Harness;
+  const staged: string[] = [];
+  const discarded: string[] = [];
+  const h = {
+    events,
+    children,
+    killed,
+    spawnOpts,
+    spawnArgs,
+    staged,
+    discarded,
+    now: 1_000_000,
+  } as Harness;
 
   const deps: OwnAiRunnerDeps = {
     // ★.cmd 가 아니다 — Node 20.12.2+ 는 shell 없이 .cmd 를 spawn 하면 EINVAL 이다.
     launch: () => ({ file: 'C:\\npm\\claude.exe', args: [], asNode: false }),
-    version: () => '2.1.258',
+    // ★공급자마다 다른 값을 준다. 하나로 뭉뚱그리면 codex 버전 조건부 분기가 안 갈린다.
+    version: (p) => (p === 'codex' ? '0.153.4' : '2.1.258'),
     cwd: 'C:\\tmp\\cwd',
     emit: (e) => events.push(e),
     platform: 'win32',
@@ -72,6 +97,16 @@ function harness(over: Partial<OwnAiRunnerDeps> = {}): Harness {
       return c as unknown as ChildProcess;
     }) as unknown as OwnAiRunnerDeps['spawnChild'],
     killTreeSync: (pid) => killed.push(pid),
+    attachmentStore: {
+      stage: (runId, files) => {
+        staged.push(runId);
+        return files.map((_, i) => `C:\\tmp\\attach\\${runId}\\image-${i + 1}.png`);
+      },
+      discard: (runId) => {
+        discarded.push(runId);
+      },
+      sweep: () => {},
+    },
     ...over,
   };
   (h as { runner: ReturnType<typeof createOwnAiRunner> }).runner = createOwnAiRunner(deps);
@@ -176,16 +211,42 @@ describe('codex JSONL 파싱 — 실제로 받은 모양', () => {
 });
 
 describe('실행 — stdin 과 프로세스 옵션', () => {
-  it('★stdin 을 닫는다 — 안 닫으면 codex 는 무한 대기한다(실측)', () => {
+  it('★codex 도 쓰고 나면 곧바로 닫는다 — 열어 둔 채 두면 무한 대기한다(실측)', () => {
     const h = harness();
-    h.runner.start(panelReq());
+    h.runner.start(panelReq({ provider: 'codex' }));
+    expect(h.spawnOpts[0]?.['stdio']).toEqual(['pipe', 'pipe', 'pipe']);
+    expect(h.children[0]?.stdinEnded).toBe(true);
+  });
+
+  it('★codex 도 프롬프트를 명령줄에 안 싣는다 — 자리에는 `-` 만(ADR-089 후속 6)', () => {
+    const h = harness();
+    h.runner.start(panelReq({ provider: 'codex' }));
+    expect(h.spawnArgs[0]).not.toContain('할 일 몇 건?');
+    expect(h.spawnArgs[0]?.[h.spawnArgs[0].length - 1]).toBe('-');
+    // 빈 곳을 재고 통과하면 안 된다 — stdin 에는 있어야 한다.
+    expect(h.children[0]?.stdinWrites.join('')).toContain('할 일 몇 건?');
+  });
+
+  it('★구버전 codex 는 옛 경로 그대로다 — `-` 가 글자로 읽히면 조용한 오작동이다', () => {
+    const h = harness({ version: (p) => (p === 'codex' ? '0.150.0' : '2.1.258') });
+    h.runner.start(panelReq({ provider: 'codex' }));
+    expect(h.spawnArgs[0]).toContain('할 일 몇 건?');
     expect(h.spawnOpts[0]?.['stdio']).toEqual(['ignore', 'pipe', 'pipe']);
   });
 
-  it('프롬프트를 인자로 넘긴다(파이프가 아니라)', () => {
+  it('★claude 는 프롬프트를 인자로 넘기지 않는다 — 명령줄에 안 실린다(ADR-089 후속 6)', () => {
     const h = harness();
-    h.runner.start(panelReq());
-    expect(h.spawnArgs[0]).toContain('할 일 몇 건?');
+    h.runner.start(panelReq({ prompt: '할 일 몇 건?' }));
+    expect(h.spawnArgs[0]).not.toContain('할 일 몇 건?');
+  });
+
+  it('★claude 는 stdin 에 한 줄 쓰고 곧바로 닫는다 — 열어 둔 채 두면 멈춘다', () => {
+    const h = harness();
+    h.runner.start(panelReq({ prompt: '할 일 몇 건?' }));
+    expect(h.spawnOpts[0]?.['stdio']).toEqual(['pipe', 'pipe', 'pipe']);
+    // 쓴 내용에는 프롬프트가 들어 있다 — 위 단언이 "어디에도 없어서" 참이면 안 된다.
+    expect(h.children[0]?.stdinWrites.join('')).toContain('할 일 몇 건?');
+    expect(h.children[0]?.stdinEnded).toBe(true);
   });
 
   it('빈 작업 폴더에서 띄운다', () => {
@@ -425,5 +486,131 @@ describe('★자식 env 에서 API 키를 뺀다 — 있으면 구독 대신 키
       delete process.env['OPENAI_API_KEY'];
       Object.assign(process.env, saved);
     }
+  });
+});
+
+describe('이미지 첨부(ADR-090) — claude 는 stdin, codex 는 임시 파일', () => {
+  const PNG = { name: '캡처.png', mediaType: 'image/png' as const, dataBase64: 'iVBORw0KGgo=' };
+
+  it('claude: -p 뒤에 프롬프트 대신 --input-format stream-json 이 오고, 메시지를 stdin 에 쓴 뒤 바로 닫는다', () => {
+    const h = harness();
+    h.runner.start(panelReq({ prompt: '이 표 읽어 줘', attachments: [PNG] }));
+
+    const argv = h.spawnArgs[0] ?? [];
+    expect(argv[0]).toBe('-p');
+    expect(argv[1]).toBe('--input-format');
+    expect(argv[2]).toBe('stream-json');
+    expect(argv).not.toContain('이 표 읽어 줘');
+    expect(h.spawnOpts[0]?.['stdio']).toEqual(['pipe', 'pipe', 'pipe']);
+
+    const child = h.children[0]!;
+    expect(child.stdinEnded).toBe(true);
+    expect(child.stdinWrites).toHaveLength(1);
+    const msg = JSON.parse(child.stdinWrites[0]!) as {
+      type: string;
+      message: { role: string; content: { type: string; source?: { data: string } }[] };
+    };
+    expect(msg.type).toBe('user');
+    expect(msg.message.content[0]).toEqual({ type: 'text', text: '이 표 읽어 줘' });
+    expect(msg.message.content[1]?.type).toBe('image');
+    expect(msg.message.content[1]?.source?.data).toBe('iVBORw0KGgo=');
+    // 파일로 풀지 않는다 — 디스크에 남기지 않는다.
+    expect(h.staged).toEqual([]);
+  });
+
+  it('★첨부가 없어도 claude 는 stdin 을 쓴다 — 이미지 때만 열던 것을 항상으로 바꿨다', () => {
+    // ADR-090 에서는 "첨부가 있을 때만" stdin 이었다. ADR-089 후속 6 에서 **항상**으로 바꿨다 —
+    // 명령줄에 학생 근거 본문이 실리지 않게 하려는 것이라, 첨부 유무와 상관이 없다.
+    const h = harness();
+    h.runner.start(panelReq({ prompt: '할 일 몇 건?' }));
+    expect(h.spawnOpts[0]?.['stdio']).toEqual(['pipe', 'pipe', 'pipe']);
+    expect(h.children[0]?.stdinWrites).toHaveLength(1);
+    // 이미지가 없으니 메시지에는 텍스트 한 덩어리만 있다.
+    const msg = JSON.parse(h.children[0]?.stdinWrites[0] ?? '{}') as {
+      message?: { content?: { type: string }[] };
+    };
+    expect(msg.message?.content).toHaveLength(1);
+    expect(msg.message?.content?.[0]?.type).toBe('text');
+  });
+
+  it('codex: 파일로 풀어 -i 로 넘기고, 끝나면 지운다', () => {
+    const h = harness();
+    h.runner.start(
+      panelReq({
+        runId: 'r-codex',
+        provider: 'codex',
+        mcpConfigPath: undefined,
+        bridge: { command: 'x', args: [], env: {} },
+        attachments: [PNG],
+      }),
+    );
+    expect(h.staged).toEqual(['r-codex']);
+    const argv = h.spawnArgs[0] ?? [];
+    const i = argv.indexOf('-i');
+    expect(i).toBeGreaterThan(-1);
+    expect(argv[i + 1]).toBe('C:\\tmp\\attach\\r-codex\\image-1.png');
+    // ★프롬프트 자리는 여전히 맨 뒤다 — `-i` 뒤에 붙으면 이미지로 먹힌다(실측).
+    //   다만 이제 그 자리에 오는 것은 본문이 아니라 `-` 이고, 본문은 stdin 으로 간다.
+    expect(argv[argv.length - 1]).toBe('-');
+    expect(argv).not.toContain('할 일 몇 건?');
+    expect(h.spawnOpts[0]?.['stdio']).toEqual(['pipe', 'pipe', 'pipe']);
+    expect(h.children[0]?.stdinWrites.join('')).toContain('할 일 몇 건?');
+    expect(h.children[0]?.stdinEnded).toBe(true);
+
+    expect(h.discarded).toEqual([]);
+    h.children[0]!.close(0);
+    expect(h.discarded).toEqual(['r-codex']);
+  });
+
+  it('codex: 취소·앱 종료로 끝나도 임시 파일은 지운다', () => {
+    const h = harness();
+    h.runner.start(
+      panelReq({
+        runId: 'r-cancel',
+        provider: 'codex',
+        mcpConfigPath: undefined,
+        bridge: { command: 'x', args: [], env: {} },
+        attachments: [PNG],
+      }),
+    );
+    h.runner.cancel('r-cancel');
+    h.children[0]!.close(null);
+    expect(h.discarded).toEqual(['r-cancel']);
+
+    const h2 = harness();
+    h2.runner.start(
+      panelReq({
+        runId: 'r-quit',
+        provider: 'codex',
+        mcpConfigPath: undefined,
+        bridge: { command: 'x', args: [], env: {} },
+        attachments: [PNG],
+      }),
+    );
+    h2.runner.cancelAllSync();
+    expect(h2.discarded).toEqual(['r-quit']);
+  });
+
+  it('codex: 파일로 못 풀면 실행하지 않고 오류를 알린다', () => {
+    const h = harness({
+      attachmentStore: {
+        stage: () => {
+          throw new Error('disk full');
+        },
+        discard: () => {},
+        sweep: () => {},
+      },
+    });
+    const r = h.runner.start(
+      panelReq({
+        provider: 'codex',
+        mcpConfigPath: undefined,
+        bridge: { command: 'x', args: [], env: {} },
+        attachments: [PNG],
+      }),
+    );
+    expect(r.ok).toBe(false);
+    expect(h.children).toHaveLength(0);
+    expect(h.events.some((e) => e.type === 'error' && e.kind === 'crashed')).toBe(true);
   });
 });

@@ -486,6 +486,12 @@ const koContent = {
               오가며, 메모 내용은 전송되지 않습니다.
             </li>
             <li>
+              <strong>생기부 초안 작성 규정 배급</strong> — 초안을 만들 때 앱이 서버에서 작성 규정을
+              받아옵니다. 이때 <strong>설치 식별자·접속 IP·요청 시각</strong>이 서버에 기록됩니다.
+              한 사람이 규정을 무제한으로 내려받는 것을 막기 위한 기록이며,{' '}
+              <strong>학생 정보나 초안 내용은 담기지 않습니다.</strong>
+            </li>
+            <li>
               <strong>Google 연동 토큰 보관</strong> — 교사 이메일과 암호화된 OAuth
               토큰(AES-256-GCM).
             </li>
@@ -1277,6 +1283,13 @@ const enContent = {
             <li>
               <strong>Classroom screen-share delivery receipts</strong> — only technical information
               such as board identifiers and access timestamps; memo content is not transmitted.
+            </li>
+            <li>
+              <strong>Student record drafting guideline delivery</strong> — when you generate a
+              draft, the app fetches the writing guideline from our server. This records the{' '}
+              <strong>installation identifier, access IP, and request time</strong>. It exists to
+              stop any one person from downloading the guideline without limit;{' '}
+              <strong>no student information or draft content is included.</strong>
             </li>
             <li>
               <strong>Google integration token storage</strong> — the teacher&apos;s email and

@@ -154,3 +154,15 @@ verify_jwt = true
 # (2026-08-24 재배포 때 항목이 없던 것을 발견해 명시. 실제 배포 상태와 일치.)
 [functions.ssampin-assist]
 verify_jwt = true
+
+# 생기부 1층 프롬프트 배급 (ADR-089).
+#
+# 2026-09-07 실호출로 대조: Authorization·apikey 헤더를 **하나도 붙이지 않고** POST 했더니
+# 게이트웨이 401 이 아니라 함수 자체 응답(400 `installId 가 필요합니다`)이 돌아왔다.
+# → verify_jwt = false 확정.
+#
+# ★이 항목은 관문이 아니다. true 로 바꿔도 anon key 는 설치파일 안에 들어 있는 공개값이라
+#   막히는 것이 없다. **이 함수의 실질 관문은 함수 안의 rate limit 하나뿐이다**
+#   (시크릿 `RECORD_PROMPT_RATELIMIT` 으로 off/observe/enforce 를 정한다).
+[functions.ssampin-record-prompt]
+verify_jwt = false

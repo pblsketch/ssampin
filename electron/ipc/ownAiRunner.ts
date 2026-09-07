@@ -4,8 +4,15 @@
  * ★S0 실측(2026-09-04)에서 확정한 것들. 고치기 전에 `S0-results.md` 를 볼 것:
  *
  * 1. **stdin 을 반드시 닫는다.** 안 닫으면 claude 는 3초를 버리고(경고 후 진행),
- *    codex 는 **무한 대기**한다(184초 타임아웃, 출력 0줄). 그래서 프롬프트를 파이프가 아니라
- *    인자로 넘기고 `stdio[0] = 'ignore'` 로 띄운다.
+ *    codex 는 **무한 대기**한다(184초 타임아웃, 출력 0줄).
+ *    ★그건 **열어 둔 채 아무것도 안 준** 경우다. **써 넣고 곧바로 `end()` 하는 것은 다른
+ *    경우이고 정상 동작한다**(2026-09-07 실측). 그래서 지금은:
+ *      - **claude** — 프롬프트를 **항상 stdin** 으로 넘긴다(`promptViaStdin`). 명령줄에
+ *        학생 근거 본문이 실리지 않게 하기 위해서다(ADR-089 후속 6). 한 줄 쓰고 즉시 닫는다.
+ *      - **codex** — 아직 위치 인자다. `-` 로 stdin 을 받는 것은 확인했으나(thread·turn 시작)
+ *        사용량 한도로 완주를 못 봐서 **적용 보류**. 남은 노출은 ADR-089 에 적혀 있다.
+ *    ★"184초"는 **앱의 안전장치가 아니었다** — 저장소 밖 스파이크 하네스의 타임아웃이다.
+ *    그래서 아래 `RUN_TIMEOUT_MS` 로 러너 자체 상한을 둔다(그전에는 상한이 아예 없었다).
  *
  * 2. **`activeUntil` 은 대입만 한다.** `Math.max` 로 갱신하면 `max(Infinity, …)` 가 계속
  *    `Infinity` 라 실행이 끝나도 영원히 409 가 되어, 선생님이 다른 AI 앱에서 하는 저장까지
@@ -19,12 +26,22 @@
  *    열린다 — 그때 활성이 아니면 카드 없이 저장된다.
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
+import type { AssistAttachmentPayload } from '../../src/domain/entities/AssistAttachment';
+import {
+  attachmentFileName,
+  buildClaudeStdinMessage,
+} from '../../src/domain/rules/assistAttachmentRules';
 import { graceUntil } from '../../src/domain/rules/ownAiWriteGate';
 import {
   stripOwnAiEnv,
   buildClaudeArgv,
   buildCodexArgv,
+  buildCodexStdinText,
   classifyOwnAiError,
+  isVersionAtLeast,
+  CODEX_STDIN_MIN,
 } from '../../src/domain/rules/ownAiCliRules';
 import type { OwnAiLaunch } from './ownAiCli';
 import type {
@@ -49,6 +66,54 @@ export interface OwnAiRunRequest {
   /** 패널에서만. claude 는 파일 경로, codex 는 엔트리를 `-c` 로 넘긴다. */
   readonly mcpConfigPath?: string;
   readonly bridge?: OwnAiBridgeEntry;
+  /**
+   * 이미지 첨부(ADR-090). claude 는 stdin 의 stream-json 메시지에 실어 보내고(디스크에 안 남김),
+   * codex 는 `-i` 밖에 길이 없어 실행 직전 임시 파일로 풀었다가 끝나는 즉시 지운다.
+   */
+  readonly attachments?: readonly AssistAttachmentPayload[];
+}
+
+/**
+ * codex 용 임시 파일 보관소. 실행 하나(runId)당 폴더 하나.
+ *
+ * ★`discard` 는 close·error·취소·앱 종료 어디서든 불린다 — 이미지에 학생 얼굴이 있을 수 있어
+ *   한 번이라도 남기면 안 된다. 앱을 켤 때도 지난 잔재를 통째로 비운다(`sweep`).
+ */
+export interface OwnAiAttachmentStore {
+  /** 파일로 풀고 절대 경로들을 돌려준다. 순서는 첨부 순서와 같다. */
+  readonly stage: (runId: string, files: readonly AssistAttachmentPayload[]) => string[];
+  readonly discard: (runId: string) => void;
+  /** 이전 실행이 남긴 폴더를 전부 지운다(앱 시작 시). */
+  readonly sweep: () => void;
+}
+
+export function createFsAttachmentStore(root: string): OwnAiAttachmentStore {
+  const dirOf = (runId: string): string => path.join(root, runId);
+  return {
+    stage: (runId, files) => {
+      const dir = dirOf(runId);
+      fs.mkdirSync(dir, { recursive: true });
+      return files.map((f, i) => {
+        const file = path.join(dir, attachmentFileName(i, f.mediaType));
+        fs.writeFileSync(file, Buffer.from(f.dataBase64, 'base64'));
+        return file;
+      });
+    },
+    discard: (runId) => {
+      try {
+        fs.rmSync(dirOf(runId), { recursive: true, force: true });
+      } catch {
+        /* 이미 없으면 그만이다 */
+      }
+    },
+    sweep: () => {
+      try {
+        fs.rmSync(root, { recursive: true, force: true });
+      } catch {
+        /* 없으면 그만이다 */
+      }
+    },
+  };
 }
 
 export interface OwnAiRunnerDeps {
@@ -61,13 +126,31 @@ export interface OwnAiRunnerDeps {
   readonly now: () => number;
   readonly spawnChild: typeof spawn;
   readonly killTreeSync: (pid: number) => void;
+  /** codex 이미지 첨부용 임시 파일 보관소. */
+  readonly attachmentStore: OwnAiAttachmentStore;
 }
+
+/**
+ * 한 번의 실행이 이보다 오래 걸리면 죽인다.
+ *
+ * ★그전에는 **상한이 아예 없었다.** 저장소가 여러 문서에서 인용하던 "184초"는 앱의 안전장치가
+ * 아니라 저장소 밖 스파이크 하네스의 타임아웃이었다 — 앱에서 CLI 가 멈추면 선생님이 [중단]을
+ * 누를 때까지 **무기한** 매달렸다는 뜻이다(ADR-089 후속 6에서 발견).
+ *
+ * ★값을 크게 잡는다. 초안 한 편이 20~30초이고 패널은 도구를 여러 번 왕복하므로, 짧게 잡으면
+ * 정상 실행을 죽인다 — 이건 "멈춤을 끊는 마지막 그물"이지 성능 제한이 아니다.
+ */
+const RUN_TIMEOUT_MS = 10 * 60 * 1000;
 
 interface ActiveRun {
   readonly child: ChildProcess;
   readonly kind: OwnAiRunKind;
   cancelled: boolean;
   finalized: boolean;
+  /** codex 첨부를 파일로 풀어 놓았다 — 끝나면 반드시 지운다. */
+  staged: boolean;
+  /** 실행 시간 상한 타이머. 끝나면(finalize) 반드시 해제한다. */
+  timeout?: ReturnType<typeof setTimeout>;
 }
 
 /**
@@ -136,7 +219,9 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
   ): void {
     if (run.finalized) return;
     run.finalized = true;
+    if (run.timeout !== undefined) clearTimeout(run.timeout);
     runs.delete(runId);
+    if (run.staged) deps.attachmentStore.discard(runId);
 
     if (run.kind === 'panel') {
       // ★대입이다. max 를 쓰면 실행 후에도 영원히 활성으로 남는다.
@@ -169,6 +254,28 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
       return { ok: false, kind: 'not-installed' };
     }
 
+    const attachments = req.attachments ?? [];
+    const hasAttachments = attachments.length > 0;
+
+    // codex 를 stdin 경로로 돌려도 되는 버전인가. 확인한 버전 아래로는 옛 경로를 쓴다.
+    const codexVersion = deps.version('codex');
+    const codexStdin =
+      req.provider === 'codex' &&
+      codexVersion !== null &&
+      isVersionAtLeast(codexVersion, CODEX_STDIN_MIN);
+
+    // codex 는 이미지를 파일로만 받는다 — 여기서 풀고, 끝나면(finalize) 반드시 지운다.
+    let imagePaths: string[] = [];
+    if (hasAttachments && req.provider === 'codex') {
+      try {
+        imagePaths = deps.attachmentStore.stage(req.runId, attachments);
+      } catch {
+        deps.attachmentStore.discard(req.runId);
+        deps.emit({ type: 'error', runId: req.runId, kind: 'crashed' });
+        return { ok: false };
+      }
+    }
+
     const argv =
       req.provider === 'claude'
         ? buildClaudeArgv({
@@ -180,6 +287,10 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
               ? {}
               : { appendSystemPrompt: req.appendSystemPrompt }),
             version: deps.version(req.provider),
+            // ★프롬프트를 **항상** stdin 메시지로 보낸다(아래에서 쓰고 즉시 닫는다).
+            //   명령줄에 규정과 학생 근거 본문이 실리지 않게 하려는 것이다(ADR-089 후속 6).
+            //   첨부가 있으면 같은 메시지에 이미지가 함께 실린다.
+            promptViaStdin: true,
           })
         : buildCodexArgv({
             kind: req.kind,
@@ -190,7 +301,25 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
             ...(req.appendSystemPrompt === undefined
               ? {}
               : { appendSystemPrompt: req.appendSystemPrompt }),
+            ...(imagePaths.length > 0 ? { imagePaths } : {}),
+            // ★확인한 버전에서만 stdin 으로 돌린다. 구버전에서 `-` 가 프롬프트 글자로
+            //   읽히면 조용한 오작동이 된다 — 그건 명령줄 노출보다 나쁘다.
+            promptViaStdin: codexStdin,
           });
+
+    // 두 CLI 모두 프롬프트를 stdin 으로 넘긴다 — 쓰고 **바로 닫는다.**
+    // claude 는 stream-json 메시지 한 줄(이미지가 있으면 같이), codex 는 글 그대로.
+    const stdinMessage =
+      req.provider === 'claude'
+        ? buildClaudeStdinMessage(req.prompt, attachments)
+        : codexStdin
+          ? buildCodexStdinText({
+              prompt: req.prompt,
+              ...(req.appendSystemPrompt === undefined
+                ? {}
+                : { appendSystemPrompt: req.appendSystemPrompt }),
+            })
+          : null;
 
     const prev = activeUntil;
     // ★spawn 직전에 대입한다 — 자식은 살아 있는데 게이트가 아직 안 켜진 창을 0으로 만든다.
@@ -207,13 +336,15 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
           ...(launch.asNode ? { ELECTRON_RUN_AS_NODE: '1', MCP_TIMEOUT: '45000' } : {}),
         },
         // ★stdin 을 닫는다. 안 닫으면 codex 는 영원히 기다린다(실측).
-        stdio: ['ignore', 'pipe', 'pipe'],
+        //   이미지를 stdin 으로 넘기는 claude 만 잠깐 열고, 한 줄 쓴 뒤 곧바로 end() 한다.
+        stdio: [stdinMessage === null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
         windowsHide: true,
         // 프로세스 그룹을 만들어야 손자까지 죽일 수 있다(win32 는 taskkill /T 를 쓴다).
         detached: deps.platform !== 'win32',
       });
     } catch (e) {
       activeUntil = prev; // 못 띄웠으면 되돌린다
+      if (imagePaths.length > 0) deps.attachmentStore.discard(req.runId);
       const code = (e as { code?: string }).code;
       deps.emit({
         type: 'error',
@@ -223,9 +354,29 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
       return { ok: false, kind: 'not-installed' };
     }
 
-    const run: ActiveRun = { child, kind: req.kind, cancelled: false, finalized: false };
+    const run: ActiveRun = {
+      child,
+      kind: req.kind,
+      cancelled: false,
+      finalized: false,
+      staged: imagePaths.length > 0,
+    };
+    // ★멈춤을 끊는 마지막 그물. 상한에 닿으면 자식 무리를 죽인다 — 그러면 close 가 와서
+    //   `finalize` 가 평소 경로로 돈다(취소가 아니라 오류로 분류된다).
+    run.timeout = setTimeout(() => {
+      if (run.finalized) return;
+      const pid = run.child.pid;
+      if (pid !== undefined) deps.killTreeSync(pid);
+    }, RUN_TIMEOUT_MS);
+
     runs.set(req.runId, run);
     deps.emit({ type: 'started', runId: req.runId });
+
+    if (stdinMessage !== null && child.stdin) {
+      // 자식이 먼저 죽으면 EPIPE 가 온다 — 그건 close 쪽에서 오류로 분류되니 여기선 삼킨다.
+      child.stdin.on('error', () => {});
+      child.stdin.end(stdinMessage);
+    }
 
     const parse = req.provider === 'claude' ? parseClaudeLine : parseCodexLine;
     let stderr = '';
@@ -291,7 +442,9 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
       const pid = run.child.pid;
       if (pid !== undefined) deps.killTreeSync(pid);
       run.finalized = true;
+      if (run.timeout !== undefined) clearTimeout(run.timeout);
       runs.delete(runId);
+      if (run.staged) deps.attachmentStore.discard(runId);
     }
     // ★0 이 아니라 **유예창**이다. 이 함수는 앱 종료뿐 아니라 `uncaughtException` 에서도
     //   불리는데, 그때 앱은 안 죽을 수 있다. 0 으로 두면 방금 죽인 자식이 보낸 늦은 쓰기가

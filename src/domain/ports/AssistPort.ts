@@ -11,6 +11,7 @@
  * 이 포트가 `ModelSafe<T>` 만 받는 순간, **재구성을 거치지 않은 객체는 타입 시스템이 거부한다.**
  */
 import type { ModelSafe } from '../entities/AssistTool';
+import type { AssistAttachmentPayload } from '../entities/AssistAttachment';
 import type { ToolResultShape } from '../services/sanitizeToolResult';
 
 /** 모델에 보낼 도구 결과 한 건. `data` 는 반드시 재구성을 거친 것이어야 한다. */
@@ -48,6 +49,12 @@ export interface AssistRequestPayload {
   readonly toolResults: readonly AssistToolResultPayload[];
   /** 있으면 모델이 도구를 고를 수 있다(옵션 A). 없으면 종전과 같은 단발 답변 */
   readonly tools?: readonly AssistToolSchemaPayload[];
+  /**
+   * 이번 질문에 붙인 이미지(ADR-090). **"내 AI"(구독 CLI) 포트만 받는다.**
+   * 쌤핀 AI(Solar) 포트는 이것이 있으면 보내지 않고 `AssistBlockedError` 를 던진다 —
+   * 사진 속 이름·얼굴은 가릴 수 없고, 중계 서버는 글만 받기 때문이다.
+   */
+  readonly attachments?: readonly AssistAttachmentPayload[];
 }
 
 /**

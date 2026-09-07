@@ -10,6 +10,13 @@
  * M2 에서 게시판, M3 에서 자료실이 더해졌다. 토론방·갤러리는 M4 이므로 아직 없다.
  */
 import type {
+  StaffRoomMySubmission,
+  StaffRoomSubmission,
+  StaffRoomSubmissionSaveResult,
+  StaffRoomSubmissionTargets,
+  WriteStaffRoomSubmissionInput,
+} from '@domain/entities/StaffRoomSubmission';
+import type {
   CreateStaffRoomDepartmentInput,
   CreateStaffRoomInviteInput,
   StaffRoomDepartment,
@@ -37,6 +44,7 @@ import type {
   StaffRoomTally,
   StaffRoomEvent,
   StaffRoomTask,
+  StaffRoomTaskForm,
   StaffRoomVote,
   WriteStaffRoomEventInput,
   WriteStaffRoomMinutesInput,
@@ -508,6 +516,104 @@ export interface IStaffRoomPort {
   deleteMinutes(googleAccessToken: string, departmentId: string, minutesId: string): Promise<void>;
 
   // ════════════════════════════════════════════════════════════════
+  // 제출 과제 (066)
+  //
+  // ★ 만들기는 **멤버 누구나** 한다. 취합은 부장만 하는 일이 아니다.
+  // ★ 목록(`listSubmissions`)은 언제나 익명이다 — 진행률 숫자와 내 상태만 온다.
+  //   명단은 `listSubmissionTargets` 로만 오고, 그건 만든이·관리자만 부를 수 있다.
+  // ════════════════════════════════════════════════════════════════
+
+  /**
+   * 업무에 걸어 둔 서식 목록.
+   *
+   * 자료실 파일을 가리키기만 한다. 내려받기는 자료실의 기존 경로를 그대로 쓴다 —
+   * 권한을 내주는 길을 두 벌로 만들지 않는다.
+   */
+  /**
+   * 붙여넣기로 읽어낸 일정 여러 건을 한 번에 올린다.
+   *
+   * 파싱은 앱이 하고(domain/rules/staffRoomSchedulePaste.ts), 사람이 미리보기로
+   * 확인한 뒤 다듬어진 줄만 여기로 온다. 서버가 다시 검사하므로 앱을 안 거치는
+   * 경로로 이상한 것이 들어와도 막힌다.
+   */
+  addEvents(
+    googleAccessToken: string,
+    departmentId: string,
+    events: readonly { startsOn: string; title: string; place: string; memo: string }[],
+  ): Promise<{ events: StaffRoomEvent[]; rejected: number }>;
+
+  listTaskForms(
+    googleAccessToken: string,
+    departmentId: string,
+    taskId: string,
+  ): Promise<StaffRoomTaskForm[]>;
+
+  /** 업무 서식을 통째로 바꾼다 (업무를 고칠 수 있는 사람만) */
+  setTaskForms(
+    googleAccessToken: string,
+    departmentId: string,
+    taskId: string,
+    fileIds: readonly string[],
+  ): Promise<{ forms: StaffRoomTaskForm[]; droppedFiles: number }>;
+
+  /** 제출 과제 목록 (익명 — 주체 명단은 안 온다) */
+  listSubmissions(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+  ): Promise<StaffRoomSubmission[]>;
+
+  /** 제출 과제 만들기 (멤버 누구나) */
+  addSubmission(
+    googleAccessToken: string,
+    departmentId: string,
+    moduleId: string,
+    input: WriteStaffRoomSubmissionInput,
+  ): Promise<StaffRoomSubmissionSaveResult>;
+
+  /** 제출 과제 고치기 (만든이·관리자) */
+  updateSubmission(
+    googleAccessToken: string,
+    departmentId: string,
+    submissionId: string,
+    input: WriteStaffRoomSubmissionInput,
+  ): Promise<StaffRoomSubmissionSaveResult>;
+
+  /** 제출 과제 지우기 (만든이·관리자) */
+  deleteSubmission(
+    googleAccessToken: string,
+    departmentId: string,
+    submissionId: string,
+  ): Promise<void>;
+
+  /**
+   * "냈음" 표시 (본인·만든이·관리자).
+   *
+   * `targetEmail` 이 없으면 내 칸이다. 남의 칸을 켜고 끄는 것은 취합자와
+   * 관리자만 — 종이나 메신저로 받은 것을 대신 표시할 수 있어야 한다.
+   */
+  toggleSubmissionDone(
+    googleAccessToken: string,
+    departmentId: string,
+    submissionId: string,
+    done: boolean,
+    targetEmail?: string,
+  ): Promise<StaffRoomSubmission>;
+
+  /**
+   * 제출 주체 명단 — 낸 사람 + 안 낸 사람 + 부서를 나간 사람 (만든이·관리자만).
+   *
+   * ★ 목록에 안 담고 여기로만 내보내는 이유: "권한 없으면 이름을 지운다"를
+   *   여기저기 적으면 한 줄만 빠뜨려도 샌다. 통로를 하나로 좁혀 그 자리에서만
+   *   판정한다(계획서 D2).
+   */
+  listSubmissionTargets(
+    googleAccessToken: string,
+    departmentId: string,
+    submissionId: string,
+  ): Promise<StaffRoomSubmissionTargets>;
+
+  // ════════════════════════════════════════════════════════════════
   // 부서 일정 · 업무 분담 (M4 · §8-B)
   //
   // ★ 부서 일정을 개인 일정으로 **복사하지 않는다.** 부서가 주인이라 나가면 안 보여야 하고,
@@ -527,7 +633,20 @@ export interface IStaffRoomPort {
   listMyPlan(
     googleAccessToken: string,
     departmentIds: readonly string[],
-  ): Promise<{ events: StaffRoomEvent[]; tasks: StaffRoomTask[] }>;
+  ): Promise<{
+    events: StaffRoomEvent[];
+    tasks: StaffRoomTask[];
+    /**
+     * 내가 주체인 제출 과제 — **미완료 전부 + 최근 14일 완료분**.
+     *
+     * 완료분을 함께 싣는 이유: 개인 화면에서 체크한 직후 줄이 사라지면
+     * 잘못 누른 것을 되돌릴 수 없다. 그렇다고 전부 실으면 제출 과제는
+     * 학년도 전환 대상이 아니라 해마다 쌓여 화면을 덮는다.
+     */
+    submissions: StaffRoomMySubmission[];
+    /** 상한에 닿아 잘렸는가 */
+    submissionsTruncated: boolean;
+  }>;
 
   addEvent(
     googleAccessToken: string,

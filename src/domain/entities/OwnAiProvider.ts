@@ -86,6 +86,10 @@ export type OwnAiErrorKind =
   | 'write-server-unavailable'
   /** 생기부 1층 프롬프트를 못 받아 왔다 — 규정을 못 지키므로 초안을 만들지 않는다 */
   | 'prompt-unavailable'
+  /** 규정 배급이 분당 한도에 걸렸다 — 1분 뒤면 풀린다 (ADR-089) */
+  | 'prompt-rate-limited-minute'
+  /** 규정 배급이 일간 한도에 걸렸다 — 오늘은 안 풀린다. 위와 안내가 달라야 한다 */
+  | 'prompt-rate-limited-day'
   | 'cancelled'
   | 'crashed';
 

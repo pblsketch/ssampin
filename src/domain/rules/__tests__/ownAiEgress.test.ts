@@ -22,7 +22,8 @@ import {
   buildCorrelationHints,
   formatCorrelationHintBlock,
 } from '@domain/rules/ownAiCorrelationHints';
-import { buildClaudeArgv, buildCodexArgv } from '@domain/rules/ownAiCliRules';
+import { buildClaudeArgv, buildCodexArgv, buildCodexStdinText } from '@domain/rules/ownAiCliRules';
+import { buildClaudeStdinMessage } from '@domain/rules/assistAttachmentRules';
 import { buildLengthAdjustPack, buildRecordDraftPack } from '@domain/services/recordDraftPack';
 
 /** 실명·학번이 실제로 있는 명단. 아래 모든 검사가 이 이름들을 찾는다. */
@@ -38,6 +39,19 @@ const ROSTER = rosterFromAll(STUDENTS, CLASSES);
 /** 명령줄에 실리는 모든 글자를 한 덩어리로 — 여기 실명이 있으면 밖으로 나간 것이다. */
 function commandLineText(argv: readonly string[]): string {
   return argv.join(' ');
+}
+
+/**
+ * **claude 로 나가는 것 전부** — 명령줄 + stdin 메시지.
+ *
+ * ★argv 만 보면 안 된다(ADR-089 후속 6). 러너는 이제 프롬프트를 **stdin 으로** 넘기므로,
+ *   `commandLineText(buildClaudeArgv(...))` 만 재면 본문이 argv 에 없어서 **이유가 틀린 채
+ *   항상 통과**한다 — 저장소의 실명 유출 가드가 조용히 무력화되는 모양이다.
+ *   그래서 러너와 **같은 조합**(promptViaStdin + stdin 한 줄)으로 재조립해 함께 본다.
+ */
+function claudeOutbound(o: Parameters<typeof buildClaudeArgv>[0]): string {
+  const argv = buildClaudeArgv({ ...o, promptViaStdin: true });
+  return `${commandLineText(argv)} ${buildClaudeStdinMessage(o.prompt, [])}`;
 }
 
 function expectNoRealNames(text: string): void {
@@ -83,15 +97,15 @@ describe('★패널 질문 — 명령줄 어디에도 실명이 없다', () => {
 
   it('claude 명령줄 전체에 실명이 없다', () => {
     const { masked, hintBlock } = buildOutbound();
-    const argv = buildClaudeArgv({
-      kind: 'panel',
-      prompt: masked,
-      mcpConfigPath: 'E:\\data\\mcp.json',
-      appendSystemPrompt: hintBlock,
-      version: '2.1.258',
-    });
-
-    expectNoRealNames(commandLineText(argv));
+    expectNoRealNames(
+      claudeOutbound({
+        kind: 'panel',
+        prompt: masked,
+        mcpConfigPath: 'E:\\data\\mcp.json',
+        appendSystemPrompt: hintBlock,
+        version: '2.1.258',
+      }),
+    );
   });
 
   it('codex 명령줄 전체에 실명이 없다', () => {
@@ -133,8 +147,7 @@ describe('★생기부 초안 — 꾸러미와 명령줄 어디에도 실명이 
   });
 
   it('초안 명령줄에는 브릿지 통로가 붙지 않는다 — 도구로 실명을 끌어올 길이 없다', () => {
-    const argv = buildClaudeArgv({ kind: 'draft', prompt: pack.text, version: '2.1.258' });
-    const text = commandLineText(argv);
+    const text = claudeOutbound({ kind: 'draft', prompt: pack.text, version: '2.1.258' });
 
     expectNoRealNames(text);
     expect(text).not.toContain('--mcp-config');
@@ -168,9 +181,7 @@ describe('★분량 조절 — 본문이 나가는 새 경로, 재조정 2차까
     for (const kind of ['shrink', 'expand'] as const) {
       const pack = adjust(kind, 1500);
       expectNoRealNames(pack.text);
-      expectNoRealNames(
-        commandLineText(buildClaudeArgv({ kind: 'draft', prompt: pack.text, version: '2.1.258' })),
-      );
+      expectNoRealNames(claudeOutbound({ kind: 'draft', prompt: pack.text, version: '2.1.258' }));
       expectNoRealNames(
         commandLineText(buildCodexArgv({ kind: 'draft', prompt: pack.text, cwd: 'C:\\tmp' })),
       );
@@ -181,9 +192,7 @@ describe('★분량 조절 — 본문이 나가는 새 경로, 재조정 2차까
     // 화면은 목표만 바꿔 **원문으로** 다시 조립한다. 이미 가린 문자열을 재사용하지 않는다.
     const second = adjust('shrink', 1350);
     expectNoRealNames(second.text);
-    expectNoRealNames(
-      commandLineText(buildClaudeArgv({ kind: 'draft', prompt: second.text, version: '2.1.258' })),
-    );
+    expectNoRealNames(claudeOutbound({ kind: 'draft', prompt: second.text, version: '2.1.258' }));
     expect(second.text).toContain('［이름1］');
   });
 
@@ -194,9 +203,11 @@ describe('★분량 조절 — 본문이 나가는 새 경로, 재조정 2차까
   });
 
   it('조절 명령줄에도 브릿지 통로가 붙지 않는다', () => {
-    const text = commandLineText(
-      buildClaudeArgv({ kind: 'draft', prompt: adjust('shrink', 1500).text, version: '2.1.258' }),
-    );
+    const text = claudeOutbound({
+      kind: 'draft',
+      prompt: adjust('shrink', 1500).text,
+      version: '2.1.258',
+    });
     expect(text).not.toContain('--mcp-config');
     expect(text).not.toContain('--allowedTools');
   });
@@ -206,5 +217,82 @@ describe('★대화 기록을 디스크에 남기지 않는다', () => {
   it('claude 는 세션 저장을 끈다 — 별칭이라도 남기지 않는다', () => {
     const argv = buildClaudeArgv({ kind: 'panel', prompt: '［이름1］ 어땠어?' });
     expect(argv).toContain('--no-session-persistence');
+  });
+});
+
+describe('★claude 는 프롬프트를 명령줄에 싣지 않는다 (ADR-089 후속 6)', () => {
+  /**
+   * 명령줄은 같은 컴퓨터의 다른 프로그램이 읽을 수 있다(작업 관리자 "명령줄" 열,
+   * `Get-CimInstance Win32_Process`, 백신·EDR 텔레메트리). 거기 실리던 것은 규정만이 아니라
+   * **선생님이 넣은 학생 근거 본문**이었고, 이름 가림은 그 반 명단 안에서만 작동한다.
+   */
+  const BODY = '［이름1］은 미세플라스틱을 조사했다. 매우 긴 근거 본문이 여기 이어진다.';
+
+  it('본문이 argv 에 없다 — stdin 으로만 간다', () => {
+    const argv = buildClaudeArgv({ kind: 'draft', prompt: BODY, promptViaStdin: true });
+    expect(commandLineText(argv)).not.toContain('미세플라스틱');
+    expect(argv).toContain('--input-format');
+    expect(argv).toContain('stream-json');
+  });
+
+  it('★그래도 stdin 에는 있다 — 가드가 빈 곳을 재고 통과하면 안 된다', () => {
+    // 이 단언이 없으면 "argv 에 없다"가 **본문이 어디에도 없어서** 참일 수도 있다.
+    expect(claudeOutbound({ kind: 'draft', prompt: BODY })).toContain('미세플라스틱');
+  });
+
+  it('규정(appendSystemPrompt)은 여전히 argv 에 있다 — 이번 범위가 아니다', () => {
+    // claude 의 시스템 자리는 stdin 메시지가 아니라 `--append-system-prompt` 옵션이다.
+    // 규정 본문의 명령줄 노출은 ADR-089 "막지 못하는 것"에 그대로 적혀 있다.
+    const argv = buildClaudeArgv({
+      kind: 'draft',
+      prompt: BODY,
+      promptViaStdin: true,
+      appendSystemPrompt: '작성 규정 본문',
+    });
+    expect(commandLineText(argv)).toContain('작성 규정 본문');
+  });
+});
+
+describe('★codex 도 프롬프트를 명령줄에 싣지 않는다 (확인한 버전에서)', () => {
+  const BODY = '［이름1］은 미세플라스틱을 조사했다.';
+  const RULE = '작성 규정 본문';
+
+  it('본문도 규정도 argv 에 없다 — 자리에 `-` 만 남는다', () => {
+    const argv = buildCodexArgv({
+      kind: 'draft',
+      prompt: BODY,
+      cwd: 'C:\\tmp',
+      appendSystemPrompt: RULE,
+      promptViaStdin: true,
+    });
+    const text = commandLineText(argv);
+    expect(text).not.toContain('미세플라스틱');
+    // ★codex 는 규정도 프롬프트에 붙여 보내므로, stdin 으로 옮기면 규정까지 함께 빠진다.
+    expect(text).not.toContain(RULE);
+    expect(argv[argv.length - 1]).toBe('-');
+  });
+
+  it('★그래도 stdin 글에는 둘 다 있다 — 빈 곳을 재고 통과하면 안 된다', () => {
+    const stdin = buildCodexStdinText({ prompt: BODY, appendSystemPrompt: RULE });
+    expect(stdin).toContain('미세플라스틱');
+    expect(stdin).toContain(RULE);
+    expect(stdin.indexOf(RULE)).toBeLessThan(stdin.indexOf('미세플라스틱'));
+  });
+
+  it('끄면 옛 경로 그대로다 — 구버전에서 조용히 오작동하지 않게', () => {
+    const argv = buildCodexArgv({ kind: 'draft', prompt: BODY, cwd: 'C:\\tmp' });
+    expect(argv[argv.length - 1]).toContain('미세플라스틱');
+  });
+
+  it('두 경로가 같은 글을 보낸다 — 조립을 한 자리에서 한다', () => {
+    const viaArgv = buildCodexArgv({
+      kind: 'draft',
+      prompt: BODY,
+      cwd: 'C:\\tmp',
+      appendSystemPrompt: RULE,
+    });
+    expect(viaArgv[viaArgv.length - 1]).toBe(
+      buildCodexStdinText({ prompt: BODY, appendSystemPrompt: RULE }),
+    );
   });
 });

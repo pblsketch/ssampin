@@ -30,6 +30,46 @@ const ROOT = resolve(__dirname, '..');
 // ============================================================
 
 const presenceChecks = [
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #71 (2026-09-07, ADR-090) — 이미지 첨부는 "내 AI"(구독 CLI)로만 나간다.
+  //
+  // 쌤핀 AI(Solar) 중계 서버는 글만 받고, 사진 속 이름·얼굴은 별칭으로 가릴 수 없다.
+  // 화면이 버튼을 숨기는 것만으로는 부족하다 — 붙여넣기·끌어다 놓기·"고른 구독이 끊겨
+  // 조용히 Solar 로 돌아온 경우"가 남는다. 그래서 두 자리에서 글자로 못 박는다:
+  //  (1) 스토어는 `attachmentsAllowedFor(chosenProvider)` 를 지난 것만 포트에 싣는다.
+  //  (2) Solar 포트(`AssistClient.ask`)는 첨부가 오면 fetch 전에 `AssistBlockedError` 를 던진다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/stores/useAssistStore.ts',
+    pattern:
+      /const attachments = attachmentsAllowedFor\(chosenProvider\)[\s\S]{0,4000}?attachments: attachments\.map\(/,
+    name: 'REGRESSION #71-1: 쌤핀 AI 스토어는 "내 AI"일 때만 이미지를 포트에 싣는다',
+  },
+  {
+    file: 'src/infrastructure/ai/AssistClient.ts',
+    pattern:
+      /async ask\(payload: AssistRequestPayload\)[\s\S]{0,600}?payload\.attachments[\s\S]{0,300}?throw new AssistBlockedError\([\s\S]{0,1200}?fetch\(/,
+    name: 'REGRESSION #71-2: Solar 포트는 첨부가 오면 fetch 전에 거절한다',
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #68-2 (2026-09-07) — 제출 과제 명단 통로는 권한 판정을 반드시 지난다.
+  //
+  // 이 프로젝트에서 "층은 만들었는데 배선을 잊은" 사고가 반복됐다(#57 주석 참조).
+  // `canSeeUnsubmittedList` 를 만들어 두고 핸들러가 안 부르면, 순수 함수 테스트는
+  // 전부 초록인데 **부서 멤버 누구나 미제출자 명단을 받아 간다.**
+  //
+  // 명단이 나가는 통로는 둘뿐이다 — `submissionTargets`(낸 사람 + 안 낸 사람)와
+  // 그 파생인 `unsubmitted`. 두 분기 안에서 판정을 부르는지 글자로 못 박는다.
+  //
+  // ★ 목록(`submissions`)은 애초에 이름을 담지 않으므로 이 검사 대상이 아니다.
+  //   그건 `toSubmissionSummary` 의 반환 타입이 막는다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'supabase/functions/staffroom-rooms/index.ts',
+    pattern:
+      /action === 'submissionTargets'[\s\S]{0,900}?canSeeUnsubmittedList\([\s\S]{0,2000}?action === 'unsubmitted'[\s\S]{0,900}?canSeeUnsubmittedList\(/,
+    name: 'REGRESSION #68-2: 제출 과제 명단 두 통로가 모두 canSeeUnsubmittedList 를 지난다 (미제출자 명단 유출 방지)',
+  },
   {
     // REGRESSION #57 (2026-08-21, UltraQA) — 쌤핀 AI 그물 ③ 배선.
     //
@@ -49,8 +89,12 @@ const presenceChecks = [
     // 창을 2,500 → 4,000자로 넓힌다. **지키는 것은 그대로다** — 포트에 실리는 것이
     // 원본 `cards` 가 아니라 걸러낸 `effectiveOutbound` 인가. 쓰기 분기는 애초에 포트를
     // 부르지 않고(두 번째 왕복 없음) 화면에 제안만 띄우므로 이 경로에 새 통로를 열지 않는다.
+    //
+    // 2026-09-07 (ADR-090, 이미지 첨부): 두 지점 사이에 "이 질문에 이미지를 실을까" 계산이
+    // 들어와 4,266자가 됐다. 창을 5,000자로 넓힌다. 이미지는 별도 필드(`attachments`)로
+    // 나가고 `toolResults` 에는 여전히 걸러낸 쪽만 실린다 — 지키는 것은 그대로다.
     file: 'src/adapters/stores/useAssistStore.ts',
-    pattern: /redactOutbound\([\s\S]{0,4000}?toolResults:\s*effectiveOutbound\.map\(/,
+    pattern: /redactOutbound\([\s\S]{0,5000}?toolResults:\s*effectiveOutbound\.map\(/,
     name: 'REGRESSION #57: 쌤핀 AI 는 이름을 지운 사본만 전송한다 (그물 ③ 배선)',
   },
   {
@@ -357,6 +401,69 @@ const presenceChecks = [
 // ============================================================
 
 const absenceChecks = [
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #68-1 (2026-09-07) — 제출 과제 **목록**은 주체의 신원을 담지 않는다.
+  //
+  // 오너 결정(2026-09-07): 진행률 숫자는 부서 전원이 보고, "누가 안 냈는지" 명단은
+  // 만든 사람과 관리자만 본다. 교무실 화면에 미제출자 이름이 회색으로 남아 있는 것은
+  // 부장에게는 편하지만 그 사람에게는 다른 뜻이다(계획서 §8-E 와 같은 결).
+  //
+  // 1차 방어는 타입이다 — `toSubmissionSummary` 의 반환 타입에 주체 칸이 없다.
+  // 이 검사는 **그 함수 본문 안에서** 주체 줄의 지메일·이름을 꺼내 담는 시도를 막는다.
+  // 함수 본문에 앵커하는 이유: 같은 파일의 `toTargetsList` 는 지메일을 **반드시**
+  // 돌려주는 정당한 함수라, 파일 단위로 검사하면 그쪽이 걸린다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #68-1: 제출 과제 목록 투영은 주체의 지메일·이름을 담지 않는다 (미제출자 노출 방지)',
+    roots: ['supabase/functions/_shared'],
+    extensions: ['.ts'],
+    fileFilter: (path) => path.endsWith('staffroomSubmissions.ts'),
+    patterns: [
+      // toSubmissionSummary 본문 안에서 주체 줄의 신원을 반환에 싣는 형태
+      /export function toSubmissionSummary[\s\S]{0,1500}?(member_email|display_name_snapshot)\s*[,:]\s*$/m,
+      /export function toSubmissionSummary[\s\S]{0,1500}?targets\.map\(/,
+    ],
+    stripComments: true,
+    minScanned: 1,
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #68-3 (2026-09-07) — 개인 화면 겹쳐 보기는 제출 과제 스토어의
+  // 완료 토글(`toggleDone`) 통로 하나만 연다.
+  //
+  // 오너 결정(2026-09-07): 온라인 교무실은 "고치려면 교무실로 간다"는 읽기 전용
+  // 설계를 지키되, **딱 하나** — 개인 할 일 화면에서 내 제출 과제의 "냈음" 체크만
+  // 예외로 뚫는다(`StaffRoomPlanOverlay.tsx` 머리 주석 참고). `useStaffRoomSubmissionStore`
+  // 에는 제목·마감·주체를 통째로 바꾸는 `saveSubmission`, 지우는 `removeSubmission`,
+  // 서버를 다시 부르는 `loadSubmissions`/`loadTargets`, 명단 상태를 만지는
+  // `clearTargets`/`clearDropped`, 응답을 그대로 갈아끼우는 `receiveMine` 도 같은
+  // 스토어에 있다. 이 파일이 그중 하나라도 부르기 시작하면 "완료 표시 하나"였던
+  // 예외가 조용히 넓어져 개인 할 일 화면에서 부서 업무 제목까지 고치는 길이 열린다
+  // ("주석 계약은 아무도 안 지킨다" — 이 저장소에서 실제로 뚫린 전례가 있다).
+  //
+  // 이 검사를 지우거나 패턴을 줄이려면(=예외를 넓히려면) 먼저 오너 결정을 받고
+  // `StaffRoomPlanOverlay.tsx` 머리 주석도 함께 고칠 것 — 주석만 넓어지고 검사가
+  // 안 따라가는 상태를 막는다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #68-3: 개인 화면 겹쳐 보기는 제출 과제 스토어의 toggleDone 외 API를 쓰지 않는다 (읽기 전용 예외가 조용히 넓어지는 것 방지)',
+    roots: ['src/adapters/components/StaffRoom'],
+    extensions: ['.tsx'],
+    fileFilter: (path) => path.endsWith('StaffRoomPlanOverlay.tsx'),
+    // ★ 괄호를 요구하지 않는다. 이 파일은 스토어를 `(s) => s.toggleDone` 처럼
+    //   **셀렉터로 뽑아** 쓰므로, `.saveSubmission(` 만 보면 예외를 넓히는 실제
+    //   경로(`(s) => s.saveSubmission`)를 통째로 놓친다. 이름이 나오는 것 자체를 막는다.
+    patterns: [
+      /saveSubmission/,
+      /removeSubmission/,
+      /loadSubmissions/,
+      /loadTargets/,
+      /clearTargets/,
+      /clearDropped/,
+      /receiveMine/,
+    ],
+    stripComments: true,
+    minScanned: 1,
+  },
   // ────────────────────────────────────────────────────────────────────────
   // REGRESSION #63 — 모바일 스토어 reload()에서 `loaded:false` 금지 (2026-08-24).
   //

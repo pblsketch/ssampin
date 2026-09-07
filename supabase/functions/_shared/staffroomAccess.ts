@@ -76,8 +76,13 @@ export type AccessResult =
   | { readonly ok: true; readonly member: AccessMember }
   | { readonly ok: false; readonly reason: AccessDenialReason };
 
-/** 지메일 비교용 정규화 */
-function norm(email: string): string {
+/**
+ * 지메일 비교용 정규화.
+ *
+ * export 하는 이유 — `staffroomSubmissions.ts` 가 같은 규칙으로 비교해야 한다.
+ * 거기서 다시 만들면 "대문자 지메일은 남의 칸으로 보이는" 어긋남이 생긴다.
+ */
+export function norm(email: string): string {
   return email.trim().toLowerCase();
 }
 
@@ -399,7 +404,14 @@ export const MODULE_NAME_MAX_LENGTH = 20;
 export const ROOM_TITLE_MAX_LENGTH = 100;
 
 /** 만들 수 있는 공간 종류 */
-export const MODULE_KINDS = ['board', 'archive', 'discussion', 'gallery', 'minutes'] as const;
+export const MODULE_KINDS = [
+  'board',
+  'archive',
+  'discussion',
+  'gallery',
+  'minutes',
+  'submission',
+] as const;
 
 /** 낼 수 있는 뜻 */
 export const STANCES = ['agree', 'disagree', 'abstain'] as const;

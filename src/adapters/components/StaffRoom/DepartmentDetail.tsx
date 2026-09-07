@@ -18,6 +18,7 @@ import { LibraryView } from './LibraryView';
 import { DiscussionView } from './DiscussionView';
 import { GalleryView } from './GalleryView';
 import { MinutesView } from './MinutesView';
+import { SubmissionView } from './SubmissionView';
 import { DepartmentBanner } from './DepartmentBanner';
 import { PlanView } from './PlanView';
 import { useStaffRoomPlanStore } from '@adapters/stores/useStaffRoomPlanStore';
@@ -237,6 +238,10 @@ export function DepartmentDetail() {
 
             if (active.kind === 'minutes') {
               return <MinutesView departmentId={currentDepartment.id} moduleId={active.id} />;
+            }
+
+            if (active.kind === 'submission') {
+              return <SubmissionView departmentId={currentDepartment.id} moduleId={active.id} />;
             }
 
             // 여기 오면 모르는 종류다. 나중에 종류가 늘 때를 위해 남겨 둔다.

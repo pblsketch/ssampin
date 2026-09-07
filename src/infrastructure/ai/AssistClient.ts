@@ -15,6 +15,7 @@ import type {
   AssistRequestPayload,
 } from '@domain/ports/AssistPort';
 import { AssistBlockedError } from '@domain/ports/AssistPort';
+import { ASSIST_ATTACHMENT_NOT_FOR_SOLAR } from '@domain/rules/assistAttachmentRules';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
@@ -70,6 +71,12 @@ export function classifyFetchFailure(error: unknown): AssistDegraded {
 
 export class AssistClient implements AssistPort {
   async ask(payload: AssistRequestPayload): Promise<AssistAnswer> {
+    // ★이미지는 이 통로로 나가지 않는다(ADR-090). 화면이 Solar 를 고른 동안 첨부 버튼을
+    //   숨기지만, 고른 구독이 끊겨 조용히 Solar 로 돌아온 경우가 남는다 — 그때 이미지만
+    //   빼고 보내면 선생님은 사진을 봤다고 믿는다. 정직하게 거절한다.
+    if (payload.attachments && payload.attachments.length > 0) {
+      throw new AssistBlockedError(ASSIST_ATTACHMENT_NOT_FOR_SOLAR);
+    }
     if (!ENDPOINT || !SUPABASE_ANON_KEY) {
       // 개발 환경에서 환경변수가 없을 때. 조용히 실패하지 않고 축소로 알린다.
       return { text: '', degraded: 'unavailable' };

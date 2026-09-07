@@ -51,6 +51,18 @@ import {
   STANCES,
 } from '../_shared/staffroomAccess.ts';
 import {
+  canSeeUnsubmittedList,
+  canToggleSubmissionDone,
+  normalizeAssignees,
+  SUBMISSION_GUIDE_MAX_LENGTH,
+  SUBMISSION_TITLE_MAX_LENGTH,
+  toSubmissionSummary,
+  toTargetsList,
+  toUnsubmittedList,
+  type SubmissionRow,
+  type SubmissionTargetRow,
+} from '../_shared/staffroomSubmissions.ts';
+import {
   serviceClient,
   loadDiscussion,
   loadMembers,
@@ -63,8 +75,15 @@ import {
   toDiscussionResponse,
   toMinutesResponse,
   toVoteResponse,
+  loadSubmission,
+  loadSubmissions,
+  loadTargetsBySubmission,
+  moduleOfKind,
+  replaceSubmissionTargets,
+  setSubmissionDone,
   DISCUSSION_COLUMNS,
   MINUTES_COLUMNS,
+  SUBMISSION_COLUMNS,
   type DiscussionRow,
   type MinutesRow,
   type ModuleRow,
@@ -583,6 +602,248 @@ serve(async (req: Request) => {
       return jsonResponse({ ok: true });
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // 제출 과제 (066)
+    //
+    // ★ 만들기는 **멤버 누구나** 한다. 취합은 부장만 하는 일이 아니다 —
+    //   교과 간사·학년 담당·행사 담당 누구나 "이거 다들 내주세요"를 띄울 수
+    //   있어야 하고, 관리자만 만들 수 있으면 나머지는 결국 단톡방으로 돌아간다.
+    //   고치고 지우는 것은 canEditRoomItem(만든이·관리자)으로 게시판 글과 같다.
+    //
+    // ★ 목록(submissions)은 **언제나 익명**이다. 진행률 숫자와 내 상태만 담고
+    //   제출 주체의 지메일·이름은 담지 않는다. toSubmissionSummary 의 반환
+    //   타입에 자리가 없어서 담으려 해도 타입이 막는다.
+    //   명단은 submissionTargets / unsubmitted 로만 나가고, 그 둘은
+    //   canSeeUnsubmittedList(만든이·관리자)를 반드시 지난다.
+    // ══════════════════════════════════════════════════════════════
+
+    // ── 제출 과제 목록 (익명) ───────────────────────────────────────
+    if (action === 'submissions') {
+      const moduleId = typeof body?.moduleId === 'string' ? body.moduleId : '';
+      if (!moduleId || !(await moduleOfKind(db, moduleId, departmentId, 'submission'))) {
+        return errorResponse('이 부서의 제출 과제 공간이 아닙니다', 403);
+      }
+
+      const rows = (await loadSubmissions(db, moduleId, departmentId)) as SubmissionRow[];
+      const targets = await loadTargetsBySubmission(
+        db,
+        rows.map((r) => r.id),
+      );
+      const activeEmails = access.map((m) => m.email);
+
+      return jsonResponse({
+        submissions: rows.map((row) =>
+          toSubmissionSummary(row, targets.get(row.id) ?? [], identity.email, activeEmails),
+        ),
+      });
+    }
+
+    // ── 제출 과제 만들기 (멤버 누구나) ──────────────────────────────
+    if (action === 'addSubmission') {
+      const moduleId = typeof body?.moduleId === 'string' ? body.moduleId : '';
+      if (!moduleId || !(await moduleOfKind(db, moduleId, departmentId, 'submission'))) {
+        return errorResponse('이 부서의 제출 과제 공간이 아닙니다', 403);
+      }
+
+      const fields = readSubmissionFields(body);
+      if (!fields.ok) return errorResponse(fields.message, 400);
+
+      const { data, error } = await db
+        .from('staffroom_submissions')
+        .insert({
+          module_id: moduleId,
+          department_id: departmentId,
+          author_email: myEmail,
+          title: fields.title,
+          due_on: fields.dueOn,
+          guide: fields.guide,
+          doc_url: fields.docUrl,
+        })
+        .select(SUBMISSION_COLUMNS)
+        .single();
+
+      if (error) throw new Error(`제출 과제 생성 실패: ${error.message}`);
+
+      const assignees = normalizeAssignees(access, body?.targetEmails);
+      const created = data as SubmissionRow;
+      await replaceSubmissionTargets(db, created.id, assignees.kept, names);
+
+      const targets = await loadTargetsBySubmission(db, [created.id]);
+      return jsonResponse({
+        submission: toSubmissionSummary(
+          created,
+          targets.get(created.id) ?? [],
+          identity.email,
+          access.map((m) => m.email),
+        ),
+        // ★ 부서 밖 사람은 조용히 버리지 않고 몇 명 빠졌는지 알린다.
+        //   만든이는 B 선생님을 걸었다고 믿는데 B 화면에 아무것도 안 뜨면
+        //   아무도 원인을 모른다.
+        droppedTargets: assignees.dropped,
+      });
+    }
+
+    // ── 제출 과제 고치기 (만든이·관리자) ────────────────────────────
+    if (action === 'updateSubmission') {
+      const row = (await loadSubmission(
+        db,
+        typeof body?.submissionId === 'string' ? body.submissionId : '',
+        departmentId,
+      )) as SubmissionRow | null;
+      if (!row) return errorResponse('제출 과제를 찾을 수 없습니다', 404);
+
+      const allowed = canEditRoomItem(access, identity.email, row.author_email);
+      if (!allowed.ok) {
+        return errorResponse(denialMessage(allowed.reason), denialStatus(allowed.reason));
+      }
+
+      const fields = readSubmissionFields(body);
+      if (!fields.ok) return errorResponse(fields.message, 400);
+
+      const { data, error } = await db
+        .from('staffroom_submissions')
+        .update({
+          title: fields.title,
+          due_on: fields.dueOn,
+          guide: fields.guide,
+          doc_url: fields.docUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', row.id)
+        .eq('department_id', departmentId)
+        .select(SUBMISSION_COLUMNS)
+        .single();
+
+      if (error) throw new Error(`제출 과제 수정 실패: ${error.message}`);
+
+      const assignees = normalizeAssignees(access, body?.targetEmails);
+      await replaceSubmissionTargets(db, row.id, assignees.kept, names);
+
+      const targets = await loadTargetsBySubmission(db, [row.id]);
+      return jsonResponse({
+        submission: toSubmissionSummary(
+          data as SubmissionRow,
+          targets.get(row.id) ?? [],
+          identity.email,
+          access.map((m) => m.email),
+        ),
+        droppedTargets: assignees.dropped,
+      });
+    }
+
+    // ── 제출 과제 지우기 (만든이·관리자) ────────────────────────────
+    if (action === 'deleteSubmission') {
+      const row = (await loadSubmission(
+        db,
+        typeof body?.submissionId === 'string' ? body.submissionId : '',
+        departmentId,
+      )) as SubmissionRow | null;
+      if (!row) return errorResponse('제출 과제를 찾을 수 없습니다', 404);
+
+      const allowed = canEditRoomItem(access, identity.email, row.author_email);
+      if (!allowed.ok) {
+        return errorResponse(denialMessage(allowed.reason), denialStatus(allowed.reason));
+      }
+
+      const { error } = await db
+        .from('staffroom_submissions')
+        .delete()
+        .eq('id', row.id)
+        .eq('department_id', departmentId);
+
+      if (error) throw new Error(`제출 과제 삭제 실패: ${error.message}`);
+      return jsonResponse({ ok: true });
+    }
+
+    // ── "냈음" 표시 (본인·만든이·관리자) ────────────────────────────
+    if (action === 'toggleSubmission') {
+      const row = (await loadSubmission(
+        db,
+        typeof body?.submissionId === 'string' ? body.submissionId : '',
+        departmentId,
+      )) as SubmissionRow | null;
+      if (!row) return errorResponse('제출 과제를 찾을 수 없습니다', 404);
+
+      const targetEmail =
+        typeof body?.targetEmail === 'string' && body.targetEmail.trim().length > 0
+          ? body.targetEmail
+          : identity.email;
+
+      const allowed = canToggleSubmissionDone(
+        access,
+        identity.email,
+        targetEmail,
+        row.author_email,
+      );
+      if (!allowed.ok) {
+        return errorResponse(denialMessage(allowed.reason), denialStatus(allowed.reason));
+      }
+
+      await setSubmissionDone(
+        db,
+        row.id,
+        normalizeEmail(targetEmail),
+        body?.done !== false,
+        myEmail,
+      );
+
+      const targets = await loadTargetsBySubmission(db, [row.id]);
+      return jsonResponse({
+        submission: toSubmissionSummary(
+          row,
+          targets.get(row.id) ?? [],
+          identity.email,
+          access.map((m) => m.email),
+        ),
+      });
+    }
+
+    // ── 제출 주체 명단 — 낸 사람 + 안 낸 사람 (만든이·관리자만) ─────
+    //
+    // ★ 낸 사람이 함께 나가야 취합자가 실수로 켠 것을 되돌릴 수 있다.
+    if (action === 'submissionTargets') {
+      const row = (await loadSubmission(
+        db,
+        typeof body?.submissionId === 'string' ? body.submissionId : '',
+        departmentId,
+      )) as SubmissionRow | null;
+      if (!row) return errorResponse('제출 과제를 찾을 수 없습니다', 404);
+
+      const allowed = canSeeUnsubmittedList(access, identity.email, row.author_email);
+      if (!allowed.ok) {
+        return errorResponse(denialMessage(allowed.reason), denialStatus(allowed.reason));
+      }
+
+      const targets = await loadTargetsBySubmission(db, [row.id]);
+      return jsonResponse({
+        targets: toTargetsList((targets.get(row.id) ?? []) as SubmissionTargetRow[], access, names),
+      });
+    }
+
+    // ── 안 낸 사람 명단 (만든이·관리자만) ───────────────────────────
+    if (action === 'unsubmitted') {
+      const row = (await loadSubmission(
+        db,
+        typeof body?.submissionId === 'string' ? body.submissionId : '',
+        departmentId,
+      )) as SubmissionRow | null;
+      if (!row) return errorResponse('제출 과제를 찾을 수 없습니다', 404);
+
+      const allowed = canSeeUnsubmittedList(access, identity.email, row.author_email);
+      if (!allowed.ok) {
+        return errorResponse(denialMessage(allowed.reason), denialStatus(allowed.reason));
+      }
+
+      const targets = await loadTargetsBySubmission(db, [row.id]);
+      return jsonResponse({
+        unsubmitted: toUnsubmittedList(
+          (targets.get(row.id) ?? []) as SubmissionTargetRow[],
+          access,
+          names,
+        ),
+      });
+    }
+
     return errorResponse('알 수 없는 요청입니다', 400);
   } catch (error) {
     console.error('[staffroom-rooms] 오류:', error);
@@ -635,4 +896,33 @@ function readMinutesFields(
       decisions: text(body?.decisions),
     },
   };
+}
+
+/** 제출 과제 입력을 다듬고 검사한다 */
+function readSubmissionFields(
+  body: Record<string, unknown>,
+):
+  | { ok: true; title: string; dueOn: string | null; guide: string; docUrl: string }
+  | { ok: false; message: string } {
+  const titled = checkText(body?.title, SUBMISSION_TITLE_MAX_LENGTH, '과제 이름');
+  if (!titled.ok) return { ok: false, message: titled.message };
+
+  const rawDue = body?.dueOn;
+  const dueOn = typeof rawDue === 'string' && rawDue.trim().length > 0 ? rawDue.trim() : null;
+  if (dueOn !== null && !isDateString(dueOn)) {
+    return { ok: false, message: '마감일을 올바르게 골라주세요.' };
+  }
+
+  const guide =
+    typeof body?.guide === 'string' ? body.guide.slice(0, SUBMISSION_GUIDE_MAX_LENGTH) : '';
+
+  // ★ 주소는 http/https 만 받는다. javascript: 같은 것을 그대로 담으면
+  //   화면이 누르는 순간 그 자리에서 실행된다.
+  const rawUrl = typeof body?.docUrl === 'string' ? body.docUrl.trim() : '';
+  const docUrl = /^https?:\/\//i.test(rawUrl) ? rawUrl.slice(0, 2000) : '';
+  if (rawUrl !== '' && docUrl === '') {
+    return { ok: false, message: '문서 주소는 http 또는 https 로 시작해야 합니다.' };
+  }
+
+  return { ok: true, title: titled.value, dueOn, guide, docUrl };
 }

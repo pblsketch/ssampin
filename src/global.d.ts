@@ -274,6 +274,8 @@ interface OwnAiElectronAPI {
     kind: 'panel' | 'draft';
     prompt: string;
     appendSystemPrompt?: string;
+    /** 이미지 첨부(base64). 패널에서만, "내 AI" 로 답할 때만(ADR-090). */
+    attachments?: readonly { name: string; mediaType: string; dataBase64: string }[];
   }) => Promise<{ ok: boolean; reason?: string }>;
   cancel: (runId: string) => void;
   /** 실행 중 이벤트 구독. 반환 함수를 부르면 구독을 끊는다. */

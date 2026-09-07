@@ -17,7 +17,13 @@
  * M3~M4 에서 열린다. 지금 타입에 함께 적어 두는 이유는, 나중에 종류가 늘 때
  * 데이터베이스 제약을 다시 고치지 않기 위해서다.
  */
-export type StaffRoomModuleKind = 'board' | 'archive' | 'discussion' | 'gallery' | 'minutes';
+export type StaffRoomModuleKind =
+  | 'board'
+  | 'archive'
+  | 'discussion'
+  | 'gallery'
+  | 'minutes'
+  | 'submission';
 
 /** 부서 안의 모듈 하나 (M2 에서는 부서마다 게시판 1개) */
 export interface StaffRoomModule {

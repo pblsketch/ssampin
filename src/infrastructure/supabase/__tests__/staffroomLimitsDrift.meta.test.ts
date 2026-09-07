@@ -36,6 +36,10 @@ const APP_BOARD = read('src/domain/entities/StaffRoomBoard.ts');
 const SERVER_DB = read('supabase/functions/_shared/staffroomDb.ts');
 const SERVER_CATEGORIES = read('supabase/functions/staffroom-categories/index.ts');
 const SQL_053 = read('supabase/migrations/053_staffroom_body_format.sql');
+const APP_SUBMISSION = read('src/domain/entities/StaffRoomSubmission.ts');
+const APP_PASTE = read('src/domain/rules/staffRoomSchedulePaste.ts');
+const SERVER_PLAN = read('supabase/functions/staffroom-plan/index.ts');
+const SERVER_SUBMISSION = read('supabase/functions/_shared/staffroomSubmissions.ts');
 
 /** `이름 = 숫자` 를 읽는다. 못 찾으면 null — 이름이 바뀐 것도 잡아야 해서다 */
 function numberOf(source: string, name: string): number | null {
@@ -51,6 +55,32 @@ describe('기준값 — 앱과 서버가 같은 숫자를 쓴다', () => {
     /** 어긋나면 선생님에게 무엇으로 보이는가 */
     symptom: string;
   }[] = [
+    {
+      // ★ 어긋나면 앱에서는 올라가는데 서버가 되돌린다.
+      what: '붙여넣기로 한 번에 올릴 수 있는 일정 줄 수',
+      app: numberOf(APP_PASTE, 'STAFFROOM_PASTE_MAX_ROWS'),
+      server: numberOf(SERVER_PLAN, 'PASTE_MAX_ROWS'),
+      symptom: '미리보기까지 되는데 [올리기]를 누르면 거절당한다',
+    },
+    {
+      // ★ 어긋나면 만든이는 100명을 걸었다고 믿는데 뒷사람이 조용히 빠진다.
+      what: '제출 과제 한 건에 걸 수 있는 사람 수',
+      app: numberOf(APP_SUBMISSION, 'STAFFROOM_SUBMISSION_TARGET_MAX'),
+      server: numberOf(SERVER_SUBMISSION, 'SUBMISSION_TARGET_MAX'),
+      symptom: '화면에서는 걸리는데 저장하면 뒷사람이 조용히 빠진다',
+    },
+    {
+      what: '제출 과제 이름 길이',
+      app: numberOf(APP_SUBMISSION, 'STAFFROOM_SUBMISSION_TITLE_MAX_LENGTH'),
+      server: numberOf(SERVER_SUBMISSION, 'SUBMISSION_TITLE_MAX_LENGTH'),
+      symptom: '앱에서는 쳐지는데 저장하면 거절당한다',
+    },
+    {
+      what: '제출 과제 안내 문구 길이',
+      app: numberOf(APP_SUBMISSION, 'STAFFROOM_SUBMISSION_GUIDE_MAX_LENGTH'),
+      server: numberOf(SERVER_SUBMISSION, 'SUBMISSION_GUIDE_MAX_LENGTH'),
+      symptom: '길게 쓴 안내가 저장하면 조용히 잘린다',
+    },
     {
       what: '해시태그 한 개 길이',
       app: numberOf(APP_TAXONOMY, 'STAFFROOM_TAG_MAX_LENGTH'),

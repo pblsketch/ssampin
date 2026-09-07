@@ -75,9 +75,10 @@ describe('공간(모듈) 관리 — 관리자만 (계획서 §6)', () => {
     });
   });
 
-  it('만들 수 있는 공간 종류가 다섯이다', () => {
+  it('만들 수 있는 공간 종류가 여섯이다', () => {
+    // 여섯 곳이 함께 움직이는지는 staffroomModuleKindDrift.meta.test.ts 가 본다.
     expect([...MODULE_KINDS].sort()).toEqual(
-      ['archive', 'board', 'discussion', 'gallery', 'minutes'].sort(),
+      ['archive', 'board', 'discussion', 'gallery', 'minutes', 'submission'].sort(),
     );
   });
 });
