@@ -109,6 +109,28 @@ function candidate(
 }
 
 /**
+ * 담임 기록이 **자동 거울 후보로 적격**인가(계획 §5.3, AC-17).
+ *
+ * 제외하는 것:
+ * - **출결**: 지각·결석은 생기부 근거가 아니다. 보드에 쌓이면 진짜 근거가 묻힌다.
+ * - **공백 본문**: 담임은 분류만 저장하는 업무가 있어 본문 없는 기록이 정상적으로 존재한다.
+ *   그것까지 거울로 만들면 빈 카드가 화면을 채운다.
+ *
+ * ★슬롯 미선택은 제외 조건이 **아니다**. 장면을 안 골랐다고 근거가 아닌 것은 아니다.
+ * ★이 함수는 후보 목록과 미분류 건수 **양쪽이 같이** 쓴다. 한쪽만 걸러 두면 "3건"이라 해 놓고
+ *   열면 1건인 화면이 된다.
+ * ★이미 저장된 근거나 기존 원본을 지우지 않는다. 여기서 거르는 것은 앞으로의 후보뿐이다.
+ */
+export function isMirrorEligibleStudentRecord(r: {
+  readonly category: string;
+  readonly content: string;
+}): boolean {
+  if (r.category === 'attendance') return false;
+  if (r.content.trim().length === 0) return false;
+  return true;
+}
+
+/**
  * 한 출처의 후보 — 원본 순서 그대로, 저장 여부를 보지 않는다.
  * 가져오기 서랍이 "추가됨" 표시를 위해 저장된 것까지 보여 주므로 이 단계를 따로 둔다.
  */
@@ -121,7 +143,7 @@ export function listEvidenceCandidates(
     case 'studentRecord': {
       if (!st.studentId) return [];
       return input.studentRecords
-        .filter((r) => r.studentId === st.studentId)
+        .filter((r) => r.studentId === st.studentId && isMirrorEligibleStudentRecord(r))
         .map((r) =>
           candidate('studentRecord', r.subcategory || r.category, {
             content: r.content,

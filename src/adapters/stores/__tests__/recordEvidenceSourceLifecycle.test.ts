@@ -504,3 +504,157 @@ describe('AC-19 동기화 reload 와 사용자 저장이 겹쳐도 파일과 메
     expect(store().records.map((r) => r.id)).toEqual(['from-cloud']);
   });
 });
+
+describe('AC-14 원본 내용으로 바꾸기 — 적용 직전 재검증', () => {
+  const capture = (over = {}) => ({
+    sourceId: 'obs-1',
+    evidenceId: 'ev-1',
+    studentRef: SRC.studentRef,
+    source: { content: '원본', date: '2026-09-01', slots: [] as readonly string[] },
+    evidence: { content: '근거', date: '2026-09-01', slots: [] as readonly string[] },
+    ...over,
+  });
+  const seed = (over: Record<string, unknown> = {}) => {
+    evidenceRepo.stored = {
+      records: [
+        {
+          id: 'ev-1',
+          studentRef: SRC.studentRef,
+          areas: ['subject'],
+          content: '근거',
+          date: '2026-09-01',
+          sourceType: 'observation',
+          sourceId: 'obs-1',
+          threadId: 'thr-1',
+          createdAt: 1,
+          updatedAt: 1,
+          ...over,
+        },
+      ],
+    };
+    evidenceRepo.saveCalls = 0;
+  };
+  const liveSource = (content = '원본') =>
+    Promise.resolve({ content, date: '2026-09-01', studentRef: SRC.studentRef });
+
+  it('둘 다 그대로면 세 필드를 원본 값으로 맞춘다', async () => {
+    seed();
+    const r = await store().applySourceFields({
+      evidenceId: 'ev-1',
+      studentRef: SRC.studentRef,
+      capture: capture(),
+      fields: { content: '원본', date: '2026-09-02', slots: ['수업'] },
+      readLatestSource: () => liveSource(),
+    });
+    expect(r).toEqual({ ok: true });
+    const saved = disk()[0]!;
+    expect(saved.content).toBe('원본');
+    expect(saved.date).toBe('2026-09-02');
+    expect(saved.slots).toEqual(['수업']);
+  });
+
+  it('★주제·영역·AI 제외는 그동안 바뀌었어도 최신값을 보존한다', async () => {
+    seed({ threadId: 'thr-바뀜', areas: ['subject', 'career'], excludedFromAi: true });
+    await store().applySourceFields({
+      evidenceId: 'ev-1',
+      studentRef: SRC.studentRef,
+      capture: capture(),
+      fields: { content: '원본', date: null, slots: null },
+      readLatestSource: () => liveSource(),
+    });
+    const saved = disk()[0]!;
+    expect(saved.threadId).toBe('thr-바뀜');
+    expect(saved.areas).toEqual(['subject', 'career']);
+    expect(saved.excludedFromAi).toBe(true);
+  });
+
+  it('★date·slots 에 null 을 주면 키를 지운다(빈 값을 저장하지 않는다)', async () => {
+    seed({ slots: ['옛장면'] });
+    await store().applySourceFields({
+      evidenceId: 'ev-1',
+      studentRef: SRC.studentRef,
+      // 캡처는 지금 근거 상태와 같아야 한다 - 다르면 재검증이 먼저 걸린다(그건 위 케이스가 잠근다).
+      capture: capture({
+        evidence: { content: '근거', date: '2026-09-01', slots: ['옛장면'] as readonly string[] },
+      }),
+      fields: { content: '원본', date: null, slots: null },
+      readLatestSource: () => liveSource(),
+    });
+    const saved = disk()[0]!;
+    expect('date' in saved).toBe(false);
+    expect('slots' in saved).toBe(false);
+  });
+
+  it('★대화상자를 열어 둔 사이 원본이 바뀌었으면 쓰기 0회', async () => {
+    seed();
+    const r = await store().applySourceFields({
+      evidenceId: 'ev-1',
+      studentRef: SRC.studentRef,
+      capture: capture(),
+      fields: { content: '원본', date: null, slots: null },
+      readLatestSource: () => liveSource('원본이 그사이 바뀜'),
+    });
+    expect(r).toEqual({ ok: false, reason: 'changed' });
+    expect(evidenceRepo.saveCalls).toBe(0);
+    expect(disk()[0]?.content).toBe('근거'); // 그대로다
+  });
+
+  it('★근거가 그사이 바뀌었어도 쓰기 0회', async () => {
+    seed({ content: '교사가 다듬음' });
+    const r = await store().applySourceFields({
+      evidenceId: 'ev-1',
+      studentRef: SRC.studentRef,
+      capture: capture(),
+      fields: { content: '원본', date: null, slots: null },
+      readLatestSource: () => liveSource(),
+    });
+    expect(r).toEqual({ ok: false, reason: 'changed' });
+    expect(evidenceRepo.saveCalls).toBe(0);
+  });
+
+  it('★원본이 사라졌으면 쓰지 않는다', async () => {
+    seed();
+    const r = await store().applySourceFields({
+      evidenceId: 'ev-1',
+      studentRef: SRC.studentRef,
+      capture: capture(),
+      fields: { content: '원본', date: null, slots: null },
+      readLatestSource: () => Promise.resolve(null),
+    });
+    expect(r).toEqual({ ok: false, reason: 'missing' });
+    expect(evidenceRepo.saveCalls).toBe(0);
+  });
+
+  it('★원본 읽기가 실패하면 던지고 쓰지 않는다 — "삭제됨"으로 둔갑시키지 않는다', async () => {
+    seed();
+    await expect(
+      store().applySourceFields({
+        evidenceId: 'ev-1',
+        studentRef: SRC.studentRef,
+        capture: capture(),
+        fields: { content: '원본', date: null, slots: null },
+        readLatestSource: () => Promise.reject(new Error('EIO')),
+      }),
+    ).rejects.toThrow('EIO');
+    expect(evidenceRepo.saveCalls).toBe(0);
+  });
+
+  it('반영한 본문에 금지 표현이 있으면 AI 제외를 붙인다', async () => {
+    seed();
+    await store().applySourceFields({
+      evidenceId: 'ev-1',
+      studentRef: SRC.studentRef,
+      capture: capture({
+        source: { content: '○○학원에서 배웠다', date: '2026-09-01', slots: [] },
+      }),
+      fields: { content: '○○학원에서 배웠다', date: null, slots: null },
+      readLatestSource: () =>
+        Promise.resolve({
+          content: '○○학원에서 배웠다',
+          date: '2026-09-01',
+          studentRef: SRC.studentRef,
+        }),
+    });
+    expect(disk()[0]?.excludedFromAi).toBe(true);
+  });
+});

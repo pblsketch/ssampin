@@ -14,6 +14,12 @@ import {
 } from '@adapters/stores/useInquiryThreadStore';
 import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import {
+  recheckBeforeApply,
+  type ComparableRecordFields,
+  type ComparisonCapture,
+  type ComparisonRecheck,
+} from '@domain/rules/evidenceSourceComparison';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
 import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
 
@@ -35,6 +41,21 @@ export interface RecordEvidenceAddInput {
    * 기재 금지 자동 판정을 끄는 값이 아니다(그건 저장 뒤 `setExcludedFromAi` 로).
    */
   excludedFromAi?: boolean;
+}
+
+/**
+ * 원본에서 그대로 가져오는 세 필드만 바꾸는 입력(계획 §5.3).
+ *
+ * 일반 patch 와 달리 **명시적인 `null` 이 "키 제거"** 를 뜻한다.
+ * 일반 patch 는 `undefined` 를 "변경 없음"으로 쓰는데, 그것만으로는
+ * "날짜를 지워라"를 표현할 수 없어 별도 타입을 둔다.
+ */
+export interface EvidenceSourceFieldsPatch {
+  readonly content: string;
+  /** `null` 이면 date 키를 지운다. */
+  readonly date: string | null;
+  /** `null` 이면 slots 키를 지운다. 빈 배열도 키를 만들지 않는다(부재 != 빈 배열). */
+  readonly slots: readonly string[] | null;
 }
 
 /** 근거 자료 부분 수정 입력. id 로 대상 지정. */
@@ -179,6 +200,27 @@ interface RecordEvidenceState {
   ensureEvidenceFromSource: (
     input: EnsureEvidenceFromSourceInput,
   ) => Promise<EnsureEvidenceFromSourceResult>;
+  /**
+   * 비교창의 [원본 내용으로 바꾸기] — content·date·slots **세 필드만** 원본 값으로 맞춘다.
+   *
+   * ★쓰기 직전에 원본과 근거를 **다시 읽어** 캡처와 대조한다. 대화상자를 열어 둔 사이에
+   *   어느 한쪽이 바뀌었거나 사라졌으면 **쓰기 0회**로 돌아간다(계획 §5.3).
+   * ★주제·영역·AI 제외는 그동안 바뀌었어도 **최신값을 보존**한다. 이 관문이 건드리는 것은
+   *   세 필드뿐이다.
+   */
+  applySourceFields: (params: {
+    readonly evidenceId: string;
+    readonly studentRef: string;
+    readonly capture: ComparisonCapture;
+    readonly fields: EvidenceSourceFieldsPatch;
+    /**
+     * 락 안에서 원본을 다시 읽는 함수. 스토어가 관찰·담임 저장소를 직접 알지 않도록 주입받는다.
+     * 읽기 실패는 던져서 알린다 - `null`(정말 없음)과 구별해야 한다.
+     */
+    readonly readLatestSource: () => Promise<
+      (ComparableRecordFields & { readonly studentRef: string }) | null
+    >;
+  }) => Promise<ComparisonRecheck>;
   remove: (id: string) => Promise<void>;
   exists: (id: string) => boolean;
 
@@ -674,6 +716,48 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
         };
       });
     },
+
+    applySourceFields: async ({ evidenceId, studentRef, capture, fields, readLatestSource }) =>
+      write<ComparisonRecheck>(async (latest) => {
+        const current = latest.find((r) => r.id === evidenceId);
+        // 원본은 락 없이 읽는다. 근거 락 안에서 다른 락을 잡지 않는다(잠금 순서 계약).
+        const source = await readLatestSource();
+        const check = recheckBeforeApply(capture, {
+          source,
+          evidence:
+            current && current.studentRef === studentRef
+              ? {
+                  content: current.content,
+                  ...(current.date !== undefined ? { date: current.date } : {}),
+                  ...(current.slots !== undefined ? { slots: current.slots } : {}),
+                  studentRef: current.studentRef,
+                }
+              : null,
+        });
+        // 바뀌었거나 사라졌으면 **쓰지 않는다.** 화면이 비교를 갱신하고 다시 확인받는다.
+        if (!check.ok) return { next: latest, result: check };
+
+        const now = Date.now();
+        const next = latest.map((r) => {
+          if (r.id !== evidenceId) return r;
+          // 세 필드 외의 모든 것(주제·영역·제외·출처·createdAt)은 **최신값 그대로** 둔다.
+          const { date: _d, slots: _s, ...rest } = r;
+          void _d;
+          void _s;
+          return {
+            ...rest,
+            content: fields.content,
+            ...(fields.date !== null ? { date: fields.date } : {}),
+            ...(fields.slots !== null && fields.slots.length > 0
+              ? { slots: [...fields.slots] }
+              : {}),
+            // 새 본문에 대해 금지 표현을 다시 본다. 붙이기만 하고 풀지는 않는다(기존 update 규칙).
+            ...(hasProhibitedTerms(fields.content) ? { excludedFromAi: true } : {}),
+            updatedAt: now,
+          };
+        });
+        return { next, result: check };
+      }),
 
     remove: async (id) => {
       await write((latest) => {

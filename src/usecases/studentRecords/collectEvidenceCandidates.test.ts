@@ -18,6 +18,7 @@ import type { Assignment, Submission } from '@domain/entities/Assignment';
 import {
   collectEvidenceCandidates,
   listEvidenceCandidates,
+  isMirrorEligibleStudentRecord,
   type CollectEvidenceCandidatesInput,
 } from './collectEvidenceCandidates';
 
@@ -241,5 +242,25 @@ describe('collectEvidenceCandidates', () => {
       sourceType: 'observation',
       label: '개념 설명',
     });
+  });
+});
+
+describe('isMirrorEligibleStudentRecord — 자동 거울 적격 (AC-17)', () => {
+  it('★출결은 제외한다 — 지각·결석은 생기부 근거가 아니다', () => {
+    expect(isMirrorEligibleStudentRecord({ category: 'attendance', content: '지각' })).toBe(false);
+  });
+
+  it('★공백 본문은 제외한다 — 담임은 분류만 저장하는 업무가 있다', () => {
+    expect(isMirrorEligibleStudentRecord({ category: 'counseling', content: '   ' })).toBe(false);
+    expect(isMirrorEligibleStudentRecord({ category: 'counseling', content: '' })).toBe(false);
+  });
+
+  it('본문이 있는 비출결 기록은 적격이다', () => {
+    expect(isMirrorEligibleStudentRecord({ category: 'counseling', content: '상담함' })).toBe(true);
+  });
+
+  it('★장면을 안 골랐다고 제외하지 않는다', () => {
+    // 슬롯 미선택은 제외 조건이 아니다(계획 §5.3).
+    expect(isMirrorEligibleStudentRecord({ category: 'observation', content: '관찰' })).toBe(true);
   });
 });
