@@ -87,5 +87,6 @@
 - [ADR-084 · "내 AI" 2차: 고르기를 화면으로 꺼내고, 첨부를 연다 (2026-09-05)](docs/03-decisions/ADR-084.md)
 - [ADR-085 · 생기부 초안 3차 — 근거는 보드 한 장, AI 초안은 오른쪽 패널, 문단에는 형광펜 (ADR-083 두 곳 수정)](docs/03-decisions/ADR-085.md)
 - [ADR-086 · 관찰 입력 → 주제별 근거: 저장이 실패를 실패라고 말하게, 본문을 먼저 쓰게 (2026-09-07)](docs/03-decisions/ADR-086.md)
+- [ADR-088 · 생기부 초안 분량 조절: 앱이 세고, 한 번만 되묻고, 못 맞추면 그렇게 말한다 (2026-09-07)](docs/03-decisions/ADR-088.md)
 
 - [ADR-V · 실시간 담벼락 v2 릴리즈 라벨](docs/03-decisions/ADR-V-realtime-wall-v2-release-labels.md) — 번호 없음(예전 파일)
