@@ -37,7 +37,34 @@ export interface RecordAiDraft {
   readonly excluded: string;
   /** [반영]·[뒤에 붙이기]한 시각. 없으면 아직 안 반영. */
   readonly appliedAt?: number;
+  /**
+   * 이 판이 **분량 조절**로 만들어졌으면 그 내역. 부재 = 새로 쓴 판(병합에서 덮지 말 것).
+   *
+   * ★`sourceText` 를 판 안에 함께 넣는 이유: 판 상한이 20개이고 `enforceAiDraftCap` 이
+   *   **미반영 판부터** 지우기 때문에, `sourceVersionId` 가 가리키던 원문 판이 먼저 지워질 수
+   *   있다. 그러면 [원문과 비교]가 빈 화면이 된다. 스냅숏이 있으면 그때도 비교가 산다.
+   * ★개인정보·용량 절충: 한도를 넘어 `record-drafts.json` 에는 저장이 거부된 본문이
+   *   여기에는 스냅숏으로 남고 동기화된다. 사실상 한도 강제를 우회해 보관하는 셈이다(ADR-086).
+   */
+  readonly adjust?: RecordAiDraftAdjust;
   readonly createdAt: number;
+}
+
+/** 분량 조절 내역. 조절로 만들어진 판에만 붙는다. */
+export interface RecordAiDraftAdjust {
+  readonly kind: 'shrink' | 'expand';
+  /** 선생님이 고른 목표 바이트(최종 저장 본문 기준). */
+  readonly targetBytes: number;
+  /** 조절 대상이 된 판의 id. 대상이 "직접 쓴 글"이었으면 없다. */
+  readonly sourceVersionId?: string;
+  /** 조절 직전 원문 스냅숏. [원문과 비교]가 이걸 쓴다. */
+  readonly sourceText: string;
+  /** 앱이 최종 본문으로 **실제로 센** 바이트. 모델이 말한 숫자가 아니다. */
+  readonly resultBytes: number;
+  /** 실제 CLI 왕복 횟수. 1 = 한 번에 나옴, 2 = 자동 재조정이 돌았음. */
+  readonly attempts: 1 | 2;
+  /** 선생님이 고른 쪽. `attempts: 2` 인데 1차를 골랐으면 1이다. */
+  readonly pickedAttempt: 1 | 2;
 }
 
 export interface RecordAiDraftData {

@@ -22,6 +22,14 @@ import { createMaskSession } from '../privacy/maskEngine';
 import type { KeywordGroup, MaskMapping } from '../privacy/types';
 import { redactQuestion } from '../rules/redactOutbound';
 import { NARRATIVE_MARK_INSTRUCTION } from '../rules/narrativeParagraphs';
+import { neisByteLength } from '../entities/RecordDraft';
+import {
+  aliasByteDelta,
+  modelFloorBytes,
+  modelTargetBytes,
+  INSUFFICIENT_MARK,
+  type LengthAdjustKind,
+} from '../rules/recordLengthGoal';
 
 /** 꾸러미에 넣을 근거 한 건(엔티티 전체가 아니라 필요한 것만 받는다). */
 export interface DraftPackEvidence {
@@ -203,6 +211,169 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
     mappings,
     includedCount: lines.length,
     exclusions,
+  };
+}
+
+/**
+ * 분량 조절 꾸러미 — 조절 대상 **본문 자체**를 모델에게 보낸다.
+ *
+ * ★이 함수가 생기기 전까지 밖으로 나간 것은 근거뿐이었다. 근거는 기재 금지 필터를 거치지만
+ *   초안 본문은 그 필터를 거친 적이 없다. 그래서 이 꾸러미는 본문의 기재 금지 항목을
+ *   **자동으로 지우지 않고 세어서 돌려준다** — 문장을 조용히 지우면 선생님은 무엇이
+ *   없어졌는지도 모른다(오너 결정 4). 지울지 보낼지는 화면이 선생님에게 묻는다.
+ * ★가리는 일은 여기 한 곳에서 한다. 부르는 쪽이 다시 가리면 `createMaskSession()` 이 새로
+ *   생겨 별칭 번호가 갈리고, 서로 다른 학생이 똑같이 ［이름1］ 이 되는 실측 사고를 재현한다.
+ */
+export interface LengthAdjustPackInput {
+  readonly kind: LengthAdjustKind;
+  /** 학생 **실명**. 여기서 별칭으로 바뀐다. */
+  readonly studentName: string;
+  readonly roster: readonly KeywordGroup[];
+  readonly areaLabel: string;
+  /** 조절 대상 판의 주제. 화면의 현재 칩이 아니라 **대상 판**의 것이어야 한다. */
+  readonly threadTitle?: string;
+  /** 조절할 본문(실명 그대로). */
+  readonly sourceText: string;
+  /** 선생님이 고른 목표 바이트(최종 저장 본문 기준). */
+  readonly targetBytes: number;
+  /** `expand` 일 때만 쓴다. `shrink` 는 근거를 싣지 않는다. */
+  readonly evidences?: readonly DraftPackEvidence[];
+}
+
+export interface LengthAdjustPack extends DraftPack {
+  /** 모델에게 실제로 적어 보낸 목표 상한(별칭 보정 반영). */
+  readonly modelTargetBytes: number;
+  /** 모델에게 실제로 적어 보낸 목표 하한(같은 보정). */
+  readonly modelFloorBytes: number;
+  /** 선생님이 고른 목표. **판정은 이 값으로 한다.** */
+  readonly finalTargetBytes: number;
+  /**
+   * 조절 대상 본문에서 찾은 기재 금지 갈래(한국어 라벨). 비어 있지 않으면 화면이 보내기 전에 묻는다.
+   * ★근거와 달리 **빼지 않는다.** 자동 삭제는 조용한 문장 소실이라 더 나쁘다.
+   */
+  readonly sourceProhibited: readonly string[];
+}
+
+export function buildLengthAdjustPack(input: LengthAdjustPackInput): LengthAdjustPack {
+  const exclusions: DraftPackExclusion[] = [];
+  const lines: string[] = [];
+  let usedChars = 0;
+  const mappings: MaskMapping[] = [];
+
+  const name = input.studentName.trim();
+  const roster = input.roster.some((g) => g.values.includes(name))
+    ? input.roster
+    : [{ label: '이름', values: [name] }, ...input.roster];
+  const session = createMaskSession();
+  const mask = (text: string): string => {
+    const r = redactQuestion(text, roster, session);
+    mappings.push(...r.mappings);
+    return r.masked;
+  };
+
+  // 학생 이름을 맨 먼저 가린다 — 본문·근거 속 같은 이름이 같은 번호를 받는다.
+  const studentAlias = mask(name);
+  const rawSource = input.sourceText.trim();
+  // 기재 금지 검사는 **원문**으로 한다(가린 뒤에는 단어가 바뀌어 못 잡을 수 있다).
+  const sourceProhibited = hitsToCategories(detectProhibitedTerms(rawSource));
+  const maskedSource = mask(rawSource);
+
+  // 별칭 보정 — 실명본과 별칭본의 길이 차이를 목표에 미리 반영한다(어림 보정).
+  const delta = aliasByteDelta(rawSource, maskedSource);
+  const target = modelTargetBytes(input.targetBytes, delta);
+  const floor = modelFloorBytes(input.targetBytes, delta);
+
+  if (input.kind === 'expand') {
+    for (const e of input.evidences ?? []) {
+      if (e.excludedFromAi === true) {
+        exclusions.push({ evidenceId: e.id, reason: 'teacher' });
+        continue;
+      }
+      const raw = e.content.trim();
+      if (raw.length === 0) {
+        exclusions.push({ evidenceId: e.id, reason: 'empty' });
+        continue;
+      }
+      const hits = detectProhibitedTerms(raw);
+      if (hits.length > 0) {
+        exclusions.push({
+          evidenceId: e.id,
+          reason: 'prohibited',
+          categories: hitsToCategories(hits),
+        });
+        continue;
+      }
+      const content = mask(raw);
+      const line = e.date ? `- (${e.date}) ${content}` : `- ${content}`;
+      if (usedChars + line.length > DRAFT_PACK_MAX_EVIDENCE_CHARS) {
+        exclusions.push({ evidenceId: e.id, reason: 'too-long' });
+        continue;
+      }
+      usedChars += line.length + 1;
+      lines.push(line);
+    }
+  }
+
+  const parts: string[] = [];
+  parts.push(`학생: ${studentAlias}`);
+  parts.push(`영역: ${input.areaLabel}`);
+  if (input.threadTitle) parts.push(`주제: ${mask(input.threadTitle)}`);
+  parts.push('');
+  parts.push(input.kind === 'shrink' ? '줄일 글:' : '채울 글:');
+  parts.push(maskedSource);
+
+  // ★`shrink` 에는 근거 블록을 아예 붙이지 않는다. 붙이면 "(보낼 수 있는 근거가 없습니다)" 와
+  //   "근거만 보고 쓰세요" 가 함께 나가 자기모순 프롬프트가 된다.
+  if (input.kind === 'expand') {
+    parts.push('');
+    parts.push('근거 자료:');
+    parts.push(lines.length > 0 ? lines.join('\n') : '(보낼 수 있는 근거가 없습니다)');
+  }
+
+  parts.push('');
+  parts.push(`현재 분량: 약 ${neisByteLength(maskedSource).toLocaleString()}바이트`);
+  parts.push(
+    `목표 분량: ${floor.toLocaleString()} ~ ${target.toLocaleString()}바이트 (가능한 한 위쪽에 가깝게)`,
+  );
+  parts.push('');
+  parts.push('지켜야 할 것:');
+  if (input.kind === 'shrink') {
+    parts.push('1. 위 글에 있는 사실, 활동, 결과, 교사의 평가를 그대로 남기세요.');
+    parts.push('2. 중복된 표현과 늘어지는 설명부터 줄이세요.');
+    parts.push('3. 문장을 중간에서 끊지 말고, 완결된 하나의 글로 돌려주세요.');
+    parts.push('4. 설명이나 인사말 없이 줄인 글만 돌려주세요.');
+  } else {
+    parts.push(
+      '1. 위 글의 문장과 순서를 최대한 지키고, 빠진 과정과 결과를 근거 자료에서 가져와 채우세요.',
+    );
+    parts.push('2. 목표를 채우려고 일반적인 칭찬이나 추측을 넣지 마세요.');
+    parts.push('3. 설명이나 인사말 없이 완성된 글만 돌려주세요.');
+  }
+
+  // 형광펜 표식 지시는 **앞**에, 지어내기를 막는 지시는 **맨 끝**에 둔다.
+  // 실측에서 지어내기 금지를 뒤쪽에 두었을 때만 모델이 얇은 근거로 지어내기를 멈췄다(최신성 효과).
+  parts.push('');
+  parts.push(NARRATIVE_MARK_INSTRUCTION);
+  parts.push('');
+  if (input.kind === 'shrink') {
+    parts.push('위 글에 있는 내용만 쓰세요. 새로운 활동이나 성과를 덧붙이지 마세요.');
+  } else {
+    parts.push(
+      '근거 자료에 있는 내용만 쓰세요. 근거 자료에 없는 내용은 한 문장도 쓰지 마세요. ' +
+        `채울 근거가 모자라면 목표보다 짧아도 됩니다. 그럴 때는 맨 마지막 줄에 ${INSUFFICIENT_MARK} 이라고만 적으세요.`,
+    );
+  }
+
+  return {
+    text: parts.join('\n'),
+    studentAlias,
+    mappings,
+    includedCount: lines.length,
+    exclusions,
+    modelTargetBytes: target,
+    modelFloorBytes: floor,
+    finalTargetBytes: input.targetBytes,
+    sourceProhibited,
   };
 }
 

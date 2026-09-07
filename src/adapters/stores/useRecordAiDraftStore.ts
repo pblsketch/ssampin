@@ -3,6 +3,7 @@ import {
   enforceAiDraftCap,
   sameAiDraftKey,
   type RecordAiDraft,
+  type RecordAiDraftAdjust,
   type RecordAiDraftKey,
 } from '@domain/entities/RecordAiDraft';
 import type { NarrativeParagraph } from '@domain/rules/narrativeParagraphs';
@@ -17,6 +18,8 @@ export interface RecordAiDraftAddInput {
   model?: string;
   paragraphs: readonly NarrativeParagraph[];
   excluded: string;
+  /** 분량 조절로 만든 판이면 그 내역. 없으면 새로 쓴 판. */
+  adjust?: RecordAiDraftAdjust;
 }
 
 interface RecordAiDraftState {
@@ -78,6 +81,9 @@ export const useRecordAiDraftStore = create<RecordAiDraftState>((set, get) => {
         createdAt: Date.now(),
         ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
         ...(input.model !== undefined && input.model.length > 0 ? { model: input.model } : {}),
+        // ★여기에 안 넣으면 입력 타입만 고친 채 값이 **조용히 사라진다** — 이 생성부는 필드를
+        //   하나씩 열거해 새 객체를 만들기 때문이다(스프레드가 아니다).
+        ...(input.adjust !== undefined ? { adjust: input.adjust } : {}),
       };
       await persist(enforceAiDraftCap([...get().records, rec], rec.draftKey));
       return rec.id;

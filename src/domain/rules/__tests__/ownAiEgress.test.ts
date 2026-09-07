@@ -12,6 +12,7 @@
  * 2. 대응 힌트 — "별칭 = 몇 번"만 적고 실명은 안 적는다.
  * 3. 생기부 꾸러미 — 별칭만 실리고, 기재 금지 항목은 아예 빠진다.
  * 4. 두 CLI(claude·codex) 어느 쪽 명령줄에도 실명이 없다.
+ * 5. 분량 조절 — **조절 대상 본문 자체**가 나가는 경로다. 1차와 자동 재조정 2차 **양쪽 다** 본다.
  */
 import { describe, it, expect } from 'vitest';
 
@@ -22,7 +23,7 @@ import {
   formatCorrelationHintBlock,
 } from '@domain/rules/ownAiCorrelationHints';
 import { buildClaudeArgv, buildCodexArgv } from '@domain/rules/ownAiCliRules';
-import { buildRecordDraftPack } from '@domain/services/recordDraftPack';
+import { buildLengthAdjustPack, buildRecordDraftPack } from '@domain/services/recordDraftPack';
 
 /** 실명·학번이 실제로 있는 명단. 아래 모든 검사가 이 이름들을 찾는다. */
 const STUDENTS = [
@@ -136,6 +137,66 @@ describe('★생기부 초안 — 꾸러미와 명령줄 어디에도 실명이 
     const text = commandLineText(argv);
 
     expectNoRealNames(text);
+    expect(text).not.toContain('--mcp-config');
+    expect(text).not.toContain('--allowedTools');
+  });
+});
+
+describe('★분량 조절 — 본문이 나가는 새 경로, 재조정 2차까지 본다', () => {
+  /**
+   * 여기까지가 이음매다. 조절은 **근거가 아니라 초안 본문 자체**를 내보내는 첫 경로이고,
+   * 자동 재조정은 그 본문을 **한 번 더** 내보낸다. 1차만 가리고 2차에서 이미 가려진 문자열을
+   * 재사용하거나 원문을 다시 집으면, 첫 회만 안전한 기능이 된다.
+   */
+  const SOURCE =
+    '김지훈은 박서연과 함께 미세플라스틱을 조사했고, 이도윤의 자료를 이어받아 정리했다.';
+
+  function adjust(kind: 'shrink' | 'expand', targetBytes: number) {
+    return buildLengthAdjustPack({
+      kind,
+      studentName: '김지훈',
+      roster: ROSTER,
+      areaLabel: '교과 세부능력 및 특기사항',
+      threadTitle: '이도윤과의 공동 탐구',
+      sourceText: SOURCE,
+      targetBytes,
+      evidences: [{ id: 'e1', content: '박서연과 모둠 토의에서 자료를 정리해 왔다.' }],
+    });
+  }
+
+  it('★1차 명령줄에 실명이 없다 (줄이기·보충하기 둘 다)', () => {
+    for (const kind of ['shrink', 'expand'] as const) {
+      const pack = adjust(kind, 1500);
+      expectNoRealNames(pack.text);
+      expectNoRealNames(
+        commandLineText(buildClaudeArgv({ kind: 'draft', prompt: pack.text, version: '2.1.258' })),
+      );
+      expectNoRealNames(
+        commandLineText(buildCodexArgv({ kind: 'draft', prompt: pack.text, cwd: 'C:\\tmp' })),
+      );
+    }
+  });
+
+  it('★자동 재조정 2차도 같은 조립 함수를 다시 지난다 — 실명이 없다', () => {
+    // 화면은 목표만 바꿔 **원문으로** 다시 조립한다. 이미 가린 문자열을 재사용하지 않는다.
+    const second = adjust('shrink', 1350);
+    expectNoRealNames(second.text);
+    expectNoRealNames(
+      commandLineText(buildClaudeArgv({ kind: 'draft', prompt: second.text, version: '2.1.258' })),
+    );
+    expect(second.text).toContain('［이름1］');
+  });
+
+  it('★같은 학생은 두 번 다 같은 별칭을 받는다 — 번호가 갈리면 되돌리기가 깨진다', () => {
+    const first = adjust('shrink', 1500);
+    const second = adjust('shrink', 1350);
+    expect(first.studentAlias).toBe(second.studentAlias);
+  });
+
+  it('조절 명령줄에도 브릿지 통로가 붙지 않는다', () => {
+    const text = commandLineText(
+      buildClaudeArgv({ kind: 'draft', prompt: adjust('shrink', 1500).text, version: '2.1.258' }),
+    );
     expect(text).not.toContain('--mcp-config');
     expect(text).not.toContain('--allowedTools');
   });

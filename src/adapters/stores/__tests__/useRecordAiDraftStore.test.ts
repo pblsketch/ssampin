@@ -120,3 +120,70 @@ describe('markApplied / remove', () => {
     expect(repoFake.stored?.records).toHaveLength(2);
   });
 });
+
+describe('★분량 조절 내역이 저장을 넘어 살아남는다 (ADR-086)', () => {
+  /**
+   * `add` 는 필드를 **하나씩 열거해** 새 객체를 만든다(스프레드가 아니다).
+   * 그래서 입력 타입에만 필드를 넣으면 값이 **조용히 사라진다** — 게이트는 전부 초록이고,
+   * 화면은 [원문과 비교]가 빈 채로 뜬다. 그때 원문 스냅숏은 이미 없다.
+   */
+  it('adjust 가 파일까지 그대로 간다 — 원문 스냅숏 포함', async () => {
+    await useRecordAiDraftStore.getState().add({
+      draftKey: KEY,
+      provider: 'claude',
+      paragraphs: [{ role: null, text: '줄인 글.' }],
+      excluded: '',
+      adjust: {
+        kind: 'shrink',
+        targetBytes: 1500,
+        sourceVersionId: 'v2',
+        sourceText: '줄이기 전 원문.',
+        resultBytes: 1463,
+        attempts: 2,
+        pickedAttempt: 1,
+      },
+    });
+
+    const saved = repoFake.stored?.records[0];
+    expect(saved?.adjust?.kind).toBe('shrink');
+    expect(saved?.adjust?.sourceText).toBe('줄이기 전 원문.');
+    expect(saved?.adjust?.resultBytes).toBe(1463);
+    // ★왕복 횟수와 "고른 쪽"은 다른 값이다. 뭉개면 두 번 돈 사실이 기록에서 사라진다.
+    expect(saved?.adjust?.attempts).toBe(2);
+    expect(saved?.adjust?.pickedAttempt).toBe(1);
+  });
+
+  it('새로 쓴 판에는 adjust 가 붙지 않는다 (부재 = 조절이 아님)', async () => {
+    await useRecordAiDraftStore.getState().add({
+      draftKey: KEY,
+      provider: 'claude',
+      paragraphs: [{ role: null, text: '새로 쓴 글.' }],
+      excluded: '',
+    });
+    expect(repoFake.stored?.records[0]?.adjust).toBeUndefined();
+  });
+
+  it('★상한에 밀려 원문 판이 지워져도 스냅숏으로 비교할 수 있다', async () => {
+    const id = await useRecordAiDraftStore.getState().add({
+      draftKey: KEY,
+      provider: 'claude',
+      paragraphs: [{ role: null, text: '줄인 글.' }],
+      excluded: '',
+      adjust: {
+        kind: 'shrink',
+        targetBytes: 1500,
+        sourceVersionId: 'v-지워질-판',
+        sourceText: '원문 스냅숏.',
+        resultBytes: 1463,
+        attempts: 1,
+        pickedAttempt: 1,
+      },
+    });
+    // 원문 판은 이미 없다(상한에 밀려 지워졌다고 본다).
+    const mine = useRecordAiDraftStore.getState().getForKey(KEY);
+    const adjusted = mine.find((r) => r.id === id);
+    expect(mine.some((r) => r.id === 'v-지워질-판')).toBe(false);
+    // 그래도 비교할 원문이 판 안에 있다.
+    expect(adjusted?.adjust?.sourceText).toBe('원문 스냅숏.');
+  });
+});

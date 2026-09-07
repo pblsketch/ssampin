@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  buildLengthAdjustPack,
   buildRecordDraftPack,
   summarizeExclusions,
   DRAFT_PACK_MAX_EVIDENCE_CHARS,
@@ -261,5 +262,91 @@ describe('★실명은 꾸러미 안에서 가려진다 — 부르는 쪽을 믿
       input({ evidences: [{ id: 'e1', content: '박서연이 교내 수학경시대회 금상.' }] }),
     );
     expect(pack.exclusions.map((x) => x.reason)).toEqual(['prohibited']);
+  });
+});
+
+// ── 분량 조절 꾸러미 ───────────────────────────────────────────────────────────
+
+describe('★분량 조절 꾸러미 — 조절 대상 본문 자체가 밖으로 나간다', () => {
+  const SOURCE = '김지훈은 미세플라스틱 탐구에서 박서연과 함께 자료를 모았다.';
+
+  function adjustInput(
+    p: Partial<Parameters<typeof buildLengthAdjustPack>[0]> = {},
+  ): Parameters<typeof buildLengthAdjustPack>[0] {
+    return {
+      kind: 'shrink',
+      studentName: '김지훈',
+      roster: ROSTER,
+      areaLabel: '교과 세부능력 및 특기사항',
+      sourceText: SOURCE,
+      targetBytes: 1500,
+      ...p,
+    };
+  }
+
+  it('★본문 속 실명이 전부 가려진다 — 이 학생도, 근거에 나온 다른 학생도', () => {
+    const pack = buildLengthAdjustPack(adjustInput());
+    expect(pack.text).not.toContain('김지훈');
+    expect(pack.text).not.toContain('박서연');
+    expect(pack.text).toContain('［이름1］');
+    // 같은 세션이므로 학생마다 다른 번호를 받는다.
+    expect(pack.text).toContain('［이름2］');
+  });
+
+  it('줄이기는 근거 블록과 "근거만 보고 쓰세요"를 아예 붙이지 않는다', () => {
+    const pack = buildLengthAdjustPack(adjustInput({ kind: 'shrink' }));
+    expect(pack.text).not.toContain('근거 자료:');
+    expect(pack.text).not.toContain('보낼 수 있는 근거가 없습니다');
+    expect(pack.text).toContain('줄일 글:');
+    expect(pack.text).toContain('새로운 활동이나 성과를 덧붙이지 마세요');
+  });
+
+  it('보충하기는 근거를 싣고 지어내기 금지를 맨 끝에 둔다', () => {
+    const pack = buildLengthAdjustPack(
+      adjustInput({ kind: 'expand', evidences: [ev({ id: 'e1' })] }),
+    );
+    expect(pack.text).toContain('근거 자료:');
+    expect(pack.includedCount).toBe(1);
+    // ★최신성 효과 — 표식 지시가 앞, 지어내기 금지가 맨 끝이어야 한다.
+    const markAt = pack.text.indexOf('[동기]');
+    const banAt = pack.text.indexOf('근거 자료에 없는 내용은 한 문장도 쓰지 마세요');
+    expect(markAt).toBeGreaterThan(-1);
+    expect(banAt).toBeGreaterThan(markAt);
+  });
+
+  it('★목표는 상한과 하한을 함께 준다 — 상한만 주면 900바이트도 "지킨 것"이 된다', () => {
+    const pack = buildLengthAdjustPack(adjustInput());
+    expect(pack.text).toMatch(/목표 분량: [\d,]+ ~ [\d,]+바이트/);
+    expect(pack.text).toContain('가능한 한 위쪽에 가깝게');
+    // 별칭 보정이 상한·하한에 같은 방향으로 들어갔다.
+    expect(pack.modelTargetBytes - pack.finalTargetBytes).toBe(pack.modelFloorBytes - 1425);
+  });
+
+  it('★기재 금지 항목은 세어서 알려 주되 문장을 지우지 않는다 (오너 결정 4)', () => {
+    const pack = buildLengthAdjustPack(
+      adjustInput({ sourceText: '김지훈은 전국과학대회에서 최우수상을 받았다.' }),
+    );
+    expect(pack.sourceProhibited.length).toBeGreaterThan(0);
+    // ★자동으로 지우면 "조용한 문장 소실"이 된다. 본문은 그대로 실린다.
+    expect(pack.text).toContain('최우수상');
+  });
+
+  it('금지 항목이 없으면 빈 목록이다', () => {
+    expect(buildLengthAdjustPack(adjustInput()).sourceProhibited).toEqual([]);
+  });
+
+  it('보충하기의 근거는 기존과 같은 순서로 걸러진다 (근거는 빼는 게 맞다)', () => {
+    const pack = buildLengthAdjustPack(
+      adjustInput({
+        kind: 'expand',
+        evidences: [
+          ev({ id: 'e1', content: '전국대회에서 대상을 받았다.' }),
+          ev({ id: 'e2', excludedFromAi: true }),
+          ev({ id: 'e3', content: '  ' }),
+        ],
+      }),
+    );
+    expect(pack.includedCount).toBe(0);
+    expect(pack.exclusions.map((x) => x.reason).sort()).toEqual(['empty', 'prohibited', 'teacher']);
   });
 });

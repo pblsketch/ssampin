@@ -21,6 +21,9 @@ const EXTRA_FILES: readonly string[] = [
   'domain/rules/threadSuggestionParser.ts',
   'domain/rules/ownAiCliRules.ts',
   'usecases/studentRecords/evidenceImport.ts',
+  // 분량 조절(ADR-086) — 모델에게 가는 지시문 전문이 여기 있다. 검사 밖에 두면 안 된다.
+  'domain/services/recordDraftPack.ts',
+  'domain/rules/recordLengthGoal.ts',
 ].map((p) => resolve(SRC_ROOT, p));
 
 function sourceFiles(dir: string): string[] {
