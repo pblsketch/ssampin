@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { allSlotsForContext } from '@domain/rules/observationSlots';
@@ -27,13 +27,23 @@ export function ObservationCard({ record, studentRef }: ObservationCardProps) {
 
   // 주제 소속은 **저장된 근거**에서 찾는다. 원본에 남은 옛 threadId 를 믿지 않는다(계획 §4.3).
   const evidenceRecords = useRecordEvidenceStore((s) => s.records);
+  const evidenceLoaded = useRecordEvidenceStore((s) => s.loaded);
+  const loadEvidence = useRecordEvidenceStore((s) => s.load);
+  /**
+   * ★이 화면이 직접 읽는다. 근거 스토어를 로드하는 곳은 초안·보드 화면뿐이라,
+   *   앱을 켜고 바로 수업 기록으로 오면 목록이 비어 있어 **묶인 기록까지 전부 '주제 미지정'**
+   *   으로 보였다. 스토어가 이미 읽었으면 알아서 건너뛴다.
+   */
+  useEffect(() => {
+    void loadEvidence();
+  }, [loadEvidence]);
   const threads = useInquiryThreadStore((s) => s.records);
   const topic = useMemo(
     () =>
       studentRef === undefined
         ? null
-        : resolveRecordTopic(record.id, studentRef, evidenceRecords, threads),
-    [record.id, studentRef, evidenceRecords, threads],
+        : resolveRecordTopic(record.id, studentRef, evidenceRecords, threads, evidenceLoaded),
+    [record.id, studentRef, evidenceRecords, threads, evidenceLoaded],
   );
 
   const handleSaveEdit = useCallback(async () => {
@@ -78,12 +88,14 @@ export function ObservationCard({ record, studentRef }: ObservationCardProps) {
               title={
                 topic.kind === 'unknown-thread'
                   ? '연결된 주제를 찾지 못했습니다. 다른 기기의 변경이 아직 안 왔을 수 있습니다.'
-                  : '이 기록이 묶인 주제'
+                  : topic.kind === 'pending'
+                    ? '근거 목록을 읽는 중입니다.'
+                    : '이 기록이 묶인 주제'
               }
             >
               {topic.kind === 'thread'
                 ? topic.title
-                : topic.kind === 'unknown-thread'
+                : topic.kind === 'unknown-thread' || topic.kind === 'pending'
                   ? '주제 확인 중'
                   : '주제 미지정'}
             </span>

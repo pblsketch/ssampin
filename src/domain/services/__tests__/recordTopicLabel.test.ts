@@ -69,3 +69,19 @@ describe('resolveRecordTopic', () => {
     expect(resolveRecordTopic('obs-1', REF, e, [th({ id: 't1' })])).toEqual({ kind: 'none' });
   });
 });
+
+describe('아직 안 읽은 상태와 "미지정"을 뭉개지 않는다', () => {
+  it('★근거 목록을 못 읽었으면 pending 이다 - 빈 목록을 "미지정"으로 읽지 않는다', () => {
+    // 실제 결함: 근거 스토어를 로드하는 곳이 초안·보드 화면뿐이라, 앱을 켜고 바로 수업 기록으로
+    // 오면 목록이 비어 있어 **주제에 묶인 기록까지 전부 '주제 미지정'** 으로 보였다.
+    expect(resolveRecordTopic('obs-1', 'sA', [], [], false)).toEqual({ kind: 'pending' });
+  });
+
+  it('읽은 뒤 정말 없으면 none 이다', () => {
+    expect(resolveRecordTopic('obs-1', 'sA', [], [], true)).toEqual({ kind: 'none' });
+  });
+
+  it('loaded 를 넘기지 않으면 읽은 것으로 본다(기존 호출부 동작 보존)', () => {
+    expect(resolveRecordTopic('obs-1', 'sA', [], [])).toEqual({ kind: 'none' });
+  });
+});

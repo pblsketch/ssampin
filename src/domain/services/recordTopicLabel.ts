@@ -9,6 +9,12 @@ import type { RecordEvidence } from '@domain/entities/RecordEvidence';
  *   지금 상태가 아닐 수 있다. 원본 값을 임의로 지우지도 않는다.
  */
 export type RecordTopicStatus =
+  /**
+   * 아직 근거 목록을 못 읽었다. **'미지정'과 절대 뭉개지 않는다** -
+   * 목록을 안 읽었을 뿐인데 '주제 미지정'이라고 말하면, 실제로 묶인 기록까지 전부
+   * 안 묶인 것처럼 보여 교사가 같은 원본을 다시 묶으려 한다.
+   */
+  | { readonly kind: 'pending' }
   /** 근거로 올린 적이 없거나, 올렸지만 아직 미분류. */
   | { readonly kind: 'none' }
   | { readonly kind: 'thread'; readonly threadId: string; readonly title: string }
@@ -28,7 +34,13 @@ export function resolveRecordTopic(
   studentRef: string,
   evidence: readonly RecordEvidence[],
   threads: readonly InquiryThread[],
+  /**
+   * 근거 목록을 읽었는가. `false` 면 판정하지 않는다(부재는 '없음'이 아니라 '모름'이다).
+   * 넘기지 않으면 읽은 것으로 본다 - 기존 호출부의 동작을 바꾸지 않기 위해서다.
+   */
+  evidenceLoaded = true,
 ): RecordTopicStatus {
+  if (!evidenceLoaded) return { kind: 'pending' };
   const mine = evidence.find((e) => e.sourceId === sourceId && e.studentRef === studentRef);
   if (!mine || mine.threadId === undefined) return { kind: 'none' };
   const thread = threads.find((t) => t.id === mine.threadId);

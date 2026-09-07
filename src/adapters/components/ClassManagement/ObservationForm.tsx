@@ -101,6 +101,8 @@ export function ObservationForm({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevStudentIdRef = useRef(studentId);
   const savingRef = useRef<string | null>(null);
+  /** 명시 저장 진행 중 - 키보드 연타로 같은 기록이 두 벌 저장되는 것을 막는다. */
+  const explicitSaveRef = useRef(false);
   const dateRef = useRef(date);
   const contentRef = useRef(content);
   const tagsRef = useRef(selectedTags);
@@ -510,6 +512,11 @@ export function ObservationForm({
   const handleSave = useCallback(async () => {
     const trimmed = content.trim();
     if (!trimmed) return;
+    // ★`saving` 은 state 라 갱신이 비동기다. 단추는 그걸로 막히지만 Ctrl+Enter 는 그대로 통과해
+    //   같은 본문이 두 번 저장되고, 원본이 둘이면 sourceId 가 달라 스토어의 중복 방지도 안 걸린다
+    //   (원본·근거 2벌 + 같은 이름 주제 2개). ref 로 막는다.
+    if (explicitSaveRef.current) return;
+    explicitSaveRef.current = true;
     setSaving(true);
     try {
       const recordId = await addRecord({
@@ -588,7 +595,20 @@ export function ObservationForm({
           onClick: () => void retryFailedAttachments(studentId),
         });
       }
+    } catch (err) {
+      // ★catch 가 없으면 unhandled rejection 으로 끝나 화면에 아무 말도 남지 않는다.
+      //   본문은 남아 있지만(리셋이 이 뒤라 도달하지 않는다) 교사는 "왜 안 비워지지?"로만 안다.
+      //   같은 파일의 자동저장 경로에는 이 안내가 이미 있었다(ADR-086 결정 1).
+      useToastStore
+        .getState()
+        .show(
+          err instanceof Error && err.message
+            ? `기록을 저장하지 못했습니다: ${err.message}`
+            : '기록을 저장하지 못했습니다. 내용은 그대로 두었으니 다시 시도해 주세요.',
+          'error',
+        );
     } finally {
+      explicitSaveRef.current = false;
       setSaving(false);
     }
   }, [

@@ -136,6 +136,8 @@ function InputMode({
    * 맥락을 잃으면 다음에 저장하는 기록에 앞 기록의 파일이 붙는다.
    */
   const attachmentRetryRef = useRef<{ readonly recordId: string } | null>(null);
+  /** 저장 진행 중 - 키보드 연타로 같은 기록이 두 벌 저장되는 것을 막는다(state 는 갱신이 비동기라 못 막는다). */
+  const savingRef = useRef(false);
   const retryFailedAttachments = useCallback(async (): Promise<void> => {
     const checkpoint = attachmentRetryRef.current;
     if (checkpoint === null || pendingFilesRef.current.length === 0) return;
@@ -576,6 +578,7 @@ function InputMode({
 
   // 단일 날짜 저장
   const handleSave = useCallback(async () => {
+    savingRef.current = true;
     const ok = await wrapSave(async () => {
       const { recordIds } = await saveForDate(selectedDate);
       // 단일 학생·비출결 1건일 때만 첨부 커밋(대상 record 가 명확). 다중/출결이면 첨부 영역이 비활성이라 pending 이 비어있다.
@@ -626,6 +629,7 @@ function InputMode({
         });
       }
     }
+    savingRef.current = false;
   }, [
     saveForDate,
     selectedDate,
@@ -681,6 +685,10 @@ function InputMode({
 
   // 저장 버튼 클릭 핸들러: 다중/범위 모드면 확인 모달, 아니면 바로 저장
   const handleSaveClick = useCallback(() => {
+    // ★저장 중에는 다시 시작하지 않는다. 단추는 `saveStatus` 로 막히지만 Enter 단축키는
+    //   그대로 통과해 같은 기록이 두 번 저장된다(중복 감지는 스토어 **메모리** 를 보므로
+    //   두 호출이 겹치면 둘 다 저장 전 목록을 읽어 함께 통과한다).
+    if (savingRef.current) return;
     if (dateMode !== 'single' && rangeDates.length > 1) {
       setShowBatchConfirm(true);
     } else if (dateMode === 'multi' && rangeDates.length === 1) {
