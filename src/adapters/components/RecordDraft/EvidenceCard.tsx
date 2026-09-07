@@ -118,6 +118,8 @@ export function EvidenceCard({
           : `${mirror ? 'bg-sp-surface' : 'bg-sp-card'} ring-sp-border hover:ring-sp-muted`
       } ${isDragging ? 'opacity-40' : ''}`}
       data-mirror={mirror ? '' : undefined}
+      // 저장 직후 이동이 이 표시로 카드를 찾아 스크롤·포커스한다(계획 §4.3).
+      data-evidence-id={ev.id}
     >
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-sp-text">{ev.content}</p>
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-sp-muted">

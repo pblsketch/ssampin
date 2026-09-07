@@ -4,6 +4,7 @@ import { HomeroomTabBar, type HomeroomTab } from './HomeroomTabBar';
 import { HOMEROOM_OPEN_TAB_EVENT, consumePendingHomeroomTab } from './homeroomTabIntent';
 import { flushAllDrafts } from '@adapters/components/RecordDraft/draftFlushRegistry';
 import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
+import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { RecordsTab } from './Records/RecordsTab';
 import { HomeroomRecordDraftTab } from './Records/HomeroomRecordDraftTab';
@@ -37,16 +38,46 @@ export function HomeroomPage() {
    */
   const [flowIntent, setFlowIntent] = useState<RecordFlowIntent | null>(null);
 
-  /** 모든 왕복 이동이 지나는 하나의 전환 함수. 초안 대기분을 먼저 밀어 넣고 실패하면 머문다. */
-  const goWithIntent = useCallback(async (intent: RecordFlowIntent): Promise<void> => {
-    const flushed = await flushAllDrafts();
-    if (!flushed) {
-      useToastStore.getState().show('저장하지 못한 초안이 있어 이동하지 않았습니다.', 'error');
-      return;
-    }
-    setFlowIntent(intent);
-    setActiveTab(intent.mode === 'board' ? 'recordDraft' : 'records');
-  }, []);
+  /**
+   * 기록 탭을 떠나도 되는지 묻는다. 탭 클릭과 새 CTA 가 **같은 관문**을 지나야
+   * 한쪽만 보호되는 일이 없다(계획 §4.3 "새 CTA 가 기존 dirty guard 를 우회하지 않도록").
+   */
+  const confirmLeaveRecords = useCallback(
+    (tab: HomeroomTab): boolean => {
+      if (!recordInputDirty || activeTab !== 'records' || tab === 'records') return true;
+      return window.confirm(
+        '기록이 아직 저장되지 않았습니다. 탭을 이동하면 변경 내용이 사라질 수 있습니다. 이동할까요?',
+      );
+    },
+    [recordInputDirty, activeTab],
+  );
+
+  /**
+   * 모든 왕복 이동이 지나는 하나의 전환 함수. 초안 대기분을 먼저 밀어 넣고 실패하면 머문다.
+   *
+   * ★상위 탭만 바꾸면 안 된다. 담임 기록 탭의 **하위 탭**은 별도 상태(`useStudentRecordsStore.viewMode`)
+   *   이고 기본값이 '출결'이라, 그대로 두면 [관찰 이어 쓰기] 가 출결 그리드를 열고 요청은 소비되지 않은 채
+   *   남는다. 그러다 교사가 나중에 '누가기록'을 누르는 순간 옛 요청이 되살아나 학생 선택을 갈아친다.
+   * ★기존 미저장 경고를 지나가지 않는다. 같은 이동을 탭 바로 하면 확인창이 뜨는데 새 CTA 만
+   *   그냥 통과하면, 보호 장치가 있으나 마나다(계획 §4.3).
+   */
+  const goWithIntent = useCallback(
+    async (intent: RecordFlowIntent): Promise<void> => {
+      const nextTab: HomeroomTab = intent.mode === 'board' ? 'recordDraft' : 'records';
+      if (!confirmLeaveRecords(nextTab)) return;
+      const flushed = await flushAllDrafts();
+      if (!flushed) {
+        useToastStore.getState().show('저장하지 못한 초안이 있어 이동하지 않았습니다.', 'error');
+        return;
+      }
+      // 하위 탭까지 맞춰야 요청을 받을 화면이 실제로 마운트된다.
+      if (intent.mode === 'compose') useStudentRecordsStore.getState().setViewMode('input');
+      if (intent.mode === 'source') useStudentRecordsStore.getState().setViewMode('search');
+      setFlowIntent(intent);
+      setActiveTab(nextTab);
+    },
+    [confirmLeaveRecords],
+  );
 
   const handleIntentConsumed = useCallback((requestId: string) => {
     setFlowIntent((prev) => (prev?.requestId === requestId ? null : prev));
@@ -83,18 +114,10 @@ export function HomeroomPage() {
 
   const handleTabChange = useCallback(
     (tab: HomeroomTab) => {
-      if (recordInputDirty && activeTab === 'records' && tab !== 'records') {
-        if (
-          !window.confirm(
-            '기록이 아직 저장되지 않았습니다. 탭을 이동하면 변경 내용이 사라질 수 있습니다. 이동할까요?',
-          )
-        ) {
-          return;
-        }
-      }
+      if (!confirmLeaveRecords(tab)) return;
       setActiveTab(tab);
     },
-    [recordInputDirty, activeTab],
+    [confirmLeaveRecords],
   );
 
   // 외부(명령 팔레트·RosterEmptyState CTA 등) → 담임 업무 하위 탭 전환 리스너.

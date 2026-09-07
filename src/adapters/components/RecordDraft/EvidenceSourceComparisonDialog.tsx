@@ -149,10 +149,24 @@ export function EvidenceSourceComparisonDialog({
   onClose,
 }: EvidenceSourceComparisonDialogProps): ReactElement {
   /**
-   * 열 때 잡아 두는 확인용 값. 반영 직전에 이 값과 최신을 대조한다.
+   * 열 때 잡아 두는 확인용 값과 **그때 본 원본 스냅샷**. 반영 직전에 이 값과 최신을 대조한다.
    * ★`null` 이면 "다시 잡아야 한다"는 뜻이다 - 재검증에 걸린 뒤 새 값으로 다시 확인받는 길이다.
+   * ★반영도 이 스냅샷으로 한다. 화면이 나중에 들고 있는 값으로 쓰면 **검증하지 않은 값**을 저장한다.
    */
-  const [capture, setCapture] = useState<ComparisonCapture | null>(null);
+  const [confirmed, setConfirmed] = useState<{
+    readonly capture: ComparisonCapture;
+    readonly source: EvidenceSourceSnapshot;
+  } | null>(null);
+  /**
+   * 직전 캡처에 쓴 원본 스냅샷.
+   *
+   * ★재검증에 걸린 직후에는 화면의 원본이 **아직 옛 값**이다. 다시 읽기를 거는 것은 부모 훅인데
+   *   그 effect 가 이 컴포넌트의 effect 보다 **나중에** 돌기 때문이다(자식 effect 가 먼저 flush 된다).
+   *   그 틈에 같은 값으로 다시 캡처하면 재검증이 영원히 같은 이유로 실패해, 교사는 안내대로
+   *   몇 번을 다시 눌러도 빠져나오지 못한다(창을 닫았다 여는 길밖에 없는데 화면은 그걸 안 알려 준다).
+   *   그래서 **새로 읽어 온 스냅샷이 도착할 때까지** 다시 잡지 않는다.
+   */
+  const capturedFromRef = useRef<EvidenceSourceSnapshot | null>(null);
   /** 미리보기를 펼쳤는가. 펼쳤다고 해서 아무것도 쓰이지 않는다. */
   const [previewing, setPreviewing] = useState(false);
   /** 재검증에 걸렸을 때의 안내. 그때 쓰기는 0회였다. */
@@ -174,9 +188,20 @@ export function EvidenceSourceComparisonDialog({
   const source = recheckFailure === 'missing' || lookup.state !== 'found' ? null : lookup.source;
 
   useEffect(() => {
-    if (capture !== null || source === null || sourceId === undefined) return;
-    setCapture(captureOf(evidence, source, sourceId));
-  }, [capture, source, evidence, sourceId]);
+    if (confirmed !== null || source === null || sourceId === undefined) return;
+    // 아직 옛 스냅샷이다(위 주석). 새로 읽어 온 것이 도착하면 그때 잡는다.
+    if (capturedFromRef.current === source) return;
+    capturedFromRef.current = source;
+    setConfirmed({ capture: captureOf(evidence, source, sourceId), source });
+  }, [confirmed, source, evidence, sourceId]);
+
+  /**
+   * 원본을 다시 읽는 중이면 미리보기를 걷는다. 바뀔 값을 보여 주지 못하는 채로 확정 단추만
+   * 남겨 두면, 누를 수는 있는데 아무 일도 일어나지 않는 단추가 된다.
+   */
+  useEffect(() => {
+    if (previewing && source === null) setPreviewing(false);
+  }, [previewing, source]);
 
   useEffect(() => {
     if (focusTarget.current === 'cancel') cancelBtnRef.current?.focus();
@@ -209,23 +234,25 @@ export function EvidenceSourceComparisonDialog({
   const showDelete = recheckFailure !== 'missing';
 
   const confirm = async (): Promise<void> => {
-    if (applyingRef.current || capture === null || source === null) return;
+    if (applyingRef.current || confirmed === null) return;
     applyingRef.current = true;
     setApplying(true);
     setReadFailure(null);
     try {
-      const result = await onApply(capture, patchOf(source));
+      // ★확인받은 그 스냅샷으로 쓴다. 화면이 지금 들고 있는 값이 아니다.
+      const result = await onApply(confirmed.capture, patchOf(confirmed.source));
       if (result.ok) {
         onClose();
         return;
       }
       // 쓰기 0회다. 미리보기를 걷고 비교를 새로 잡아 다시 확인받는다.
       setPreviewing(false);
-      setCapture(null);
+      setConfirmed(null);
       onRetrySource();
       setRecheckFailure(result.reason === 'changed' ? 'changed' : 'missing');
-    } catch (err) {
-      setReadFailure(err instanceof Error ? err.message : '원본을 확인하지 못했습니다.');
+    } catch {
+      // 저장소 예외 메시지를 그대로 띄우지 않는다. 교사에게는 기술 문자열이 아니라 다음 행동을 말한다.
+      setReadFailure('원본을 확인하지 못했습니다. 잠시 뒤 다시 시도해 주세요.');
     } finally {
       applyingRef.current = false;
       setApplying(false);
@@ -383,7 +410,7 @@ export function EvidenceSourceComparisonDialog({
             <button
               type="button"
               onClick={() => void confirm()}
-              disabled={applying || capture === null}
+              disabled={applying || confirmed === null || source === null}
               className={BTN_CONFIRM}
             >
               {applying ? '확인하는 중' : '이 내용으로 바꾸기'}
@@ -417,7 +444,7 @@ export function EvidenceSourceComparisonDialog({
                   focusTarget.current = 'cancel';
                   setPreviewing(true);
                 }}
-                disabled={blockReason !== null || capture === null}
+                disabled={blockReason !== null || confirmed === null}
                 {...(blockReason !== null ? { title: blockReason } : {})}
                 className={BTN_APPLY}
               >

@@ -139,6 +139,14 @@ export interface RecordEvidenceBoardProps {
    * 상위 화면이 이동을 결정한다 - 보드가 직접 탭을 바꾸지 않는다.
    */
   readonly onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
+  /**
+   * 저장 직후 넘어온 "이걸 찾아 줘" 요청(계획 §4.3). 대상 카드를 찾아 필터를 풀고 스크롤·포커스한다.
+   * 대상이 지금 영역 필터 밖이면 **'전체'로 바꾸고 그 사실을 말한다** - 조용히 못 찾으면
+   * 교사는 저장이 안 된 줄 안다.
+   */
+  readonly focusRequest?: RecordFlowIntent | null;
+  /** 요청을 처리했다고 상위에 알린다. 같은 요청을 다시 처리하지 않게. */
+  readonly onFocusRequestHandled?: () => void;
 }
 
 /** 폼 상태 — id=null 이면 신규 등록, 값이 있으면 해당 근거 수정. */
@@ -284,6 +292,8 @@ export function RecordEvidenceBoard({
   onSelectStudent,
   initialArea,
   onRequestFlow,
+  focusRequest,
+  onFocusRequestHandled,
 }: RecordEvidenceBoardProps) {
   const author = context === 'homeroom' ? 'homeroom' : 'teaching';
   const areas = useMemo(() => areasForContext(level, author), [level, author]);
@@ -292,6 +302,7 @@ export function RecordEvidenceBoard({
 
   const records = useRecordEvidenceStore((s) => s.records);
   const loadEvidence = useRecordEvidenceStore((s) => s.load);
+  const evidenceLoaded = useRecordEvidenceStore((s) => s.loaded);
   const addEvidence = useRecordEvidenceStore((s) => s.add);
   const addManyEvidence = useRecordEvidenceStore((s) => s.addMany);
   const updateEvidence = useRecordEvidenceStore((s) => s.update);
@@ -360,6 +371,9 @@ export function RecordEvidenceBoard({
   /** 끌고 있는 카드(미리보기용). */
   const [dragging, setDragging] = useState<DragState | null>(null);
   const newZoneRef = useRef<HTMLElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  /** 이미 처리한 이동 요청. 리렌더마다 다시 스크롤하지 않게. */
+  const handledFocusRef = useRef<string | null>(null);
   // ★포인터가 6px 이상 움직여야 끌기다 — 그 안이면 클릭(선택). 이 제약이 없으면 고르려다 옮긴다. 키보드 센서는 붙이지 않는다.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -527,6 +541,7 @@ export function RecordEvidenceBoard({
     () => (comparingId === null ? undefined : studentEvidence.find((r) => r.id === comparingId)),
     [comparingId, studentEvidence],
   );
+
   const differsFromSource = useCallback(
     (ev: RecordEvidence): boolean => {
       if (isMirrorId(ev.id)) return false;
@@ -641,6 +656,64 @@ export function RecordEvidenceBoard({
     toastTimer.current = null;
     setToast(null);
   }, []);
+
+  /**
+   * 저장 직후 [근거 보드에서 보기] 로 넘어온 대상을 찾아 준다(계획 §4.3, AC-10).
+   *
+   * 순서가 중요하다: **먼저 필터를 풀고**(다음 렌더에서 카드가 그려진다) 그다음에 스크롤·포커스한다.
+   * ★못 찾으면 조용히 넘어가지 않는다. 교사는 방금 저장한 것이 없어졌다고 읽는다.
+   */
+  useEffect(() => {
+    if (!focusRequest || !student) return;
+    if (handledFocusRef.current === focusRequest.requestId) return;
+    const targetId =
+      focusRequest.evidenceId !== undefined &&
+      studentEvidence.some((r) => r.id === focusRequest.evidenceId)
+        ? focusRequest.evidenceId
+        : focusRequest.sourceId !== undefined
+          ? (studentEvidence.find((r) => r.sourceId === focusRequest.sourceId)?.id ??
+            (mirrorBySourceId.has(focusRequest.sourceId)
+              ? mirrorId(focusRequest.sourceId)
+              : undefined))
+          : undefined;
+    if (targetId === undefined) {
+      // 아직 목록이 안 왔을 수 있다. 근거가 로드되기 전에는 판정하지 않는다.
+      if (!evidenceLoaded) return;
+      handledFocusRef.current = focusRequest.requestId;
+      onFocusRequestHandled?.();
+      flash('방금 저장한 근거를 보드에서 찾지 못했습니다');
+      return;
+    }
+    // 영역 필터에 가려 안 보이면 먼저 푼다. 못 찾은 것이 아니라 가려진 것이다.
+    const hidden =
+      areaFilter !== null &&
+      !isMirrorId(targetId) &&
+      !(studentEvidence.find((r) => r.id === targetId)?.areas.includes(areaFilter) ?? false);
+    if (hidden) {
+      setAreaFilter(null);
+      flash('전체 유형으로 바꿔서 방금 저장한 근거를 보여 드립니다');
+      return; // 다음 렌더에서 카드가 그려지면 이 effect 가 다시 돌아 스크롤한다.
+    }
+    const el = rootRef.current?.querySelector<HTMLElement>(`[data-evidence-id="${targetId}"]`);
+    if (!el) return; // 아직 안 그려졌다. 다음 렌더에 다시 시도한다.
+    handledFocusRef.current = focusRequest.requestId;
+    onFocusRequestHandled?.();
+    // 스크롤은 있으면 좋은 것이고 포커스가 본질이다 - 스크롤 API 가 없다고 포커스까지 놓치지 않는다.
+    el.scrollIntoView?.({ block: 'center', behavior: 'smooth' });
+    el.focus();
+    // 마친 주제 열은 접혀 있다 - 대상이 그 안이면 펼쳐 준다.
+    const t = studentEvidence.find((r) => r.id === targetId)?.threadId;
+    if (t !== undefined) setExpandedClosed((prev) => (prev.includes(t) ? prev : [...prev, t]));
+  }, [
+    focusRequest,
+    student,
+    studentEvidence,
+    mirrorBySourceId,
+    areaFilter,
+    evidenceLoaded,
+    onFocusRequestHandled,
+    flash,
+  ]);
 
   /** 이동 결과를 한 줄로 — 건너뛴 건이 있으면 반드시 말한다. `addedMirrors` = 관문 밖에서 주제로 바로 저장한 거울 수. */
   const report = (r: EvidenceMoveResult, done: string, addedMirrors = 0): void => {
@@ -1497,7 +1570,7 @@ export function RecordEvidenceBoard({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div ref={rootRef} className="flex min-h-0 flex-1 flex-col">
       {/* 상단 — 학생 선택 · 영역 필터 · 가져오기 · 근거 직접 입력 · AI 분류 제안 */}
       <div className="flex flex-wrap items-center gap-2 border-b border-sp-border px-4 py-2">
         <button
@@ -1952,6 +2025,8 @@ export function RecordEvidenceBoard({
       {/* 원본 비교 대화상자 — 근거는 스토어의 최신값에서 다시 찾는다(반영·동기화로 바뀌었을 수 있다). */}
       {comparing !== undefined && (
         <EvidenceSourceComparisonDialog
+          // ★근거가 바뀌면 창을 새로 만든다. 캡처·미리보기 상태가 앞 근거의 것으로 남지 않게.
+          key={comparing.id}
           evidence={comparing}
           lookup={sourceState.lookup(comparing.sourceId, comparing.sourceType)}
           onRetrySource={sourceState.retry}

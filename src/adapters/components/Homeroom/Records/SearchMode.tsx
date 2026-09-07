@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -23,13 +23,29 @@ import {
 } from '@adapters/components/common/records/RecordStudentJumpList';
 import { studentRecordToDisplay } from '@adapters/presentation/displayRecord';
 import { useRecordInlineEdit } from './useRecordInlineEdit';
+import {
+  resolveRecordFlowIntent,
+  type RecordFlowIntent,
+} from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useRecordFilters } from './useRecordFilters';
 import { RecordFilterPopover } from './RecordFilterPopover';
 import { useReviewQueue } from './useReviewQueue';
 import { useTodayStr } from './useTodayStr';
 import { ReviewMode } from './ReviewMode';
 
-function SearchMode({ students, records, categories }: ModeProps) {
+interface SearchModeProps extends ModeProps {
+  /** 보드 [원본 보기·수정] 로 넘어온 요청(계획 §4.3). `mode:'source'` 만 처리한다. */
+  readonly flowIntent?: RecordFlowIntent | null;
+  readonly onFlowIntentConsumed?: (requestId: string) => void;
+}
+
+function SearchMode({
+  students,
+  records,
+  categories,
+  flowIntent,
+  onFlowIntentConsumed,
+}: SearchModeProps) {
   const { deleteRecord, toggleFollowUpDone, toggleNeisReport, toggleDocumentSubmitted } =
     useStudentRecordsStore();
   const showToast = useToastStore((s) => s.show);
@@ -66,6 +82,47 @@ function SearchMode({ students, records, categories }: ModeProps) {
 
   // 인라인 편집 상태 묶음 — 뷰에는 edit 객체 하나로 전달(useRecordInlineEdit 훅)
   const { edit, handleEdit } = useRecordInlineEdit(studentMap);
+
+  /**
+   * 보드에서 [원본 보기·수정] 로 넘어온 요청을 여기서 소비한다(계획 §4.3, AC-11 담임).
+   * ★소비 기록은 `ref` 다. state 로 두면 갱신이 비동기라 같은 렌더 흐름에서 두 번 처리된다.
+   * ★지워진 학생이면 첫 학생에게 붙이지 않는다. 조용히 남의 기록을 여는 사고다.
+   */
+  const consumedIntentsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (!flowIntent || flowIntent.mode !== 'source') return;
+    const resolution = resolveRecordFlowIntent({
+      intent: flowIntent,
+      rosterLoaded: students.length > 0,
+      knownStudentRefs: new Set(students.map((s) => s.id)),
+      consumedRequestIds: consumedIntentsRef.current,
+    });
+    if (resolution.status === 'student-missing') {
+      consumedIntentsRef.current.add(flowIntent.requestId);
+      showToast('학생을 찾을 수 없습니다.', 'error');
+      onFlowIntentConsumed?.(flowIntent.requestId);
+      return;
+    }
+    if (resolution.status !== 'ready') return;
+    const target = records.find(
+      (r) => r.id === flowIntent.sourceId && r.studentId === flowIntent.studentRef,
+    );
+    // 아직 기록이 안 왔을 수 있다. 없다고 단정하기 전에 목록이 비었는지 본다.
+    if (!target && records.length === 0) return;
+    consumedIntentsRef.current.add(flowIntent.requestId);
+    setSelectedStudentId(flowIntent.studentRef);
+    if (target) handleEdit(target);
+    else showToast('원본 기록을 찾지 못했습니다.', 'error');
+    onFlowIntentConsumed?.(flowIntent.requestId);
+  }, [
+    flowIntent,
+    students,
+    records,
+    handleEdit,
+    setSelectedStudentId,
+    showToast,
+    onFlowIntentConsumed,
+  ]);
 
   // 좌측 학생 점프 리스트 아이템 — 학생별 건수·경고 점(나이스 미반영/기한 초과 후속조치)
   // 자정을 넘기면 자동 갱신 — 경고 점(기한 초과) 판정이 어제 기준으로 남지 않게

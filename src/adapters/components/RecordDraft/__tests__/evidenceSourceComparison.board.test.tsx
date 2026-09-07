@@ -124,9 +124,13 @@ const { obsRepo, fakeStore, evidenceState, applySpy, removeSpy, updateSpy, addSp
         sourceId: 'perf-1',
       },
     ];
-    const apply = vi.fn(async (_params: { evidenceId: string; fields: unknown }) => ({
-      ok: true as const,
-    }));
+    const apply = vi.fn(
+      async (_params: {
+        evidenceId: string;
+        capture: { source: { content: string } };
+        fields: unknown;
+      }) => ({ ok: true as const }),
+    );
     const remove = vi.fn(async () => {});
     const update = vi.fn(async () => {});
     const add = vi.fn(async () => 'x');
@@ -323,6 +327,35 @@ describe('AC-14 반영은 2단계이고, 보내는 것은 세 필드뿐이다', 
     });
   });
 
+  it('★재검증에 걸린 뒤 다시 확인하면 실제로 통한다(재확인이 무한 반복되지 않는다)', async () => {
+    await board();
+    await openCompare('근거로 다듬은 글');
+    // 대화상자를 열어 둔 사이 디스크의 원본이 바뀌었다.
+    obsRepo.records = obsRepo.records.map((o) =>
+      o.id === 'obs-diff' ? { ...o, content: '원본 글 최신' } : o,
+    );
+    applySpy.mockResolvedValueOnce({ ok: false, reason: 'changed' } as never);
+    await act(async () => {
+      fireEvent.click(within(dialog()).getByRole('button', { name: /원본 내용으로 바꾸기/ }));
+    });
+    await act(async () => {
+      fireEvent.click(within(dialog()).getByRole('button', { name: '이 내용으로 바꾸기' }));
+    });
+    // 다시 읽기가 끝나 화면이 최신 원본을 보여 준다.
+    await waitFor(() => expect(within(dialog()).getByText('원본 글 최신')).toBeTruthy());
+    await act(async () => {
+      fireEvent.click(within(dialog()).getByRole('button', { name: /원본 내용으로 바꾸기/ }));
+    });
+    await act(async () => {
+      fireEvent.click(within(dialog()).getByRole('button', { name: '이 내용으로 바꾸기' }));
+    });
+    const second = applySpy.mock.calls[1]?.[0];
+    // ★캡처가 옛 원본에 고정되면 재검증이 영원히 같은 이유로 실패한다. 실제로 그 결함이 있었다.
+    expect(second?.capture.source.content).toBe('원본 글 최신');
+    // ★반영하는 값도 화면 값이 아니라 **확인받은 스냅샷**이어야 한다.
+    expect(second?.fields).toMatchObject({ content: '원본 글 최신' });
+  });
+
   it('★재검증에 걸리면 창을 닫지 않고 다시 확인받는다', async () => {
     applySpy.mockResolvedValueOnce({ ok: false, reason: 'changed' } as never);
     await board();
@@ -427,5 +460,78 @@ describe('AC-16 삭제 안내 4갈래 - 확인한 것만 약속한다', () => {
     const text = await del('직접 입력한 근거', '삭제');
     expect(text).toContain('근거 1건을 지웠습니다');
     expect(text).not.toContain('원본');
+  });
+});
+
+describe('AC-10 저장 직후 이동 - 보드가 대상까지 찾아 준다', () => {
+  const intent = (over: Record<string, unknown> = {}) => ({
+    requestId: 'rfi-test-1',
+    context: 'teaching' as const,
+    classId: 'c1',
+    studentRef: 'sA',
+    mode: 'board' as const,
+    ...over,
+  });
+
+  it('★대상 카드를 찾아 포커스한다(보드만 열고 마는 것이 아니다)', async () => {
+    const handled = vi.fn();
+    render(
+      <RecordEvidenceBoard
+        context="teaching"
+        level="high"
+        students={STUDENTS}
+        classId="c1"
+        selectedStudentRef="sA"
+        onSelectStudent={() => {}}
+        initialArea={null}
+        focusRequest={intent({ evidenceId: 'e-diff' }) as never}
+        onFocusRequestHandled={handled}
+      />,
+    );
+    await waitFor(() => expect(handled).toHaveBeenCalled());
+    // 대상 카드가 실제로 포커스를 받는다 - 교사가 어디를 봐야 하는지 알 수 있다.
+    expect(document.activeElement).toBe(cardOf('근거로 다듬은 글'));
+  });
+
+  it('sourceId 만 있어도(근거 id 를 모르는 담임 저장) 같은 원본의 근거를 찾아낸다', async () => {
+    const handled = vi.fn();
+    render(
+      <RecordEvidenceBoard
+        context="teaching"
+        level="high"
+        students={STUDENTS}
+        classId="c1"
+        selectedStudentRef="sA"
+        onSelectStudent={() => {}}
+        initialArea={null}
+        focusRequest={intent({ sourceId: 'obs-diff' }) as never}
+        onFocusRequestHandled={handled}
+      />,
+    );
+    await waitFor(() => expect(handled).toHaveBeenCalled());
+    expect(document.activeElement).toBe(cardOf('근거로 다듬은 글'));
+  });
+
+  it('★대상을 못 찾으면 조용히 넘어가지 않는다(저장이 안 된 줄 알게 두지 않는다)', async () => {
+    const handled = vi.fn();
+    render(
+      <RecordEvidenceBoard
+        context="teaching"
+        level="high"
+        students={STUDENTS}
+        classId="c1"
+        selectedStudentRef="sA"
+        onSelectStudent={() => {}}
+        initialArea={null}
+        focusRequest={intent({ evidenceId: 'e-없는것', sourceId: 'obs-없는것' }) as never}
+        onFocusRequestHandled={handled}
+      />,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('status', { name: '알림' }).textContent).toContain(
+        '보드에서 찾지 못했습니다',
+      ),
+    );
+    expect(handled).toHaveBeenCalled();
   });
 });

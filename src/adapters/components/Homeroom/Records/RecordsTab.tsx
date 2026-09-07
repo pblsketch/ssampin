@@ -182,6 +182,8 @@ export function RecordsTab({
           students={activeStudentsList}
           records={filteredRecords}
           categories={categories}
+          flowIntent={flowIntent}
+          onFlowIntentConsumed={onFlowIntentConsumed}
         />
       )}
 

@@ -174,6 +174,11 @@ export function RecordDraftView({
     students[0]?.studentRef ?? null,
   );
   const [sideTab, setSideTab] = useState<SidePanelTab>('ai');
+  /**
+   * 보드로 넘길 때 "이걸 찾아 줘"라고 함께 보내는 요청(계획 §4.3).
+   * 보드가 필터를 풀고 스크롤·포커스한다. 한 번 쓰고 나면 보드가 알려 준다.
+   */
+  const [boardFocus, setBoardFocus] = useState<RecordFlowIntent | null>(null);
 
   /** 형광펜 스위치 — 설정에 기억한다. 켰을 때만 색·범례가 보인다. */
   const highlightOn = useSettingsStore((s) => s.settings.recordHighlightOn === true);
@@ -218,9 +223,16 @@ export function RecordDraftView({
       consumedRequestIds: consumedIntentsRef.current,
     });
     if (resolution.status === 'ready') {
-      consumedIntentsRef.current.add(resolution.intent.requestId);
-      setSelectedStudentRef(resolution.intent.studentRef);
-      onFlowIntentConsumed?.(resolution.intent.requestId);
+      const { intent } = resolution;
+      consumedIntentsRef.current.add(intent.requestId);
+      setSelectedStudentRef(intent.studentRef);
+      // ★학생만 고르고 끝내면 화면은 초안 목록에 머문다 - 교사가 누른 [근거 보드에서 보기] 가
+      //   아무 일도 안 한 것처럼 보인다. 보드로 실제로 넘기고, 대상까지 찾아 준다(계획 §4.3).
+      if (intent.mode === 'board') {
+        setViewMode('evidence');
+        setBoardFocus(intent);
+      }
+      onFlowIntentConsumed?.(intent.requestId);
       return;
     }
     if (resolution.status === 'student-missing') {
@@ -621,6 +633,8 @@ export function RecordDraftView({
           selectedStudentRef={selectedStudentRef}
           onSelectStudent={selectStudent}
           initialArea={activeArea}
+          focusRequest={boardFocus}
+          onFocusRequestHandled={() => setBoardFocus(null)}
           {...(onRequestFlow !== undefined ? { onRequestFlow } : {})}
         />
       ) : (
