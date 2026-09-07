@@ -18,12 +18,15 @@
   기존 관련 테스트 4파일 99/99 통과. 앱 구현·실제 AI 품질 검증은 미실행.
   [검토](docs/03-analysis/record-draft-length-adjustment.analysis.md) · [기록](docs/progress/2026-09.md).
 
-- **관찰 입력 → 주제별 근거 연결 UIUX** — **S0~S2 완료·커밋**(`74f9473d`·`880a82c4`). 잔여 S3~S5.
-  S1 저장 안정성: 근거·주제에 파일 잠금, 저장 성공 후 게시, 원본당 근거 1개 관문, 첨부 파일별 결과.
-  **담임 저장 실패 시 본문이 사라지던 결함 수정.** S2: 두 입력 화면을 본문 우선 순서로 재배치 + 주제 연결 선택기.
-  게이트 전통과(vitest 692파일 9244통과). [계획](docs/01-plan/features/observation-evidence-flow.plan.md) ·
+- **관찰 입력 → 주제별 근거 연결 UIUX** — **S0~S3 완료 + S4 저장 계약까지 push 완료**(ADR-086).
+  **잔여: S4 비교창 화면 · S5 실기기 QA·공개 가이드.** 다음 세션은 여기부터.
+  S1 저장 안정성(파일 잠금·저장 후 게시·원본당 근거 1개·첨부 파일별 결과·담임 본문 소실 결함 수정) /
+  S2 본문 우선 입력 + 주제 연결 선택기(교과·담임) / S3 화면 왕복(요청 1회 소비·초안 flush 후 이동) /
+  S4 비교 규칙 + 적용 직전 재검증 + 출결·공백 자동 거울 제외.
+  게이트 전통과(vitest 696파일 9296통과, 실패 0). [계획](docs/01-plan/features/observation-evidence-flow.plan.md) ·
   [설계](docs/02-design/features/observation-input-topic-picker.design.md) ·
-  [분석](docs/03-analysis/observation-evidence-flow.analysis.md) · [기록](docs/progress/2026-09.md).
+  [분석](docs/03-analysis/observation-evidence-flow.analysis.md) · [ADR-086](docs/03-decisions/ADR-086.md) ·
+  [기록](docs/progress/2026-09.md).
 - **생기부 초안 3차 (record-draft-uiux-v3)** — 구현·게이트 완료, 미커밋. 실기기 확인 + 서랍(덮기 vs 나란히) 오너 판단. ADR-085. → 아래 섹션.
 - **근거 정리 보드 2차 (record-evidence-board-v2)** — 구현·게이트 완료, **커밋·푸시·배포 완료(2026-09-07)**. 실기기 확인(설계서 §8)만 남음. → 아래 섹션.
 - **내 AI로 실행(선생님 본인 구독 CLI)** — 구현 완료(2026-09-05, ADR-082·084). 잔여: 생기부 T6 한 줄 삽입 · 디자인 검토 · 실기기 QA. 계획서 원문 → [2026-09](docs/progress/2026-09.md).
