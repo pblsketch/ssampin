@@ -91,5 +91,6 @@
 - [ADR-088 · 생기부 초안 분량 조절: 앱이 세고, 한 번만 되묻고, 못 맞추면 그렇게 말한다 (2026-09-07)](docs/03-decisions/ADR-088.md)
 - [ADR-089 · 생기부 작성 규정을 나눠 주는 서버 문에 잠금장치를 달고, 못 막는 것은 사실대로 적는다 (2026-09-07)](docs/03-decisions/ADR-089.md)
 - [ADR-090 · 쌤핀 AI 패널 이미지 첨부: "내 AI"(구독 CLI)로만 보내고 쌤핀 AI(Solar)에는 열지 않는다 (2026-09-07)](docs/03-decisions/ADR-090.md)
+- [ADR-091 · 컴시간 일일자료(보강·교체)도 받아 "이번 주 변경"으로 따로 안내한다 (2026-09-08)](docs/03-decisions/ADR-091.md)
 
 - [ADR-V · 실시간 담벼락 v2 릴리즈 라벨](docs/03-decisions/ADR-V-realtime-wall-v2-release-labels.md) — 번호 없음(예전 파일)

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   decodeLessonCode,
+  decodeDailyTimetable,
   decodeTimetable,
   detectDecodeAnomaly,
   summarizeTeachers,
@@ -129,6 +130,31 @@ describe('decodeTimetable — 격자 → 수업 목록', () => {
       baseGrid: [[], [[], [[], [2, code(99, 1), code(1, 99)]]]],
     };
     expect(decodeTimetable(broken)).toHaveLength(0);
+  });
+});
+
+describe('decodeDailyTimetable — 이번 주 일일자료(보강·교체) 해석', () => {
+  it('일일자료가 없는 학교는 null (변경 없음 과 구분)', () => {
+    expect(decodeDailyTimetable(makeFixture())).toBeNull();
+  });
+
+  it("일일자료를 같은 규칙으로 해석하고 '>' 접두(변경 표시) 코드도 읽는다", () => {
+    const fixture = makeFixture();
+    const withDaily: ComciganRawSchoolData = {
+      ...fixture,
+      // 1-1 월요일: 1교시는 그대로(언매·백순*), 2교시가 국어·A교사* 로 바뀜('>' 표시)
+      dailyGrid: [[], [[], [[], [2, code(3, 3), `>${code(1, 1)}`]]]],
+    };
+    const lessons = decodeDailyTimetable(withDaily);
+    expect(lessons).not.toBeNull();
+    expect(lessons).toHaveLength(2);
+    expect(lessons?.[1]).toMatchObject({
+      day: 1,
+      period: 2,
+      subject: '국어',
+      teacherIndex: 1,
+      teacherName: 'A교사*',
+    });
   });
 });
 

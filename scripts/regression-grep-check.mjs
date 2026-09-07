@@ -31,6 +31,51 @@ const ROOT = resolve(__dirname, '..');
 
 const presenceChecks = [
   // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #72 (2026-09-08) — 위젯 카드 안 입력칸에서 스페이스가 삼켜지지 않는다.
+  //
+  // `ee23ce55`(v2.4.6) 가 dnd-kit `{...listeners}` 를 카드 전체에 붙였다. listeners 에는
+  // 키보드 감지기(Space·Enter = 끌기 시작)도 들어 있어, 할 일 확장 모달·북마크·연락처
+  // 입력칸의 스페이스가 전부 "위젯 끌기"로 먹혀 글자가 안 찍혔다(사용자 제보).
+  // 해법은 ⋮ 손잡이 버튼을 `setActivatorNodeRef` 로 지정하는 것 — 감지기는 activator 가
+  // 있으면 그 요소에서 누른 키만 인정한다. 카드 전체 마우스 끌기는 그대로 산다.
+  // 지문: useSortable 에서 setActivatorNodeRef 를 꺼내고, 손잡이 버튼에 ref 로 단다.
+  // 동작 검증은 src/widgets/components/__tests__/SortableWidgetKeyboardInput.spec.tsx.
+  // ────────────────────────────────────────────────────────────────────────
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #73 (2026-09-08) — 컴시간 "이번 주 변경"(일일자료) 배선.
+  //
+  // 앱은 컴시간 원자료(기본 편성표, 자료481)만 읽어서 보강·교체(일일자료, 자료147)가
+  // 있어도 "바뀐 내용이 없어요"라고 답했다(사용자 제보). 유스케이스가 `weekly` 를 계산해도
+  // 확인 함수가 안 쓰면 순수 함수 테스트는 초록인 채 화면은 예전 그대로다("층은 만들었는데
+  // 배선을 잊은" 사고 유형 — #57 주석). 세 자리를 글자로 못 박는다:
+  //  (1) API 클라이언트가 일일자료 코드를 읽어 dailyGrid 로 넘긴다.
+  //  (2) 확인 함수가 result.weekly 를 스토어(weeklyComciganChanges)에 싣고 결과에 weeklyChangeCount 를 준다.
+  //  (3) 위젯 배너 요약이 unchanged + weeklyChangeCount>0 을 'weekly' 로 올린다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/infrastructure/comcigan/ComciganApiClient.ts',
+    pattern:
+      /일일자료=Q자료[\s\S]{0,9000}?json\[`자료\$\{dailyGridCode\}`\][\s\S]{0,1500}?\{ dailyGrid \}/,
+    name: 'REGRESSION #73-1: 컴시간 API 클라이언트가 일일자료(이번 주 보강·교체)를 dailyGrid 로 넘긴다',
+  },
+  {
+    file: 'src/adapters/hooks/useComciganAutoSync.ts',
+    pattern:
+      /result\.weekly\?\.diff\.changes[\s\S]{0,400}?setWeeklyComciganChanges\([\s\S]{0,1500}?status: 'unchanged', changeCount: 0, weeklyChangeCount/,
+    name: 'REGRESSION #73-2: 컴시간 확인 함수가 이번 주 변경을 스토어에 싣고 weeklyChangeCount 를 돌려준다',
+  },
+  {
+    file: 'src/widgets/hooks/useTimetableChangeCheck.ts',
+    pattern: /case 'unchanged':[\s\S]{0,300}?weeklyCount > 0\) return \{ kind: 'weekly'/,
+    name: 'REGRESSION #73-3: 위젯 배너는 기본 편성표 무변경 + 이번 주 변경을 "최신 상태"로 뭉개지 않는다',
+  },
+  {
+    file: 'src/widgets/components/SortableWidget.tsx',
+    pattern:
+      /setActivatorNodeRef,[\s\S]{0,400}?\} = useSortable\([\s\S]{0,6000}?<button[\s\S]{0,80}?ref=\{setActivatorNodeRef\}[\s\S]{0,200}?\[WIDGET_DRAG_HANDLE_ATTR\]/,
+    name: 'REGRESSION #72: 위젯 키보드 끌기 시작점은 ⋮ 손잡이 버튼뿐이다 (setActivatorNodeRef) — 입력칸 스페이스 보호',
+  },
+  // ────────────────────────────────────────────────────────────────────────
   // REGRESSION #71 (2026-09-07, ADR-090) — 이미지 첨부는 "내 AI"(구독 CLI)로만 나간다.
   //
   // 쌤핀 AI(Solar) 중계 서버는 글만 받고, 사진 속 이름·얼굴은 별칭으로 가릴 수 없다.

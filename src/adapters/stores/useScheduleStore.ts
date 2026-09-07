@@ -15,6 +15,7 @@ import {
   filterOverridesInRange,
   dedupeOverridesKeepLatest,
 } from '@domain/rules/timetableRules';
+import type { TimetableChange } from '@domain/rules/timetableDiff';
 import { scheduleRepository } from '@adapters/di/container';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import type { WeekendDay } from '@domain/valueObjects/DayOfWeek';
@@ -37,6 +38,20 @@ export interface PendingComciganReview {
   readonly schedule: TeacherScheduleData;
   /** 바뀐 칸 수(배너 표시용) */
   readonly changeCount: number;
+}
+
+/**
+ * 컴시간 일일자료에서 본 "이번 주 변경"(보강·교체). 기본 편성표 검토(PendingComciganReview)와
+ * 별개로 알리기만 하고 시간표에는 반영하지 않는다. 확인 함수(useComciganAutoSync)가 채우고
+ * 시간표 화면이 배너로 노출한다. 영속·동기화 안 함.
+ */
+export interface WeeklyComciganChanges {
+  /** 기본 편성표 → 이번 주 시간표 차이(요일·교시·전/후) */
+  readonly changes: readonly TimetableChange[];
+  /** 이번 주 실제 교사 시간표(보강·교체 반영) */
+  readonly schedule: TeacherScheduleData;
+  /** 확인한 날짜 'YYYY-MM-DD' */
+  readonly checkedAt: string;
 }
 
 /**
@@ -63,6 +78,10 @@ interface ScheduleState {
   /** 컴시간 변경 감지 후 검토 대기 중인 교사 시간표(없으면 null) */
   pendingComciganReview: PendingComciganReview | null;
   setPendingComciganReview: (review: PendingComciganReview | null) => void;
+
+  /** 컴시간 이번 주 변경(보강·교체) — 알림 전용, 없으면 null */
+  weeklyComciganChanges: WeeklyComciganChanges | null;
+  setWeeklyComciganChanges: (changes: WeeklyComciganChanges | null) => void;
 
   /** 압핀 변경 감지 후 검토 대기 중인 시간표(교사/학급, 없으면 null) */
   pendingAppinReview: PendingAppinReview | null;
@@ -124,8 +143,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     overrides: [],
     pendingComciganReview: null,
     pendingAppinReview: null,
+    weeklyComciganChanges: null,
 
     setPendingComciganReview: (review) => set({ pendingComciganReview: review }),
+
+    setWeeklyComciganChanges: (changes) => set({ weeklyComciganChanges: changes }),
 
     setPendingAppinReview: (review) => set({ pendingAppinReview: review }),
 

@@ -9,6 +9,7 @@
  */
 import { mergePeriodLabels } from './periodLabel';
 import type {
+  ComciganGrid,
   ComciganLesson,
   ComciganRawSchoolData,
   ComciganTeacherSummary,
@@ -74,11 +75,30 @@ export function decodeLessonCode(
  * 인덱스가 목록 범위를 벗어난 셀(구조 변경 신호)은 건너뛴다.
  */
 export function decodeTimetable(data: ComciganRawSchoolData): readonly ComciganLesson[] {
-  const { baseGrid, teachers, subjects, separator } = data;
+  return decodeGrid(data.baseGrid, data);
+}
+
+/**
+ * 이번 주 일일자료(보강·교체 반영) 격자를 수업 목록으로 해석한다.
+ * 컴시간이 일일자료를 주지 않은 학교(dailyGrid 없음)는 null — "변경 없음"과 구분하기 위해서다.
+ * 교사·과목 목록과 분리 값은 원자료와 공유하므로 교사 인덱스도 그대로 맞는다.
+ */
+export function decodeDailyTimetable(
+  data: ComciganRawSchoolData,
+): readonly ComciganLesson[] | null {
+  if (!data.dailyGrid) return null;
+  return decodeGrid(data.dailyGrid, data);
+}
+
+function decodeGrid(
+  grid: ComciganGrid,
+  data: Pick<ComciganRawSchoolData, 'teachers' | 'subjects' | 'separator'>,
+): readonly ComciganLesson[] {
+  const { teachers, subjects, separator } = data;
   const lessons: ComciganLesson[] = [];
 
-  for (let grade = 1; grade < baseGrid.length; grade++) {
-    const gradeArr = baseGrid[grade];
+  for (let grade = 1; grade < grid.length; grade++) {
+    const gradeArr = grid[grade];
     if (!Array.isArray(gradeArr)) continue;
     for (let classNum = 1; classNum < gradeArr.length; classNum++) {
       const classArr = gradeArr[classNum];

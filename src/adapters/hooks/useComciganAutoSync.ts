@@ -24,6 +24,7 @@ async function markComciganSynced(today: string): Promise<void> {
  * 컴시간 변경 확인 + 결과 처리(부수효과). 앱 시작 훅과 수동 버튼, 위젯 새로고침이 공유한다.
  * - 매칭 실패 → "다시 선택" 안내(적용 0)
  * - 변경 없음 → (수동일 때만) 안내
+ * - 이번 주 보강·교체(일일자료) → 기본 편성표 판정과 별개로 알림만(반영 안 함, 스토어 weeklyComciganChanges)
  * - 변경 있음 + autoApply → 무음 적용, 아니면 검토 대기(비파괴) + 알림
  *
  * 판정 결과를 반환하는 이유: 위젯 창에는 토스트 표시기가 없어(App.tsx WidgetApp) 안내를
@@ -81,10 +82,35 @@ export async function checkComciganTimetableChange(opts: {
     return { status: 'unmatched', changeCount: 0 };
   }
 
+  // 이번 주 변경(보강·교체) — 일일자료가 있을 때만. 기본 편성표 판정과 따로 알리고,
+  // 시간표에는 반영하지 않는다(이번 주만의 일이라 기본 편성표를 덮으면 안 된다).
+  // 예전엔 원자료만 봐서 이 변경이 있어도 "바뀐 내용이 없어요"라고 답했다(2026-09-08 제보).
+  const weeklyChanges = result.weekly?.diff.changes ?? [];
+  const weeklyChangeCount = weeklyChanges.length;
+  useScheduleStore
+    .getState()
+    .setWeeklyComciganChanges(
+      result.weekly && weeklyChangeCount > 0
+        ? { changes: weeklyChanges, schedule: result.weekly.schedule, checkedAt: today }
+        : null,
+    );
+  const weeklyNote =
+    weeklyChangeCount > 0 ? ` 이번 주 보강·교체도 ${weeklyChangeCount}칸 있어요.` : '';
+
   if (!result.changed || !result.data) {
-    if (manual) toast('시간표에 바뀐 내용이 없어요. 최신 상태예요.', 'success');
+    if (weeklyChangeCount > 0) {
+      // 자동 확인(앱 시작, 하루 1회)에서도 알린다 — 이번 주 수업이 달라졌다는 건 오늘의 일이다.
+      toast(
+        `기본 시간표는 그대로예요. 이번 주 보강·교체가 ${weeklyChangeCount}칸 있어요.`,
+        'info',
+        { label: '보기', onClick: navigateToTimetable },
+        6000,
+      );
+    } else if (manual) {
+      toast('시간표에 바뀐 내용이 없어요. 최신 상태예요.', 'success');
+    }
     await markComciganSynced(today);
-    return { status: 'unchanged', changeCount: 0 };
+    return { status: 'unchanged', changeCount: 0, weeklyChangeCount };
   }
 
   const changeCount = result.diff?.changes.length ?? 0;
@@ -92,19 +118,23 @@ export async function checkComciganTimetableChange(opts: {
   if (comcigan.autoSync.autoApply) {
     // 옵트인 무음 적용 (컴시간 기본 아님)
     await useScheduleStore.getState().updateTeacherSchedule(result.data);
-    toast(`컴시간 시간표가 업데이트됐어요. (${changeCount}칸 변경)`, 'success');
+    toast(`컴시간 시간표가 업데이트됐어요. (${changeCount}칸 변경)${weeklyNote}`, 'success');
     await markComciganSynced(today);
-    return { status: 'applied', changeCount };
+    return { status: 'applied', changeCount, weeklyChangeCount };
   }
 
   // 기본: 비파괴 — 검토 대기로 두고 알림만
   useScheduleStore.getState().setPendingComciganReview({ schedule: result.data, changeCount });
-  toast(`컴시간에서 시간표가 바뀌었어요. (${changeCount}칸) 검토 후 적용해주세요.`, 'info', {
-    label: '검토하기',
-    onClick: navigateToTimetable,
-  });
+  toast(
+    `컴시간에서 시간표가 바뀌었어요. (${changeCount}칸) 검토 후 적용해주세요.${weeklyNote}`,
+    'info',
+    {
+      label: '검토하기',
+      onClick: navigateToTimetable,
+    },
+  );
   await markComciganSynced(today);
-  return { status: 'pending', changeCount };
+  return { status: 'pending', changeCount, weeklyChangeCount };
 }
 
 /**

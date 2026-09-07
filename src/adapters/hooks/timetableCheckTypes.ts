@@ -23,6 +23,11 @@ export interface TimetableCheckResult {
   readonly status: TimetableCheckStatus;
   /** 바뀐 칸 수. not-configured / fetch-failed / unmatched / unchanged 는 0 */
   readonly changeCount: number;
+  /**
+   * 이번 주만 달라진 칸 수(컴시간 일일자료의 보강·교체). 기본 편성표 판정(status)과 별개라
+   * status 가 unchanged 여도 0 보다 클 수 있다. 압핀·일일자료 없는 학교는 생략(0 으로 본다).
+   */
+  readonly weeklyChangeCount?: number;
 }
 
 /** 확인 대상 원천 */

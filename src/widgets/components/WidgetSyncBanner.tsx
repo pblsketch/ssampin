@@ -55,6 +55,19 @@ export function WidgetSyncBanner() {
     void window.electronAPI?.navigateToPage?.(fragment);
   };
 
+  if (state.kind === 'weekly') {
+    // 기본 편성표는 그대로 — 검토(amber)가 아니라 안내라서 강조색을 쓴다.
+    // 메인 창 시간표 화면이 도착 즉시 다시 확인해 이번 주 변경 배너를 띄운다(sync-review 의도).
+    return (
+      <ActionBanner
+        tone="bg-sp-accent hover:brightness-110"
+        onClick={() => goToTimetable('timetable#sync-review')}
+        onDismiss={dismiss}
+        label={`이번 주 컴시간 보강·교체 ${state.changeCount}칸 — 눌러서 보기`}
+      />
+    );
+  }
+
   if (state.kind === 'pending') {
     return (
       <ActionBanner

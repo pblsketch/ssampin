@@ -26,7 +26,7 @@ import { periodTimesToSettingsPatch } from '@domain/rules/comciganRules';
 import type { ParsedComciganPeriodTimes } from '@domain/rules/comciganRules';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import { periodTimeLabel } from '@domain/rules/periodLabel';
+import { periodTimeLabel, resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { TeacherPeriod, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
 import type { SubjectColorMap, SubjectColorId } from '@domain/valueObjects/SubjectColor';
 import { DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
@@ -79,6 +79,16 @@ type TabType = 'class' | 'teacher';
  *   여기 도착한 뒤 이미 대기 중인 검토가 있으면 바로 열고, 없으면 한 번 더 확인한다.
  */
 export type TimetableInitialIntent = 'sync-review';
+
+/** 이번 주 변경 배너의 한 칸 표기 — diff 키('과목@교실' 또는 공강 '')를 사람 말로 */
+function formatWeeklyCell(key: string): string {
+  if (key === '') return '공강';
+  const [subject, room] = key.split('@');
+  return room ? `${subject} ${room}` : (subject ?? '');
+}
+
+/** 이번 주 변경 배너에 바로 펼쳐 보이는 칸 수(그 이상은 "외 n칸") */
+const WEEKLY_CHANGES_PREVIEW = 6;
 
 interface TimetablePageProps {
   readonly initialIntent?: TimetableInitialIntent | null;
@@ -656,6 +666,8 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
   // ── 컴시간 변경 감지: 대기 중 검토 + 수동 확인 ──
   const pendingComciganReview = useScheduleStore((s) => s.pendingComciganReview);
   const setPendingComciganReview = useScheduleStore((s) => s.setPendingComciganReview);
+  const weeklyComciganChanges = useScheduleStore((s) => s.weeklyComciganChanges);
+  const setWeeklyComciganChanges = useScheduleStore((s) => s.setWeeklyComciganChanges);
   const [checkingComcigan, setCheckingComcigan] = useState(false);
   const comciganAutoSyncOn = settings.comcigan?.autoSync?.enabled === true;
 
@@ -1087,6 +1099,58 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
                   className="rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
                 >
                   나중에
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* 컴시간 이번 주 변경 배너 — 일일자료(보강·교체)로 이번 주만 달라진 칸.
+              검토·적용 대상이 아니라 알림뿐이라 경고색(amber)이 아닌 강조색을 쓴다.
+              기본 편성표는 건드리지 않는다 — 이번 주만의 일을 기본 편성표에 덮으면 다음 주가 틀어진다. */}
+          {tab === 'teacher' && weeklyComciganChanges && (
+            <div
+              style={{
+                backgroundColor: 'color-mix(in srgb, var(--sp-accent) 7%, var(--sp-card))',
+                borderColor: 'color-mix(in srgb, var(--sp-accent) 22%, transparent)',
+              }}
+              className="flex flex-col gap-3 rounded-xl border px-4 py-3"
+            >
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined shrink-0 text-xl text-sp-accent">
+                  event_repeat
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-sp-text">
+                    이번 주 컴시간 시간표가 {weeklyComciganChanges.changes.length}칸 달라요
+                  </p>
+                  <p className="mt-0.5 text-xs text-sp-muted">
+                    보강·교체로 이번 주만 바뀐 칸이에요. 기본 시간표는 그대로 두고 알려만 드려요.
+                  </p>
+                  <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-sp-text">
+                    {weeklyComciganChanges.changes
+                      .slice(0, WEEKLY_CHANGES_PREVIEW)
+                      .map((change) => (
+                        <li key={`${change.day}-${change.period}`} className="whitespace-nowrap">
+                          <span className="font-semibold">
+                            {/* 교사가 붙인 교시 이름("창체")을 여기서도 존중한다 — 정본에 위임 */}
+                            {change.day}요일{' '}
+                            {resolvePeriodLabel(change.period, settings.periodTimes)}
+                          </span>{' '}
+                          {formatWeeklyCell(change.before)} → {formatWeeklyCell(change.after)}
+                        </li>
+                      ))}
+                    {weeklyComciganChanges.changes.length > WEEKLY_CHANGES_PREVIEW && (
+                      <li className="text-sp-muted">
+                        외 {weeklyComciganChanges.changes.length - WEEKLY_CHANGES_PREVIEW}칸
+                      </li>
+                    )}
+                  </ul>
+                </div>
+                <button
+                  onClick={() => setWeeklyComciganChanges(null)}
+                  className="shrink-0 rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
+                >
+                  닫기
                 </button>
               </div>
             </div>

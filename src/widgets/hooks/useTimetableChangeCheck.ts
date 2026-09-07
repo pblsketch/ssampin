@@ -38,6 +38,8 @@ export type WidgetSyncState =
   | { kind: 'checking' }
   | { kind: 'cooldown' }
   | { kind: 'unchanged' }
+  /** 기본 편성표는 그대로인데 컴시간 이번 주 보강·교체만 있음 — 눌러서 보기 */
+  | { kind: 'weekly'; changeCount: number }
   | { kind: 'applied'; sources: TimetableSource[]; changeCount: number }
   | { kind: 'pending'; sources: TimetableSource[]; changeCount: number }
   | { kind: 'unmatched'; sources: TimetableSource[] }
@@ -64,6 +66,9 @@ interface SourceOutcome {
 }
 
 function summarize(outcomes: readonly SourceOutcome[]): WidgetSyncState {
+  // 이번 주 보강·교체 칸 수(컴시간 일일자료). 기본 편성표 판정과 별개라 status 로는 안 보인다.
+  const weeklyCount = outcomes.reduce((sum, o) => sum + (o.result.weeklyChangeCount ?? 0), 0);
+
   for (const status of STATUS_PRIORITY) {
     const hit = outcomes.filter((o) => o.result.status === status);
     if (hit.length === 0) continue;
@@ -81,6 +86,8 @@ function summarize(outcomes: readonly SourceOutcome[]): WidgetSyncState {
       case 'applied':
         return { kind: 'applied', sources, changeCount };
       case 'unchanged':
+        // 기본 편성표는 그대로여도 이번 주만 달라진 칸이 있으면 "최신 상태예요"로 끝내지 않는다.
+        if (weeklyCount > 0) return { kind: 'weekly', changeCount: weeklyCount };
         return { kind: 'unchanged' };
       default:
         // not-configured — 연동을 쓰지 않는 사용자에게는 아무 안내도 띄우지 않는다.

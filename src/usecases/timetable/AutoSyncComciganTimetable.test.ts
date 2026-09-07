@@ -55,6 +55,38 @@ describe('autoSyncComciganTimetable', () => {
     expect(r.changed).toBe(false);
   });
 
+  it('일일자료가 없는 학교는 weekly 를 주지 않는다(이번 주 변경 판단 불가)', async () => {
+    const r = await autoSyncComciganTimetable(port(fixture()), FP, EMPTY);
+    expect(r.matched).toBe(true);
+    expect(r.weekly).toBeUndefined();
+  });
+
+  it('일일자료가 있으면 기본 편성표와 견준 이번 주 변경(weekly)을 함께 돌려준다', async () => {
+    // 이번 주: 월 2교시 문학이 빠지고(보강으로 다른 교사) 월 3교시 국어가 생김
+    const withDaily: ComciganRawSchoolData = {
+      ...fixture(),
+      dailyGrid: [[], [[], [[], [3, code(1, 1), 0, `>${code(1, 1)}`]]]],
+    };
+    const base = await autoSyncComciganTimetable(port(fixture()), FP, EMPTY);
+    const r = await autoSyncComciganTimetable(port(withDaily), FP, base.data!);
+
+    // 기본 편성표는 저장본과 같다 — 예전엔 여기서 "변동 없음"으로 끝났다
+    expect(r.changed).toBe(false);
+    expect(r.weekly?.diff.changed).toBe(true);
+    expect(r.weekly?.diff.changes).toEqual([
+      { day: '월', period: 2, before: '문학@1-1', after: '' },
+      { day: '월', period: 3, before: '', after: '국어@1-1' },
+    ]);
+    expect(r.weekly?.schedule['월']?.[2]).toEqual({ subject: '국어', classroom: '1-1' });
+  });
+
+  it('일일자료가 기본 편성표와 같으면 weekly.diff.changed 는 false', async () => {
+    const same: ComciganRawSchoolData = { ...fixture(), dailyGrid: fixture().baseGrid };
+    const r = await autoSyncComciganTimetable(port(same), FP, EMPTY);
+    expect(r.weekly?.diff.changed).toBe(false);
+    expect(r.weekly?.diff.changes).toEqual([]);
+  });
+
   it('지문 이름을 못 찾으면 matched:false + no-match (적용 0)', async () => {
     const r = await autoSyncComciganTimetable(
       port(fixture()),

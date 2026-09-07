@@ -57,7 +57,15 @@ export function SortableWidget({
   onResizeHeight,
   onNavigate,
 }: SortableWidgetProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    setActivatorNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: instance.widgetId,
     disabled: false,
   });
@@ -130,6 +138,14 @@ export function SortableWidget({
         카드 안 버튼·입력칸·스크롤바에서 시작한 누름은 WidgetPointerSensor 가 걸러내므로
         클릭·스크롤은 그대로 산다. 투명 오버레이를 덮는 옛 방식으로 되돌리지 말 것 —
         그건 카드 안 버튼 클릭을 삼켰던 방식이다(위 주석 참고).
+
+        ★ listeners 에는 키보드 감지기(Space·Enter 로 끌기 시작)도 들어 있다. 이걸 카드
+        전체에 걸어 두면 카드 안 입력칸(할 일 추가, 북마크, 연락처…)과 확장 모달 안
+        입력칸(모달은 portal 이지만 React 이벤트는 이 트리로 올라온다)에서 누른 스페이스가
+        전부 "위젯 끌기 시작"으로 먹혀 글자가 안 찍힌다(2026-09-08 제보, v2.4.6~).
+        그래서 아래 ⋮ 손잡이 버튼을 `setActivatorNodeRef` 로 지정한다 — dnd-kit 키보드
+        감지기는 activator 가 있으면 **그 요소에서 누른 키만** 끌기로 인정한다.
+        마우스 끌기(WidgetPointerSensor)는 activator 와 무관하게 카드 전체에서 계속 된다.
       */}
       <div
         className="relative group/widget h-full"
@@ -162,8 +178,10 @@ export function SortableWidget({
             showHandles ? 'opacity-100' : 'opacity-0 pointer-events-none'
           }`}
         >
-          {/* 드래그 핸들 — 키보드로도 순서를 바꿀 수 있는 경로(attributes 의 onKeyDown)라 유지한다 */}
+          {/* 드래그 핸들 — 키보드로 순서를 바꾸는 **유일한** 시작점(setActivatorNodeRef).
+              여기서 누른 Space·Enter 만 끌기가 되고, 카드 안 다른 입력칸의 키는 건드리지 않는다. */}
           <button
+            ref={setActivatorNodeRef}
             {...attributes}
             {...listeners}
             {...{ [WIDGET_DRAG_HANDLE_ATTR]: '' }}

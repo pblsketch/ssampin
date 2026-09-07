@@ -115,6 +115,55 @@ describe('ComciganApiClient — 라우트 추출·검색·시간표 수신', () 
     expect(ttPath).toBe(`/36179_T?${btoa('73629_77367_0_1')}`);
   });
 
+  it('이번 주 일일자료(자료147)가 있으면 dailyGrid 로 함께 넘긴다', async () => {
+    const transport = fixtureTransport({
+      timetableBody: JSON.stringify({
+        학교명: 'X',
+        분리: 1000,
+        자료446: ['', '박지*'],
+        자료492: ['', '국어', '언매'],
+        자료481: [[], [[], [[], [2, 1001, 0]]]],
+        // 화요일 2교시가 보강으로 생김 — 컴시간은 바뀐 칸을 '>' 접두로 표시한다
+        자료147: [[], [[], [[], [2, 1001, '>2001']]]],
+      }),
+    });
+    const client = new ComciganApiClient(transport);
+    const data = await client.getSchoolData(77367);
+    expect(data.dailyGrid).toEqual([[], [[], [[], [2, 1001, '>2001']]]]);
+    // 기본 편성표는 그대로(무회귀)
+    expect(data.baseGrid).toEqual([[], [[], [[], [2, 1001, 0]]]]);
+  });
+
+  it('응답에 일일자료가 없으면 dailyGrid 를 비워 두고(undefined) 기본 편성표만 넘긴다', async () => {
+    const transport = fixtureTransport();
+    const client = new ComciganApiClient(transport);
+    const data = await client.getSchoolData(77367);
+    expect(data.dailyGrid).toBeUndefined();
+    expect(Array.isArray(data.baseGrid)).toBe(true);
+  });
+
+  it('페이지에서 일일자료 코드를 못 찾아도 에러 없이 기본 편성표만 받는다', async () => {
+    const stPage = ST_PAGE_FIXTURE.replace(
+      ';일일자료=Q자료(자료.자료147[학년][반][요일][교시]);',
+      ';',
+    );
+    const transport = fixtureTransport({
+      stPage,
+      timetableBody: JSON.stringify({
+        학교명: 'X',
+        분리: 1000,
+        자료446: ['', '박지*'],
+        자료492: ['', '국어'],
+        자료481: [[], [[], [[], [2, 1001]]]],
+        자료147: [[], [[], [[], [2, 1001]]]],
+      }),
+    });
+    const client = new ComciganApiClient(transport);
+    const data = await client.getSchoolData(77367);
+    expect(data.dailyGrid).toBeUndefined();
+    expect(data.teachers).toEqual(['', '박지*']);
+  });
+
   it('일과시간이 없는 학교는 dayTimes 를 미제공(undefined)으로 둔다', async () => {
     const transport = fixtureTransport({
       timetableBody: JSON.stringify({

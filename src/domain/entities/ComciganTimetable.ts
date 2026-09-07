@@ -32,6 +32,12 @@ export interface ComciganRawSchoolData {
   /** 기본 편성표 격자 (자료481 계열 — 일일 변경 미반영 원본) */
   readonly baseGrid: ComciganGrid;
   /**
+   * 이번 주 일일자료 격자 (자료147 계열 — 보강·교체 같은 주간 변경이 반영된 표).
+   * 컴시간 페이지의 `일일자료=` 코드를 못 찾았거나 응답에 없으면 undefined.
+   * (2026-09-08 실측: 학교 전체 25칸이 원자료와 달랐는데 앱은 원자료만 봐서 "변동 없음"이었다)
+   */
+  readonly dailyGrid?: ComciganGrid;
+  /**
    * 교시별 시각 문자열 (자료.일과시간 — 예: '5(13:40)' = 5교시 13:40 시작).
    * 학교가 컴시간에 입력하지 않았으면 미제공(undefined). 시작 시각만 담기며,
    * 끝 시각·점심 위치는 parseComciganPeriodTimes에서 추정한다.

@@ -30,9 +30,19 @@ interface ComciganRouteCodes {
   readonly teacherCode: string;
   readonly subjectCode: string;
   readonly baseGridCode: string;
+  /**
+   * 이번 주 일일자료(보강·교체 반영) 키. 없어도 기본 편성표 기능은 그대로 돌아가야 하므로
+   * 필수 코드와 달리 못 찾아도 에러를 내지 않는다(null).
+   */
+  readonly dailyGridCode: string | null;
 }
 
-const ROUTE_REGEXES: Record<keyof ComciganRouteCodes, RegExp> = {
+type RequiredRouteCode = Exclude<keyof ComciganRouteCodes, 'dailyGridCode'>;
+
+/** 선택 코드 — 2026-09-08 실측: `원자료=…자료481…;일일자료=…자료147…` */
+const DAILY_GRID_REGEX = /(?<=일일자료=Q자료\(자료\.자료)\d+/;
+
+const ROUTE_REGEXES: Record<RequiredRouteCode, RegExp> = {
   mainRoute: /(?<=\.\/)\d+(?=\?\d+l)/,
   searchRoute: /(?<=\?)\d+(?=l)/,
   timetableRoute: /(?<=')\d+(?=_')/,
@@ -86,8 +96,8 @@ export class ComciganApiClient implements IComciganPort {
     const buf = await this.transport.fetchRaw('/st');
     const page = new TextDecoder('euc-kr').decode(buf);
 
-    const extracted: Partial<Record<keyof ComciganRouteCodes, string>> = {};
-    for (const key of Object.keys(ROUTE_REGEXES) as (keyof ComciganRouteCodes)[]) {
+    const extracted: Partial<Record<RequiredRouteCode, string>> = {};
+    for (const key of Object.keys(ROUTE_REGEXES) as RequiredRouteCode[]) {
       const match = ROUTE_REGEXES[key].exec(page);
       if (!match) {
         throw new ComciganError(
@@ -98,7 +108,10 @@ export class ComciganApiClient implements IComciganPort {
       extracted[key] = match[0];
     }
 
-    const codes = extracted as ComciganRouteCodes;
+    const codes: ComciganRouteCodes = {
+      ...(extracted as Record<RequiredRouteCode, string>),
+      dailyGridCode: DAILY_GRID_REGEX.exec(page)?.[0] ?? null,
+    };
     this.routeCache = { codes, at: Date.now() };
     return codes;
   }
@@ -136,7 +149,7 @@ export class ComciganApiClient implements IComciganPort {
   }
 
   async getSchoolData(schoolCode: number): Promise<ComciganRawSchoolData> {
-    const { mainRoute, timetableRoute, teacherCode, subjectCode, baseGridCode } =
+    const { mainRoute, timetableRoute, teacherCode, subjectCode, baseGridCode, dailyGridCode } =
       await this.getRouteCodes();
 
     // 쿼리는 "{라우트}_{학교코드}_0_1" 의 base64 (ASCII 전용이라 btoa 안전)
@@ -150,6 +163,11 @@ export class ComciganApiClient implements IComciganPort {
       throw new ComciganError('SERVICE_CHANGED', '컴시간 시간표 데이터 구조가 예상과 달라요.');
     }
 
+    // 이번 주 일일자료 — 보강·교체가 반영된 격자. 원자료와 같은 좌표계([학년][반][요일][교시])이며
+    // 바뀐 칸은 '>' 접두 코드로 온다. 없으면(코드 미발견·응답 누락) 기본 편성표만으로 진행한다.
+    const dailyGridRaw = dailyGridCode ? json[`자료${dailyGridCode}`] : undefined;
+    const dailyGrid = Array.isArray(dailyGridRaw) ? (dailyGridRaw as ComciganGrid) : undefined;
+
     const separatorRaw = json['분리'];
     // 교시별 시각(일과시간)은 학교가 입력하지 않았으면 미제공 — 있을 때만 통과시킨다.
     const dayTimesRaw = json['일과시간'];
@@ -162,6 +180,7 @@ export class ComciganApiClient implements IComciganPort {
       subjects: subjects.map((s) => (typeof s === 'string' ? s : '')),
       separator: typeof separatorRaw === 'number' && separatorRaw > 0 ? separatorRaw : 100,
       baseGrid: baseGrid as ComciganGrid,
+      ...(dailyGrid ? { dailyGrid } : {}),
       ...(dayTimes && dayTimes.length > 0 ? { dayTimes } : {}),
     };
   }

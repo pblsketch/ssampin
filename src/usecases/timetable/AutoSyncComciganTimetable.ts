@@ -12,6 +12,7 @@ import type { ComciganTeacherFingerprint } from '@domain/entities/Settings';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
 import {
   buildTeacherSchedule,
+  decodeDailyTimetable,
   decodeTimetable,
   summarizeTeachers,
 } from '@domain/rules/comciganRules';
@@ -20,6 +21,18 @@ import { diffTeacherSchedule } from '@domain/rules/timetableDiff';
 import type { TimetableDiffResult } from '@domain/rules/timetableDiff';
 
 export type ComciganSyncSkipReason = 'no-fingerprint' | 'fetch-failed' | 'no-match';
+
+/**
+ * 이번 주 변경 — 컴시간 일일자료(보강·교체 반영)로 만든 이 교사의 이번 주 시간표와,
+ * 같은 응답의 기본 편성표(원자료)로 만든 시간표의 차이. 기본 편성표 diff(`changed`)와는
+ * 별개다: 기본 편성표는 그대로인데 이번 주만 몇 칸 달라진 경우가 바로 이것이다.
+ */
+export interface ComciganWeeklyChanges {
+  /** 이번 주 실제 시간표(보강·교체 반영) */
+  readonly schedule: TeacherScheduleData;
+  /** 기본 편성표 → 이번 주 시간표 차이 */
+  readonly diff: TimetableDiffResult;
+}
 
 export interface ComciganSyncResult {
   /** 재fetch/매칭 전에 중단됐는지(지문 없음·fetch 실패) */
@@ -32,6 +45,8 @@ export interface ComciganSyncResult {
   readonly data?: TeacherScheduleData;
   readonly diff?: TimetableDiffResult;
   readonly reason?: ComciganSyncSkipReason;
+  /** matched 이고 컴시간이 일일자료를 줬을 때만. 일일자료가 없는 학교는 undefined */
+  readonly weekly?: ComciganWeeklyChanges;
 }
 
 const SKIP = (reason: ComciganSyncSkipReason): ComciganSyncResult => ({
@@ -74,5 +89,22 @@ export async function autoSyncComciganTimetable(
 
   const { schedule } = buildTeacherSchedule(lessons, matched.index);
   const diff = diffTeacherSchedule(currentTeacherSchedule, schedule);
-  return { skipped: false, matched: true, changed: diff.changed, data: schedule, diff };
+
+  // 이번 주 변경: 일일자료의 같은 교사 시간표를 "서버의 기본 편성표"와 견준다(저장본이 아니라).
+  // 저장본과 견주면 기본 편성표 변경과 섞여 무엇이 이번 주만의 것인지 알 수 없다.
+  const dailyLessons = decodeDailyTimetable(data);
+  let weekly: ComciganWeeklyChanges | undefined;
+  if (dailyLessons) {
+    const { schedule: weekSchedule } = buildTeacherSchedule(dailyLessons, matched.index);
+    weekly = { schedule: weekSchedule, diff: diffTeacherSchedule(schedule, weekSchedule) };
+  }
+
+  return {
+    skipped: false,
+    matched: true,
+    changed: diff.changed,
+    data: schedule,
+    diff,
+    ...(weekly ? { weekly } : {}),
+  };
 }
