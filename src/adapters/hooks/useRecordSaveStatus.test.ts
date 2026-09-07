@@ -163,3 +163,23 @@ describe('useRecordSaveStatus — 상태 전이 (UT-1)', () => {
     expect(result.current.isDirty()).toBe(false);
   });
 });
+
+describe('wrapSave 반환값 — 호출부가 폼을 비울지 정하는 근거 (ADR-086 결정 1)', () => {
+  it('★성공하면 true 를 돌려준다', async () => {
+    const { result } = renderHook(() => useRecordSaveStatus());
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.wrapSave(() => Promise.resolve());
+    });
+    expect(ok).toBe(true);
+  });
+
+  it('★실패하면 false 다 - 이 값이 없으면 저장 실패인데 폼을 비워 교사가 쓴 본문이 사라진다', async () => {
+    const { result } = renderHook(() => useRecordSaveStatus());
+    let ok: boolean | undefined;
+    await act(async () => {
+      ok = await result.current.wrapSave(() => Promise.reject(new Error('디스크 오류')));
+    });
+    expect(ok).toBe(false);
+  });
+});

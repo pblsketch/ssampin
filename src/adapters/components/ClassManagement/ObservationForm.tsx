@@ -103,6 +103,17 @@ export function ObservationForm({
   const savingRef = useRef<string | null>(null);
   /** 명시 저장 진행 중 - 키보드 연타로 같은 기록이 두 벌 저장되는 것을 막는다. */
   const explicitSaveRef = useRef(false);
+  /** 연결 재시도가 자기 자신을 부를 수 있게 하는 통로(useCallback 순환 참조 회피). */
+  const linkRef = useRef<
+    | ((
+        recordId: string,
+        savedContent: string,
+        savedSlots: readonly string[],
+        savedDate: string,
+        owner: { readonly topic: TopicSelection | null; readonly ownerRef: string },
+      ) => Promise<{ readonly evidenceId: string; readonly threadId?: string } | null>)
+    | null
+  >(null);
   const dateRef = useRef(date);
   const contentRef = useRef(content);
   const tagsRef = useRef(selectedTags);
@@ -245,6 +256,9 @@ export function ObservationForm({
         }
         return { evidenceId, threadId: topic.threadId };
       } catch (e) {
+        // ★원본은 저장됐다. 연결만 다시 하면 되는 일이라 **재시도 길을 준다**(계획 §5.2).
+        //   재시도가 원본을 새로 만들지 않는 이유: `ensureEvidenceFromSource` 가
+        //   studentRef + sourceId 로 중복을 걸러 기존 근거를 재사용한다(ADR-086 결정 3).
         useToastStore
           .getState()
           .show(
@@ -252,12 +266,19 @@ export function ObservationForm({
               ? `기록은 저장됐습니다 · ${e.message}`
               : '기록은 저장됐지만 주제에 연결하지 못했습니다',
             'error',
+            {
+              label: '연결 다시 시도',
+              onClick: () => {
+                void linkRef.current?.(recordId, savedContent, savedSlots, savedDate, owner);
+              },
+            },
           );
         return null;
       }
     },
     [classId, ensureEvidenceFromSource, moveToNewThread],
   );
+  linkRef.current = linkSavedRecordToTopic;
 
   const retryFailedAttachments = useCallback(
     async (ownerStudentId: string): Promise<void> => {

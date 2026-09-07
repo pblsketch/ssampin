@@ -513,19 +513,34 @@ function InputMode({
    * 저장된 원본을 근거로 올리고 고른 주제에 잇는다(담임 단일 저장 전용).
    * 연결이 실패해도 원본은 되돌리지 않는다 - 되돌리면 교사가 쓴 기록이 사라진다.
    */
+  /**
+   * 저장된 원본을 근거로 올리고 고른 주제에 잇는다.
+   *
+   * ★값을 **인자로 받는다.** 폼 상태를 클로저로 읽으면, 저장 뒤 `resetForm` 이 돌고 난 다음에
+   *   눌리는 재시도가 **빈 본문·빈 주제**로 실행된다.
+   * ★연결만 실패하면 원본은 그대로 두고 재시도 길을 준다(계획 §5.2). 재시도가 원본을 새로
+   *   만들지 않는 이유: `ensureEvidenceFromSource` 가 studentRef + sourceId 로 중복을 걸러
+   *   기존 근거를 재사용한다(ADR-086 결정 3).
+   */
   const linkSavedRecordToTopic = useCallback(
-    async (recordId: string, studentRef: string): Promise<void> => {
-      const topic = selectedTopic;
-      if (topic === null) return;
+    async (payload: {
+      readonly recordId: string;
+      readonly studentRef: string;
+      readonly topic: TopicSelection;
+      readonly content: string;
+      readonly date: string;
+      readonly slots: readonly string[];
+    }): Promise<void> => {
+      const { recordId, studentRef, topic } = payload;
       try {
         const { evidenceId } = await ensureEvidenceFromSource({
           studentRef,
           areas: [],
-          content: memo,
+          content: payload.content,
           sourceType: 'studentRecord',
           sourceId: recordId,
-          date: selectedDate,
-          ...(selectedSlots.length > 0 ? { slots: [...selectedSlots] } : {}),
+          date: payload.date,
+          ...(payload.slots.length > 0 ? { slots: [...payload.slots] } : {}),
           ...(topic.kind === 'existing' ? { threadId: topic.threadId } : {}),
         });
         if (topic.kind === 'new') {
@@ -541,19 +556,15 @@ function InputMode({
             ? `기록은 저장됐습니다 · ${e.message}`
             : '기록은 저장됐지만 주제에 연결하지 못했습니다',
           'error',
+          { label: '연결 다시 시도', onClick: () => void linkRef.current?.(payload) },
         );
       }
     },
-    [
-      selectedTopic,
-      memo,
-      selectedDate,
-      selectedSlots,
-      ensureEvidenceFromSource,
-      moveToNewThread,
-      showToast,
-    ],
+    [ensureEvidenceFromSource, moveToNewThread, showToast],
   );
+  /** 재시도가 자기 자신을 부를 수 있게 하는 통로(useCallback 순환 참조 회피). */
+  const linkRef = useRef<typeof linkSavedRecordToTopic | null>(null);
+  linkRef.current = linkSavedRecordToTopic;
 
   const resetForm = useCallback(() => {
     setSelectedStudents(new Set());
@@ -590,7 +601,14 @@ function InputMode({
       }
       // 주제 연결도 단일 대상일 때만. 원본이 저장된 뒤에만 부른다(계획 §5.1-1).
       if (selectedTopic !== null && singleTopicStudentRef !== null && recordIds.length === 1) {
-        await linkSavedRecordToTopic(recordIds[0]!, singleTopicStudentRef);
+        await linkSavedRecordToTopic({
+          recordId: recordIds[0]!,
+          studentRef: singleTopicStudentRef,
+          topic: selectedTopic,
+          content: memo,
+          date: selectedDate,
+          slots: selectedSlots,
+        });
       }
       // 저장 결과와 함께 **보드로 가는 길**을 준다. 저장만으로 탭을 옮기지는 않는다(계획 §4.3).
       if (onRequestFlow && singleTopicStudentRef !== null && recordIds.length === 1) {
@@ -640,6 +658,8 @@ function InputMode({
     selectedTopic,
     singleTopicStudentRef,
     linkSavedRecordToTopic,
+    memo,
+    selectedSlots,
     onRequestFlow,
     showToast,
   ]);

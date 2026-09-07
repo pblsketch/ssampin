@@ -123,12 +123,33 @@ describe('recheckBeforeApply — 대화상자를 열어 둔 사이에 바뀌었�
     expect(r).toEqual({ ok: false, reason: 'missing' });
   });
 
-  it('줄바꿈 표기만 달라진 것은 "바뀜"이 아니다', () => {
+  it('★줄바꿈 표기만 달라진 것은 "바뀜"이 아니다', () => {
+    // ★캡처는 LF, 디스크는 CRLF 다. 정규화가 없으면 여기서 'changed' 가 떠, 교사는 아무것도
+    //   안 바꿨는데 계속 재확인을 요구받는다. 예전 이 테스트는 CR 을 아예 넣지 않아 위 케이스의
+    //   복사본이었고, 정규화를 통째로 지워도 통과했다.
+    const crlfCapture: ComparisonCapture = {
+      ...capture,
+      source: { content: '가\n나', date: '2026-09-01', slots: [] },
+    };
     const r = recheckBeforeApply(
-      capture,
-      latest({ source: { content: '원본', date: '2026-09-01', studentRef: 'tc:c1:1-2-3' } }),
+      crlfCapture,
+      latest({
+        source: { content: '가\r\n나', date: '2026-09-01', studentRef: 'tc:c1:1-2-3' },
+      }),
     );
     expect(r.ok).toBe(true);
+  });
+
+  it('★띄어쓰기가 달라진 것은 "바뀜"이다 - 느슨하면 원본 수정이 영영 반영되지 않는다', () => {
+    const spaced: ComparisonCapture = {
+      ...capture,
+      source: { content: '가 나', date: '2026-09-01', slots: [] },
+    };
+    const r = recheckBeforeApply(
+      spaced,
+      latest({ source: { content: '가  나', date: '2026-09-01', studentRef: 'tc:c1:1-2-3' } }),
+    );
+    expect(r).toEqual({ ok: false, reason: 'changed' });
   });
 });
 
