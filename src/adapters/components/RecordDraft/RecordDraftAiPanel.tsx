@@ -48,6 +48,19 @@ import { askOnce, runApi } from '@adapters/components/RecordDraft/ownAiRun';
 import type { KeywordGroup, MaskMapping } from '@domain/privacy/types';
 import { restoreModelText } from '@domain/rules/redactOutbound';
 import { ROLE_BG } from '@adapters/components/RecordDraft/narrativeRoleStyles';
+import {
+  RecordDraftLengthPanel,
+  type LengthAdjustOutcome,
+} from '@adapters/components/RecordDraft/RecordDraftLengthPanel';
+import type { LengthAdjustCandidate } from '@adapters/components/RecordDraft/lengthAdjustRun';
+import type { LengthAdjustKind } from '@domain/rules/recordLengthGoal';
+import {
+  isAreaLimitVerified,
+  resolveAreaLimit,
+  type RecordArea,
+  type SchoolLevel,
+} from '@domain/entities/RecordDraft';
+import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
 
 /** 한 학생분의 초안 재료. 화면(부모)이 실명 그대로 준다 — 가리는 일은 꾸러미가 한다. */
 export interface DraftTarget {
@@ -102,6 +115,34 @@ export interface RecordDraftAiPanelProps {
   readonly onActiveChange?: (studentRefs: readonly string[]) => void;
   /** 큐가 다음 학생으로 넘어갔다 — 부모가 그 학생을 고른 학생으로 바꾼다. */
   readonly onFocusStudent?: (studentRef: string) => void;
+
+  // ── 분량 조절 (ADR-088). 넷이 모두 있어야 섹션이 그려진다. ──
+  /** 영역·학교급 — 한도와 확인 여부는 도메인 함수가 이 둘로부터 구한다(숫자를 따로 받지 않는다). */
+  readonly area?: RecordArea;
+  readonly level?: SchoolLevel;
+  /**
+   * 조절 대상 글을 **누르는 시점에** 읽는다.
+   * ★`target.existingText` 를 쓰면 안 된다 — 그건 **저장된** 값의 렌더 시점 스냅숏이라,
+   *   한도를 넘겨 저장이 거부된 글(정작 조절해야 할 그 글)이 들어 있지 않다.
+   */
+  readonly getSourceText?: () => string;
+  readonly onLengthRun?: (
+    kind: LengthAdjustKind,
+    targetBytes: number,
+  ) => Promise<LengthAdjustOutcome>;
+  readonly onLengthApply?: (
+    picked: LengthAdjustCandidate,
+    outcome: LengthAdjustOutcome,
+    kind: LengthAdjustKind,
+    targetBytes: number,
+  ) => Promise<void>;
+  /** [편집칸에 넣기(저장 안 함)] — 부모가 행에 배달한다. */
+  readonly onInsertToEditor?: (text: string) => void;
+  /**
+   * 화면에 저장되지 않은 입력이 있는가. [뒤에 붙이기]를 막는 데 쓴다.
+   * ★붙이기의 앞글은 **저장된** 글이라, 미저장 입력이 있는 채 누르면 그 입력이 조용히 사라진다.
+   */
+  readonly hasUnsavedInput?: boolean;
 }
 
 type Phase =
@@ -163,6 +204,13 @@ export function RecordDraftAiPanel({
   onRemark,
   onActiveChange,
   onFocusStudent,
+  area,
+  level,
+  getSourceText,
+  onLengthRun,
+  onLengthApply,
+  onInsertToEditor,
+  hasUnsavedInput,
 }: RecordDraftAiPanelProps) {
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
   /** 고른 주제(''=전체 근거). 학생이 바뀌면 부모가 이 패널을 새로 만든다(key). */
@@ -749,15 +797,35 @@ export function RecordDraftAiPanel({
                 ? '바꾸기'
                 : '반영'}
             </button>
-            {selected.draftKey.studentRef === target.studentRef && target.existingText?.trim() && (
-              <button
-                type="button"
-                onClick={() => void applyVersion('append')}
-                className={`bg-sp-card text-sp-text ${btn}`}
-              >
-                뒤에 붙이기
-              </button>
-            )}
+            {selected.draftKey.studentRef === target.studentRef &&
+              target.existingText?.trim() &&
+              // ★조절안 판에는 [뒤에 붙이기]를 아예 그리지 않는다. 원문 + 조절안 합산은 거의 항상
+              //   한도를 넘어 저장이 거부된다 - 눌러도 실패할 버튼을 보여 주지 않는다.
+              selected.adjust === undefined && (
+                <button
+                  type="button"
+                  onClick={() => void applyVersion('append')}
+                  disabled={hasUnsavedInput === true}
+                  title={
+                    hasUnsavedInput === true
+                      ? '저장되지 않은 글이 있어요. 먼저 저장하거나 분량을 줄여 주세요.'
+                      : undefined
+                  }
+                  className={`bg-sp-card text-sp-text ${btn} disabled:opacity-40`}
+                >
+                  뒤에 붙이기
+                </button>
+              )}
+            {/* ★[뒤에 붙이기]의 앞글은 **저장된** 글인데 화면에는 저장 안 된 글이 있다. 그대로
+                누르면 그 입력이 조용히 사라진다 - 막고 이유를 말한다(ADR-088 후속 2). */}
+            {hasUnsavedInput === true &&
+              selected.draftKey.studentRef === target.studentRef &&
+              target.existingText?.trim() &&
+              selected.adjust === undefined && (
+                <p className="w-full text-xs text-sp-muted">
+                  저장되지 않은 글이 있어요. 먼저 저장하거나 분량을 줄여 주세요.
+                </p>
+              )}
             <button
               type="button"
               onClick={() => void discardVersion()}
@@ -788,6 +856,34 @@ export function RecordDraftAiPanel({
           </div>
         </div>
       )}
+
+      {/* 4-2. 분량 조절 (ADR-088) — 조절 대상 글은 누르는 시점에 등록부에서 새로 읽는다. */}
+      {area !== undefined &&
+        level !== undefined &&
+        getSourceText &&
+        onLengthRun &&
+        onLengthApply &&
+        onInsertToEditor && (
+          <RecordDraftLengthPanel
+            area={area}
+            level={level}
+            areaLimit={resolveAreaLimit(area, level)}
+            areaLimitVerified={isAreaLimitVerified(area, level)}
+            getSourceText={getSourceText}
+            detectProhibited={(text) => summarizeProhibited(detectProhibitedTerms(text))}
+            evidenceCount={targetForRun.evidences.length}
+            {...(pickedThread !== null ? { threadTitle: pickedThread.title } : {})}
+            {...(selected !== null && selected.adjust === undefined
+              ? {
+                  sourceVersionLabel: `AI 초안 v${versions.findIndex((v) => v.id === selected.id) + 1}`,
+                }
+              : {})}
+            lockedByOther={phase.kind === 'running' || remarking}
+            onRun={onLengthRun}
+            onApply={onLengthApply}
+            onInsertOnly={onInsertToEditor}
+          />
+        )}
 
       {/* 5. 형광펜 다시 표시 — 스위치가 켜져 있고 글이 있을 때 */}
       {highlightOn && onRemark && (target.existingText ?? '').trim().length > 0 && (

@@ -59,8 +59,24 @@ import {
 } from '@adapters/components/RecordDraft/RoleHighlightLayer';
 import { ROLE_DOT } from '@adapters/components/RecordDraft/narrativeRoleStyles';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
-
+import { fetchRecordPromptL1 } from '@adapters/di/container';
+import { useConnectedOwnAiProviders } from '@adapters/stores/useOwnAiStatusStore';
+import { useRecordAiDraftStore } from '@adapters/stores/useRecordAiDraftStore';
+import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
+import { goalFloor, type LengthAdjustKind } from '@domain/rules/recordLengthGoal';
+import { aiDraftText } from '@domain/entities/RecordAiDraft';
+import type { DraftPackEvidence } from '@domain/services/recordDraftPack';
+import { runApi } from '@adapters/components/RecordDraft/ownAiRun';
+import {
+  adjustRecordOf,
+  runLengthAdjust,
+  type LengthAdjustCandidate,
+} from '@adapters/components/RecordDraft/lengthAdjustRun';
+import type { LengthAdjustOutcome } from '@adapters/components/RecordDraft/RecordDraftLengthPanel';
 import { rosterFromAll } from '@domain/rules/redactOutbound';
+
+/** 왕복 상한 - 이 시간을 넘기면 잠금을 풀어 화면이 영영 잠기지 않게 한다. */
+const LENGTH_ADJUST_TIMEOUT_MS = 5 * 60_000;
 
 /** 작성주체(담임/교과) — 노출 영역 집합과 작성주체 결속을 결정. */
 type RecordContext = 'homeroom' | 'teaching';
@@ -160,6 +176,18 @@ export function RecordDraftView({
   const allThreads = useInquiryThreadStore((s) => s.records);
   const loadThreads = useInquiryThreadStore((s) => s.load);
   const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
+  const installId = useAssistStore((s) => s.installId);
+  const preferredProvider = useAssistStore((s) => s.provider);
+  const ownAiModels = useAssistStore((s) => s.ownAiModels);
+  const connectedProviders = useConnectedOwnAiProviders();
+  const addAiVersion = useRecordAiDraftStore((s) => s.add);
+  /** 조절을 돌릴 공급자 - 패널과 같은 규칙(고른 것이 연결돼 있으면 그것, 아니면 연결된 첫 번째). */
+  const runProviderForLength =
+    preferredProvider === 'claude' || preferredProvider === 'codex'
+      ? connectedProviders.includes(preferredProvider)
+        ? preferredProvider
+        : (connectedProviders[0] ?? null)
+      : (connectedProviders[0] ?? null);
 
   const [activeArea, setActiveArea] = useState<RecordArea>(areas[0] ?? 'autonomy');
   const [filter, setFilter] = useState<DraftFilter>('all');
@@ -179,6 +207,64 @@ export function RecordDraftView({
    * 보드가 필터를 풀고 스크롤·포커스한다. 한 번 쓰고 나면 보드가 알려 준다.
    */
   const [boardFocus, setBoardFocus] = useState<RecordFlowIntent | null>(null);
+
+  /**
+   * 행이 **지금 화면에 들고 있는 글** 등록부(ADR-088). 행은 여기에 기록만 하고, 부모는 읽기만 한다.
+   *
+   * ★왜 필요한가: 한도를 넘긴 글은 저장이 거부되므로 디스크에 없다. 그런데 분량 조절이
+   *   조절해야 할 것이 바로 그 글이다. 저장소에서 다시 읽으면 조절할 글을 잃는다.
+   * ★키는 행의 마운트 키와 **글자 그대로 같다**(`studentRef:area:subject`). 부모는 `activeArea` 가
+   *   내부 상태라 영역을 바꿔도 다시 만들어지지 않는다. 키를 학생 하나로만 두면 자율 활동에 쓴
+   *   글이 진로 활동 칸의 조절 대상이 되어 **남의 영역 본문이 CLI 로 나간다.**
+   * ★언마운트에서 지우지 않는다. 3축 키를 쓰면 섞일 일이 구조적으로 없고, 지우면 영역을 바꿨다
+   *   돌아왔을 때 저장이 거부된 글이 화면에서도 등록부에서도 사라져 완전히 소실된다.
+   * ★`draftFlushRegistry` 와 **다른 물건**이다. 그건 이동 전에 저장을 밀어 넣는 콜백 등록소이고
+   *   언마운트에서 등록이 풀린다. 이건 부모가 든 "키 → 현재 입력 글" 지도다.
+   */
+  const liveDraftTextRef = useRef(new Map<string, string>());
+  /**
+   * 초안 생성·분량 조절·형광펜 [다시 표시]를 **함께** 막는 잠금과, 늦게 온 결과를 가리는 번호.
+   *
+   * ★패널이 아니라 여기에 둔다. 패널은 학생·영역을 바꾸면 통째로 새로 만들어져서, 잠금을 패널에
+   *   두면 새 인스턴스의 잠금은 초기값이라 CLI 왕복 2건이 동시에 돌고, 옛 인스턴스의 번호는 옛
+   *   클로저에 살아 있어 비교가 언제나 통과한다. 부모는 다시 만들어지지 않는다.
+   * ★반드시 `finally` 에서 풀고 시간 상한을 둔다. 안 그러면 이 화면의 AI 가 통째로 잠긴다.
+   */
+  const aiBusyRef = useRef(false);
+  const aiRunTokenRef = useRef(0);
+
+  /** 행의 마운트 키와 같은 3축 키. 등록부·후보 보관이 모두 이걸 쓴다. */
+  const rowKeyOf = useCallback(
+    (studentRef: string): string =>
+      `${studentRef}:${activeArea}:${areaSubject(activeArea, classSubject) ?? ''}`,
+    [activeArea, classSubject],
+  );
+
+  const noteLiveText = useCallback((key: string, value: string): void => {
+    liveDraftTextRef.current.set(key, value);
+  }, []);
+
+  /**
+   * [편집칸에 넣기] 배달 상자 — 한 번만 배달된다. 토큰이 바뀔 때만 행이 받는다.
+   * ★부모가 행에 값을 쓰는 유일한 자리다(원칙 2의 유일한 예외).
+   */
+  const [deliverBox, setDeliverBox] = useState<{
+    readonly rowKey: string;
+    readonly text: string;
+    readonly token: number;
+  } | null>(null);
+  const deliverTokenRef = useRef(0);
+  const deliverToEditor = useCallback(
+    (studentRef: string, text: string): void => {
+      deliverTokenRef.current += 1;
+      setDeliverBox({
+        rowKey: `${studentRef}:${activeArea}:${areaSubject(activeArea, classSubject) ?? ''}`,
+        text,
+        token: deliverTokenRef.current,
+      });
+    },
+    [activeArea, classSubject],
+  );
 
   /** 형광펜 스위치 — 설정에 기억한다. 켰을 때만 색·범례가 보인다. */
   const highlightOn = useSettingsStore((s) => s.settings.recordHighlightOn === true);
@@ -306,6 +392,32 @@ export function RecordDraftView({
   const draftFor = (studentRef: string): RecordDraft | undefined =>
     getDraft(activeArea, studentRef, subject);
 
+  /**
+   * 분량 조절이 대상으로 삼을 글 — **화면의 현재 입력이 진실**이다.
+   *
+   * ★등록부에 항목이 없을 때 `''` 로 두면 빈 글을 조절하게 된다. 행은 글자를 칠 때만 기록하므로
+   *   **한 번도 안 친 학생은 항목이 없다.** 그때는 저장된 초안을 쓴다 — 타이핑한 적 없는 학생도
+   *   조절할 수 있어야 한다.
+   */
+  const readLiveText = useCallback(
+    (studentRef: string): string =>
+      liveDraftTextRef.current.get(rowKeyOf(studentRef)) ??
+      getDraft(activeArea, studentRef, subject)?.content ??
+      '',
+    [rowKeyOf, getDraft, activeArea, subject],
+  );
+
+  /**
+   * 저장되지 않은 입력이 있는가 — [뒤에 붙이기]를 막을지 판정한다.
+   * ★행의 `flush` 가 쓰는 술어를 **통째로** 쓴다. 앞 조건(`trim().length > 0`)을 빼면 칸을
+   *   완전히 비운 상태가 영구 미저장으로 판정돼 [뒤에 붙이기]가 계속 막힌다.
+   */
+  const hasUnsavedInputFor = (studentRef: string): boolean => {
+    const live = liveDraftTextRef.current.get(rowKeyOf(studentRef));
+    if (live === undefined) return false;
+    return live.trim().length > 0 && live !== (draftFor(studentRef)?.content ?? '');
+  };
+
   const writtenCount = students.filter(
     (s) => (draftFor(s.studentRef)?.content ?? '').trim().length > 0,
   ).length;
@@ -347,6 +459,120 @@ export function RecordDraftView({
       });
     },
     [students, upsertDraft, activeArea, classId, subject, standardTexts, level],
+  );
+
+  /**
+   * 분량 조절 실행 — 부모가 맡는다(ADR-088).
+   *
+   * ★잠금과 실행 번호를 **부모의 기억 상자**에 둔다. 패널에 두면 학생을 바꿨을 때 새 인스턴스의
+   *   잠금은 초기값이라 CLI 왕복 2건이 동시에 돌고, 옛 인스턴스의 번호는 옛 클로저에 살아 있어
+   *   "늦게 온 결과 버리기" 비교가 언제나 통과한다.
+   * ★`finally` 에서 반드시 풀고 시간 상한을 둔다. 안 풀면 이 화면의 AI 가 통째로 잠긴다.
+   */
+  const runLengthAdjustFor = useCallback(
+    async (
+      studentRef: string,
+      displayName: string,
+      evidences: readonly DraftPackEvidence[],
+      threadTitle: string | undefined,
+      kind: LengthAdjustKind,
+      targetBytes: number,
+    ): Promise<LengthAdjustOutcome> => {
+      const api = runApi();
+      if (!api || !runProviderForLength) throw new Error(OWN_AI_ERROR_MESSAGES.crashed.draft);
+      if (aiBusyRef.current) throw new Error('다른 AI 작업이 끝나면 이어서 할 수 있어요.');
+
+      // ★규정(1층 프롬프트)을 먼저 받는다. 없으면 실행하지 않는다 - 조절도 같은 게이트를 받는다.
+      const systemPrompt = await fetchRecordPromptL1(installId);
+      if (systemPrompt === null) throw new Error(OWN_AI_ERROR_MESSAGES['prompt-unavailable'].draft);
+
+      aiBusyRef.current = true;
+      aiRunTokenRef.current += 1;
+      const token = aiRunTokenRef.current;
+      const timeout = setTimeout(() => {
+        aiBusyRef.current = false;
+      }, LENGTH_ADJUST_TIMEOUT_MS);
+      try {
+        const outcome = await runLengthAdjust({
+          api,
+          provider: runProviderForLength,
+          systemPrompt,
+          pack: {
+            kind,
+            studentName: displayName,
+            roster,
+            areaLabel: RECORD_AREA_LABELS[activeArea],
+            sourceText: readLiveText(studentRef),
+            targetBytes,
+            ...(threadTitle !== undefined ? { threadTitle } : {}),
+            ...(kind === 'expand' ? { evidences } : {}),
+          },
+          floorBytes: goalFloor(targetBytes),
+        });
+        // 늦게 온 결과는 버린다 — 그 사이 다른 실행이 시작됐다면 이 결과는 화면의 것이 아니다.
+        if (token !== aiRunTokenRef.current)
+          throw new Error('다른 작업이 시작되어 결과를 버렸어요.');
+        return outcome;
+      } finally {
+        clearTimeout(timeout);
+        aiBusyRef.current = false;
+      }
+    },
+    [runProviderForLength, installId, roster, activeArea, readLiveText],
+  );
+
+  /**
+   * [이 글로 바꾸기] — 고른 후보를 **판으로 남기고** 초안 칸에 반영한다.
+   *
+   * ★디스크로 가는 것은 선생님이 고른 하나뿐이다. 자동 재조정의 나머지 후보는 화면(패널 상태)에만
+   *   있다가 사라진다 — 판 상한 20개를 두 배로 갉아먹지 않기 위해서다(ADR-088 결정 7).
+   * ★`upsert` 가 한도 초과로 던지면 그대로 올려 보낸다. 조용히 삼키면 안 된다(C0 (ㄱ)과 같은 이유).
+   */
+  const applyLengthAdjust = useCallback(
+    async (
+      studentRef: string,
+      picked: LengthAdjustCandidate,
+      outcome: LengthAdjustOutcome,
+      kind: LengthAdjustKind,
+      targetBytes: number,
+      sourceVersionId: string | undefined,
+      threadId: string | undefined,
+    ): Promise<void> => {
+      if (!runProviderForLength) return;
+      const text = aiDraftText({ paragraphs: picked.paragraphs });
+      await addAiVersion({
+        draftKey: {
+          area: activeArea,
+          studentRef,
+          ...(subject !== undefined ? { subject } : {}),
+          ...(classId !== undefined ? { classId } : {}),
+        },
+        provider: runProviderForLength,
+        ...(ownAiModels[runProviderForLength] ? { model: ownAiModels[runProviderForLength] } : {}),
+        // 주제는 **조절 대상 판**의 것을 물려받는다. 화면의 현재 칩이 아니다.
+        ...(threadId !== undefined ? { threadId } : {}),
+        paragraphs: picked.paragraphs,
+        excluded: picked.excluded,
+        adjust: adjustRecordOf({
+          kind,
+          targetBytes,
+          sourceText: outcome.sourceText,
+          candidates: outcome.candidates,
+          picked,
+          ...(sourceVersionId !== undefined ? { sourceVersionId } : {}),
+        }),
+      });
+      await applyAiDraft(
+        studentRef,
+        text,
+        picked.paragraphs.some((p) => p.role !== null)
+          ? picked.paragraphs
+              .filter((p) => p.text.trim().length > 0)
+              .map((p) => ({ role: p.role, text: p.text.trim() }))
+          : null,
+      );
+    },
+    [runProviderForLength, addAiVersion, activeArea, subject, classId, ownAiModels, applyAiDraft],
   );
 
   /** [다시 표시] — 본문은 그대로, 표식만 갱신한다. */
@@ -771,6 +997,11 @@ export function RecordDraftView({
                       highlightOn={highlightOn}
                       showAiButton={ownAiEnabled}
                       {...(standardTexts !== undefined ? { standardTexts } : {})}
+                      rowKey={rowKeyOf(s.studentRef)}
+                      onLiveText={noteLiveText}
+                      {...(deliverBox !== null && deliverBox.rowKey === rowKeyOf(s.studentRef)
+                        ? { deliver: deliverBox }
+                        : {})}
                       onSelect={selectStudent}
                       onOpenAi={openAiFor}
                       onOpenBoard={openBoardFor}
@@ -812,6 +1043,32 @@ export function RecordDraftView({
                     onRemark={remarkDraft}
                     onActiveChange={setAiActive}
                     onFocusStudent={selectStudent}
+                    area={activeArea}
+                    level={level}
+                    getSourceText={() => readLiveText(selectedStudent.studentRef)}
+                    onLengthRun={(kind, targetBytes) =>
+                      runLengthAdjustFor(
+                        selectedStudent.studentRef,
+                        selectedStudent.name,
+                        selectedAreaEvidences,
+                        undefined,
+                        kind,
+                        targetBytes,
+                      )
+                    }
+                    onLengthApply={(picked, outcome, kind, targetBytes) =>
+                      applyLengthAdjust(
+                        selectedStudent.studentRef,
+                        picked,
+                        outcome,
+                        kind,
+                        targetBytes,
+                        undefined,
+                        undefined,
+                      )
+                    }
+                    onInsertToEditor={(text) => deliverToEditor(selectedStudent.studentRef, text)}
+                    hasUnsavedInput={hasUnsavedInputFor(selectedStudent.studentRef)}
                   />
                 ) : null
               }
@@ -851,6 +1108,9 @@ function RecordDraftRow({
   highlightOn,
   showAiButton,
   standardTexts,
+  rowKey,
+  onLiveText,
+  deliver,
   onSelect,
   onOpenAi,
   onOpenBoard,
@@ -873,6 +1133,15 @@ function RecordDraftRow({
   showAiButton: boolean;
   /** 이 수업반이 가르친 성취기준 원문 — 복사 검사에만 쓴다(AI 에는 안 간다). */
   standardTexts?: readonly string[];
+  /** 이 행의 3축 마운트 키. 등록부에 기록할 때 쓴다(부모가 만든 것을 그대로 받는다). */
+  rowKey: string;
+  /** 화면의 현재 입력을 부모 등록부에 **기록만** 한다(ADR-088). 부모는 읽기만 한다. */
+  onLiveText: (rowKey: string, value: string) => void;
+  /**
+   * [편집칸에 넣기] 배달 — 한 번만 배달되는 상자. `token` 이 바뀔 때만 편집 칸에 넣는다.
+   * ★부모가 행에 값을 쓰는 **유일한 경로**다. 이 자리에는 §E-2 비교 게이트가 이미 걸려 있다.
+   */
+  deliver?: { readonly rowKey: string; readonly text: string; readonly token: number };
   onSelect: (studentRef: string) => void;
   onOpenAi: (studentRef: string) => void;
   onOpenBoard: (studentRef: string) => void;
@@ -963,9 +1232,30 @@ function RecordDraftRow({
     setText(value);
     // 되돌리기 효과가 이 글을 지우지 못하게 도장을 찍는다(위 lastEditAtRef 주석 참조).
     lastEditAtRef.current = Date.now();
+    // 분량 조절이 볼 "화면의 현재 글"을 부모 등록부에 기록한다. 저장이 거부돼도 이건 남는다.
+    onLiveText(rowKey, value);
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => persist(value), 700);
   };
+
+  /**
+   * [편집칸에 넣기] 배달 — **선생님이 그 글을 방금 친 것과 완전히 같게 취급한다.**
+   *
+   * ★배달은 `onChange` 를 타지 않는데, 등록부 기록도 편집 시각 도장도 **둘 다 타이핑에 걸려 있다.**
+   *   빼먹으면 두 가지가 한꺼번에 무너진다:
+   *   1. 등록부에 조절 전 옛 글이 남아, 넣은 직후 다시 조절하면 옛 글이 대상이 된다.
+   *   2. 도장이 안 찍혀 다음 초점 이동·동기화에 **넣은 글이 그대로 되돌아간다.**
+   *      C0 (ㄴ)을 완벽히 고쳐도 이 경로만 무너진다.
+   */
+  const deliveredTokenRef = useRef(0);
+  useEffect(() => {
+    if (!deliver || deliver.rowKey !== rowKey) return;
+    if (deliver.token === deliveredTokenRef.current) return;
+    deliveredTokenRef.current = deliver.token;
+    setText(deliver.text);
+    lastEditAtRef.current = Date.now();
+    onLiveText(rowKey, deliver.text);
+  }, [deliver, rowKey, onLiveText]);
 
   const flush = (): Promise<boolean> => {
     setFocused(false);
