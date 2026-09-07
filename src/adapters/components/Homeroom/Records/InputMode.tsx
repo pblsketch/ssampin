@@ -131,6 +131,20 @@ function InputMode({
     },
     [addAttachment, showToast],
   );
+  /**
+   * 붙이지 못한 첨부가 **어느 기록** 것인지. 폼을 비운 뒤에도 재시도가 그 기록을 찾아가게 한다.
+   * 맥락을 잃으면 다음에 저장하는 기록에 앞 기록의 파일이 붙는다.
+   */
+  const attachmentRetryRef = useRef<{ readonly recordId: string } | null>(null);
+  const retryFailedAttachments = useCallback(async (): Promise<void> => {
+    const checkpoint = attachmentRetryRef.current;
+    if (checkpoint === null || pendingFilesRef.current.length === 0) return;
+    const allAttached = await commitPendingAttachments(checkpoint.recordId);
+    if (allAttached) {
+      attachmentRetryRef.current = null;
+      showToast('첨부를 모두 붙였습니다.', 'success');
+    }
+  }, [commitPendingAttachments, showToast]);
   const handleAddPendingFiles = useCallback(
     (files: File[], source: ObservationAttachmentSource) => {
       setPendingFiles((prev) => {
@@ -170,8 +184,18 @@ function InputMode({
   const [detailOpen, setDetailOpen] = useState(false);
   const ensureEvidenceFromSource = useRecordEvidenceStore((s) => s.ensureEvidenceFromSource);
   const moveToNewThread = useRecordEvidenceStore((s) => s.moveToNewThread);
-  /** 저장 시 이어 붙일 주제. 학생·날짜가 여럿이면 쓰지 않는다. */
-  const [selectedTopic, setSelectedTopic] = useState<TopicSelection | null>(null);
+  /**
+   * 저장 시 이어 붙일 주제와 **그때 고른 학생**. 학생·날짜가 여럿이면 쓰지 않는다.
+   *
+   * ★주인을 함께 기억하는 이유: 담임은 학생을 여러 명 골랐다 풀 수 있는데 그 지점에 주제를
+   *   지우는 코드가 없었다. A 에게 고른 주제를 그대로 둔 채 C 만 남기고 저장하면 **C 밑에
+   *   A 의 활동 이름으로 새 주제가 생긴다** - `kind:'new'` 는 스토어의 소유권 검사에 걸릴
+   *   대상 자체가 없어 막히지도 않는다. 주인이 다르면 아예 없는 것으로 본다.
+   */
+  const [topicPick, setTopicPick] = useState<{
+    readonly selection: TopicSelection;
+    readonly ownerRef: string;
+  } | null>(null);
   const [selectedStudents, setSelectedStudents] = useState<Set<string>>(new Set());
   const [selectedSub, setSelectedSub] = useState<{
     categoryId: string;
@@ -262,8 +286,11 @@ function InputMode({
       const target = students.find((s) => homeroomStudentRef(s.id) === intent.studentRef);
       if (target) setSelectedStudents(new Set([target.id]));
       // 이어 쓰기는 **빈 본문**이다. 주제만 미리 골라 주고 메모는 건드리지 않는다.
-      if (intent.mode === 'compose' && intent.threadId !== undefined) {
-        setSelectedTopic({ kind: 'existing', threadId: intent.threadId });
+      if (intent.mode === 'compose' && intent.threadId !== undefined && target) {
+        setTopicPick({
+          selection: { kind: 'existing', threadId: intent.threadId },
+          ownerRef: intent.studentRef,
+        });
       }
       onFlowIntentConsumed?.(intent.requestId);
       return;
@@ -279,6 +306,13 @@ function InputMode({
   const singleTopicStudentRef = isSingleTarget
     ? homeroomStudentRef(Array.from(selectedStudents)[0] ?? '')
     : null;
+  /** 지금 고른 학생의 것일 때만 유효한 주제. 주인이 다르면 화면에도 안 보이고 저장에도 안 쓴다. */
+  const selectedTopic: TopicSelection | null =
+    topicPick !== null &&
+    singleTopicStudentRef !== null &&
+    topicPick.ownerRef === singleTopicStudentRef
+      ? topicPick.selection
+      : null;
 
   // 3컬럼 리사이즈 (퍼센트 기반)
   const [leftPct, setLeftPct] = useState(38);
@@ -535,7 +569,7 @@ function InputMode({
     setMultiDateSet(new Set());
     setPendingFiles([]);
     // 장면과 같은 이유로 반드시 지운다 - 남으면 다음 기록이 앞 학생 주제에 묶인다.
-    setSelectedTopic(null);
+    setTopicPick(null);
     setDetailOpen(false);
     resetSaveStatus();
   }, [resetSaveStatus]);
@@ -546,7 +580,10 @@ function InputMode({
       const { recordIds } = await saveForDate(selectedDate);
       // 단일 학생·비출결 1건일 때만 첨부 커밋(대상 record 가 명확). 다중/출결이면 첨부 영역이 비활성이라 pending 이 비어있다.
       if (pendingFilesRef.current.length > 0 && recordIds.length === 1) {
-        await commitPendingAttachments(recordIds[0]!);
+        // ★반환값(성공 여부)을 반드시 본다. 버리면 아래 resetForm 이 방금 보존한 실패분을
+        //   통째로 지워, 토스트는 "다시 시도해 주세요"라고 하는데 다시 시도할 파일이 없다.
+        const allAttached = await commitPendingAttachments(recordIds[0]!);
+        if (!allAttached) attachmentRetryRef.current = { recordId: recordIds[0]! };
       }
       // 주제 연결도 단일 대상일 때만. 원본이 저장된 뒤에만 부른다(계획 §5.1-1).
       if (selectedTopic !== null && singleTopicStudentRef !== null && recordIds.length === 1) {
@@ -573,12 +610,28 @@ function InputMode({
     });
     // ★저장이 실패했으면 폼을 비우지 않는다 — 교사가 쓴 본문과 고른 첨부가 그대로 사라진다(계획 §5.2).
     //   실패 상태(saveStatus=error)로 남겨 두면 같은 폼에서 곧바로 다시 저장할 수 있다.
-    if (ok) resetForm();
+    if (ok) {
+      const failed = pendingFilesRef.current;
+      const retry = attachmentRetryRef.current;
+      resetForm();
+      // ★붙지 못한 첨부는 폼을 비운 뒤에도 되살린다. 대상 기록 id 와 함께 들고 있어야
+      //   재시도가 **그 기록에** 붙는다(맥락을 잃으면 다음 기록에 붙는다).
+      if (retry !== null && failed.length > 0) {
+        pendingFilesRef.current = failed;
+        setPendingFiles(failed);
+        attachmentRetryRef.current = retry;
+        showToast('붙이지 못한 첨부가 남아 있습니다', 'error', {
+          label: '첨부 다시 시도',
+          onClick: () => void retryFailedAttachments(),
+        });
+      }
+    }
   }, [
     saveForDate,
     selectedDate,
     resetForm,
     commitPendingAttachments,
+    retryFailedAttachments,
     wrapSave,
     selectedTopic,
     singleTopicStudentRef,
@@ -954,7 +1007,13 @@ function InputMode({
               content={memo}
               multiTarget={!isSingleTarget}
               selected={selectedTopic}
-              onSelect={setSelectedTopic}
+              onSelect={(sel) =>
+                setTopicPick(
+                  sel !== null && singleTopicStudentRef !== null
+                    ? { selection: sel, ownerRef: singleTopicStudentRef }
+                    : null,
+                )
+              }
             />
 
             {/* 분류·상세 정보 — 위 상태 줄과 같은 펼침 상태를 공유한다. */}
@@ -1476,8 +1535,11 @@ function InputMode({
                             'homeroom',
                             customHomeroomSlots ?? [],
                           );
+                          // ★옛 slots 를 먼저 떼어낸다(useRecordInlineEdit 와 같은 이유).
+                          const { slots: _prevSlots, ...restEditing } = editingRecord;
+                          void _prevSlots;
                           await updateRecord({
-                            ...editingRecord,
+                            ...restEditing,
                             content: editingContent,
                             category: editingCategory,
                             subcategory: editingSubcat,

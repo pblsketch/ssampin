@@ -123,8 +123,13 @@ export function useRecordInlineEdit(studentMap: ReadonlyMap<string, Student>): {
         // ★정규화 후 빈 배열이면 키 자체를 넣지 않는다. 부재 != 빈 배열 -
         //   빈 배열을 저장하면 병합에서 다른 기기의 장면을 덮는다(입력 경로와 같은 규칙).
         const normalizedSlots = normalizeSlots(editSlots, 'homeroom', customHomeroomSlots ?? []);
+        // ★옛 slots 를 **먼저 떼어낸다.** `...record` 를 그대로 펼치면 옛 값이 실려 있어,
+        //   칩을 전부 해제해도 조건부 spread 가 아무것도 안 덮어 옛 장면이 그대로 살아남는다
+        //   (교사가 지운 장면이 조용히 되살아난다). 교과 `ObservationCard` 가 쓰는 방식과 같다.
+        const { slots: _prevSlots, ...restRecord } = record;
+        void _prevSlots;
         await updateRecord({
-          ...record,
+          ...restRecord,
           content: editContent,
           category: editCategory,
           subcategory: editSubcategory,

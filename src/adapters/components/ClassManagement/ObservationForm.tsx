@@ -214,12 +214,14 @@ export function ObservationForm({
       savedContent: string,
       savedSlots: readonly string[],
       savedDate: string,
+      // ★자동저장은 **이전 학생** 맥락으로 부른다. 화면은 이미 다음 학생이라 기본값을 쓰면 남의 학생에 붙는다.
+      owner: { readonly topic: TopicSelection | null; readonly ownerRef: string },
     ): Promise<{ readonly evidenceId: string; readonly threadId?: string } | null> => {
-      const topic = selectedTopic;
+      const topic = owner.topic;
       if (topic === null) return null;
       try {
         const { evidenceId } = await ensureEvidenceFromSource({
-          studentRef: topicStudentRef,
+          studentRef: owner.ownerRef,
           areas: [],
           content: savedContent,
           sourceType: 'observation',
@@ -232,7 +234,7 @@ export function ObservationForm({
         if (topic.kind === 'new') {
           // 주제 생성 + 이동 + 실패 시 보상까지 한 동작으로 처리하는 관문을 그대로 쓴다.
           const made = await moveToNewThread({
-            studentRef: topicStudentRef,
+            studentRef: owner.ownerRef,
             evidenceIds: [evidenceId],
             title: topic.title,
             classId,
@@ -252,7 +254,7 @@ export function ObservationForm({
         return null;
       }
     },
-    [selectedTopic, topicStudentRef, classId, ensureEvidenceFromSource, moveToNewThread],
+    [classId, ensureEvidenceFromSource, moveToNewThread],
   );
 
   const retryFailedAttachments = useCallback(
@@ -340,6 +342,10 @@ export function ObservationForm({
 
       if (savedContent && savingRef.current !== prevId) {
         savingRef.current = prevId;
+        // ★고른 주제도 **이전 학생 맥락으로** 캡처한다. 캡처하지 않으면 원본만 저장되고
+        //   교사가 고른 주제는 아무 말 없이 사라진다(AC-05: 자동저장과 명시 저장은 같은 결과).
+        const savedTopic = selectedTopic;
+        const savedOwnerRef = teachingStudentRef(classId, prevId);
         // 이전 학생의 대기 첨부를 캡처한다. 대기 목록은 비워 새 학생이 물려받지 않게 하되,
         // ★캡처한 목록은 커밋이 끝날 때까지 살아 있다 — 먼저 버리고 결과를 기다리지 않으면
         //   무엇이 붙고 무엇이 실패했는지 영원히 알 수 없다(계획 §5.1-2).
@@ -356,6 +362,11 @@ export function ObservationForm({
           slots: savedSlots,
         })
           .then(async (recordId) => {
+            // 원본이 저장된 뒤에만 잇는다(계획 §5.1-1). 연결이 실패해도 원본은 되돌리지 않는다.
+            await linkSavedRecordToTopic(recordId, savedContent, savedSlots, savedDate, {
+              topic: savedTopic,
+              ownerRef: savedOwnerRef,
+            });
             // ★완료를 기다린다. void 로 떼어 놓으면 실패해도 "자동 저장됨"만 뜬다.
             if (filesToCommit.length > 0) {
               const result = await commitPendingAttachments(recordId, filesToCommit);
@@ -424,6 +435,8 @@ export function ObservationForm({
     studentId,
     commitPendingAttachments,
     retryFailedAttachments,
+    linkSavedRecordToTopic,
+    selectedTopic,
   ]);
 
   useEffect(() => {
@@ -513,7 +526,10 @@ export function ObservationForm({
       // 주제를 골랐을 때만 근거로 올린다. 안 골랐으면 원본은 보드에 거울 카드로 보인다(계획 §5.1-3).
       const linked =
         selectedTopic !== null
-          ? await linkSavedRecordToTopic(recordId, trimmed.slice(0, 500), selectedSlots, date)
+          ? await linkSavedRecordToTopic(recordId, trimmed.slice(0, 500), selectedSlots, date, {
+              topic: selectedTopic,
+              ownerRef: topicStudentRef,
+            })
           : null;
 
       // 저장 결과를 알리고 **보드로 가는 길**을 같이 준다. 저장만으로 탭을 강제로 옮기지
@@ -547,19 +563,31 @@ export function ObservationForm({
         );
       }
       const partial = partialAttachmentMessage(result);
-      // 기록은 저장됐다. 붙지 못한 첨부만 대기 목록에 남겨 다시 시도할 수 있게 한다 —
-      // 여기서 통째로 비우면 성공한 파일과 실패한 파일을 구별할 수 없다(계획 §5.1-2).
+      // 기록은 저장됐다. 붙지 못한 첨부는 **이 기록 것으로** 따로 들고 있다가 다시 시도한다.
+      //
+      // ★대기 목록(`pendingFilesRef`)에 남겨 두면 안 된다. 교사가 이어서 다음 관찰을 쓰고
+      //   저장하면 위 `commitPendingAttachments(recordId, items)` 가 **그 파일을 다음 기록에**
+      //   붙인다 - 앞 관찰의 학생 제출물이 다른 관찰의 증빙이 되는 사고다. 학생 전환 자동저장이
+      //   쓰는 방식(맥락과 함께 보관 + 명시적 재시도)과 같게 맞춘다.
       const remaining = partial ? keepFailed(items, result) : [];
-      pendingFilesRef.current = remaining;
+      if (remaining.length > 0) {
+        attachmentRetryRef.current.set(studentId, { recordId, items: remaining });
+      }
+      pendingFilesRef.current = [];
       draftMapRef.current.delete(studentId);
       setContent('');
       setSelectedTags([]);
       setSelectedSlots([]);
       setSelectedCategory(DEFAULT_OBSERVATION_CATEGORIES[0]);
       setDate(todayString());
-      setPendingFiles(remaining);
+      setPendingFiles([]);
       setSelectedTopic(null);
-      if (partial) useToastStore.getState().show(partial, 'error');
+      if (partial) {
+        useToastStore.getState().show(partial, 'error', {
+          label: '첨부 다시 시도',
+          onClick: () => void retryFailedAttachments(studentId),
+        });
+      }
     } finally {
       setSaving(false);
     }
@@ -577,6 +605,7 @@ export function ObservationForm({
     linkSavedRecordToTopic,
     onRequestFlow,
     topicStudentRef,
+    retryFailedAttachments,
   ]);
 
   const handleKeyDown = useCallback(
