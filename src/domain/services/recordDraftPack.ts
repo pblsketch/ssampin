@@ -194,7 +194,8 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
     parts.push(mask(input.teacherPrompt.trim()));
   }
 
-  // 형광펜 표식(ADR-085) — 문단마다 [동기]/[과정]/[결과]/[평가]. 앱이 색으로 바꾸고 저장 본문에서는 뗀다.
+  // 형광펜 표식(ADR-085) — 문단마다 [평가]/[동기]/[과정]/[결과]. 앱이 색으로 바꾸고 저장 본문에서는 뗀다.
+  // ★교사 평가가 **맨 앞** 문단이다(ADR-094). 1층 프롬프트도 같은 순서를 요구한다 — 둘이 어긋나면 안 된다.
   // ★근거로 되짚기 지시보다 **앞**에 둔다 — 맨 끝(최신성)은 지어내기를 막는 지시의 자리다.
   parts.push('');
   parts.push(NARRATIVE_MARK_INSTRUCTION);

@@ -1,9 +1,13 @@
 /**
- * 서사 역할 형광펜 — 초안 문단이 무엇(동기·과정·결과·평가)인지 표시하는 어휘와 파서(순수).
+ * 서사 역할 형광펜 — 초안 문단이 무엇(평가·동기·과정·결과)인지 표시하는 어휘와 파서(순수).
  *
  * 왜 영역 무관 공통 4종인가(오너 결정 2026-09-06, ADR-085): 교과 세특이든 담임 행특이든 좋은 글의
- * 골격은 같다 — 무엇에서 출발했고(동기·질문) → 무엇을 했고(과정) → 무엇이 나왔고(결과) → 교사가
- * 무엇을 봤나(평가). 영역마다 어휘를 갈라 두면 선생님이 외울 것이 늘고 색의 뜻이 화면마다 달라진다.
+ * 골격은 같다 — 교사가 무엇을 봤나(평가) → 무엇에서 출발했고(동기·질문) → 무엇을 했고(과정) →
+ * 무엇이 나왔나(결과). 영역마다 어휘를 갈라 두면 선생님이 외울 것이 늘고 색의 뜻이 화면마다 달라진다.
+ *
+ * ★**교사 평가가 맨 앞이다**(오너 결정 2026-09-08, ADR-094). 예전에는 평가가 맨 뒤였다. 생기부를 읽는
+ * 사람이 가장 먼저 보는 것은 "이 학생을 교사가 어떤 사람으로 봤는가"이고, 그 뒤의 탐구 서사는 그
+ * 판단의 근거로 읽힌다. 그래서 `NARRATIVE_ROLES` 의 순서가 곧 글의 순서다 — 범례도 이 순서로 뜬다.
  *
  * 표식 주체는 AI 다. `recordDraftPack` 이 문단 첫머리에 `[동기]` 류 표식을 붙여 달라고 지시하고, 이
  * 파서가 표식을 떼어 역할과 **순수 텍스트**로 나눈다. ★저장되는 `RecordDraft.content` 에는 표식이
@@ -14,27 +18,28 @@
 
 export type NarrativeRole = 'motive' | 'process' | 'result' | 'evaluation';
 
+/** 글에 놓이는 순서. **교사 평가가 맨 앞이다**(ADR-094). 범례·지시문이 모두 이 배열을 따른다. */
 export const NARRATIVE_ROLES: readonly NarrativeRole[] = [
+  'evaluation',
   'motive',
   'process',
   'result',
-  'evaluation',
 ];
 
 /** 범례·툴팁용 한국어 라벨. */
 export const NARRATIVE_ROLE_LABELS: Readonly<Record<NarrativeRole, string>> = {
+  evaluation: '교사 평가',
   motive: '동기·질문',
   process: '과정',
   result: '결과',
-  evaluation: '교사 평가',
 };
 
 /** 모델에게 요구하는 표식 낱말(정본). 파서는 이보다 관대하게 읽는다. */
 export const NARRATIVE_ROLE_MARKS: Readonly<Record<NarrativeRole, string>> = {
+  evaluation: '평가',
   motive: '동기',
   process: '과정',
   result: '결과',
-  evaluation: '평가',
 };
 
 /** 문단 하나 — 역할(없으면 null)과 표식을 뗀 본문. */
@@ -240,5 +245,7 @@ export function alignRoleMarksInline(
 
 /** AI 가 문단마다 붙일 표식 지시 — `recordDraftPack` 과 [다시 표시]가 같은 문장을 쓴다. */
 export const NARRATIVE_MARK_INSTRUCTION =
-  '문단마다 줄 첫머리에 그 문단의 역할을 [동기] [과정] [결과] [평가] 중 하나로 표시하세요. ' +
-  '표식은 문단 첫머리에만, 한 문단에 하나만 씁니다. 문단 사이는 빈 줄로 나눕니다.';
+  '문단마다 줄 첫머리에 그 문단의 역할을 [평가] [동기] [과정] [결과] 중 하나로 표시하세요. ' +
+  '표식은 문단 첫머리에만, 한 문단에 하나만 씁니다. 문단 사이는 빈 줄로 나눕니다. ' +
+  '순서는 반드시 [평가] → [동기] → [과정] → [결과] 입니다. ' +
+  '첫 문단은 교사 평가이고 "~하는 학생임." 으로 끝냅니다.';

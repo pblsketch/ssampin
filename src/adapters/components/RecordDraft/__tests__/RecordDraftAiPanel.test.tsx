@@ -500,7 +500,7 @@ describe('★형광펜 표식 — 저장되는 글에는 표식이 없고 역할
     expect(applied[0]?.text).not.toMatch(/\[(동기|과정|결과|평가)\]/);
     expect(applied[0]?.marks?.map((m) => m.role)).toEqual(['motive', 'process', 'result']);
     // 프롬프트가 표식을 요구한다.
-    expect(runCalls[0]?.prompt).toContain('[동기] [과정] [결과] [평가]');
+    expect(runCalls[0]?.prompt).toContain('[평가] [동기] [과정] [결과]');
   });
 
   it('표식이 하나도 없으면 "표식 없음"을 알리고 글은 그대로 보여 준다', async () => {

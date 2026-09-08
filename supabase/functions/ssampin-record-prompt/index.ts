@@ -39,8 +39,13 @@ import {
 } from '../_shared/cors.ts';
 import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 
-/** 프롬프트가 바뀌면 올린다. 클라이언트는 이 값으로 캐시를 무를지 정한다. */
-const PROMPT_VERSION = 1;
+/**
+ * 프롬프트가 바뀌면 올린다. 클라이언트는 이 값으로 캐시를 무를지 정한다.
+ *
+ * - 1: 초판(2026-08).
+ * - 2: 교사 평가를 **맨 앞**으로 옮기고 첫 문장 어미를 '~하는 학생임.' 으로 고정(ADR-094, 2026-09-08).
+ */
+const PROMPT_VERSION = 2;
 
 /** 클라이언트가 메모리에 얼마나 들고 있어도 되는가. */
 const TTL_SEC = 60 * 60;

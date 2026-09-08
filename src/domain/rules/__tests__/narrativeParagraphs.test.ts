@@ -10,6 +10,8 @@ import {
   sameNarrativeBody,
   splitParagraphs,
   stripNarrativeMarks,
+  NARRATIVE_MARK_INSTRUCTION,
+  NARRATIVE_ROLES,
 } from '../narrativeParagraphs';
 
 describe('parseNarrativeParagraphs', () => {
@@ -139,5 +141,23 @@ describe('alignRoleMarksInline — 한 덩어리 글의 인라인 형광펜', ()
     expect(alignRoleMarksInline('하나. 둘.', undefined)).toEqual([
       { text: '하나. 둘.', role: null, match: null },
     ]);
+  });
+});
+
+/**
+ * 순서 계약(ADR-094) — **교사 평가가 맨 앞이다.**
+ *
+ * 이 배열의 순서가 곧 (1) 화면 범례 순서이고 (2) 모델에게 요구하는 문단 순서다. 셋이 어긋나면
+ * 선생님이 보는 색 순서와 실제 글의 순서가 달라진다. 그래서 글자로 못 박는다.
+ */
+describe('서사 역할 순서', () => {
+  it('교사 평가가 맨 앞이고 그 뒤로 동기·과정·결과다', () => {
+    expect(NARRATIVE_ROLES).toEqual(['evaluation', 'motive', 'process', 'result']);
+  });
+
+  it('모델 지시문도 같은 순서를 요구하고, 첫 문단 어미까지 못 박는다', () => {
+    expect(NARRATIVE_MARK_INSTRUCTION).toContain('[평가] [동기] [과정] [결과]');
+    expect(NARRATIVE_MARK_INSTRUCTION).toContain('[평가] → [동기] → [과정] → [결과]');
+    expect(NARRATIVE_MARK_INSTRUCTION).toContain('~하는 학생임.');
   });
 });
