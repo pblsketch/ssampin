@@ -62,6 +62,7 @@
 2. 근거 정리 보드 2차 — 오너 실기기 확인(설계서 §8 8줄) → v3 와 함께 커밋 → `supabase functions deploy ssampin-ai-models` ✅ 완료(2026-09-07, 실제 호출로 확인).
 3. **060 적용 후 며칠 관찰** — 구버전 예약 취소 문의가 몰리면 되돌리고 v2.5.0 확산을 더 기다린다. 아직 안 닫힌 위험 4건은 런북 §2.
 4. **v2.5.0 실기기 확인** — 통합표 `docs/03-analysis/pre-release-device-qa-20260908.md` 의 오너 잔여분 + 설치본으로 새 기능 왕복.
+5. **상담·설문 교사 Google 신원 전환 — 새 세션에서 ralplan 으로 계획부터**(오너 결정 2026-09-08). 핸드오프·붙여넣을 프롬프트는 비공개 폴더 `E:/test/ssampin-consult-security/HANDOFF-2026-09-08-identity.md` §11. 계획 산출물은 `docs/01-plan/features/consultation-teacher-identity.plan.md` + ADR-095. **이 폴더 문서는 커밋 금지.**
 
 ## 📚 기록 보관
 
