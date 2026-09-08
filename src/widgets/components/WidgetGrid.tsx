@@ -22,6 +22,7 @@ import { WidgetTabBar } from './WidgetTabBar';
 import type { TabFilter } from './WidgetTabBar';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { DEFAULT_WIDGET_STYLE } from '@domain/entities/DashboardTheme';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 interface WidgetGridProps {
   onNavigate?: (page: string) => void;
@@ -203,6 +204,7 @@ export function WidgetGrid({ onNavigate }: WidgetGridProps) {
       )}
 
       <DndContext
+        accessibility={DND_KO_ACCESSIBILITY}
         sensors={sensors}
         collisionDetection={closestCenter}
         onDragStart={handleDragStart}

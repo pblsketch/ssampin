@@ -162,7 +162,7 @@ function MinutesEditor({
         onChange={(v) => set('decisions', v)}
       />
 
-      {!dateOk && <p className="text-xs text-sp-danger">회의한 날을 골라주세요.</p>}
+      {!dateOk && <p className="text-xs text-sp-error">회의한 날을 골라주세요.</p>}
 
       <div className="flex justify-end gap-2">
         <button
@@ -233,7 +233,7 @@ function MinutesCard({
                 type="button"
                 onClick={onDelete}
                 aria-label={`${minutes.title} 지우기`}
-                className="rounded-lg p-1.5 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-danger"
+                className="rounded-lg p-1.5 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-error"
               >
                 <span className="material-symbols-outlined text-icon-sm">delete</span>
               </button>
@@ -339,8 +339,8 @@ export function MinutesView({ departmentId, moduleId }: MinutesViewProps) {
   return (
     <div className="space-y-4">
       {error && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-danger bg-sp-surface p-4">
-          <p className="text-sm leading-relaxed text-sp-danger">{error}</p>
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-error bg-sp-surface p-4">
+          <p className="text-sm leading-relaxed text-sp-error">{error}</p>
           <button
             type="button"
             onClick={clearError}

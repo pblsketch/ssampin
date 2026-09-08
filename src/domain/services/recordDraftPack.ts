@@ -254,6 +254,11 @@ export interface LengthAdjustPack extends DraftPack {
   readonly sourceProhibited: readonly string[];
 }
 
+/** NEIS 바이트를 한글 글자 수로 어림한다(한글 1자 = 3바이트). 모델에게 감을 주는 숫자일 뿐 판정에는 안 쓴다. */
+function approxKoreanChars(bytes: number): number {
+  return Math.max(1, Math.round(bytes / 3));
+}
+
 export function buildLengthAdjustPack(input: LengthAdjustPackInput): LengthAdjustPack {
   const exclusions: DraftPackExclusion[] = [];
   const lines: string[] = [];
@@ -331,17 +336,31 @@ export function buildLengthAdjustPack(input: LengthAdjustPackInput): LengthAdjus
   }
 
   parts.push('');
-  parts.push(`현재 분량: 약 ${neisByteLength(maskedSource).toLocaleString()}바이트`);
+  const sourceBytes = neisByteLength(maskedSource);
+  // ★모델은 바이트를 못 센다 — 한글 기준 글자 수(1자 = 3바이트)를 함께 준다. 실측(2026-09-08):
+  //   바이트만 주면 1,719 → 1,689 로 겨우 줄이고 목표(1,500)를 두 번 다 넘겼다.
   parts.push(
-    `목표 분량: ${floor.toLocaleString()} ~ ${target.toLocaleString()}바이트 (가능한 한 위쪽에 가깝게)`,
+    `현재 분량: 약 ${sourceBytes.toLocaleString()}바이트 (한글 약 ${approxKoreanChars(sourceBytes)}자)`,
   );
+  parts.push(
+    `목표 분량: ${floor.toLocaleString()} ~ ${target.toLocaleString()}바이트 (한글 약 ${approxKoreanChars(floor)}~${approxKoreanChars(target)}자, 가능한 한 위쪽에 가깝게)`,
+  );
+  if (input.kind === 'shrink' && sourceBytes > target) {
+    const cut = sourceBytes - target;
+    parts.push(
+      `반드시 ${target.toLocaleString()}바이트 이하여야 합니다. 지금 글에서 최소 ${cut.toLocaleString()}바이트(한글 약 ${approxKoreanChars(cut)}자)를 빼야 합니다.`,
+    );
+  }
   parts.push('');
   parts.push('지켜야 할 것:');
   if (input.kind === 'shrink') {
     parts.push('1. 위 글에 있는 사실, 활동, 결과, 교사의 평가를 그대로 남기세요.');
-    parts.push('2. 중복된 표현과 늘어지는 설명부터 줄이세요.');
+    parts.push(
+      '2. 먼저 덜 중요한 문장을 통째로 지우고, 그다음 중복된 표현과 늘어지는 설명을 줄이세요. 표현만 다듬어서는 목표에 못 미칩니다.',
+    );
     parts.push('3. 문장을 중간에서 끊지 말고, 완결된 하나의 글로 돌려주세요.');
-    parts.push('4. 설명이나 인사말 없이 줄인 글만 돌려주세요.');
+    parts.push('4. 다 쓴 뒤 글자 수를 세어 목표 위쪽 숫자를 넘으면 문장을 더 지우세요.');
+    parts.push('5. 설명이나 인사말 없이 줄인 글만 돌려주세요.');
   } else {
     parts.push(
       '1. 위 글의 문장과 순서를 최대한 지키고, 빠진 과정과 결과를 근거 자료에서 가져와 채우세요.',

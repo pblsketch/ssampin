@@ -24,6 +24,7 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 interface ClassListProps {
   onAddClass: () => void;
@@ -540,7 +541,12 @@ export function ClassList({ onAddClass, onBeforeSelect }: ClassListProps) {
           </div>
         )}
 
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          accessibility={DND_KO_ACCESSIBILITY}
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext
             items={activeClasses.map((c) => c.id)}
             strategy={verticalListSortingStrategy}

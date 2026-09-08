@@ -17,6 +17,7 @@ import { toLocalDateString } from '@shared/utils/localDate';
 import { KanbanColumn } from '../components/KanbanColumn';
 import { TodoEditModal } from '../components/TodoEditModal';
 import { BucketMoveConfirm } from '../components/BucketMoveConfirm';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 /** 칸 머리 색. '진행 중'만 수동 칸반과 같은 노란색을 쓴다(같은 뜻이므로). */
 const BUCKET_COLOR: Record<AutoBoardBucket, string> = {
@@ -117,7 +118,7 @@ export function AutoBoardView({ categoryFilter }: AutoBoardViewProps) {
         나오지 않습니다.
       </p>
 
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext accessibility={DND_KO_ACCESSIBILITY} sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
           {AUTO_BOARD_BUCKETS.map((bucket) => (
             <div key={bucket}>

@@ -25,6 +25,7 @@ import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
 import { StaffRoomDayEvents } from '@adapters/components/StaffRoom/StaffRoomPlanOverlay';
 import { ScheduleDayTodos } from './ScheduleTodoOverlay';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 interface DayScheduleModalProps {
   date: Date;
@@ -139,6 +140,7 @@ export function DayScheduleModal({
         <div className="flex-1 overflow-y-auto p-4 pl-10 bg-sp-bg/50">
           {hasSortableEvents ? (
             <DndContext
+              accessibility={DND_KO_ACCESSIBILITY}
               sensors={sensors}
               collisionDetection={closestCenter}
               onDragEnd={handleDragEnd}

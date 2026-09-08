@@ -208,6 +208,8 @@ describe('★기록은 왕복 횟수와 고른 쪽을 따로 남긴다', () => {
     insufficient: false,
     excluded: '',
     includedCount: 0,
+    nonDraft: false,
+    nonDraftReason: '',
   });
 
   it('두 번 돌았는데 1차를 골라도 "두 번 돌았다"가 남는다', () => {
@@ -251,5 +253,31 @@ describe('진행 알림', () => {
       onAttempt: spy,
     });
     expect(spy).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('★설명문(거절)은 저장 후보가 아니다 (2026-09-08 R-3)', () => {
+  const REFUSAL =
+    '이 요청은 그대로 수행하기 어렵습니다. - 원문(약 162바이트)에는 구체적 사실이 적어 분량을 채우려면 지어내야 합니다.\n- 추가 근거를 알려주시면 이어서 작성하겠습니다.';
+
+  it('거절문이 오면 nonDraft 로 표시하고 **다시 묻지 않는다**', async () => {
+    const { api, calls } = fakeApi([REFUSAL, '두 번째 답']);
+    const out = await runLengthAdjust({
+      api,
+      provider: 'claude',
+      systemPrompt: '[규정]',
+      pack: packInput({ targetBytes: 1500 }),
+      floorBytes: 1425,
+    });
+    expect(calls).toHaveLength(1);
+    expect(out.candidates).toHaveLength(1);
+    expect(out.candidates[0]?.nonDraft).toBe(true);
+    expect(out.candidates[0]?.nonDraftReason).toContain('설명');
+  });
+
+  it('정상 초안은 nonDraft 가 아니다', () => {
+    const out = measureAnswer('[동기] 왜 그런지 물었다.\n\n[결과] 답을 찾았다.', []);
+    expect(out.nonDraft).toBe(false);
+    expect(out.nonDraftReason).toBe('');
   });
 });

@@ -18,6 +18,7 @@ import {
   type EisenhowerQuadrant,
 } from '@domain/rules/eisenhowerMatrix';
 import { TodoEditModal } from '../components/TodoEditModal';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 interface MatrixViewProps {
   categoryFilter: string | null;
@@ -144,7 +145,7 @@ export function MatrixView({ categoryFilter }: MatrixViewProps): JSX.Element {
           onClose={() => setEditingTodo(null)}
         />
       )}
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext accessibility={DND_KO_ACCESSIBILITY} sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {QUADRANT_ORDER.map((q) => (
             <QuadrantCell

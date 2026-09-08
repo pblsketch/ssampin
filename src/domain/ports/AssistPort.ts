@@ -43,6 +43,15 @@ export interface AssistToolCallPayload {
   readonly rawArguments: string;
 }
 
+/**
+ * 진행 중인 질문을 멈출 수 있는 포트. "내 AI"(구독 CLI) 포트만 구현한다 —
+ * 쌤핀 AI(중계 서버) 요청은 짧아서 멈출 틈이 없고, 멈춰도 서버 쪽 비용은 이미 나갔다.
+ * (2026-09-08 실기기 대행 QA R-6: 패널·초안 어디에도 [중단]이 없어 긴 답을 기다릴 수밖에 없었다.)
+ */
+export interface CancelableAssistPort {
+  cancel(): void;
+}
+
 export interface AssistRequestPayload {
   readonly installId: string;
   readonly turns: readonly AssistTurnPayload[];

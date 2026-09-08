@@ -60,7 +60,7 @@ function TallyBar({
       {total > 0 && (
         <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-sp-surface">
           <div className="bg-sp-accent" style={{ width: `${(agree / total) * 100}%` }} />
-          <div className="bg-sp-danger" style={{ width: `${(disagree / total) * 100}%` }} />
+          <div className="bg-sp-error" style={{ width: `${(disagree / total) * 100}%` }} />
           <div className="bg-sp-muted" style={{ width: `${(abstain / total) * 100}%` }} />
         </div>
       )}
@@ -260,7 +260,7 @@ function DiscussionDetail({ departmentId }: { departmentId: string }) {
                   }
                 }}
                 aria-label="안건 지우기"
-                className="rounded-lg p-2 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-danger"
+                className="rounded-lg p-2 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-error"
               >
                 <span className="material-symbols-outlined text-icon-sm">delete</span>
               </button>
@@ -386,8 +386,8 @@ export function DiscussionView({ departmentId, moduleId }: DiscussionViewProps) 
   return (
     <div className="space-y-4">
       {error && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-danger bg-sp-surface p-4">
-          <p className="text-sm leading-relaxed text-sp-danger">{error}</p>
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-error bg-sp-surface p-4">
+          <p className="text-sm leading-relaxed text-sp-error">{error}</p>
           <button
             type="button"
             onClick={clearError}

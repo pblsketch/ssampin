@@ -27,7 +27,12 @@ import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
 import type { KeywordGroup } from '@domain/privacy/types';
-import type { AssistDegraded, AssistPort, AssistTurnPayload } from '@domain/ports/AssistPort';
+import type {
+  AssistDegraded,
+  AssistPort,
+  AssistTurnPayload,
+  CancelableAssistPort,
+} from '@domain/ports/AssistPort';
 import { toModelToolSchemas } from '@domain/services/assistToolRegistry';
 import { AssistBlockedError } from '@domain/ports/AssistPort';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
@@ -207,6 +212,11 @@ interface AssistActions {
   screenDraft: () => AssistInputScreening;
   clearConversation: () => void;
   /**
+   * 진행 중인 답을 멈춘다(2026-09-08 R-6). "내 AI" 포트만 멈출 수 있다 — 쌤핀 AI 요청은
+   * 짧아서 멈출 틈이 없고, 그 포트는 `cancel` 이 없어 아무 일도 하지 않는다.
+   */
+  stop: () => void;
+  /**
    * @param roster 학생 이름 명단. **domain 이 스토어를 import 하지 않으므로 주입한다.**
    *   생략할 수 없게 필수로 뒀다 — 빠뜨리면 이름이 그대로 나간다(QA 에서 실제로 그랬다).
    */
@@ -368,6 +378,18 @@ function sameToolWriteCalls(
   return writes.filter((call) => call.name === first.name).slice(0, 6);
 }
 
+/**
+ * 지금 답을 만들고 있는 포트. 저장하지 않는 값이라 스토어 밖에 둔다 — `ask` 가 넣고 [중단]이 쓴다.
+ * 포트가 `cancel` 을 모르면(쌤핀 AI) 멈추기는 아무 일도 하지 않는다.
+ */
+let activePort: AssistPort | null = null;
+
+function cancelable(port: AssistPort | null): CancelableAssistPort | null {
+  if (port === null) return null;
+  const maybe = port as Partial<CancelableAssistPort>;
+  return typeof maybe.cancel === 'function' ? (maybe as CancelableAssistPort) : null;
+}
+
 export const useAssistStore = create<AssistStore>()(
   persist(
     (set, get) => ({
@@ -468,6 +490,11 @@ export const useAssistStore = create<AssistStore>()(
 
       screenDraft: () => screenAssistInput(get().draft),
 
+      stop: () => {
+        // 멈춤 자체는 main 이 한다. 결과(`cancelled`)는 `ask` 의 catch 가 턴에 적는다.
+        cancelable(activePort)?.cancel();
+      },
+
       clearConversation: () => {
         // ★[실행]으로 저장이 진행 중이면 지우지 않는다 (2026-08-24 UltraQA P2).
         //   지우면 settleProposal 이 결과를 적을 턴이 사라져, **저장은 됐는데 화면에는
@@ -496,6 +523,7 @@ export const useAssistStore = create<AssistStore>()(
         //   "내 AI"(선생님 본인 구독 CLI)는 서버를 거치지 않으므로 이 관문에 걸리지 않는다 —
         //   대신 그쪽은 자체 고지(acknowledgedOwnAiNoticeVersion)를 따로 받는다.
         if (!get().enabled && get().provider === 'ssampin') return;
+        activePort = port;
 
         // ★계획서: "실행 없이 대화가 이어지면 제안은 소멸".
         //   다음 질문을 던지는 순간 앞 제안의 [실행] 버튼은 죽는다 — 한참 전에 말한

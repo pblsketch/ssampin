@@ -18,6 +18,7 @@ import {
   type NarrativeParagraph,
 } from '@domain/rules/narrativeParagraphs';
 import { stripInsufficientMark } from '@domain/rules/recordLengthGoal';
+import { judgeNonDraftReply } from '@domain/rules/nonDraftReply';
 import {
   buildLengthAdjustPack,
   summarizeExclusions,
@@ -40,6 +41,13 @@ export interface LengthAdjustCandidate {
   readonly excluded: string;
   /** 실제로 실린 근거 수(화면이 "근거 6건 사용"을 적는다). */
   readonly includedCount: number;
+  /**
+   * 초안이 아니라 설명(거절·되묻기·목록)이 돌아왔는가(2026-09-08 R-3). 참이면 화면은 이 후보를
+   * **저장 후보로 내놓지 않는다** — [이 글로 바꾸기]도 [편집칸에 넣기]도 없이 사유만 보여 준다.
+   */
+  readonly nonDraft: boolean;
+  /** `nonDraft` 일 때 사람이 읽을 이유. 아니면 빈 문자열. */
+  readonly nonDraftReason: string;
 }
 
 export interface LengthAdjustRunResult {
@@ -71,12 +79,26 @@ export function retryTargetBytes(
 export function measureAnswer(
   raw: string,
   mappings: Parameters<typeof restoreModelText>[1],
-): { paragraphs: readonly NarrativeParagraph[]; bytes: number; insufficient: boolean } {
+): {
+  paragraphs: readonly NarrativeParagraph[];
+  bytes: number;
+  insufficient: boolean;
+  nonDraft: boolean;
+  nonDraftReason: string;
+} {
   const restored = restoreModelText(raw, mappings);
   const { text, insufficient } = stripInsufficientMark(restored);
   const paragraphs = parseNarrativeParagraphs(text);
+  // 거절·되묻기 설명문은 초안이 아니다 — 저장 후보로 세지 않는다(R-3).
+  const verdict = judgeNonDraftReply(text);
   // ★저장될 본문 그대로 센다(`aiDraftText` = 문단을 공백 하나로 이은 것). 프롬프트 길이가 아니다.
-  return { paragraphs, bytes: neisByteLength(aiDraftText({ paragraphs })), insufficient };
+  return {
+    paragraphs,
+    bytes: neisByteLength(aiDraftText({ paragraphs })),
+    insufficient,
+    nonDraft: verdict.nonDraft,
+    nonDraftReason: verdict.reason,
+  };
 }
 
 export interface LengthAdjustRunInput {
@@ -90,6 +112,8 @@ export interface LengthAdjustRunInput {
   readonly floorBytes: number;
   /** 각 왕복 전에 화면에 알린다(진행 문구). */
   readonly onAttempt?: (attempt: 1 | 2) => void;
+  /** [중단]. abort 되면 진행 중 왕복이 `cancelled` 로 거절된다(R-6). */
+  readonly signal?: AbortSignal;
 }
 
 /**
@@ -99,12 +123,12 @@ export interface LengthAdjustRunInput {
  *   그렇게 하면 첫 회만 안전한 기능이 된다(이음매 게이트가 이걸 본다).
  */
 export async function runLengthAdjust(input: LengthAdjustRunInput): Promise<LengthAdjustRunResult> {
-  const { api, provider, systemPrompt, pack, floorBytes, onAttempt } = input;
+  const { api, provider, systemPrompt, pack, floorBytes, onAttempt, signal } = input;
   const candidates: LengthAdjustCandidate[] = [];
 
   onAttempt?.(1);
   const first = buildLengthAdjustPack(pack);
-  const firstRaw = await askOnce(api, provider, first.text, systemPrompt);
+  const firstRaw = await askOnce(api, provider, first.text, systemPrompt, signal);
   const firstOut = measureAnswer(firstRaw, first.mappings);
   candidates.push({
     attempt: 1,
@@ -113,11 +137,14 @@ export async function runLengthAdjust(input: LengthAdjustRunInput): Promise<Leng
     insufficient: firstOut.insufficient,
     excluded: summarizeExclusions(first.exclusions),
     includedCount: first.includedCount,
+    nonDraft: firstOut.nonDraft,
+    nonDraftReason: firstOut.nonDraftReason,
   });
 
   const onTarget = firstOut.bytes <= pack.targetBytes && firstOut.bytes >= floorBytes;
   // ★근거 부족은 재조정에서 제외한다. 다시 물어도 없는 근거가 생기지 않는다.
-  if (onTarget || firstOut.insufficient) {
+  // ★설명문(거절)도 재조정하지 않는다 — 같은 원문으로 다시 물으면 같은 거절이 온다(R-3).
+  if (onTarget || firstOut.insufficient || firstOut.nonDraft) {
     return {
       candidates,
       sourceText: pack.sourceText,
@@ -130,7 +157,7 @@ export async function runLengthAdjust(input: LengthAdjustRunInput): Promise<Leng
     ...pack,
     targetBytes: retryTargetBytes(firstOut.bytes, pack.targetBytes, floorBytes),
   });
-  const secondRaw = await askOnce(api, provider, second.text, systemPrompt);
+  const secondRaw = await askOnce(api, provider, second.text, systemPrompt, signal);
   const secondOut = measureAnswer(secondRaw, second.mappings);
   candidates.push({
     attempt: 2,
@@ -139,6 +166,8 @@ export async function runLengthAdjust(input: LengthAdjustRunInput): Promise<Leng
     insufficient: secondOut.insufficient,
     excluded: summarizeExclusions(second.exclusions),
     includedCount: second.includedCount,
+    nonDraft: secondOut.nonDraft,
+    nonDraftReason: secondOut.nonDraftReason,
   });
 
   return { candidates, sourceText: pack.sourceText, sourceProhibited: first.sourceProhibited };

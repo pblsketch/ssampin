@@ -136,7 +136,7 @@ function EventForm({
         className={`w-full resize-y ${INPUT_CLASS}`}
       />
 
-      {!check.ok && <p className="text-xs text-sp-danger">{check.message}</p>}
+      {!check.ok && <p className="text-xs text-sp-error">{check.message}</p>}
 
       <div className="flex justify-end gap-2">
         <button
@@ -798,8 +798,8 @@ export function PlanView({ departmentId }: PlanViewProps) {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-danger bg-sp-surface p-4">
-          <p className="text-sm leading-relaxed text-sp-danger">{error}</p>
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-error bg-sp-surface p-4">
+          <p className="text-sm leading-relaxed text-sp-error">{error}</p>
           <button
             type="button"
             onClick={clearError}
@@ -908,7 +908,7 @@ export function PlanView({ departmentId }: PlanViewProps) {
                       }
                     }}
                     aria-label={`${event.title} 지우기`}
-                    className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-danger"
+                    className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-error"
                   >
                     <span className="material-symbols-outlined text-icon-sm">delete</span>
                   </button>

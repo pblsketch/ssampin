@@ -49,6 +49,7 @@ function describeForgottenAge(lastClickedAt: string | undefined, now: Date = new
 }
 
 import { BookmarksExpanded } from './BookmarksExpanded';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 interface BookmarksWidgetProps {
   /** false 일 때(모달 확장 뷰) 인라인 CRUD 노출. 기본 true(작은 카드 뷰). */
@@ -245,6 +246,7 @@ function BookmarksWidgetCompact() {
         </div>
       ) : (
         <DndContext
+          accessibility={DND_KO_ACCESSIBILITY}
           sensors={sensors}
           collisionDetection={closestCenter}
           onDragStart={handleDragStart}

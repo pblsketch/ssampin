@@ -15,6 +15,7 @@ import { useRealtimeWallBoardColorScheme } from './RealtimeWallBoardColorSchemeC
 import { RealtimeWallCard } from './RealtimeWallCard';
 import { RealtimeWallCardActions } from './RealtimeWallCardActions';
 import type { RealtimeWallBoardCommonProps } from './types';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 interface RealtimeWallKanbanBoardProps extends RealtimeWallBoardCommonProps {
   readonly columns: readonly RealtimeWallColumn[];
@@ -942,7 +943,11 @@ export function RealtimeWallKanbanBoard({
           {showAddColumn && onAddColumnInline && <AddColumnInlineCard onAdd={onAddColumnInline} />}
         </div>
       ) : (
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <DndContext
+          accessibility={DND_KO_ACCESSIBILITY}
+          sensors={sensors}
+          onDragEnd={handleDragEnd}
+        >
           <div className="flex h-full min-h-0 items-stretch gap-3">
             {postsByColumn.map(({ column, posts: columnPosts }, index) => (
               <KanbanColumnView

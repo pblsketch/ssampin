@@ -68,7 +68,7 @@ function PhotoCard({
           onClick={onDelete}
           aria-label={`${file.name} 지우기`}
           title="지우기"
-          className="absolute right-2 top-2 rounded-lg bg-sp-card/90 p-1.5 text-sp-muted opacity-0 transition-opacity hover:text-sp-danger focus:opacity-100 group-hover:opacity-100"
+          className="absolute right-2 top-2 rounded-lg bg-sp-card/90 p-1.5 text-sp-muted opacity-0 transition-opacity hover:text-sp-error focus:opacity-100 group-hover:opacity-100"
         >
           <span className="material-symbols-outlined text-icon-sm">delete</span>
         </button>
@@ -189,8 +189,8 @@ export function GalleryView({ departmentId, moduleId }: GalleryViewProps) {
       </div>
 
       {error && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-danger bg-sp-surface p-4">
-          <p className="text-sm leading-relaxed text-sp-danger">{error}</p>
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-error bg-sp-surface p-4">
+          <p className="text-sm leading-relaxed text-sp-error">{error}</p>
           <button
             type="button"
             onClick={clearError}

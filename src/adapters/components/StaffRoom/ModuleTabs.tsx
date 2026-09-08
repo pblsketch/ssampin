@@ -233,7 +233,7 @@ export function ModuleManagePanel({ departmentId, modules, myRole }: ModuleManag
                 type="button"
                 onClick={() => void handleDelete(module)}
                 aria-label={`${module.name} 지우기`}
-                className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-danger"
+                className="rounded-lg p-1.5 text-sp-muted transition-colors hover:text-sp-error"
               >
                 <span className="material-symbols-outlined text-icon-sm">delete</span>
               </button>

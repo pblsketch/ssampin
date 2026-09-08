@@ -18,6 +18,7 @@
  *   node scripts/seed-record-flow-test-data.mjs                 # 기본 = %APPDATA%/ssampin/data
  *   node scripts/seed-record-flow-test-data.mjs "D:/경로/data"  # 대상 지정
  *   node scripts/seed-record-flow-test-data.mjs --clean         # 심은 것만 제거
+ *   node scripts/seed-record-flow-test-data.mjs --students=30   # 학생 30명(화면 판단용, 5번부터 근거 없음)
  *
  * ## 무엇이 심어지나 (화면에서 무엇을 볼 수 있나)
  *  - 수업반 '흐름테스트 3-8' 학생 4명 — 담임 학급과 겹치지 않는다.
@@ -115,6 +116,15 @@ const TS = [
   { number: 3, name: '흐름다솜', grade: G, classNum: C },
   { number: 4, name: '흐름라온', grade: G, classNum: C },
 ];
+/**
+ * `--students=30` — 학생을 N명으로 늘린다(5번부터 '흐름학생05'…). 초안 행 30개가 어떻게 보이는지,
+ * 보드 서랍을 덮기/나란히 중 무엇으로 둘지 같은 **화면 판단**용이다. 근거·주제는 앞 4명에게만 있다.
+ */
+const studentsArg = rawArgs.find((a) => a.startsWith('--students='));
+const wantStudents = studentsArg ? Number(studentsArg.slice('--students='.length)) : TS.length;
+for (let n = TS.length + 1; n <= Math.min(60, wantStudents); n += 1) {
+  TS.push({ number: n, name: `흐름학생${String(n).padStart(2, '0')}`, grade: G, classNum: C });
+}
 const sKey = (s) => `${s.grade}-${s.classNum}-${s.number}`;
 /** 수업반 학생의 신원 키 — RecordDraft·RecordEvidence·InquiryThread 가 공유하는 체계. */
 const sRef = (s) => `tc:${CLASS_ID}:${sKey(s)}`;

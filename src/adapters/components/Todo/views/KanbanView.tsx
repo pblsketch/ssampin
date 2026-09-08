@@ -11,6 +11,7 @@ import {
 } from '@domain/rules/todoRules';
 import { KanbanColumn } from '../components/KanbanColumn';
 import { TodoEditModal } from '../components/TodoEditModal';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 const KANBAN_COLUMNS: { key: TodoStatus; label: string; colorClass: string }[] = [
   { key: 'todo', label: '할 일', colorClass: 'bg-blue-500' },
@@ -115,7 +116,7 @@ export function KanbanView({ categoryFilter }: KanbanViewProps) {
           추가
         </button>
       </div>
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+      <DndContext accessibility={DND_KO_ACCESSIBILITY} sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="flex gap-4 h-[calc(100vh-320px)] min-h-[400px]">
           {KANBAN_COLUMNS.map((col) => (
             <KanbanColumn

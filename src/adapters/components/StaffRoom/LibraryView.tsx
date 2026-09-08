@@ -61,7 +61,7 @@ function StorageBar() {
   if (usage.driveLimitBytes <= 0) return null;
 
   const barColor =
-    level === 'full' ? 'bg-sp-danger' : level === 'warn' ? 'bg-sp-highlight' : 'bg-sp-accent';
+    level === 'full' ? 'bg-sp-error' : level === 'warn' ? 'bg-sp-highlight' : 'bg-sp-accent';
 
   return (
     <div className="rounded-xl border border-sp-border bg-sp-card p-4">
@@ -89,7 +89,7 @@ function StorageBar() {
       {message && (
         <p
           className={`mt-2.5 text-xs leading-relaxed ${
-            level === 'full' ? 'text-sp-danger' : 'text-sp-highlight'
+            level === 'full' ? 'text-sp-error' : 'text-sp-highlight'
           }`}
         >
           {message.replace(/\*\*/g, '')}
@@ -199,7 +199,7 @@ function FileRow({
             onClick={onDelete}
             title="지우기"
             aria-label={`${file.name} 지우기`}
-            className="rounded-lg p-2 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-danger"
+            className="rounded-lg p-2 text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-error"
           >
             <span className="material-symbols-outlined text-icon-sm">delete</span>
           </button>
@@ -371,8 +371,8 @@ export function LibraryView({ departmentId, moduleId }: LibraryViewProps) {
       </p>
 
       {error && (
-        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-danger bg-sp-surface p-4">
-          <p className="text-sm leading-relaxed text-sp-danger">{error}</p>
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-sp-error bg-sp-surface p-4">
+          <p className="text-sm leading-relaxed text-sp-error">{error}</p>
           <button
             type="button"
             onClick={clearError}

@@ -10,7 +10,12 @@
  *
  * ★서버(Supabase)를 부르지 않는다. 이 경로는 100% 로컬이다.
  */
-import type { AssistAnswer, AssistPort, AssistRequestPayload } from '@domain/ports/AssistPort';
+import type {
+  AssistAnswer,
+  AssistPort,
+  AssistRequestPayload,
+  CancelableAssistPort,
+} from '@domain/ports/AssistPort';
 import type { AssistAttachmentPayload } from '@domain/entities/AssistAttachment';
 import type {
   OwnAiErrorKind,
@@ -74,8 +79,21 @@ export interface OwnAiAssistPortOptions {
   readonly onDelta?: (text: string) => void;
 }
 
-export class OwnAiAssistPort implements AssistPort {
+export class OwnAiAssistPort implements AssistPort, CancelableAssistPort {
+  /** 지금 도는 실행. [중단]이 이걸 main 에 넘긴다. 끝나면 비운다. */
+  private activeRunId: string | null = null;
+
   constructor(private readonly options: OwnAiAssistPortOptions) {}
+
+  /**
+   * 진행 중인 실행을 멈춘다. main 의 러너가 프로세스를 죽이고 `error/cancelled` 를 흘리므로
+   * `ask` 의 약속은 그 이벤트로 거절된다 — 여기서 따로 거절하지 않는다(두 번 끝내지 않는다).
+   */
+  cancel(): void {
+    const runId = this.activeRunId;
+    if (runId === null) return;
+    bridgeApi()?.cancel(runId);
+  }
 
   async ask(payload: AssistRequestPayload): Promise<AssistAnswer> {
     const api = bridgeApi();
@@ -84,6 +102,7 @@ export class OwnAiAssistPort implements AssistPort {
     }
 
     const runId = newRunId();
+    this.activeRunId = runId;
     const question = lastUserQuestion(payload);
 
     return new Promise<AssistAnswer>((resolve, reject) => {
@@ -103,6 +122,7 @@ export class OwnAiAssistPort implements AssistPort {
         if (ev.type === 'done') {
           settled = true;
           off();
+          if (this.activeRunId === runId) this.activeRunId = null;
           // 도구는 CLI 안에서 이미 실행됐다 — 화면이 다시 실행하지 않게 비워 보낸다.
           resolve({ text: ev.text, degraded: null, toolCalls: [] });
           return;
@@ -110,6 +130,7 @@ export class OwnAiAssistPort implements AssistPort {
         if (ev.type === 'error') {
           settled = true;
           off();
+          if (this.activeRunId === runId) this.activeRunId = null;
           reject(new OwnAiRunError(ev.kind, OWN_AI_ERROR_MESSAGES[ev.kind].panel));
         }
       });

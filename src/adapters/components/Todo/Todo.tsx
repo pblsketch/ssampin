@@ -67,6 +67,7 @@ import { formatDistanceToNow, isToday, isThisWeek, isThisMonth, parseISO } from 
 import { ko } from 'date-fns/locale';
 import { StaffRoomMyTasks } from '@adapters/components/StaffRoom/StaffRoomPlanOverlay';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 type DateFilter = 'all' | 'today' | 'week';
 type ViewMode = 'active' | 'archive';
@@ -1857,6 +1858,7 @@ function TodoGroup({
         <>
           {/* Incomplete items with drag-and-drop */}
           <DndContext
+            accessibility={DND_KO_ACCESSIBILITY}
             sensors={sensors}
             collisionDetection={closestCenter}
             onDragEnd={handleDragEnd}
