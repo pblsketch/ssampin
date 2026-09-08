@@ -705,9 +705,12 @@ const koContent = {
             </li>
             <li>
               <strong>접근 통제</strong> — 클라우드 자료에는 행 수준 접근 제어(RLS)와{' '}
-              <strong>컬럼 단위 권한</strong>을 적용합니다. 교사용 관리 키와 설문 PIN 해시는 공개
-              요청으로 조회할 수 없고, 서명 이미지 보관함은 목록 조회를 차단합니다. 앱의 예약·응답
-              조회는 <strong>해당 일정·설문의 관리 키를 확인하는 경로로만</strong> 동작합니다.
+              <strong>컬럼 단위 권한</strong>을 적용해,{' '}
+              <strong>권한 없는 요청이 다른 사람의 자료를 조회할 수 없도록 차단합니다.</strong> 상담
+              예약과 설문 응답은 표를 직접 읽는 경로 자체를 막았고, 교사용 관리 키와 설문 PIN 해시는
+              공개 요청으로 조회할 수 없으며, 서명 이미지 보관함은 목록 조회를 차단합니다. 앱의
+              예약·응답 조회는 <strong>해당 일정·설문의 관리 키를 확인하는 경로로만</strong>{' '}
+              동작합니다.
             </li>
             <li>
               <strong>식별정보 최소화</strong> — 전자 서명의 접속 IP와 기기정보(User-Agent)는 원문이
@@ -1519,11 +1522,13 @@ const enContent = {
             </li>
             <li>
               <strong>Access control</strong> — cloud data is protected by row-level security (RLS)
-              and <strong>column-level privileges</strong>. Teacher admin keys and survey PIN hashes
-              cannot be read by public requests, and listing of the signature-image bucket is
-              blocked. The app reads bookings and survey responses{' '}
-              <strong>only through a path that verifies the admin key</strong> of that schedule or
-              survey.
+              and <strong>column-level privileges</strong>, so that{' '}
+              <strong>unauthorized requests cannot read other people&rsquo;s data</strong>. Direct
+              table reads of consultation bookings and survey responses are revoked entirely;
+              teacher admin keys and survey PIN hashes cannot be read by public requests; and
+              listing of the signature-image bucket is blocked. The app reads bookings and survey
+              responses <strong>only through a path that verifies the admin key</strong> of that
+              schedule or survey.
             </li>
             <li>
               <strong>Minimizing identifiers</strong> — the access IP and device information
