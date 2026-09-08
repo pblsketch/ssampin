@@ -13,10 +13,10 @@
   서버는 실호출로 확인(`version 2 · 본문 일치`). 되돌리려면 `E:/test/ssampin-prompts/record-prompt-l1.v1.backup-20260908.txt` 를 base64 한 줄로 다시 올린다.
   ★잔여: **실기기 왕복으로 어미 준수 확인**(규칙은 3중이지만 실측 전) · 앱을 켜 둔 채면 캐시 1시간 동안 옛 규정 · 이미 저장된 초안은 안 바뀐다. [기록](docs/progress/2026-09.md).
 
-- **생활기록부 화면 단순화 — 구현·게이트 완료, 미커밋(2026-09-08, [ADR-093](docs/03-decisions/ADR-093.md))**: 집중 보기(학생 목록+넓은 본문)가 기본·전체 훑어보기 유지 · 오른쪽 보조 공간 하나([AI 초안|근거], 닫으면 폭 0; 쌤핀 AI 도크와는 **배타** — 오너 피드백으로 탭 통합은 철회) ·
+- **생활기록부 화면 단순화 — 커밋·푸시 완료 `8232ab22`(2026-09-08, [ADR-093](docs/03-decisions/ADR-093.md); ADR-092 대행 QA 수정은 `39168849`)**: 집중 보기(학생 목록+넓은 본문)가 기본·전체 훑어보기 유지 · 오른쪽 보조 공간 하나([AI 초안|근거], 닫으면 폭 0; 쌤핀 AI 도크와는 **배타** — 오너 피드백으로 탭 통합은 철회) ·
   초안 생성 대상 [고른 N명](체크) · 실행 상태 스토어(`useRecordAiRunStore`: "남은 학생 모두"가 2명째에서 끊기던 결함·분량 조절 결과 소실 결함 수정) · 카드 겉면=내용·출처·상태, 조작은 골랐을 때 · 학급 목록 자동 접기/복원.
   브라우저 합성 30명 1280/1440/1920 담임·교과 실측(가로 스크롤 0·세로 글자 0) → [설계서 §7](docs/02-design/features/record-workspace-simplification.design.md) · 캡처 `output/playwright/record-ux-20260908/after/`.
-  ★잔여: 오너 실기기(Electron)·실제 구독 AI 왕복 확인 · 커밋(`git commit -- <경로>`). 장부 `.omc/ultragoal/plans/record-workspace-simplification-20260908/`. [기록](docs/progress/2026-09.md).
+  ★잔여: 오너 실기기(Electron)·실제 구독 AI 왕복 확인. 장부 `.omc/ultragoal/plans/record-workspace-simplification-20260908/`. [기록](docs/progress/2026-09.md).
 
 - 🔴 **운영 DB 1시간 먹통(2026-09-08 07:30~09:38 KST) → 관리 API 재시작으로 복구.** 30분마다 도는 통계 롤업 크론(job 5)이 출근 부하와 겹쳐 timeout 폭주(Nano 인스턴스, `app_analytics` 하루 7,585행으로 급증). **job 5 는 지금 꺼져 있다**(`cron.alter_job(5, active := false)`) — 관리자 대시보드 롤업은 9/8 07:00 KST 값에서 멈춤. 재활성화 전에 컴퓨트 승격·주기 완화·증분 갱신 중 하나 결정 필요. [기록](docs/progress/2026-09.md).
 - **출시 버전 v2.4.9** (2026-09-04). 릴리즈 기록 → [2026-09](docs/progress/2026-09.md).
