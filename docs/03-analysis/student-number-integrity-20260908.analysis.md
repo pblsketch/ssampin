@@ -84,7 +84,8 @@
 
 ### 재현 스크립트의 상태가 바뀌었다 — 꼭 읽을 것
 
-- `student-number-audit-20260908.cjs` 는 **손대지 않았다.** 수정 전 HEAD `44a950ba` 의 증거로 남긴다.
+- `student-number-audit-20260908.cjs` 의 **assert 는 한 줄도 바꾸지 않았다.** 수정 전 HEAD `44a950ba` 의 증거로 남긴다.
+  (커밋 훅의 prettier 가 줄바꿈만 손봤다 — 판정 내용은 그대로다.)
   이제 이 스크립트는 **첫 assert 에서 실패한다**(1·3번이 나오는데 1·2번을 기대하므로). 그 실패가
   결함이 사라졌다는 뜻이다. **통과하도록 고치지 말 것.**
 - `generateStudentPins` 는 시그니처가 `(count)` → `(studentNumbers)` 로 바뀌었다. 옛 호출은
