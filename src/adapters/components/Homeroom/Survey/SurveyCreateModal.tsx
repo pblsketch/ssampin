@@ -24,8 +24,13 @@ interface QuestionDraft {
 interface SurveyCreateModalProps {
   onClose: () => void;
   classId?: string;
-  /** 교과반 학생 수 (미전달 시 useStudentStore fallback) */
+  /** 교과반 학생 수 (미전달 시 기본 30) */
   targetCount?: number;
+  /**
+   * 응답 대상의 **실제 출석번호 목록**. 결번이 있어도 32·33번이 살아 있어야 하므로
+   * 인원수와 따로 받는다(2026-09-08 검토 D). 미전달 시 `1..targetCount`.
+   */
+  targetNumbers?: readonly number[];
 }
 
 /* ──────────────── 상수 ──────────────── */
@@ -57,10 +62,18 @@ export function SurveyCreateModal({
   onClose,
   classId,
   targetCount: targetCountProp,
+  targetNumbers: targetNumbersProp,
 }: SurveyCreateModalProps) {
   const { createSurvey } = useSurveyStore();
   const showToast = useToastStore((s) => s.show);
-  const resolvedTargetCount = targetCountProp ?? 30;
+  const resolvedTargetNumbers = useMemo(
+    () =>
+      targetNumbersProp && targetNumbersProp.length > 0
+        ? [...targetNumbersProp].sort((a, b) => a - b)
+        : Array.from({ length: targetCountProp ?? 30 }, (_, i) => i + 1),
+    [targetNumbersProp, targetCountProp],
+  );
+  const resolvedTargetCount = resolvedTargetNumbers.length;
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -181,7 +194,7 @@ export function SurveyCreateModal({
       // PIN 생성 (사칭 방지 모드 + 학생 응답 모드일 때)
       let studentPins: Record<number, string> | undefined;
       if (pinProtection && mode === 'student') {
-        studentPins = generateStudentPins(resolvedTargetCount);
+        studentPins = generateStudentPins(resolvedTargetNumbers);
       }
 
       const survey = await createSurvey({
@@ -194,6 +207,7 @@ export function SurveyCreateModal({
         isArchived: false,
         classId,
         targetCount: resolvedTargetCount,
+        targetNumbers: resolvedTargetNumbers,
         customLinkCode:
           mode === 'student' && customLinkCode.trim() ? customLinkCode.trim() : undefined,
         pinProtection: mode === 'student' ? pinProtection : undefined,
@@ -223,6 +237,7 @@ export function SurveyCreateModal({
             dueDate: survey.dueDate,
             adminKey: survey.adminKey,
             targetCount: survey.targetCount ?? 30,
+            targetNumbers: survey.targetNumbers,
             pinProtection: survey.pinProtection,
             studentPinHashes,
           });
@@ -251,6 +266,8 @@ export function SurveyCreateModal({
     classId,
     customLinkCode,
     pinProtection,
+    resolvedTargetCount,
+    resolvedTargetNumbers,
     createSurvey,
     showToast,
     onClose,

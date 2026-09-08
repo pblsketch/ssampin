@@ -20,6 +20,7 @@ interface SurveyRow {
   category_color: string;
   admin_key: string;
   target_count: number;
+  student_numbers: number[] | null;
   is_closed: boolean;
   created_at: string;
 }
@@ -45,6 +46,8 @@ export interface SurveyPublic {
   }>;
   dueDate?: string;
   targetCount: number;
+  /** 응답 가능한 실제 출석번호 목록. 구형 설문(마이그레이션 067 이전)은 없다. */
+  targetNumbers?: readonly number[];
   isClosed: boolean;
 }
 
@@ -91,6 +94,7 @@ export class SurveySupabaseClient {
     dueDate?: string;
     adminKey: string;
     targetCount: number;
+    targetNumbers?: readonly number[];
     pinProtection?: boolean;
     studentPinHashes?: Record<string, string>;
   }): Promise<void> {
@@ -110,6 +114,7 @@ export class SurveySupabaseClient {
         due_date: params.dueDate ?? null,
         admin_key: params.adminKey,
         target_count: params.targetCount,
+        student_numbers: params.targetNumbers ? [...params.targetNumbers] : null,
         pin_protection: params.pinProtection ?? false,
         pin_hashes: params.studentPinHashes ?? null,
       }),
@@ -127,7 +132,7 @@ export class SurveySupabaseClient {
   async getSurvey(id: string): Promise<SurveyPublic | null> {
     this.ensureConfigured();
     const res = await fetch(
-      `${this.baseUrl}/rest/v1/surveys?id=eq.${id}&select=id,title,description,questions,due_date,target_count,is_closed`,
+      `${this.baseUrl}/rest/v1/surveys?id=eq.${id}&select=id,title,description,questions,due_date,target_count,student_numbers,is_closed`,
       { headers: this.headers() },
     );
 
@@ -149,6 +154,7 @@ export class SurveySupabaseClient {
       questions: row.questions as SurveyPublic['questions'],
       dueDate: row.due_date ?? undefined,
       targetCount: row.target_count,
+      ...(row.student_numbers != null ? { targetNumbers: row.student_numbers } : {}),
       isClosed: row.is_closed,
     };
   }

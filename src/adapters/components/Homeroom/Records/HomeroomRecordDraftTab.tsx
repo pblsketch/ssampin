@@ -8,6 +8,7 @@ import {
   RecordDraftView,
   type RecordDraftStudentRow,
 } from '@adapters/components/RecordDraft/RecordDraftView';
+import { numberActiveRoster } from '@domain/rules/rosterNumbering';
 
 interface HomeroomRecordDraftTabProps {
   /** 기록 탭에서 넘어온 왕복 요청(계획 §4.3). */
@@ -26,7 +27,6 @@ export function HomeroomRecordDraftTab({
   const load = useStudentStore((s) => s.load);
   const loaded = useStudentStore((s) => s.loaded);
   const students = useStudentStore((s) => s.students);
-  const activeStudents = useStudentStore((s) => s.activeStudents);
   const schoolLevel = useSettingsStore((s) => s.settings.schoolLevel);
 
   useEffect(() => {
@@ -36,15 +36,15 @@ export function HomeroomRecordDraftTab({
   const level = coerceSchoolLevel(schoolLevel);
 
   const rows: RecordDraftStudentRow[] = useMemo(() => {
-    return activeStudents().map((s, i) => ({
+    // 번호는 명렬표의 실제 출석번호다. 번호가 없거나 겹친 학생만 미사용 번호로 채운다
+    // (배열 위치를 쓰면 결번 뒤 학생 줄에 남의 번호가 찍힌다 — 2026-09-08 검토).
+    return numberActiveRoster(students).map(({ student: s, number }) => ({
       studentRef: homeroomStudentRef(s.id),
-      number: s.studentNumber ?? i + 1,
+      number,
       name: s.name,
       studentId: s.id,
     }));
-    // students 가 바뀌면 activeStudents() 결과도 갱신된다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [students, activeStudents]);
+  }, [students]);
 
   if (!loaded) {
     return (

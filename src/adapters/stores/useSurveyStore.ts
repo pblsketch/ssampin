@@ -19,22 +19,25 @@ interface SurveyState {
   loaded: boolean;
 
   load: () => Promise<void>;
-  createSurvey: (params: Omit<Survey, 'id' | 'createdAt'> & { customLinkCode?: string }) => Promise<Survey>;
+  createSurvey: (
+    params: Omit<Survey, 'id' | 'createdAt'> & { customLinkCode?: string },
+  ) => Promise<Survey>;
   updateSurvey: (survey: Survey) => Promise<void>;
   deleteSurvey: (id: string) => Promise<void>;
   archiveSurvey: (id: string) => Promise<void>;
-  duplicateSurvey: (surveyId: string, newClassId: string, newTargetCount: number) => Promise<Survey>;
+  /** `newTargetNumbers` 는 대상 반의 **실제 출석번호 목록**이다(결번 보존). */
+  duplicateSurvey: (
+    surveyId: string,
+    newClassId: string,
+    newTargetNumbers: readonly number[],
+  ) => Promise<Survey>;
   setLocalEntry: (
     surveyId: string,
     studentId: string,
     questionId: string,
     value: string | boolean,
   ) => Promise<void>;
-  setStudentMemo: (
-    surveyId: string,
-    studentId: string,
-    memo: string,
-  ) => Promise<void>;
+  setStudentMemo: (surveyId: string, studentId: string, memo: string) => Promise<void>;
   getLocalData: (surveyId: string) => SurveyLocalData | undefined;
 }
 
@@ -63,7 +66,9 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     if (shareUrl) {
       try {
         const expiresAt = surveyParams.dueDate
-          ? new Date(new Date(surveyParams.dueDate).getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+          ? new Date(
+              new Date(surveyParams.dueDate).getTime() + 90 * 24 * 60 * 60 * 1000,
+            ).toISOString()
           : undefined; // 기한 없으면 기본 90일
         const result = await shortLinkClient.createShortLink(shareUrl, customLinkCode, expiresAt);
         if (result !== shareUrl) shortUrl = result;
@@ -114,16 +119,16 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
   archiveSurvey: async (id) => {
     const { surveys, localData } = get();
     const next: SurveysData = {
-      surveys: surveys.map((s) =>
-        s.id === id ? { ...s, isArchived: true } : s,
-      ),
+      surveys: surveys.map((s) => (s.id === id ? { ...s, isArchived: true } : s)),
       localData,
     };
     await surveyRepository.save(next);
     set({ surveys: next.surveys });
   },
 
-  duplicateSurvey: async (surveyId, newClassId, newTargetCount) => {
+  duplicateSurvey: async (surveyId, newClassId, newTargetNumbers) => {
+    const targetNumbers = [...newTargetNumbers].sort((a, b) => a - b);
+    const newTargetCount = targetNumbers.length;
     const { surveys } = get();
     const source = surveys.find((s) => s.id === surveyId);
     if (!source) throw new Error('설문을 찾을 수 없습니다');
@@ -149,7 +154,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     // 학생 PIN 재생성 (대상반 학생 수 기준)
     const studentPins =
       source.mode === 'student' && source.pinProtection
-        ? generateStudentPins(newTargetCount)
+        ? generateStudentPins(targetNumbers)
         : undefined;
 
     const duplicated: Survey = {
@@ -163,6 +168,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
       dueDate: source.dueDate,
       classId: newClassId,
       targetCount: newTargetCount,
+      targetNumbers,
       pinProtection: source.mode === 'student' ? source.pinProtection : undefined,
       studentPins,
       shareUrl,
@@ -191,6 +197,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
         dueDate: duplicated.dueDate,
         adminKey: duplicated.adminKey,
         targetCount: duplicated.targetCount ?? newTargetCount,
+        targetNumbers: duplicated.targetNumbers,
         pinProtection: duplicated.pinProtection,
         studentPinHashes,
       });
@@ -230,11 +237,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     }
 
     const updatedLocalData: readonly SurveyLocalData[] = existing
-      ? localData.map((d) =>
-          d.surveyId === surveyId
-            ? { ...d, entries: updatedEntries }
-            : d,
-        )
+      ? localData.map((d) => (d.surveyId === surveyId ? { ...d, entries: updatedEntries } : d))
       : [...localData, { surveyId, entries: updatedEntries }];
 
     const next: SurveysData = { surveys, localData: updatedLocalData };
@@ -254,11 +257,7 @@ export const useSurveyStore = create<SurveyState>((set, get) => ({
     if (!memo) delete updatedMemos[studentId];
 
     const updatedLocalData: readonly SurveyLocalData[] = existing
-      ? localData.map((d) =>
-          d.surveyId === surveyId
-            ? { ...d, studentMemos: updatedMemos }
-            : d,
-        )
+      ? localData.map((d) => (d.surveyId === surveyId ? { ...d, studentMemos: updatedMemos } : d))
       : [...localData, { surveyId, entries: [], studentMemos: updatedMemos }];
 
     const next: SurveysData = { surveys, localData: updatedLocalData };

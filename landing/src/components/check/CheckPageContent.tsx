@@ -301,6 +301,12 @@ function NumberSelectView({
 }) {
   const [selected, setSelected] = useState<number | null>(null);
   const [checking, setChecking] = useState(false);
+  // 선생님이 만든 명단의 **실제 출석번호**만 보여 준다. 결번은 아예 고를 수 없고,
+  // 33번까지 있는 반이면 결번이 있어도 32·33번이 그대로 있다(2026-09-08 검토 D).
+  const answerableNumbers =
+    survey.targetNumbers && survey.targetNumbers.length > 0
+      ? survey.targetNumbers
+      : Array.from({ length: survey.targetCount }, (_, i) => i + 1);
 
   const handleContinue = async () => {
     if (selected === null) return;
@@ -320,7 +326,7 @@ function NumberSelectView({
       <div className="bg-sp-card rounded-xl border border-sp-border p-6">
         <h3 className="text-sm font-bold text-sp-text mb-4">본인의 번호를 선택하세요</h3>
         <div className="grid grid-cols-5 gap-2 mb-6">
-          {Array.from({ length: survey.targetCount }, (_, i) => i + 1).map((num) => (
+          {answerableNumbers.map((num) => (
             <button
               key={num}
               onClick={() => setSelected(num)}

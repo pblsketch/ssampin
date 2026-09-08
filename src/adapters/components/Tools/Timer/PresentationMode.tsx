@@ -4,6 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { numberActiveRoster } from '@domain/rules/rosterNumbering';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 import {
   playAlarmSound,
@@ -104,13 +105,14 @@ export function PresentationMode() {
   // ─── 명단 불러오기 ────────────────────────────
   const loadStudents = useCallback(() => {
     const allStudents = useStudentStore.getState().students;
-    const valid = allStudents.filter((s) => isStudentActive(s) && s.name.trim() !== '');
+    // 여기 `number` 는 학번이다(수업반 경로도 `s.number` 를 쓴다). 배열 위치를 쓰면 결번 뒤
+    // 학생의 번호가 밀려 "번호순" 정렬과 화면 표시가 실제 학번과 어긋난다(2026-09-08 검토).
+    const valid = numberActiveRoster(allStudents).filter(
+      ({ student }) => student.name.trim() !== '',
+    );
     if (valid.length > 0) {
       setPresenters(
-        valid.map((s) => {
-          const idx = allStudents.indexOf(s);
-          return { id: `s-${idx}`, name: s.name, number: idx + 1 };
-        }),
+        valid.map(({ student, number }) => ({ id: `s-${student.id}`, name: student.name, number })),
       );
       setInputMode('students');
     }

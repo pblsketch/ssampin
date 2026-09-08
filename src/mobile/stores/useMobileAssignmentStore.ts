@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Assignment, Submission } from '@domain/entities/Assignment';
 import { storage, assignmentSupabaseClient } from '@mobile/di/container';
+import { matchSubmissionsToStudents } from '@domain/rules/submissionMatching';
 
 interface AssignmentSubmissionStatus {
   total: number;
@@ -73,13 +74,17 @@ export const useMobileAssignmentStore = create<MobileAssignmentState>((set, get)
 
     try {
       const subs = await assignmentSupabaseClient.getSubmissions(assignmentId, adminKey);
+      // 제출 인원은 **명단에 붙은 제출물** 수다. 제출물 개수를 그대로 세면 명단 밖 제출이 섞여
+      // 화면 목록(같은 규칙으로 판정)과 숫자가 어긋난다(2026-09-08 검토 B).
+      const matchedCount = matchSubmissionsToStudents(assignment.target.students, subs).byStudentId
+        .size;
       set((s) => ({
         submissions: { ...s.submissions, [assignmentId]: subs },
         submissionStatus: {
           ...s.submissionStatus,
           [assignmentId]: {
             total: assignment.target.students.length,
-            submitted: subs.length,
+            submitted: matchedCount,
             loading: false,
           },
         },

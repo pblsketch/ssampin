@@ -159,6 +159,7 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
     selectedAssignmentId,
     currentAssignment,
     submissions,
+    unmatchedSubmissions,
     isLoading,
     error,
     loadAssignmentDetail,
@@ -488,6 +489,30 @@ export function AssignmentDetail({ onBack }: AssignmentDetailProps) {
       {currentAssignment.description && (
         <div className="bg-sp-surface/50 rounded-lg px-5 py-3 mb-4 ml-12">
           <p className="text-sm text-sp-muted leading-relaxed">{currentAssignment.description}</p>
+        </div>
+      )}
+
+      {/* 명단에 붙이지 못한 제출물 — 번호만 보고 아무 학생에게나 붙이지 않는다(2026-09-08 검토 B) */}
+      {unmatchedSubmissions.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-5 py-4 mb-4 ml-12">
+          <p className="text-sm font-semibold text-amber-400">
+            명단과 연결하지 못한 제출 {unmatchedSubmissions.length}건
+          </p>
+          <p className="mt-1 text-xs text-sp-muted leading-relaxed">
+            학년·반이 명단과 다르거나, 같은 번호 학생이 여러 명이라 누구 것인지 확정할 수 없습니다.
+            번호만 보고 임의로 연결하지 않았습니다. 아래 목록을 보고 학생에게 확인해 주세요.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {unmatchedSubmissions.map((sub) => (
+              <li key={sub.id} className="text-xs text-sp-text">
+                {sub.studentGrade && sub.studentClass
+                  ? `${sub.studentGrade}학년 ${sub.studentClass}반 `
+                  : ''}
+                {sub.studentNumber}번 {sub.studentName}
+                <span className="text-sp-muted"> · {sub.fileName ?? '텍스트 제출'}</span>
+              </li>
+            ))}
+          </ul>
         </div>
       )}
 

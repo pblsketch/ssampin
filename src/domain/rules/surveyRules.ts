@@ -5,8 +5,17 @@ import type {
   SurveyLocalEntry,
   SurveyResponse,
 } from '@domain/entities/Survey';
-import type { Student } from '@domain/entities/Student';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { numberActiveRoster, type RosterNumberSource } from '@domain/rules/rosterNumbering';
+
+/**
+ * 설문 명단 한 줄 — 담임(`studentNumber`)과 수업반(`number`)을 함께 받는다.
+ * 두 화면이 같은 함수를 쓰므로 필드 이름이 다르다는 사실을 여기서 흡수한다.
+ */
+export interface SurveyRosterStudent extends RosterNumberSource {
+  readonly id: string;
+  readonly name: string;
+}
 
 /* ──────────────── 진행률 ──────────────── */
 
@@ -82,10 +91,14 @@ export function aggregateAnswers(
 export function formatSurveyForClipboard(
   survey: Survey,
   entries: readonly SurveyLocalEntry[],
-  students: readonly Student[],
+  students: readonly SurveyRosterStudent[],
   studentMemos?: Readonly<Record<string, string>>,
 ): string {
   const studentMap = new Map(students.map((s) => [s.id, s]));
+  // ★번호는 배열 위치가 아니라 명렬표의 실제 출석번호다(2026-09-08 검토 C).
+  const numbered = numberActiveRoster(students);
+  const numberOf = new Map(numbered.map((e) => [e.student.id, e.number]));
+  const label = (s: SurveyRosterStudent): string => `${numberOf.get(s.id) ?? '?'}${s.name}`;
   const lines: string[] = [`[${survey.title}]`];
 
   for (const q of survey.questions) {
@@ -99,30 +112,36 @@ export function formatSurveyForClipboard(
       const unanswered = students.filter((s) => isStudentActive(s) && !answered.has(s.id));
 
       const formatNames = (ids: readonly { studentId: string }[]) =>
-        ids.map((e) => {
-          const s = studentMap.get(e.studentId);
-          return s ? `${students.indexOf(s) + 1}${s.name}` : '';
-        }).filter(Boolean).join(', ');
+        ids
+          .map((e) => {
+            const s = studentMap.get(e.studentId);
+            return s ? label(s) : '';
+          })
+          .filter(Boolean)
+          .join(', ');
 
       lines.push(`○ (${yes.length}명): ${formatNames(yes)}`);
       lines.push(`× (${no.length}명): ${formatNames(no)}`);
       if (unanswered.length > 0) {
-        lines.push(`미응답 (${unanswered.length}명): ${unanswered.map((s) => `${students.indexOf(s) + 1}${s.name}`).join(', ')}`);
+        lines.push(`미응답 (${unanswered.length}명): ${unanswered.map(label).join(', ')}`);
       }
     } else if (q.type === 'choice' && q.options) {
       for (const opt of q.options) {
         const matched = qEntries.filter((e) => String(e.value) === opt);
-        const names = matched.map((e) => {
-          const s = studentMap.get(e.studentId);
-          return s ? `${students.indexOf(s) + 1}${s.name}` : '';
-        }).filter(Boolean).join(', ');
+        const names = matched
+          .map((e) => {
+            const s = studentMap.get(e.studentId);
+            return s ? label(s) : '';
+          })
+          .filter(Boolean)
+          .join(', ');
         lines.push(`${opt} (${matched.length}명): ${names}`);
       }
     } else {
       for (const entry of qEntries) {
         const s = studentMap.get(entry.studentId);
         if (s) {
-          lines.push(`${students.indexOf(s) + 1}${s.name}: ${String(entry.value)}`);
+          lines.push(`${label(s)}: ${String(entry.value)}`);
         }
       }
     }
@@ -132,10 +151,7 @@ export function formatSurveyForClipboard(
   if (studentMemos) {
     const memoLines = students
       .filter((s) => isStudentActive(s) && studentMemos[s.id])
-      .map((s, _i) => {
-        const idx = students.filter(isStudentActive).indexOf(s);
-        return `${idx + 1}${s.name}: ${studentMemos[s.id]}`;
-      });
+      .map((s) => `${label(s)}: ${studentMemos[s.id]}`);
     if (memoLines.length > 0) {
       lines.push('[메모]');
       lines.push(...memoLines);
@@ -150,7 +166,7 @@ export function formatSurveyForClipboard(
 export function formatSurveyForCSV(
   survey: Survey,
   entries: readonly SurveyLocalEntry[],
-  students: readonly Student[],
+  students: readonly SurveyRosterStudent[],
   studentMemos?: Readonly<Record<string, string>>,
 ): { columns: { key: string; label: string }[]; rows: Record<string, string>[] } {
   const columns = [
@@ -163,22 +179,20 @@ export function formatSurveyForCSV(
     { key: 'memo', label: '메모' },
   ];
 
-  const rows = students
-    .filter(isStudentActive)
-    .map((s, idx) => {
-      const row: Record<string, string> = {
-        number: String(idx + 1),
-        name: s.name,
-      };
-      survey.questions.forEach((q, i) => {
-        const entry = entries.find(
-          (e) => e.studentId === s.id && e.questionId === q.id,
-        );
-        row[`q${i}`] = entry ? String(entry.value) : '-';
-      });
-      row['memo'] = studentMemos?.[s.id] ?? '';
-      return row;
+  // ★번호는 명렬표의 실제 출석번호다. 예전에는 비활성 학생을 거른 뒤 `idx + 1` 을 써서
+  //   2번이 전출하면 3번 학생 줄에 "2"가 찍혔다(2026-09-08 검토 C).
+  const rows = numberActiveRoster(students).map(({ student: s, number }) => {
+    const row: Record<string, string> = {
+      number: String(number),
+      name: s.name,
+    };
+    survey.questions.forEach((q, i) => {
+      const entry = entries.find((e) => e.studentId === s.id && e.questionId === q.id);
+      row[`q${i}`] = entry ? String(entry.value) : '-';
     });
+    row['memo'] = studentMemos?.[s.id] ?? '';
+    return row;
+  });
 
   return { columns, rows };
 }
@@ -196,22 +210,41 @@ export function getArchivedSurveys(surveys: readonly Survey[]): Survey[] {
 /* ──────────────── PIN 코드 (사칭 방지) ──────────────── */
 
 /**
- * 학생 수만큼 중복 없는 4자리 PIN 생성
- * @param count 학생 수 (1~50)
- * @returns Record<studentNumber, pin> (1-indexed)
+ * 응답 대상 **번호마다** 중복 없는 4자리 PIN 생성.
+ *
+ * ★인원수가 아니라 **번호 목록**을 받는다. 예전에는 `1..인원수` 로 만들어서, 33번까지 있는 반에
+ *   결번 2명이 있으면 32·33번 학생에게 PIN 이 없고 결번 번호에 PIN 이 생겼다(2026-09-08 검토 D).
+ *
+ * @param studentNumbers 응답할 수 있는 실제 출석번호 목록
+ * @returns Record<출석번호, pin>
  */
-export function generateStudentPins(count: number): StudentPinMap {
+export function generateStudentPins(studentNumbers: readonly number[]): StudentPinMap {
+  const targets = [...new Set(studentNumbers)].filter((n) => Number.isFinite(n) && n > 0);
   const pins = new Set<string>();
-  while (pins.size < count) {
+  while (pins.size < targets.length) {
     const pin = String(Math.floor(Math.random() * 10000)).padStart(4, '0');
     pins.add(pin);
   }
   const result: Record<number, string> = {};
   const pinArray = [...pins];
-  for (let i = 0; i < count; i++) {
-    result[i + 1] = pinArray[i]!;
-  }
+  targets.forEach((num, i) => {
+    result[num] = pinArray[i]!;
+  });
   return result;
+}
+
+/**
+ * 이 설문이 실제로 받는 번호 목록. 새 설문은 `targetNumbers`, 구형 설문은 `1..targetCount`.
+ * 학생 화면·교사 화면·PIN 이 전부 이 함수를 본다.
+ */
+export function surveyAnswerableNumbers(survey: {
+  readonly targetNumbers?: readonly number[];
+  readonly targetCount?: number;
+}): number[] {
+  if (survey.targetNumbers !== undefined && survey.targetNumbers.length > 0) {
+    return [...survey.targetNumbers].sort((a, b) => a - b);
+  }
+  return Array.from({ length: survey.targetCount ?? 0 }, (_, i) => i + 1);
 }
 
 /**

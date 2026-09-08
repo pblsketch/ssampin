@@ -7,7 +7,9 @@ import { StudentGrid } from '@adapters/components/Homeroom/shared/StudentGrid';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import type { ReadonlyModeProps } from '@adapters/components/Homeroom/shared/StudentGrid';
 import type { Survey, SurveyResponse, StudentPinMap } from '@domain/entities/Survey';
-import { isStudentActive, isStudentInactive } from '@domain/rules/studentActivity';
+import { isStudentActive } from '@domain/rules/studentActivity';
+import { numberActiveRoster } from '@domain/rules/rosterNumbering';
+import type { Student } from '@domain/entities/Student';
 import { hashPin } from '@infrastructure/crypto/pinHash';
 import { getStudentResponseProgress } from '@domain/rules/surveyRules';
 import type {
@@ -22,8 +24,20 @@ type StudentLike = {
   readonly id: string;
   readonly name: string;
   readonly isVacant?: boolean;
+  readonly status?: Student['status'];
+  /** 수업반 명단의 출석번호 */
   readonly number?: number;
+  /** 담임 명렬표의 출석번호 */
+  readonly studentNumber?: number;
 };
+
+/**
+ * 명단 학생 → 실제 출석번호. 담임은 `studentNumber`, 수업반은 `number` 다.
+ * ★배열 위치(`idx + 1`)를 쓰면 결번 뒤 학생이 남의 응답·PIN 을 받는다(2026-09-08 검토 D).
+ */
+function numberedActive(students: readonly StudentLike[]): (StudentLike & { _num: number })[] {
+  return numberActiveRoster(students).map(({ student, number }) => ({ ...student, _num: number }));
+}
 
 /* ──────────────── Props ──────────────── */
 
@@ -97,6 +111,7 @@ export function SurveyStudentDetail({
             dueDate: survey.dueDate,
             adminKey: survey.adminKey!,
             targetCount: survey.targetCount ?? 30,
+            targetNumbers: survey.targetNumbers,
             pinProtection: survey.pinProtection,
             studentPinHashes,
           });
@@ -145,20 +160,15 @@ export function SurveyStudentDetail({
   const respondedMap = useMemo(() => {
     const map = new Map<string, string>();
     const respondedNumbers = new Set(responses.map((r) => r.studentNumber));
-
-    students.forEach((s, idx) => {
-      if (isStudentInactive(s)) return;
-      const num = s.number ?? idx + 1;
-      map.set(s.id, respondedNumbers.has(num) ? 'responded' : '');
-    });
+    for (const s of numberedActive(students)) {
+      map.set(s.id, respondedNumbers.has(s._num) ? 'responded' : '');
+    }
     return map;
   }, [students, responses]);
 
   /* ── 내보내기 데이터 (로컬 이름 매칭) ── */
   const exportData = useMemo(() => {
-    const nonVacant = students
-      .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
-      .filter(isStudentActive);
+    const nonVacant = numberedActive(students);
     const columns = [
       { key: 'number', label: '번호' },
       { key: 'name', label: '이름' },
@@ -192,6 +202,10 @@ export function SurveyStudentDetail({
   }, [survey, responses, students]);
 
   /* ── ReadonlyMode 설정 ── */
+  const numberById = useMemo(
+    () => new Map(numberedActive(students).map((s) => [s.id, s._num])),
+    [students],
+  );
   const readonlyConfig = useMemo((): ReadonlyModeProps<string> => {
     return {
       mode: 'readonly',
@@ -200,10 +214,8 @@ export function SurveyStudentDetail({
       valueStyle: (v) =>
         v === 'responded' ? 'bg-green-500/20 text-green-400' : 'bg-sp-surface text-sp-muted',
       renderSub: (studentId) => {
-        const sIdx = students.findIndex((s) => s.id === studentId);
-        if (sIdx === -1) return undefined;
-        const s = students[sIdx]!;
-        const num = s.number ?? sIdx + 1;
+        const num = numberById.get(studentId);
+        if (num === undefined) return undefined;
         const resp = responses.find((r) => r.studentNumber === num);
         if (!resp) return undefined;
         const d = new Date(resp.submittedAt);
@@ -214,7 +226,7 @@ export function SurveyStudentDetail({
         return `${mm}/${dd} ${hh}:${mi}`;
       },
     };
-  }, [respondedMap, students, responses]);
+  }, [respondedMap, numberById, responses]);
 
   /* ── 메뉴 핸들러 ── */
   const handleArchive = useCallback(async () => {
@@ -396,9 +408,7 @@ function PinListModal({
   surveyTitle: string;
   onClose: () => void;
 }) {
-  const nonVacant = students
-    .map((s, idx) => ({ ...s, _num: s.number ?? idx + 1 }))
-    .filter(isStudentActive);
+  const nonVacant = numberedActive(students);
 
   const handlePrint = () => {
     window.print();

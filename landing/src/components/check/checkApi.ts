@@ -22,6 +22,11 @@ export interface SurveyPublic {
   }>;
   dueDate?: string;
   targetCount: number;
+  /**
+   * 응답할 수 있는 **실제 출석번호 목록**. 결번이 있어도 32·33번이 살아 있게 한다.
+   * 구형 설문(마이그레이션 067 이전)에는 없으므로 `1..targetCount` 로 되돌아간다.
+   */
+  targetNumbers?: readonly number[];
   isClosed: boolean;
   pinProtection: boolean;
 }
@@ -33,6 +38,7 @@ interface SurveyRow {
   questions: unknown;
   due_date: string | null;
   target_count: number;
+  student_numbers: number[] | null;
   is_closed: boolean;
   pin_protection: boolean;
   pin_hashes: Record<string, string> | null;
@@ -47,7 +53,7 @@ export async function getSurveyPublic(
 ): Promise<SurveyPublic | null | NetworkError> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=id,title,description,questions,due_date,target_count,is_closed,pin_protection`,
+      `${SUPABASE_URL}/rest/v1/surveys?id=eq.${surveyId}&select=id,title,description,questions,due_date,target_count,student_numbers,is_closed,pin_protection`,
       { headers: headers() },
     );
 
@@ -63,6 +69,9 @@ export async function getSurveyPublic(
       questions: row.questions as SurveyPublic['questions'],
       dueDate: row.due_date ?? undefined,
       targetCount: row.target_count,
+      ...(row.student_numbers != null && row.student_numbers.length > 0
+        ? { targetNumbers: [...row.student_numbers].sort((a, b) => a - b) }
+        : {}),
       isClosed: row.is_closed,
       pinProtection: row.pin_protection ?? false,
     };

@@ -4,7 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import { filterByStudent, getAttendanceStats } from '@domain/rules/studentRecordRules';
-import { isStudentActive } from '@domain/rules/studentActivity';
+import { numberActiveRoster } from '@domain/rules/rosterNumbering';
 /* eslint-disable no-restricted-imports */
 import { exportStudentRecordsToExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
@@ -145,14 +145,14 @@ function SearchMode({
     }
 
     const items: JumpListItem[] = [];
-    students.forEach((student, idx) => {
-      if (!isStudentActive(student)) return;
+    // 번호는 배열 위치가 아니라 명렬표의 실제 출석번호다(2026-09-08 검토).
+    numberActiveRoster(students).forEach(({ student, number }) => {
       const w = warnings.get(student.id);
       const hasWarning = !!w && (w.unreported > 0 || w.overdueFollowUp > 0);
       items.push({
         key: student.id,
         label: student.name,
-        number: idx + 1,
+        number,
         count: counts.get(student.id) ?? 0,
         hasWarning,
         warningTitle: hasWarning

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMobileAssignmentStore } from '@mobile/stores/useMobileAssignmentStore';
 import type { Assignment } from '@domain/entities/Assignment';
+import { matchSubmissionsToStudents } from '@domain/rules/submissionMatching';
 
 interface Props {
   onBack: () => void;
@@ -26,7 +27,9 @@ function AssignmentDetail({ assignment, onBack }: { assignment: Assignment; onBa
 
   const status = submissionStatus[assignment.id];
   const subs = submissions[assignment.id] ?? [];
-  const submittedIds = new Set(subs.map((s) => s.studentNumber));
+  // 제출 판정은 데스크톱 상세 화면과 **같은 규칙**을 쓴다(`submissionMatching`).
+  // 예전에는 번호만 비교해서 다른 반 같은 번호 학생이 제출한 것으로 보였다(2026-09-08 검토 B).
+  const matched = matchSubmissionsToStudents(assignment.target.students, subs).byStudentId;
 
   return (
     <div className="flex flex-col h-full">
@@ -36,7 +39,9 @@ function AssignmentDetail({ assignment, onBack }: { assignment: Assignment; onBa
         </button>
         <div className="flex-1 min-w-0">
           <h2 className="text-base font-bold text-sp-text truncate">{assignment.title}</h2>
-          <p className="text-xs text-sp-muted">{assignment.target.name} · {formatDeadline(assignment.deadline)}</p>
+          <p className="text-xs text-sp-muted">
+            {assignment.target.name} · {formatDeadline(assignment.deadline)}
+          </p>
         </div>
       </header>
 
@@ -72,15 +77,17 @@ function AssignmentDetail({ assignment, onBack }: { assignment: Assignment; onBa
       <div className="flex-1 overflow-auto p-4 space-y-1">
         {status?.loading && subs.length === 0 ? (
           <div className="flex items-center justify-center py-8">
-            <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">progress_activity</span>
+            <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">
+              progress_activity
+            </span>
           </div>
         ) : (
           assignment.target.students
             .slice()
             .sort((a, b) => a.number - b.number)
             .map((student) => {
-              const sub = subs.find((s) => s.studentNumber === student.number);
-              const isSubmitted = submittedIds.has(student.number);
+              const sub = matched.get(student.id);
+              const isSubmitted = sub !== undefined;
               return (
                 <div
                   key={student.id}
@@ -88,9 +95,11 @@ function AssignmentDetail({ assignment, onBack }: { assignment: Assignment; onBa
                     isSubmitted ? 'bg-green-500/5' : 'bg-red-500/5'
                   }`}
                 >
-                  <span className={`material-symbols-outlined text-lg ${
-                    isSubmitted ? 'text-green-500' : 'text-red-400'
-                  }`}>
+                  <span
+                    className={`material-symbols-outlined text-lg ${
+                      isSubmitted ? 'text-green-500' : 'text-red-400'
+                    }`}
+                  >
                     {isSubmitted ? 'check_circle' : 'cancel'}
                   </span>
                   <span className="text-xs text-sp-muted w-6 text-right">{student.number}</span>
@@ -98,7 +107,10 @@ function AssignmentDetail({ assignment, onBack }: { assignment: Assignment; onBa
                   {sub && (
                     <span className="text-xs text-sp-muted">
                       {sub.isLate && <span className="text-yellow-500 mr-1">지각</span>}
-                      {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(sub.submittedAt).toLocaleTimeString('ko-KR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
                     </span>
                   )}
                 </div>
@@ -121,7 +133,9 @@ export function ToolAssignmentPage({ onBack }: Props) {
   if (!loaded) {
     return (
       <div className="flex items-center justify-center h-full">
-        <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">progress_activity</span>
+        <span className="material-symbols-outlined text-sp-accent text-3xl animate-spin">
+          progress_activity
+        </span>
       </div>
     );
   }
@@ -166,14 +180,22 @@ export function ToolAssignmentPage({ onBack }: Props) {
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-blue-500/15 shrink-0 mt-0.5">
-                          <span className="material-symbols-outlined text-blue-400">assignment</span>
+                          <span className="material-symbols-outlined text-blue-400">
+                            assignment
+                          </span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-sp-text truncate">{a.title}</p>
-                          <p className="text-xs text-sp-muted mt-0.5">{a.target.name} · {a.target.students.length}명</p>
-                          <p className="text-xs text-sp-muted mt-0.5">{formatDeadline(a.deadline)}</p>
+                          <p className="text-xs text-sp-muted mt-0.5">
+                            {a.target.name} · {a.target.students.length}명
+                          </p>
+                          <p className="text-xs text-sp-muted mt-0.5">
+                            {formatDeadline(a.deadline)}
+                          </p>
                         </div>
-                        <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">chevron_right</span>
+                        <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
+                          chevron_right
+                        </span>
                       </div>
                     </button>
                   ))}
@@ -195,14 +217,22 @@ export function ToolAssignmentPage({ onBack }: Props) {
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gray-500/15 shrink-0 mt-0.5">
-                          <span className="material-symbols-outlined text-gray-400">assignment_turned_in</span>
+                          <span className="material-symbols-outlined text-gray-400">
+                            assignment_turned_in
+                          </span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-sp-text truncate">{a.title}</p>
-                          <p className="text-xs text-sp-muted mt-0.5">{a.target.name} · {a.target.students.length}명</p>
-                          <p className="text-xs text-sp-muted mt-0.5">{formatDeadline(a.deadline)}</p>
+                          <p className="text-xs text-sp-muted mt-0.5">
+                            {a.target.name} · {a.target.students.length}명
+                          </p>
+                          <p className="text-xs text-sp-muted mt-0.5">
+                            {formatDeadline(a.deadline)}
+                          </p>
                         </div>
-                        <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">chevron_right</span>
+                        <span className="material-symbols-outlined text-sp-muted text-lg shrink-0">
+                          chevron_right
+                        </span>
                       </div>
                     </button>
                   ))}

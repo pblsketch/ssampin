@@ -6,6 +6,7 @@ import { StudentGrid } from '@adapters/components/Homeroom/shared/StudentGrid';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import type { CycleModeProps } from '@adapters/components/Homeroom/shared/StudentGrid';
 import type { Survey, SurveyQuestion } from '@domain/entities/Survey';
+import type { Student } from '@domain/entities/Student';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   aggregateAnswers,
@@ -19,7 +20,11 @@ type StudentLike = {
   readonly id: string;
   readonly name: string;
   readonly isVacant?: boolean;
+  readonly status?: Student['status'];
+  /** 수업반 명단의 출석번호 */
   readonly number?: number;
+  /** 담임 명렬표의 출석번호 */
+  readonly studentNumber?: number;
 };
 
 /* ──────────────── Props ──────────────── */
@@ -100,12 +105,7 @@ export function SurveyDetail({ survey, onBack, students: studentsProp }: SurveyD
   /* ── 내보내기 데이터 ── */
 
   const exportData = useMemo(() => {
-    return formatSurveyForCSV(
-      survey,
-      localData?.entries ?? [],
-      students as readonly import('@domain/entities/Student').Student[],
-      localData?.studentMemos,
-    );
+    return formatSurveyForCSV(survey, localData?.entries ?? [], students, localData?.studentMemos);
   }, [survey, localData, students]);
 
   /* ── 메뉴 핸들러 ── */
@@ -370,14 +370,7 @@ function QuestionGrid({ question, students, valuesMap, onCycle }: QuestionGridPr
     };
   }, [question, valuesMap, onCycle]);
 
-  return (
-    <StudentGrid
-      students={students as readonly import('@domain/entities/Student').Student[]}
-      gridMode={cycleConfig}
-      columns={5}
-      hideVacant
-    />
-  );
+  return <StudentGrid students={students} gridMode={cycleConfig} columns={5} hideVacant />;
 }
 
 /* ──────────────── TextQuestionList (텍스트 질문) ──────────────── */

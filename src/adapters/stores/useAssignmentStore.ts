@@ -19,6 +19,12 @@ interface AssignmentState {
   assignments: AssignmentWithStatus[];
   currentAssignment: AssignmentWithStatus | null;
   submissions: SubmissionDetail[];
+  /**
+   * 어느 학생 것인지 **확정하지 못한** 제출물. 소속(학년·반)이 명단과 어긋나거나,
+   * 소속 정보가 없는데 같은 번호 학생이 둘 이상이라 추측이 필요한 경우다.
+   * ★번호만으로 붙이지 않고 화면이 교사에게 알린다(2026-09-08 검토 B).
+   */
+  unmatchedSubmissions: Submission[];
   isLoading: boolean;
   error: string | null;
   selectedAssignmentId: string | null;
@@ -303,6 +309,7 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
     assignments: [],
     currentAssignment: null,
     submissions: [],
+    unmatchedSubmissions: [],
     isLoading: false,
     error: null,
     selectedAssignmentId: null,
@@ -432,7 +439,8 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
       set({ isLoading: true, error: null });
       try {
         const useCases = createAssignmentUseCases(getAccessToken);
-        const submissions = await useCases.getSubmissions.execute(assignmentId);
+        const { details: submissions, unmatched } =
+          await useCases.getSubmissions.executeDetailed(assignmentId);
 
         // 현재 과제 찾기
         const { assignments } = get();
@@ -446,6 +454,7 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
         set({
           currentAssignment: current,
           submissions: withTexts,
+          unmatchedSubmissions: [...unmatched],
           isLoading: false,
         });
 
@@ -473,7 +482,12 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
           .catch(() => undefined);
         // 목록 새로고침
         await get().loadAssignments();
-        set({ currentAssignment: null, submissions: [], isLoading: false });
+        set({
+          currentAssignment: null,
+          submissions: [],
+          unmatchedSubmissions: [],
+          isLoading: false,
+        });
       } catch (err) {
         set({
           error: (err as Error).message,
@@ -503,16 +517,17 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
           // 제출 현황 업데이트 시 submissions detail 재로드
           try {
             const useCases = createAssignmentUseCases(getAccessToken);
-            const details = await useCases.getSubmissions.execute(assignmentId);
+            const { details, unmatched } =
+              await useCases.getSubmissions.executeDetailed(assignmentId);
 
             // Detect new submissions
             const currentSubmittedCount = details.filter((s) => s.status !== 'missing').length;
             if (currentSubmittedCount > prevSubmissionCount) {
               const newSubmissions = details.filter((d) => {
                 if (d.status === 'missing') return false;
-                const prevDetail = get().submissions.find(
-                  (s) => s.studentNumber === d.studentNumber,
-                );
+                // ★학생은 번호가 아니라 명단 id 로 찾는다. 번호로 찾으면 다른 반 같은 번호 학생을
+                //   같은 사람으로 봐서 알림이 엉뚱한 이름을 부른다(2026-09-08 검토 B).
+                const prevDetail = get().submissions.find((s) => s.studentId === d.studentId);
                 return !prevDetail || prevDetail.status === 'missing';
               });
 
@@ -533,7 +548,7 @@ export const useAssignmentStore = create<AssignmentState>((set, get) => {
             const extractor = getExtractSubmissionTexts(getAccessToken);
             await extractor.ready();
             const withTexts = withCachedTexts(details, extractor);
-            set({ submissions: withTexts });
+            set({ submissions: withTexts, unmatchedSubmissions: [...unmatched] });
 
             // 새로 들어온 제출물만 뽑는다(이미 뽑은 것은 캐시라 다시 내려받지 않는다).
             void runTextExtraction(assignmentId, withTexts);

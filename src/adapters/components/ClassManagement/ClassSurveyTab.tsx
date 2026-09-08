@@ -11,6 +11,7 @@ import {
 } from '@domain/rules/surveyRules';
 import type { Survey } from '@domain/entities/Survey';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { activeRosterNumbers } from '@domain/rules/rosterNumbering';
 import { SurveyCreateModal } from '@adapters/components/Homeroom/Survey/SurveyCreateModal';
 import { SurveyDetail } from '@adapters/components/Homeroom/Survey/SurveyDetail';
 import { SurveyStudentDetail } from '@adapters/components/Homeroom/Survey/SurveyStudentDetail';
@@ -22,14 +23,14 @@ import { IconButton } from '@adapters/components/common/IconButton';
 /* ──────────────── 색상 매핑 ──────────────── */
 
 const COLOR_MAP: Record<string, { bg: string; dot: string; bar: string }> = {
-  blue:   { bg: 'bg-blue-500/10',   dot: 'bg-blue-400',   bar: 'bg-blue-400' },
-  green:  { bg: 'bg-green-500/10',  dot: 'bg-green-400',  bar: 'bg-green-400' },
+  blue: { bg: 'bg-blue-500/10', dot: 'bg-blue-400', bar: 'bg-blue-400' },
+  green: { bg: 'bg-green-500/10', dot: 'bg-green-400', bar: 'bg-green-400' },
   yellow: { bg: 'bg-yellow-500/10', dot: 'bg-yellow-400', bar: 'bg-yellow-400' },
   purple: { bg: 'bg-purple-500/10', dot: 'bg-purple-400', bar: 'bg-purple-400' },
-  red:    { bg: 'bg-red-500/10',    dot: 'bg-red-400',    bar: 'bg-red-400' },
-  pink:   { bg: 'bg-pink-500/10',   dot: 'bg-pink-400',   bar: 'bg-pink-400' },
+  red: { bg: 'bg-red-500/10', dot: 'bg-red-400', bar: 'bg-red-400' },
+  pink: { bg: 'bg-pink-500/10', dot: 'bg-pink-400', bar: 'bg-pink-400' },
   indigo: { bg: 'bg-indigo-500/10', dot: 'bg-indigo-400', bar: 'bg-indigo-400' },
-  teal:   { bg: 'bg-teal-500/10',   dot: 'bg-teal-400',   bar: 'bg-teal-400' },
+  teal: { bg: 'bg-teal-500/10', dot: 'bg-teal-400', bar: 'bg-teal-400' },
 };
 
 function getColor(color: string) {
@@ -51,12 +52,19 @@ function SurveyShareModal({ survey, onClose }: SurveyShareModalProps) {
   useEffect(() => {
     if (survey.shortUrl || !survey.shareUrl) return;
     let cancelled = false;
-    shortLinkClient.createShortLink(survey.shareUrl).then((result) => {
-      if (cancelled || result === survey.shareUrl) return;
-      setUrl(result);
-      void useSurveyStore.getState().updateSurvey({ ...survey, shortUrl: result });
-    }).catch(() => { /* 네트워크 실패 무시 */ });
-    return () => { cancelled = true; };
+    shortLinkClient
+      .createShortLink(survey.shareUrl)
+      .then((result) => {
+        if (cancelled || result === survey.shareUrl) return;
+        setUrl(result);
+        void useSurveyStore.getState().updateSurvey({ ...survey, shortUrl: result });
+      })
+      .catch(() => {
+        /* 네트워크 실패 무시 */
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [survey]);
 
   useEffect(() => {
@@ -158,11 +166,11 @@ function SurveyCopyModal({ survey, currentClassId, onClose }: SurveyCopyModalPro
   );
 
   const handleCopy = useCallback(
-    async (targetClassId: string, targetCount: number) => {
+    async (targetClassId: string, targetNumbers: readonly number[]) => {
       if (copyingId) return;
       setCopyingId(targetClassId);
       try {
-        await duplicateSurvey(survey.id, targetClassId, targetCount);
+        await duplicateSurvey(survey.id, targetClassId, targetNumbers);
         showToast('다른 반으로 복사했습니다', 'success');
         onClose();
       } catch {
@@ -192,14 +200,14 @@ function SurveyCopyModal({ survey, currentClassId, onClose }: SurveyCopyModalPro
           ) : (
             <div className="flex flex-col gap-2">
               {targets.map((c) => {
-                const activeCount = c.students.filter(
-                  isStudentActive,
-                ).length;
+                // 복사 대상 반의 **실제 출석번호**를 넘긴다 — 인원수만 넘기면 결번 뒤 번호가 사라진다.
+                const activeNumbers = activeRosterNumbers(c.students);
+                const activeCount = activeNumbers.length;
                 const isCopying = copyingId === c.id;
                 return (
                   <button
                     key={c.id}
-                    onClick={() => handleCopy(c.id, activeCount)}
+                    onClick={() => handleCopy(c.id, activeNumbers)}
                     disabled={copyingId !== null || activeCount === 0}
                     className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-sp-surface border border-sp-border hover:border-sp-accent/50 hover:bg-sp-surface/80 transition-colors text-left disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -225,7 +233,8 @@ function SurveyCopyModal({ survey, currentClassId, onClose }: SurveyCopyModalPro
 
         <div className="p-3 border-t border-sp-border shrink-0">
           <p className="text-caption text-sp-muted">
-            질문·설정은 그대로 복사되며, 응답 데이터는 복사되지 않습니다. 학생 응답 모드는 새 공유 링크와 PIN이 생성됩니다.
+            질문·설정은 그대로 복사되며, 응답 데이터는 복사되지 않습니다. 학생 응답 모드는 새 공유
+            링크와 PIN이 생성됩니다.
           </p>
         </div>
       </div>
@@ -243,12 +252,19 @@ interface ClassSurveyCardProps {
   onCopy: (survey: Survey) => void;
 }
 
-function ClassSurveyCard({ survey, totalStudents, onSelect, onShare, onCopy }: ClassSurveyCardProps) {
+function ClassSurveyCard({
+  survey,
+  totalStudents,
+  onSelect,
+  onShare,
+  onCopy,
+}: ClassSurveyCardProps) {
   const localData = useSurveyStore((s) => s.getLocalData(survey.id));
   const color = getColor(survey.categoryColor);
-  const progress = survey.mode === 'teacher'
-    ? getTeacherCheckProgress(survey, localData, totalStudents)
-    : getStudentResponseProgress([], totalStudents);
+  const progress =
+    survey.mode === 'teacher'
+      ? getTeacherCheckProgress(survey, localData, totalStudents)
+      : getStudentResponseProgress([], totalStudents);
 
   const modeIcon = survey.mode === 'teacher' ? '✏️' : '📱';
   const modeLabelText = survey.mode === 'teacher' ? '교사 체크' : '학생 응답';
@@ -267,7 +283,9 @@ function ClassSurveyCard({ survey, totalStudents, onSelect, onShare, onCopy }: C
       role="button"
       tabIndex={0}
       onClick={() => onSelect(survey.id)}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(survey.id); }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') onSelect(survey.id);
+      }}
       className={`w-full text-left rounded-xl border border-sp-border p-4 transition-all hover:border-sp-accent/50 hover:shadow-lg cursor-pointer ${color.bg}`}
     >
       <div className="flex items-start gap-3">
@@ -281,7 +299,9 @@ function ClassSurveyCard({ survey, totalStudents, onSelect, onShare, onCopy }: C
           </div>
 
           <div className="flex items-center gap-2 mt-1 text-xs text-sp-muted">
-            <span>{modeIcon} {modeLabelText}</span>
+            <span>
+              {modeIcon} {modeLabelText}
+            </span>
             <span>·</span>
             <span>{questionTypes}</span>
             {survey.dueDate && (
@@ -299,9 +319,7 @@ function ClassSurveyCard({ survey, totalStudents, onSelect, onShare, onCopy }: C
               style={{ width: `${progress.percentage}%` }}
             />
           </div>
-          <div className="text-caption text-sp-muted mt-1 text-right">
-            {progress.percentage}%
-          </div>
+          <div className="text-caption text-sp-muted mt-1 text-right">{progress.percentage}%</div>
 
           {/* 액션 버튼 (공유 / 복사) */}
           <div className="mt-2 flex items-center gap-3">
@@ -365,27 +383,23 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
   }, [loaded, load]);
 
   // 학급 학생 목록
-  const currentClass = useMemo(
-    () => classes.find((c) => c.id === classId),
-    [classes, classId],
-  );
+  const currentClass = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
   const classStudents = currentClass?.students ?? [];
 
   // SurveyDetail 호환 형식으로 변환 (number 필드 포함 — 결번 학생 대응)
   const studentLikes = useMemo(
     () =>
-      classStudents
-        .filter(isStudentActive)
-        .map((s) => ({
-          id: studentKey(s),
-          name: s.name,
-          number: s.number,
-          isVacant: s.isVacant,
-        })),
+      classStudents.filter(isStudentActive).map((s) => ({
+        id: studentKey(s),
+        name: s.name,
+        number: s.number,
+        isVacant: s.isVacant,
+      })),
     [classStudents],
   );
 
   const totalStudents = studentLikes.length;
+  const targetNumbers = useMemo(() => activeRosterNumbers(classStudents), [classStudents]);
 
   // 이 학급의 설문만 필터
   const classSurveys = useMemo(
@@ -417,13 +431,7 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
   if (view === 'detail' && selectedSurveyId) {
     const survey = classSurveys.find((s) => s.id === selectedSurveyId);
     if (survey?.mode === 'teacher') {
-      return (
-        <SurveyDetail
-          survey={survey}
-          onBack={handleBack}
-          students={studentLikes}
-        />
-      );
+      return <SurveyDetail survey={survey} onBack={handleBack} students={studentLikes} />;
     }
     if (survey?.mode === 'student') {
       return (
@@ -498,16 +506,17 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
                   </span>
                   완료/보관 ({archivedSurveys.length})
                 </button>
-                {showArchived && archivedSurveys.map((s) => (
-                  <ClassSurveyCard
-                    key={s.id}
-                    survey={s}
-                    totalStudents={totalStudents}
-                    onSelect={handleSelect}
-                    onShare={handleShare}
-                    onCopy={handleCopy}
-                  />
-                ))}
+                {showArchived &&
+                  archivedSurveys.map((s) => (
+                    <ClassSurveyCard
+                      key={s.id}
+                      survey={s}
+                      totalStudents={totalStudents}
+                      onSelect={handleSelect}
+                      onShare={handleShare}
+                      onCopy={handleCopy}
+                    />
+                  ))}
               </>
             )}
           </div>
@@ -519,6 +528,7 @@ export function ClassSurveyTab({ classId }: ClassSurveyTabProps) {
           onClose={() => setShowCreateModal(false)}
           classId={classId}
           targetCount={totalStudents}
+          targetNumbers={targetNumbers}
         />
       )}
 

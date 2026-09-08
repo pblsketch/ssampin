@@ -4,6 +4,7 @@ import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { activeRosterNumbers } from '@domain/rules/rosterNumbering';
 import { surveySupabaseClient, shortLinkClient } from '@adapters/di/container';
 import {
   getActiveSurveys,
@@ -280,6 +281,8 @@ export function SurveyTab() {
   );
 
   const totalStudents = useMemo(() => students.filter(isStudentActive).length, [students]);
+  // 응답 가능한 실제 출석번호 — 결번이 있어도 마지막 번호가 사라지지 않는다(2026-09-08 검토 D).
+  const targetNumbers = useMemo(() => activeRosterNumbers(students), [students]);
 
   const handleSelect = (id: string) => {
     setSelectedSurveyId(id);
@@ -409,6 +412,7 @@ export function SurveyTab() {
         <SurveyCreateModal
           onClose={() => setShowCreateModal(false)}
           targetCount={totalStudents || undefined}
+          targetNumbers={targetNumbers}
         />
       )}
 

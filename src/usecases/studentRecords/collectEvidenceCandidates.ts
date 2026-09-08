@@ -219,14 +219,15 @@ export function listEvidenceCandidates(
         );
     }
     case 'submission': {
-      // 과제 수합으로 불러온 in-memory 제출물에서 매칭 — 담임은 학생 id, 수업반은 번호로.
+      // 과제 수합으로 불러온 in-memory 제출물에서 매칭.
+      // ★예전에는 수업반에서 `번호만` 비교해서 **다른 수업반 같은 번호 학생의 과제**가 이 학생의
+      //   근거 후보로 떴다(2026-09-08 검토 E). 지금은 과제가 겨냥한 반까지 확인한다.
       const out: EvidenceCandidate[] = [];
       for (const sd of input.submissions) {
         const sub = sd.submission;
         if (!sub) continue;
-        const mine = st.studentId ? sd.studentId === st.studentId : sd.studentNumber === st.number;
-        if (!mine) continue;
         const assignment = input.assignments.find((x) => x.id === sub.assignmentId);
+        if (!isSubmissionOfStudent(sd, st, assignment, input.context, classId)) continue;
         out.push(
           candidate(
             'submission',
@@ -238,6 +239,51 @@ export function listEvidenceCandidates(
       return out;
     }
   }
+}
+
+/**
+ * 이 제출물이 **정말 이 학생 것**인가.
+ *
+ * 학생 경계는 여기서 자른다 — 번호가 같다는 이유만으로 다른 반 학생의 과제를 끌어오지 않는다.
+ *
+ *  - 담임: 명단 학생 id 가 같아야 한다. 담임 학생 id 와 수업반 명단 id(`tc-…`)는 형태가 달라 섞이지 않는다.
+ *  - 수업반: 그 과제가 **이 수업반을 겨냥한 과제**여야 하고(`teachingClassId === classId`),
+ *    그 과제 명단에서 제출자를 찾아 이 학생과 같은 사람인지 확인한다.
+ *  - 과제를 목록에서 찾지 못하면 확인할 방법이 없으므로 **연결하지 않는다**.
+ */
+function isSubmissionOfStudent(
+  row: EvidenceCandidateSubmissionRow,
+  st: EvidenceCandidateStudent,
+  assignment: Assignment | undefined,
+  context: 'homeroom' | 'teaching',
+  classId: string | undefined,
+): boolean {
+  if (context === 'homeroom') {
+    if (st.studentId === undefined) return false;
+    return row.studentId === st.studentId;
+  }
+  // ── 수업반 ──
+  if (classId === undefined || assignment === undefined) return false;
+  const target = assignment.target as Assignment['target'] | undefined;
+  if (target === undefined || target.type !== 'teaching') return false;
+  // 이 반을 겨냥한 과제인가. 반 id 가 붙기 전(구형) 과제는 이 관문을 통과시키고 아래에서 학생으로 가른다.
+  if (target.teachingClassId !== undefined && target.teachingClassId !== classId) return false;
+
+  const rosterEntry = target.students.find((s) => s.id === row.studentId);
+  if (rosterEntry !== undefined) {
+    // 같은 반 안에도 소속(학년·반)이 다른 학생이 섞여 있다 — studentKey(학년-반-번호)로 사람을 가른다.
+    if (st.studentKey !== undefined) return studentKeyOf(rosterEntry) === st.studentKey;
+    return rosterEntry.number === st.number;
+  }
+  // 명단에서 제출자를 못 찾은 구형 제출물 — 반 id 로 이 반 과제임이 확인됐을 때만 번호로 잇는다.
+  if (target.teachingClassId === undefined) return false;
+  return row.studentNumber === st.number;
+}
+
+/** `studentKey`(수업반)와 같은 규칙 — 유스케이스가 엔티티 헬퍼에 기대지 않도록 여기서 만든다. */
+function studentKeyOf(s: { number: number; grade?: number; classNum?: number }): string {
+  if (s.grade != null && s.classNum != null) return `${s.grade}-${s.classNum}-${s.number}`;
+  return String(s.number);
 }
 
 /** 날짜 내림차순, 날짜 없는 것은 뒤로. 같은 날짜면 출처·sourceId 순 — 렌더마다 순서가 흔들리지 않게. */

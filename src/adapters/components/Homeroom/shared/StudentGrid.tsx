@@ -1,6 +1,7 @@
 import { useMemo, useCallback } from 'react';
 import type { Student } from '@domain/entities/Student';
 import { isInactiveStatus, STUDENT_STATUS_LABELS } from '@domain/entities/Student';
+import { numberRoster } from '@domain/rules/rosterNumbering';
 
 /* ──────────────────────── 모드별 Props ──────────────────────── */
 
@@ -39,8 +40,11 @@ export type StudentGridMode<T extends string = string> =
 
 /* ──────────────────────── 공통 Props ──────────────────────── */
 
+/** 담임 명렬표(`studentNumber`)와 수업반 명단(`number`) 둘 다 받는다. */
+export type GridStudent = Student & { readonly number?: number };
+
 export interface StudentGridProps<T extends string = string> {
-  students: readonly Student[];
+  students: readonly GridStudent[];
   gridMode: StudentGridMode<T>;
   /** 열 수 (기본 5) */
   columns?: number;
@@ -58,11 +62,13 @@ export function StudentGrid<T extends string = string>({
   hideVacant = false,
   className = '',
 }: StudentGridProps<T>) {
-  /* 원본 배열 위치에서 번호를 계산한 뒤 필터링 — hideVacant 시 번호 밀림 방지 */
+  /* 명렬표에 적힌 실제 출석번호를 표시한다. 번호가 없거나 겹친 학생만 미사용 번호로 채운다.
+     ★예전에는 배열 위치(`idx + 1`)를 썼다. 결번 행을 지운 명렬표에서 화면 번호가 실제 학번과
+     어긋나 상담·과제 신청 번호가 안 맞는다는 신고로 이어졌다(2026-09-08 검토). */
   const displayData = useMemo(() => {
-    const all = students.map((s, idx) => ({
-      student: s,
-      displayNumber: idx + 1,
+    const all = numberRoster(students).map((e) => ({
+      student: e.student,
+      displayNumber: e.number,
     }));
     return hideVacant
       ? all.filter(({ student: s }) => !isInactiveStatus(s.status) && !s.isVacant)
@@ -146,7 +152,8 @@ function StudentCell<T extends string>({
   }
 
   if (gridMode.mode === 'cycle') {
-    const value: T = gridMode.values.get(student.id) ?? (gridMode.cycle[gridMode.cycle.length - 1] as T);
+    const value: T =
+      gridMode.values.get(student.id) ?? (gridMode.cycle[gridMode.cycle.length - 1] as T);
     const label = gridMode.renderValue(value);
     const style = gridMode.valueStyle?.(value) ?? '';
     return (
@@ -154,7 +161,9 @@ function StudentCell<T extends string>({
         onClick={onClick}
         className={`px-2 py-2.5 rounded-lg text-xs font-medium transition-all text-center ${style || 'bg-sp-surface text-sp-text'} hover:opacity-80`}
       >
-        <div>{displayNumber} {label}</div>
+        <div>
+          {displayNumber} {label}
+        </div>
         <div className="text-caption truncate">{student.name}</div>
       </button>
     );
@@ -166,8 +175,12 @@ function StudentCell<T extends string>({
   const style = value !== undefined ? (gridMode.valueStyle?.(value) ?? '') : 'text-sp-muted';
   const sub = gridMode.renderSub?.(student.id);
   return (
-    <div className={`px-2 py-2.5 rounded-lg text-xs text-center ${style || 'bg-sp-surface text-sp-text'}`}>
-      <div>{displayNumber} {label}</div>
+    <div
+      className={`px-2 py-2.5 rounded-lg text-xs text-center ${style || 'bg-sp-surface text-sp-text'}`}
+    >
+      <div>
+        {displayNumber} {label}
+      </div>
       <div className="text-caption truncate">{student.name}</div>
       {sub && <div className="text-tiny text-sp-muted truncate">{sub}</div>}
     </div>

@@ -108,7 +108,20 @@ const ATT: ObservationAttachment = {
   createdAt: '2026-06-01T01:00:00Z',
 };
 
-const ASSIGNMENT = { id: 'a1', title: '독서 감상문' } as Assignment;
+// 과제 대상(어느 반·누구에게 낸 과제인가)까지 적는다 — 근거 후보는 이 정보로 학생 경계를 자른다.
+const ASSIGNMENT = {
+  id: 'a1',
+  title: '독서 감상문',
+  target: {
+    type: 'teaching',
+    name: '3-1 국어',
+    teachingClassId: 'c1',
+    students: [
+      { id: 's3', number: 3, name: '김지훈', grade: 3, classNum: 1 },
+      { id: 's4', number: 4, name: '박서연', grade: 3, classNum: 1 },
+    ],
+  },
+} as unknown as Assignment;
 const SUB: Submission = {
   id: 'sub1',
   assignmentId: 'a1',
