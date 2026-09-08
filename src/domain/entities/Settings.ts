@@ -722,6 +722,11 @@ export interface Settings {
    * 켰을 때만 미리보기·편집 칸에 문단 색과 범례가 보인다.
    */
   readonly recordHighlightOn?: boolean;
+  /**
+   * 생기부 초안 화면의 보기(ADR-093). `focus` = 학생별 집중 보기(기본), `overview` = 전체 훑어보기(30명 목록).
+   * 미설정 = `focus`.
+   */
+  readonly recordDraftViewMode?: 'focus' | 'overview';
   /** AI 도우미 챗봇 표시 여부 (기본: true) */
   readonly showChatbot?: boolean;
   /** 온보딩에서 선택한 교사 역할 (복수) */

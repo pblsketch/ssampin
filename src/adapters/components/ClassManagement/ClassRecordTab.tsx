@@ -21,6 +21,8 @@ interface ClassRecordTabProps {
   initialStudentViewMode?: 'list' | 'seating';
   onGoToRosterTab?: () => void;
   onGoToSeatingTab?: () => void;
+  /** 생기부 초안 화면이 떠 있는 동안 학급 목록을 접어 달라는 요청(ADR-093). 페이지가 복원까지 맡는다. */
+  onRequestCompactClassList?: (compact: boolean) => void;
 }
 
 export function ClassRecordTab({
@@ -28,6 +30,7 @@ export function ClassRecordTab({
   initialStudentViewMode,
   onGoToRosterTab,
   onGoToSeatingTab,
+  onRequestCompactClassList,
 }: ClassRecordTabProps) {
   const [viewMode, setViewMode] = useState<RecordViewMode>('input');
   /**
@@ -104,6 +107,9 @@ export function ClassRecordTab({
             flowIntent={flowIntent}
             onFlowIntentConsumed={handleIntentConsumed}
             onRequestFlow={goWithIntent}
+            {...(onRequestCompactClassList !== undefined
+              ? { onRequestCompactHost: onRequestCompactClassList }
+              : {})}
           />
         )}
       </div>

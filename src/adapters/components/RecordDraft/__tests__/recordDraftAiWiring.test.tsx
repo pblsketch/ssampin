@@ -154,8 +154,9 @@ vi.mock('@adapters/components/RecordDraft/RecordDraftAiPanel', () => ({
   },
 }));
 
-import { RecordDraftView } from '../RecordDraftView';
+import { RecordDraftView, resolveListMode } from '../RecordDraftView';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
+import { useRecordAiRunStore } from '@adapters/stores/useRecordAiRunStore';
 
 const STUDENTS = [
   { studentRef: 'sA', number: 1, name: '김지훈', studentKey: '1' },
@@ -175,8 +176,17 @@ function element() {
   );
 }
 
-function view() {
-  return render(element());
+/**
+ * 오른쪽 보조 공간은 **눌렀을 때만** 열린다(ADR-093). 패널 props 를 보는 테스트는 첫 학생의 [AI ▸] 를 눌러 연다.
+ * `openPanel: false` 면 누르지 않는다(스위치 꺼짐·행만 보는 테스트).
+ */
+function view(opts: { readonly openPanel?: boolean } = {}) {
+  const r = render(element());
+  if (opts.openPanel !== false) {
+    const first = screen.queryAllByRole('button', { name: /AI 초안$/ })[0];
+    if (first) fireEvent.click(first);
+  }
+  return r;
 }
 
 const lastProps = (): Record<string, unknown> => panelProps[panelProps.length - 1] ?? {};
@@ -185,8 +195,10 @@ beforeEach(() => {
   panelProps.length = 0;
   upsertSpy.mockClear();
   drafts.byRef = {};
-  settingsState.settings = {};
+  // 이 파일은 예전 목록(전체 훑어보기)을 검사한다 — 집중 보기는 recordDraftFocusView.test 가 지킨다.
+  settingsState.settings = { recordDraftViewMode: 'overview' };
   useAssistStore.setState({ ownAiEnabled: true });
+  useRecordAiRunStore.getState().reset();
 });
 
 afterEach(() => {
@@ -200,10 +212,39 @@ describe('실험실 스위치가 화면을 가른다', () => {
     expect(screen.queryAllByRole('button', { name: /AI 초안$/ })).toHaveLength(0);
   });
 
-  it('켜면 학생마다 [AI ▸] 가 붙고, 패널은 첫 학생으로 열린다', () => {
-    view();
+  it('켜면 학생마다 [AI ▸] 가 붙고, 패널은 **눌러야** 그 학생으로 열린다(ADR-093: 닫힌 패널은 폭이 없다)', () => {
+    view({ openPanel: false });
     expect(screen.getAllByRole('button', { name: /AI 초안$/ })).toHaveLength(2);
+    expect(screen.queryByTestId('ai-panel')).toBeNull();
+    expect(screen.queryByRole('complementary', { name: '고른 학생 패널' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '김지훈 AI 초안' }));
     expect(screen.getByText('김지훈 AI 패널')).toBeTruthy();
+    // ✕ 로 닫으면 패널 자체가 사라진다 — 빈 폭을 남기지 않는다.
+    fireEvent.click(screen.getByRole('button', { name: '패널 닫기' }));
+    expect(screen.queryByRole('complementary', { name: '고른 학생 패널' })).toBeNull();
+  });
+
+  it('★쌤핀 AI 도크와 초안 패널은 둘 중 하나만 열린다 — 도크를 열면 패널이 닫히고, [AI ▸]는 도크를 닫는다', async () => {
+    useAssistStore.setState({ enabled: true, open: false });
+    view();
+    expect(screen.getByRole('complementary', { name: '고른 학생 패널' })).toBeTruthy();
+    await act(async () => useAssistStore.getState().setOpen(true));
+    expect(screen.queryByRole('complementary', { name: '고른 학생 패널' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '박서연 AI 초안' }));
+    expect(useAssistStore.getState().open).toBe(false);
+    expect(screen.getByRole('complementary', { name: '고른 학생 패널' })).toBeTruthy();
+    // 패널 안에 쌤핀 AI 탭은 없다.
+    expect(screen.queryByRole('tab', { name: '쌤핀 AI' })).toBeNull();
+    useAssistStore.setState({ enabled: false });
+  });
+
+  it('[근거 N건] 을 누르면 패널이 [근거] 탭으로 그 학생에게 열린다', () => {
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: /박서연 근거 1건 보기/ }));
+    const panel = screen.getByRole('complementary', { name: '고른 학생 패널' });
+    expect(panel.textContent).toContain('박서연');
+    expect(screen.getByRole('tab', { name: '근거' }).getAttribute('aria-selected')).toBe('true');
+    expect(screen.queryByTestId('ai-panel')).toBeNull();
   });
 });
 
@@ -354,9 +395,21 @@ describe('★"미작성" 필터에서 실행 중인 행은 사라지지 않는�
     fireEvent.click(screen.getByRole('button', { name: '미작성' }));
     expect(screen.getAllByRole('button', { name: /AI 초안$/ })).toHaveLength(2);
 
-    // 패널이 "김지훈·박서연 실행 중"을 알린다(남은 학생 모두를 누른 상황)
-    const onActiveChange = lastProps()['onActiveChange'] as (refs: readonly string[]) => void;
-    await act(async () => onActiveChange(['sA', 'sB']));
+    // 실행 스토어에 "김지훈·박서연 실행 중"이 든다(남은 학생 모두를 누른 상황). 패널 콜백이 아니라 스토어다(ADR-093).
+    await act(async () =>
+      useRecordAiRunStore.getState().setDraftPhase('c1:subject:수학', {
+        kind: 'running',
+        done: 0,
+        total: 2,
+        name: '김지훈',
+        studentRef: 'sA',
+        // 실제 큐는 지금 쓰는 학생부터 시작한다(queue.slice(i)).
+        queue: [
+          { studentRef: 'sA', displayName: '김지훈', evidences: [] },
+          { studentRef: 'sB', displayName: '박서연', evidences: [] },
+        ],
+      }),
+    );
 
     // 첫 [반영] — 김지훈에게 초안이 생긴다 → 미작성 필터에서는 원래 빠질 학생
     drafts.byRef = { sA: DRAFT_A };
@@ -364,7 +417,9 @@ describe('★"미작성" 필터에서 실행 중인 행은 사라지지 않는�
     expect(screen.getByRole('button', { name: '김지훈 AI 초안' })).toBeTruthy(); // ★붙들려 있다
 
     // 실행이 끝났다 → 이제 필터대로 빠진다
-    await act(async () => onActiveChange([]));
+    await act(async () =>
+      useRecordAiRunStore.getState().setDraftPhase('c1:subject:수학', { kind: 'idle' }),
+    );
     expect(screen.queryByRole('button', { name: '김지훈 AI 초안' })).toBeNull();
     expect(screen.getByRole('button', { name: '박서연 AI 초안' })).toBeTruthy();
   });
@@ -470,5 +525,257 @@ describe('★C0 (ㄴ) 저장이 거부된 글은 초점을 잃어도 화면에 �
     expect((screen.getByRole('textbox', { name: /김지훈/ }) as HTMLTextAreaElement).value).toBe(
       'AI 가 반영한 글.',
     );
+  });
+});
+
+// ───────────────────────── 학생별 집중 보기 (ADR-093) ─────────────────────────
+
+describe('★학생별 집중 보기 — 기본 보기, 학생 목록 + 한 명의 넓은 본문', () => {
+  beforeEach(() => {
+    settingsState.settings = {};
+  });
+
+  it('설정이 없으면 집중 보기다: 학생 목록이 있고 편집 칸은 고른 학생 하나뿐이다', () => {
+    view({ openPanel: false });
+    expect(screen.getByTestId('focus-layout')).toBeTruthy();
+    expect(screen.getByTestId('student-list')).toBeTruthy();
+    expect(screen.getAllByRole('textbox', { name: /초안$/ })).toHaveLength(1);
+    expect(screen.getByRole('textbox', { name: /김지훈/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '집중 보기' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+  });
+
+  it('목록에서 학생을 누르면 본문이 그 학생으로 바뀌고 오른쪽 패널 재료도 따라간다', () => {
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: '2번 박서연 보기' }));
+    expect(screen.getByRole('textbox', { name: /박서연/ })).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: /김지훈/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '박서연 AI 초안' }));
+    expect(screen.getByText('박서연 AI 패널')).toBeTruthy();
+  });
+
+  it('Ctrl+Enter 는 저장을 밀어 넣은 뒤 다음 학생으로 넘어간다(연속 작성 유지)', async () => {
+    view({ openPanel: false });
+    await act(async () => {
+      fireEvent.keyDown(screen.getByRole('textbox', { name: /김지훈/ }), {
+        key: 'Enter',
+        ctrlKey: true,
+      });
+    });
+    expect(screen.getByRole('textbox', { name: /박서연/ })).toBeTruthy();
+    expect(screen.queryByRole('textbox', { name: /김지훈/ })).toBeNull();
+  });
+
+  it('★Ctrl+Enter 에서 저장이 거부되면(한도 초과) 넘어가지 않고 오류를 보여 준다', async () => {
+    upsertSpy.mockRejectedValueOnce(new Error('한도 1,500바이트를 넘었습니다.'));
+    view({ openPanel: false });
+    const ta = screen.getByRole('textbox', { name: /김지훈/ });
+    fireEvent.change(ta, { target: { value: '아주 긴 글' } });
+    await act(async () => {
+      fireEvent.keyDown(ta, { key: 'Enter', ctrlKey: true });
+    });
+    expect(screen.getByRole('textbox', { name: /김지훈/ })).toBeTruthy();
+    expect(screen.getByText('저장하지 못했습니다.')).toBeTruthy();
+  });
+
+  it('★타이핑한 뒤 저장본이 더 새로워지면(AI 반영·동기화) 옛 글로 되돌리지 않는다(리뷰 지적 1)', async () => {
+    const r = view({ openPanel: false });
+    fireEvent.change(screen.getByRole('textbox', { name: /김지훈/ }), {
+      target: { value: '가나다' },
+    });
+    // AI [반영]으로 저장본이 갱신됐다 — 등록부의 "가나다"보다 새롭다.
+    drafts.byRef = {
+      sA: {
+        id: 'd-A',
+        area: 'subject',
+        studentRef: 'sA',
+        content: 'AI 가 쓴 초안',
+        status: 'draft',
+        basisObservationIds: [],
+        groundingFlags: [],
+        createdAt: 1,
+        updatedAt: Date.now() + 60_000,
+      },
+    };
+    r.rerender(element());
+    fireEvent.click(screen.getByRole('button', { name: '2번 박서연 보기' }));
+    fireEvent.click(screen.getByRole('button', { name: '1번 김지훈 보기' }));
+    expect((screen.getByRole('textbox', { name: /김지훈/ }) as HTMLTextAreaElement).value).toBe(
+      'AI 가 쓴 초안',
+    );
+  });
+
+  it('[이전]/[다음] 단추로도 옮긴다 — 첫 학생에서는 [이전]이 잠긴다', () => {
+    view({ openPanel: false });
+    expect((screen.getByRole('button', { name: '이전 학생' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+    fireEvent.click(screen.getByRole('button', { name: '다음 학생' }));
+    expect(screen.getByRole('textbox', { name: /박서연/ })).toBeTruthy();
+    expect((screen.getByRole('button', { name: '다음 학생' }) as HTMLButtonElement).disabled).toBe(
+      true,
+    );
+  });
+
+  it('★미저장 글은 학생을 바꿨다 돌아와도 편집 칸에 남는다(P8: 등록부에서 되살린다)', () => {
+    view({ openPanel: false });
+    const ta = screen.getByRole('textbox', { name: /김지훈/ }) as HTMLTextAreaElement;
+    fireEvent.change(ta, { target: { value: '아직 저장 안 된 글' } });
+    fireEvent.click(screen.getByRole('button', { name: '2번 박서연 보기' }));
+    fireEvent.click(screen.getByRole('button', { name: '1번 김지훈 보기' }));
+    expect((screen.getByRole('textbox', { name: /김지훈/ }) as HTMLTextAreaElement).value).toBe(
+      '아직 저장 안 된 글',
+    );
+  });
+
+  it('★보기를 바꿔도(집중 → 전체) 미저장 글과 고른 학생이 남는다', async () => {
+    const r = view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: '2번 박서연 보기' }));
+    fireEvent.change(screen.getByRole('textbox', { name: /박서연/ }), {
+      target: { value: '박서연 미저장' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '전체 훑어보기' }));
+    // 설정 갱신은 흉내 스토어를 거친다 — 값을 직접 넣고 다시 그린다.
+    settingsState.settings = { recordDraftViewMode: 'overview' };
+    r.rerender(element());
+    expect(screen.queryByTestId('focus-layout')).toBeNull();
+    expect(screen.getAllByRole('textbox', { name: /초안$/ })).toHaveLength(2);
+    expect((screen.getByRole('textbox', { name: /박서연/ }) as HTMLTextAreaElement).value).toBe(
+      '박서연 미저장',
+    );
+    // 전체 → 집중으로 돌아와도 같다.
+    settingsState.settings = {};
+    r.rerender(element());
+    expect((screen.getByRole('textbox', { name: /박서연/ }) as HTMLTextAreaElement).value).toBe(
+      '박서연 미저장',
+    );
+  });
+
+  it('보기 단추는 설정에 기록한다', () => {
+    const update = vi.fn(async () => {});
+    settingsState.update = update;
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: '전체 훑어보기' }));
+    expect(update).toHaveBeenCalledWith({ recordDraftViewMode: 'overview' });
+    settingsState.update = async () => {};
+  });
+
+  it('★체크한 학생들이 패널에 "고른 N명"으로 넘어간다(초안 있는 학생은 existingText 포함)', () => {
+    drafts.byRef = {
+      sB: {
+        id: 'd-B',
+        area: 'subject',
+        studentRef: 'sB',
+        content: '박서연 기존 글',
+        status: 'draft',
+        basisObservationIds: [],
+        groundingFlags: [],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    };
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('checkbox', { name: '박서연 초안 생성 대상으로 고르기' }));
+    expect(screen.getByText('고른 1명')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '김지훈 AI 초안' }));
+    const picked = lastProps()['picked'] as readonly {
+      studentRef: string;
+      existingText?: string;
+    }[];
+    expect(picked.map((p) => p.studentRef)).toEqual(['sB']);
+    expect(picked[0]?.existingText).toBe('박서연 기존 글');
+    // [선택 해제] 로 비운다.
+    fireEvent.click(screen.getByRole('button', { name: '선택 해제' }));
+    expect((lastProps()['picked'] as readonly unknown[]).length).toBe(0);
+  });
+
+  it('[미작성 전체 고르기]는 보이는 학생 중 초안이 없는 학생만 고른다', () => {
+    drafts.byRef = {
+      sA: {
+        id: 'd-A',
+        area: 'subject',
+        studentRef: 'sA',
+        content: '김지훈 글',
+        status: 'draft',
+        basisObservationIds: [],
+        groundingFlags: [],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    };
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: '미작성 전체 고르기' }));
+    expect(screen.getByText('고른 1명')).toBeTruthy();
+    expect(
+      (
+        screen.getByRole('checkbox', {
+          name: '박서연 초안 생성 대상으로 고르기',
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(true);
+  });
+
+  it('[미작성 전체 고르기]는 검색으로 걸러진 학생만 고른다(리뷰 지적 4)', () => {
+    view({ openPanel: false });
+    fireEvent.change(screen.getByRole('searchbox', { name: '학생 찾기' }), {
+      target: { value: '김' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '미작성 전체 고르기' }));
+    expect(screen.getByText('고른 1명')).toBeTruthy();
+    fireEvent.change(screen.getByRole('searchbox', { name: '학생 찾기' }), {
+      target: { value: '' },
+    });
+    expect(
+      (
+        screen.getByRole('checkbox', {
+          name: '박서연 초안 생성 대상으로 고르기',
+        }) as HTMLInputElement
+      ).checked,
+    ).toBe(false);
+  });
+
+  it('실험실 스위치가 꺼져 있으면 체크 상자가 없다(AI 초안 대상 고르기라서)', () => {
+    useAssistStore.setState({ ownAiEnabled: false });
+    view({ openPanel: false });
+    expect(screen.queryAllByRole('checkbox', { name: /초안 생성 대상/ })).toHaveLength(0);
+  });
+
+  it('실행 중이면 [AI 도움] 단추에 진행 표시가 붙는다(패널이 닫혀 있어도 결과로 돌아갈 수 있다)', async () => {
+    view({ openPanel: false });
+    await act(async () =>
+      useRecordAiRunStore.getState().setDraftPhase('c1:subject:수학', {
+        kind: 'running',
+        done: 0,
+        total: 1,
+        name: '김지훈',
+        studentRef: 'sA',
+        queue: [],
+      }),
+    );
+    expect(screen.getByLabelText('AI 실행 중')).toBeTruthy();
+    await act(async () =>
+      useRecordAiRunStore.getState().setDraftPhase('c1:subject:수학', {
+        kind: 'preview',
+        studentRef: 'sA',
+        name: '김지훈',
+        queue: [],
+      }),
+    );
+    expect(screen.getByLabelText('AI 결과 있음')).toBeTruthy();
+  });
+});
+
+describe('★배치 규칙 resolveListMode — 본문 560px 을 못 확보하면 목록을 선택기로 접는다', () => {
+  it('폭을 모르면 목록', () => {
+    expect(resolveListMode(null, true, 380)).toBe('list');
+  });
+  it('패널 열림: 224 + 380 + 32(안쪽 여백) + 560 = 1196 이상이면 목록, 아래면 선택기', () => {
+    expect(resolveListMode(1196, true, 380)).toBe('list');
+    expect(resolveListMode(1195, true, 380)).toBe('selector');
+  });
+  it('패널 닫힘: 224 + 32 + 560 = 816 이상이면 목록', () => {
+    expect(resolveListMode(816, false, 380)).toBe('list');
+    expect(resolveListMode(815, false, 380)).toBe('selector');
   });
 });

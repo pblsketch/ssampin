@@ -3,36 +3,26 @@ import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import {
   RECORD_AREA_LABELS,
   areasForContext,
-  neisByteLength,
   resolveAreaLimit,
   isAreaLimitVerified,
   type RecordArea,
   type RecordDraft,
-  type RecordDraftStatus,
   type SchoolLevel,
 } from '@domain/entities/RecordDraft';
-import {
-  RecordDraftLimitError,
-  useRecordDraftsStore,
-  type RecordDraftUpsertInput,
-} from '@adapters/stores/useRecordDraftsStore';
+import { useRecordDraftsStore } from '@adapters/stores/useRecordDraftsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
-import { registerDraftFlush } from '@adapters/components/RecordDraft/draftFlushRegistry';
 import { useToastStore } from '@adapters/components/common/Toast';
 import {
   resolveRecordFlowIntent,
   type RecordFlowIntent,
 } from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
-import { recordDraftFlagLabel } from '@domain/rules/recordDraftFlagLabels';
 import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import { useInquiryThreadStore } from '@adapters/stores/useInquiryThreadStore';
 import { useRubricStore } from '@adapters/stores/useRubricStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useCurriculumStandards } from '@adapters/hooks/useCurriculumStandards';
 import { standardKeywords, standardsForCodes } from '@domain/rules/curriculumStandardRules';
-import { isClassified } from '@domain/rules/threadSuggest';
 import type { ObservationRecord } from '@domain/entities/Observation';
 import {
   NARRATIVE_ROLES,
@@ -45,18 +35,29 @@ import {
   useEvidenceCandidateCounts,
   useEvidenceCandidates,
 } from '@adapters/hooks/useEvidenceCandidates';
-import {
-  RecordDraftAiPanel,
-  type DraftTarget,
-} from '@adapters/components/RecordDraft/RecordDraftAiPanel';
+import { RecordDraftAiPanel } from '@adapters/components/RecordDraft/RecordDraftAiPanel';
 import {
   RecordDraftSidePanel,
+  type SidePanelPlacement,
   type SidePanelTab,
 } from '@adapters/components/RecordDraft/RecordDraftSidePanel';
 import {
-  DRAFT_TEXT_METRICS,
-  RoleHighlightLayer,
-} from '@adapters/components/RecordDraft/RoleHighlightLayer';
+  activeStudentRefsOf,
+  draftRunScope,
+  useRecordAiRunStore,
+  type DraftRunPhase,
+} from '@adapters/stores/useRecordAiRunStore';
+import { RecordDraftRow } from '@adapters/components/RecordDraft/RecordDraftRow';
+import {
+  RecordDraftStudentList,
+  type StudentListItem,
+} from '@adapters/components/RecordDraft/RecordDraftStudentList';
+import type {
+  DraftTarget,
+  LiveDraftEntry,
+  RecordDraftLayout,
+  RecordDraftStudentRow,
+} from '@adapters/components/RecordDraft/recordDraftTypes';
 import { ROLE_DOT } from '@adapters/components/RecordDraft/narrativeRoleStyles';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { fetchRecordPromptL1 } from '@adapters/di/container';
@@ -82,16 +83,7 @@ const LENGTH_ADJUST_TIMEOUT_MS = 5 * 60_000;
 /** 작성주체(담임/교과) — 노출 영역 집합과 작성주체 결속을 결정. */
 type RecordContext = 'homeroom' | 'teaching';
 
-export interface RecordDraftStudentRow {
-  /** 학생 신원 키(담임=Student.id / 수업반='tc:{classId}:{studentKey}'). */
-  readonly studentRef: string;
-  readonly number: number;
-  readonly name: string;
-  /** 담임 학생 id. */
-  readonly studentId?: string;
-  /** 수업반 학생 번호 키. */
-  readonly studentKey?: string;
-}
+export type { RecordDraftStudentRow } from '@adapters/components/RecordDraft/recordDraftTypes';
 
 interface RecordDraftViewProps {
   readonly context: RecordContext;
@@ -114,6 +106,55 @@ interface RecordDraftViewProps {
   readonly onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
   /** 명단이 실제로 로드됐는지. false 면 요청 판정을 미룬다(없는 학생으로 단정하지 않는다). */
   readonly rosterLoaded?: boolean;
+  /**
+   * 이 화면이 떠 있는 동안 바깥 틀(수업 관리의 학급 목록)을 접어 달라는 요청(ADR-093 결정 7).
+   * 마운트에 `true`, 언마운트에 `false`. 복원 판단은 받는 쪽이 한다.
+   */
+  readonly onRequestCompactHost?: (compact: boolean) => void;
+}
+
+/** 오른쪽 보조 공간의 폭 — 넓은 창 380, 그 아래 320(ADR-092 R-7 의 값을 그대로). */
+const PANEL_WIDTH_WIDE = 380;
+const PANEL_WIDTH_NARROW = 320;
+/** 본문(편집 칸)이 확보해야 하는 최소 폭(설계서 §2-3). 이 아래로 눌리면 배치를 바꾼다. */
+const MIN_BODY_WIDTH = 560;
+/** 본문 칸의 좌우 안쪽 여백(px-4 × 2). 편집 칸 실제 폭 = 칸 폭 − 이 값. 실측(1440px: 칸 576 → 편집 칸 544)으로 확인. */
+const BODY_PADDING = 32;
+
+/**
+ * 창 폭에 따른 배치(설계서 §2-3). `width` 는 이 화면 루트의 실제 폭(px). 모르면(`null`, jsdom 등) 넓다고 본다.
+ * @returns panelWidth — 나란히 놓일 때의 패널 폭 · placement — 나란히(`side`) / 본문 자리 통째(`sheet`)
+ */
+export function resolvePanelLayout(width: number | null): {
+  readonly panelWidth: number;
+  readonly placement: SidePanelPlacement;
+} {
+  if (width === null) return { panelWidth: PANEL_WIDTH_WIDE, placement: 'side' };
+  const panelWidth = width >= 1200 ? PANEL_WIDTH_WIDE : PANEL_WIDTH_NARROW;
+  return {
+    panelWidth,
+    placement: width - panelWidth - BODY_PADDING >= MIN_BODY_WIDTH ? 'side' : 'sheet',
+  };
+}
+
+/** 실행 없음 — 매 렌더 새 객체를 만들지 않게 모듈 상수로. */
+const IDLE_RUN_PHASE: DraftRunPhase = { kind: 'idle' };
+
+/** 집중 보기 학생 목록의 폭(px). */
+const STUDENT_LIST_WIDTH = 224;
+
+/**
+ * 집중 보기의 학생 목록을 기둥(`list`)으로 둘지 선택기 한 줄(`selector`)로 접을지(설계서 §2-3).
+ * 본문이 560px 을 못 확보하면 접는다. 폭을 모르면 기둥.
+ */
+export function resolveListMode(
+  width: number | null,
+  sidePanelShown: boolean,
+  panelWidth: number,
+): 'list' | 'selector' {
+  if (width === null) return 'list';
+  const body = width - STUDENT_LIST_WIDTH - (sidePanelShown ? panelWidth : 0) - BODY_PADDING;
+  return body >= MIN_BODY_WIDTH ? 'list' : 'selector';
 }
 
 type DraftFilter = 'all' | 'unwritten' | 'unreviewed';
@@ -123,27 +164,6 @@ const FILTERS: { id: DraftFilter; label: string }[] = [
   { id: 'unwritten', label: '미작성' },
   { id: 'unreviewed', label: '검토 전' },
 ];
-
-const STATUS_META: Record<RecordDraftStatus, { label: string; cls: string }> = {
-  draft: { label: '작성 중', cls: 'bg-sp-surface text-sp-muted' },
-  reviewing: { label: '검토 중', cls: 'bg-amber-500/15 text-amber-500' },
-  confirmed: { label: '검토 완료', cls: 'bg-emerald-500/15 text-emerald-500' },
-};
-
-const NEXT_STATUS: Record<RecordDraftStatus, RecordDraftStatus> = {
-  draft: 'reviewing',
-  reviewing: 'confirmed',
-  confirmed: 'draft',
-};
-
-/** 검토 플래그 라벨은 도메인(`recordDraftFlagLabels.ts`)이 정본 — 점검 규칙이 늘어도 이 파일은 안 바뀐다. */
-const flagLabel = recordDraftFlagLabel;
-
-/** 관찰기록 날짜(YYYY-MM-DD) → 'M/D'. */
-function formatObsDate(date: string): string {
-  const [, mm, dd] = date.split('-');
-  return mm && dd ? `${Number(mm)}/${Number(dd)}` : date;
-}
 
 /** subject 키가 필요한 영역(과목·개인세특·교과학습발달상황). 그 외(담임 영역·동아리)는 과목 없음. */
 function areaSubject(area: RecordArea, classSubject?: string): string | undefined {
@@ -163,6 +183,7 @@ export function RecordDraftView({
   onFlowIntentConsumed,
   onRequestFlow,
   rosterLoaded = true,
+  onRequestCompactHost,
 }: RecordDraftViewProps) {
   const author = context === 'homeroom' ? 'homeroom' : 'teaching';
   const areas = useMemo(() => areasForContext(level, author), [level, author]);
@@ -204,6 +225,50 @@ export function RecordDraftView({
   );
   const [sideTab, setSideTab] = useState<SidePanelTab>('ai');
   /**
+   * 오른쪽 보조 공간 열림(ADR-093 결정 2). [AI ▸]·[AI 도움]·[근거 N건]을 눌렀을 때만 열리고 ✕ 로 닫으면 폭이 0 이다.
+   * 쌤핀 AI 도크가 열려 있으면(`assistOpen`) 그것도 이 공간의 한 탭이라 함께 보인다.
+   */
+  const [panelOpen, setPanelOpen] = useState(false);
+  const assistOpen = useAssistStore((s) => s.open);
+  const setAssistOpen = useAssistStore((s) => s.setOpen);
+  const panelVisible = panelOpen;
+  const closePanel = useCallback((): void => setPanelOpen(false), []);
+
+  /**
+   * 쌤핀 AI 도크(범용 대화)와 이 패널(생기부 초안 전용)은 **둘 중 하나만** 열린다(ADR-093 결정 2, 오너 피드백).
+   * 쌤핀 AI 를 이 패널 안의 탭으로 넣어 봤더니 "이 화면의 AI = 초안 쓰기"와 헷갈렸다. 그래서 자리를 합치지 않고
+   * 배타적으로 다룬다: 도크가 열리면 이 패널을 닫고([AI ▸]·[근거 N건]은 반대로 도크를 닫는다) 오른쪽엔 늘 하나만 있다.
+   */
+  useEffect(() => {
+    if (assistOpen) setPanelOpen(false);
+  }, [assistOpen]);
+
+  /** 바깥 틀(수업 관리 학급 목록) 접기 요청 — 마운트에 켜고 언마운트에 푼다. */
+  useEffect(() => {
+    if (!onRequestCompactHost) return;
+    onRequestCompactHost(true);
+    return () => onRequestCompactHost(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트/언마운트에만. 콜백이 바뀌어도 다시 요청하지 않는다.
+  }, []);
+
+  /** 이 화면 루트의 실제 폭 — 배치(나란히/시트) 판단에 쓴다. ResizeObserver 가 없으면(jsdom) 모름(=넓다). */
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const [rootWidth, setRootWidth] = useState<number | null>(null);
+  useEffect(() => {
+    const el = rootRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w !== undefined) setRootWidth(Math.round(w));
+    });
+    ro.observe(el);
+    setRootWidth(Math.round(el.getBoundingClientRect().width));
+    return () => ro.disconnect();
+  }, []);
+  const layout = resolvePanelLayout(rootWidth);
+  /** 패널이 본문 자리를 통째로 차지하는 좁은 배치인가. */
+  const sheetMode = panelVisible && layout.placement === 'sheet';
+  /**
    * 보드로 넘길 때 "이걸 찾아 줘"라고 함께 보내는 요청(계획 §4.3).
    * 보드가 필터를 풀고 스크롤·포커스한다. 한 번 쓰고 나면 보드가 알려 준다.
    */
@@ -222,7 +287,7 @@ export function RecordDraftView({
    * ★`draftFlushRegistry` 와 **다른 물건**이다. 그건 이동 전에 저장을 밀어 넣는 콜백 등록소이고
    *   언마운트에서 등록이 풀린다. 이건 부모가 든 "키 → 현재 입력 글" 지도다.
    */
-  const liveDraftTextRef = useRef(new Map<string, string>());
+  const liveDraftTextRef = useRef(new Map<string, LiveDraftEntry>());
   /**
    * 초안 생성·분량 조절·형광펜 [다시 표시]를 **함께** 막는 잠금과, 늦게 온 결과를 가리는 번호.
    *
@@ -233,6 +298,8 @@ export function RecordDraftView({
    */
   const aiBusyRef = useRef(false);
   const aiRunTokenRef = useRef(0);
+  /** 진행 중 분량 조절의 [중단] 손잡이(R-6). 실행마다 새로 만든다. */
+  const lengthAbortRef = useRef<AbortController | null>(null);
 
   /** 행의 마운트 키와 같은 3축 키. 등록부·후보 보관이 모두 이걸 쓴다. */
   const rowKeyOf = useCallback(
@@ -242,7 +309,8 @@ export function RecordDraftView({
   );
 
   const noteLiveText = useCallback((key: string, value: string): void => {
-    liveDraftTextRef.current.set(key, value);
+    // 시각을 함께 적는다 — 저장된 글(`updatedAt`)보다 새로울 때만 "화면의 진실"로 인정한다(아래 liveEntryFor).
+    liveDraftTextRef.current.set(key, { text: value, at: Date.now() });
   }, []);
 
   /**
@@ -400,12 +468,24 @@ export function RecordDraftView({
    *   **한 번도 안 친 학생은 항목이 없다.** 그때는 저장된 초안을 쓴다 — 타이핑한 적 없는 학생도
    *   조절할 수 있어야 한다.
    */
+  /**
+   * 등록부의 글이 **저장된 글보다 새로울 때만** 돌려준다. 타이핑 뒤 AI [반영]·동기화로 저장본이 갱신되면
+   * 등록부의 옛 글은 더 이상 진실이 아니다 — 그걸 그대로 쓰면 반영본을 옛 글로 덮는다(리뷰 지적 1).
+   * 행의 되돌리기 효과(`lastEditAtRef > draft.updatedAt`)와 같은 기준이다.
+   */
+  const liveEntryFor = useCallback(
+    (studentRef: string): LiveDraftEntry | undefined => {
+      const live = liveDraftTextRef.current.get(rowKeyOf(studentRef));
+      if (live === undefined) return undefined;
+      const savedAt = getDraft(activeArea, studentRef, subject)?.updatedAt ?? 0;
+      return live.at > savedAt ? live : undefined;
+    },
+    [rowKeyOf, getDraft, activeArea, subject],
+  );
   const readLiveText = useCallback(
     (studentRef: string): string =>
-      liveDraftTextRef.current.get(rowKeyOf(studentRef)) ??
-      getDraft(activeArea, studentRef, subject)?.content ??
-      '',
-    [rowKeyOf, getDraft, activeArea, subject],
+      liveEntryFor(studentRef)?.text ?? getDraft(activeArea, studentRef, subject)?.content ?? '',
+    [liveEntryFor, getDraft, activeArea, subject],
   );
 
   /**
@@ -414,9 +494,9 @@ export function RecordDraftView({
    *   완전히 비운 상태가 영구 미저장으로 판정돼 [뒤에 붙이기]가 계속 막힌다.
    */
   const hasUnsavedInputFor = (studentRef: string): boolean => {
-    const live = liveDraftTextRef.current.get(rowKeyOf(studentRef));
+    const live = liveEntryFor(studentRef);
     if (live === undefined) return false;
-    return live.trim().length > 0 && live !== (draftFor(studentRef)?.content ?? '');
+    return live.text.trim().length > 0 && live.text !== (draftFor(studentRef)?.content ?? '');
   };
 
   const writtenCount = students.filter(
@@ -478,10 +558,14 @@ export function RecordDraftView({
       threadTitle: string | undefined,
       kind: LengthAdjustKind,
       targetBytes: number,
+      // ★조절할 원문은 패널이 정해 넘긴다(R-2). 없으면 편집 칸의 지금 글.
+      sourceText: string | undefined,
     ): Promise<LengthAdjustOutcome> => {
       const api = runApi();
       if (!api || !runProviderForLength) throw new Error(OWN_AI_ERROR_MESSAGES.crashed.draft);
       if (aiBusyRef.current) throw new Error('다른 AI 작업이 끝나면 이어서 할 수 있어요.');
+      const abort = new AbortController();
+      lengthAbortRef.current = abort;
 
       // ★규정(1층 프롬프트)을 먼저 받는다. 없으면 실행하지 않는다 - 조절도 같은 게이트를 받는다.
       //   ★한도(429)와 그 밖의 실패는 안내가 달라야 한다 — "인터넷을 확인하라"고 하면
@@ -514,12 +598,13 @@ export function RecordDraftView({
             studentName: displayName,
             roster,
             areaLabel: RECORD_AREA_LABELS[activeArea],
-            sourceText: readLiveText(studentRef),
+            sourceText: sourceText ?? readLiveText(studentRef),
             targetBytes,
             ...(threadTitle !== undefined ? { threadTitle } : {}),
             ...(kind === 'expand' ? { evidences } : {}),
           },
           floorBytes: goalFloor(targetBytes),
+          signal: abort.signal,
         });
         // 늦게 온 결과는 버린다 — 그 사이 다른 실행이 시작됐다면 이 결과는 화면의 것이 아니다.
         if (token !== aiRunTokenRef.current)
@@ -601,22 +686,120 @@ export function RecordDraftView({
    * AI 초안을 만드는 중인 학생 — 필터가 걸려 있어도 **행을 붙들어 둔다.**
    * ★"미작성" 필터에서 "남은 학생 모두"를 누르면 첫 [반영] 순간 그 학생이 필터에서 빠져
    *   행이 사라졌다(UltraQA P1). 실행이 끝날 때까지 붙든다.
+   * ★패널 콜백이 아니라 **실행 스토어**에서 읽는다(ADR-093 결정 3) — 패널을 닫아도 붙들림이 풀리지 않는다.
    */
-  const [aiActiveRefs, setAiActiveRefs] = useState<ReadonlySet<string>>(() => new Set());
-  const setAiActive = useCallback((refs: readonly string[]) => {
-    setAiActiveRefs((prev) => {
-      if (prev.size === refs.length && refs.every((r) => prev.has(r))) return prev;
-      return new Set(refs);
-    });
-  }, []);
+  const runScope = draftRunScope({
+    area: activeArea,
+    ...(subject !== undefined ? { subject } : {}),
+    ...(classId !== undefined ? { classId } : {}),
+  });
+  const draftRun = useRecordAiRunStore((s) => s.drafts[runScope]);
+  const runPhase: DraftRunPhase = draftRun ?? IDLE_RUN_PHASE;
+  const aiActiveRefs = useMemo(() => new Set(activeStudentRefsOf(runPhase)), [runPhase]);
+  /** 보기 선택은 설정에 기억한다(ADR-093 결정 1). 기본 = 학생별 집중 보기. */
+  const draftLayout: RecordDraftLayout = useSettingsStore(
+    (s) => s.settings.recordDraftViewMode ?? 'focus',
+  );
+  /** [AI 도움] 단추의 진행 표시 — 패널이 닫혀 있어도 실행 중·결과 있음을 알린다(결과 돌아가기). */
+  const aiBadge: 'running' | 'result' | undefined =
+    runPhase.kind === 'running'
+      ? 'running'
+      : runPhase.kind === 'preview' || (runPhase.kind === 'stopped' && runPhase.message.length > 0)
+        ? 'result'
+        : undefined;
 
   const visibleStudents = students.filter((s) => {
     if (filter === 'all') return true;
     if (aiActiveRefs.has(s.studentRef)) return true; // 실행 중인 행은 필터를 무시하고 남긴다
+    // 집중 보기에서 쓰고 있는 학생은 붙들어 둔다 — 자동 저장 순간 필터에서 빠져 편집 칸이 사라지면 안 된다(리뷰 지적 5).
+    if (draftLayout === 'focus' && s.studentRef === selectedStudentRef) return true;
     const d = draftFor(s.studentRef);
     if (filter === 'unwritten') return (d?.content ?? '').trim().length === 0;
     return d === undefined || d.status !== 'confirmed'; // unreviewed
   });
+
+  // ── 보기(집중/전체)와 학생 목록 ──────────────────────────────
+  const setDraftLayout = (next: RecordDraftLayout): void => {
+    void updateSettings({ recordDraftViewMode: next });
+  };
+  /** 집중 보기의 학생 목록 재료 — 필터가 적용된 순서 그대로(매 렌더 계산, 30명이라 가볍다). */
+  const listItems: readonly StudentListItem[] = visibleStudents.map((s) => {
+    const d = draftFor(s.studentRef);
+    return {
+      studentRef: s.studentRef,
+      number: s.number,
+      name: s.name,
+      status: d?.status ?? null,
+      needsReview: !!d && (d.status === 'reviewing' || (d.groundingFlags ?? []).length > 0),
+      written: (d?.content ?? '').trim().length > 0,
+    };
+  });
+  /** 폭이 모자라면 학생 목록을 선택기 한 줄로 접는다(설계서 §2-3). */
+  const listMode = resolveListMode(
+    rootWidth,
+    panelVisible && layout.placement === 'side',
+    layout.panelWidth,
+  );
+
+  /**
+   * 초안 생성 대상으로 골라 둔 학생(오너 요청 2026-09-08: 한 명/전체 말고 몇 명만 직접).
+   * 두 보기가 같은 집합을 본다. 명단에서 사라진 학생은 뺀다.
+   */
+  const [checkedRefs, setCheckedRefs] = useState<ReadonlySet<string>>(() => new Set());
+  useEffect(() => {
+    setCheckedRefs((prev) => {
+      const alive = new Set(students.map((s) => s.studentRef));
+      const next = new Set([...prev].filter((r) => alive.has(r)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [students]);
+  const toggleChecked = useCallback((studentRef: string): void => {
+    setCheckedRefs((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentRef)) next.delete(studentRef);
+      else next.add(studentRef);
+      return next;
+    });
+  }, []);
+  const clearChecked = useCallback((): void => setCheckedRefs(new Set()), []);
+  /** [미작성 전체 고르기] — 목록이 **지금 보여 주는** 학생(검색·필터 뒤) 중 초안이 없는 학생만(리뷰 지적 4). */
+  const checkUnwrittenVisible = (shownRefs: readonly string[]): void => {
+    const shown = new Set(shownRefs);
+    setCheckedRefs(
+      new Set(
+        visibleStudents
+          .filter((s) => shown.has(s.studentRef))
+          .filter((s) => (draftFor(s.studentRef)?.content ?? '').trim().length === 0)
+          .map((s) => s.studentRef),
+      ),
+    );
+  };
+
+  /** 집중 보기의 [이전]/[다음]·Ctrl+Enter — 보이는 목록 순서로 옮기고, 키보드로 왔으면 새 칸에 포커스한다. */
+  const selectedIndex = visibleStudents.findIndex((s) => s.studentRef === selectedStudentRef);
+  const [focusRequest, setFocusRequest] = useState<{
+    readonly studentRef: string;
+    readonly token: number;
+  } | null>(null);
+  const focusTokenRef = useRef(0);
+  const stepStudent = (delta: 1 | -1, focusEditor: boolean): void => {
+    const next = visibleStudents[selectedIndex + delta];
+    if (!next) return;
+    setSelectedStudentRef(next.studentRef);
+    if (focusEditor) {
+      focusTokenRef.current += 1;
+      setFocusRequest({ studentRef: next.studentRef, token: focusTokenRef.current });
+    } else {
+      setFocusRequest(null);
+    }
+  };
+  /** 행이 다시 만들어질 때 등록부의 글로 시작하게 하는 prop(P8). 저장본보다 새 글이 없으면 아무것도 넘기지 않는다. */
+  const liveTextProp = (
+    studentRef: string,
+  ): { readonly initialLiveText?: string; readonly initialLiveAt?: number } => {
+    const live = liveEntryFor(studentRef);
+    return live === undefined ? {} : { initialLiveText: live.text, initialLiveAt: live.at };
+  };
 
   // ── 고른 학생의 패널 재료 ─────────────────────────────────
   const selectedStudent = students.find((s) => s.studentRef === selectedStudentRef) ?? null;
@@ -681,6 +864,29 @@ export function RecordDraftView({
         })),
     [unwrittenStudents, selectedStudentRef, evidenceRecords, activeArea, standardKeywordList],
   );
+  /**
+   * "고른 N명" 대상 — 체크한 학생 전부(자기 자신 포함, 초안이 있는 학생도 포함). 이미 글이 있는 학생은
+   * 미리보기에서 [바꾸기]/[뒤에 붙이기]를 고르게 하므로 `existingText` 를 실어 준다.
+   */
+  const aiPicked = useMemo<readonly DraftTarget[]>(
+    () =>
+      students
+        .filter((s) => checkedRefs.has(s.studentRef))
+        .map((s) => {
+          const existing = draftFor(s.studentRef)?.content ?? '';
+          return {
+            studentRef: s.studentRef,
+            displayName: s.name,
+            evidences: evidenceRecords.filter(
+              (e) => e.studentRef === s.studentRef && e.areas.includes(activeArea),
+            ),
+            ...(standardKeywordList !== undefined ? { standardKeywords: standardKeywordList } : {}),
+            ...(existing.trim().length > 0 ? { existingText: existing } : {}),
+          };
+        }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- draftFor 는 매 렌더 새로 만들어진다. 실제 의존은 records.
+    [students, checkedRefs, evidenceRecords, activeArea, standardKeywordList, records],
+  );
   const aiDraftKey = useMemo(
     () => ({
       area: activeArea,
@@ -693,12 +899,31 @@ export function RecordDraftView({
 
   const selectStudent = useCallback((studentRef: string) => {
     setSelectedStudentRef(studentRef);
+    // 클릭으로 고른 것은 포커스 요청이 아니다 — 키보드(Ctrl+Enter)로 왔을 때만 새 칸에 커서를 둔다.
+    setFocusRequest(null);
   }, []);
   const openAiFor = (studentRef: string): void => {
     setSelectedStudentRef(studentRef);
     setSideTab('ai');
+    // 쌤핀 AI 도크가 열려 있었으면 닫는다(오른쪽엔 하나만). 대화는 스토어에 남는다.
+    if (useAssistStore.getState().open) setAssistOpen(false);
+    setPanelOpen(true);
+  };
+  const openEvidenceFor = (studentRef: string): void => {
+    setSelectedStudentRef(studentRef);
+    setSideTab('evidence');
+    if (useAssistStore.getState().open) setAssistOpen(false);
+    setPanelOpen(true);
   };
   const openBoardFor = (studentRef: string): void => {
+    // ★한도를 넘겨 저장되지 않은 글이 있으면 막지는 않되 **말한다**(R-5, ADR-092). 그 글은 앱을
+    //   켜 둔 동안만 남는다 — 이동은 자유지만 잊고 앱을 끄면 사라진다.
+    if (hasUnsavedInputFor(studentRef)) {
+      flashCopyMsg(
+        '저장되지 않은 글이 있어요. 한도를 넘어 저장되지 않았습니다: 앱을 끄기 전에 줄여서 저장하세요.',
+        false,
+      );
+    }
     setSelectedStudentRef(studentRef);
     setViewMode('evidence');
   };
@@ -706,6 +931,14 @@ export function RecordDraftView({
   // ── 파워유저 가속 ─────────────────────────────────────────
   const listRef = useRef<HTMLDivElement | null>(null);
   const tablistRef = useRef<HTMLDivElement | null>(null);
+  // 전체 훑어보기로 바꾸면 고른 학생의 행이 보이는 자리로 스크롤한다(위치 보전). jsdom 엔 scrollIntoView 가 없다.
+  useEffect(() => {
+    if (draftLayout !== 'overview' || selectedStudentRef === null) return;
+    const el = listRef.current?.querySelector<HTMLElement>(
+      `[data-rd-student="${selectedStudentRef}"]`,
+    );
+    el?.scrollIntoView?.({ block: 'nearest' });
+  }, [draftLayout, selectedStudentRef]);
   const [copyMsg, setCopyMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const copyMsgTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -781,9 +1014,13 @@ export function RecordDraftView({
         };
 
   return (
-    <div className="h-full flex flex-col rounded-xl bg-sp-card ring-1 ring-sp-border overflow-hidden">
-      {/* 상단 바 — breadcrumb + 모드 토글 + 형광펜 + (초안)복사·내보내기 + 컨텍스트 칩 */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-sp-border">
+    <div
+      ref={rootRef}
+      className="h-full flex flex-col rounded-xl bg-sp-card ring-1 ring-sp-border overflow-hidden"
+    >
+      {/* 상단 바 — breadcrumb + 모드 토글 + 형광펜 + (초안)복사·내보내기 + 컨텍스트 칩.
+          ★좁으면 다음 줄로 내린다(flex-wrap) — 단추 글자가 한 글자씩 세로로 무너지지 않게 각 단추는 nowrap. */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 border-b border-sp-border">
         <div className="flex items-center gap-1.5 truncate">
           {className ? <span className="text-sm text-sp-muted">{className}</span> : null}
           {className ? <span className="text-sm text-sp-muted">›</span> : null}
@@ -792,24 +1029,51 @@ export function RecordDraftView({
           </h2>
         </div>
         {/* 초안 ↔ 근거 정리 서브페이지 토글 */}
-        <div className="inline-flex overflow-hidden rounded-full text-xs font-medium ring-1 ring-sp-border">
+        <div className="inline-flex shrink-0 overflow-hidden rounded-full text-xs font-medium ring-1 ring-sp-border">
           <button
             type="button"
             onClick={() => setViewMode('draft')}
-            className={`px-3 py-1 transition-colors ${viewMode === 'draft' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
+            className={`whitespace-nowrap px-3 py-1 transition-colors ${viewMode === 'draft' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
           >
             초안
           </button>
           <button
             type="button"
             onClick={() => setViewMode('evidence')}
-            className={`px-3 py-1 transition-colors ${viewMode === 'evidence' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
+            className={`whitespace-nowrap px-3 py-1 transition-colors ${viewMode === 'evidence' ? 'bg-sp-accent text-white' : 'text-sp-muted hover:text-sp-text'}`}
           >
             근거 정리
           </button>
         </div>
+        {/* 보기: 학생별 집중 보기 ↔ 전체 훑어보기(ADR-093 결정 1). 선택은 설정에 기억한다. */}
         {viewMode === 'draft' && (
-          <label className="inline-flex cursor-pointer items-center gap-1.5 text-xs font-medium text-sp-muted">
+          <div
+            className="inline-flex shrink-0 overflow-hidden rounded-full text-xs font-medium ring-1 ring-sp-border"
+            role="group"
+            aria-label="초안 보기"
+          >
+            <button
+              type="button"
+              onClick={() => setDraftLayout('focus')}
+              aria-pressed={draftLayout === 'focus'}
+              title="학생 한 명을 넓게 보며 씁니다"
+              className={`whitespace-nowrap px-3 py-1 transition-colors ${draftLayout === 'focus' ? 'bg-sp-surface font-semibold text-sp-text' : 'text-sp-muted hover:text-sp-text'}`}
+            >
+              집중 보기
+            </button>
+            <button
+              type="button"
+              onClick={() => setDraftLayout('overview')}
+              aria-pressed={draftLayout === 'overview'}
+              title="학생 전체를 한 목록에서 이어서 씁니다"
+              className={`whitespace-nowrap px-3 py-1 transition-colors ${draftLayout === 'overview' ? 'bg-sp-surface font-semibold text-sp-text' : 'text-sp-muted hover:text-sp-text'}`}
+            >
+              전체 훑어보기
+            </button>
+          </div>
+        )}
+        {viewMode === 'draft' && (
+          <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap text-xs font-medium text-sp-muted">
             <input
               type="checkbox"
               role="switch"
@@ -837,7 +1101,7 @@ export function RecordDraftView({
               type="button"
               onClick={() => void copyAllVisible()}
               title="현재 영역의 작성된 초안을 한 번에 복사 (번호·이름·내용)"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
             >
               <span className="material-symbols-outlined text-base">content_copy</span>영역 전체
               복사
@@ -845,14 +1109,14 @@ export function RecordDraftView({
             <button
               type="button"
               onClick={() => setShowExport(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
+              className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 rounded-lg text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text hover:bg-sp-surface transition-all"
             >
               <span className="material-symbols-outlined text-base">download</span>내보내기
             </button>
           </>
         )}
         <span
-          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold ring-1 ${ctxChip.cls}`}
+          className={`inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-3 py-1 text-xs font-semibold ring-1 ${ctxChip.cls}`}
         >
           <span className="material-symbols-outlined text-sm">{ctxChip.icon}</span>
           {ctxChip.label}
@@ -972,119 +1236,249 @@ export function RecordDraftView({
             </div>
           </div>
 
-          <div className="flex min-h-0 flex-1">
-            <div className="flex min-w-0 flex-1 flex-col">
-              {/* 입력창 안내 — 목록 전체에 1회만 노출(행마다 반복 제거) */}
-              <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 text-xs text-sp-muted border-b border-sp-border">
-                <span className="inline-flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">open_in_full</span>
-                  입력창 우하단을 끌어 크기를 조절할 수 있습니다.
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm">keyboard_return</span>
-                  <kbd className="rounded bg-sp-surface px-1 font-semibold text-sp-text">
-                    Ctrl+Enter
-                  </kbd>
-                  로 다음 학생 칸으로 이동합니다.
-                </span>
-              </p>
-
-              {/* 학생 세로 스크롤 리스트 */}
-              <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
-                {visibleStudents.length === 0 ? (
-                  <p className="py-10 text-center text-sm text-sp-muted">표시할 학생이 없습니다.</p>
+          {/* 본문 + 오른쪽 보조 공간. 가로가 모자라도 짓누르지 않는다(R-7) — 배치 규칙은 resolvePanelLayout/resolveListMode. */}
+          <div className="flex min-h-0 flex-1 overflow-x-auto">
+            {/* 좁은 배치(sheet)에서는 패널이 본문 자리를 통째로 쓴다 — 본문은 잠시 비운다(글은 등록부·저장소에 있다). */}
+            {!sheetMode && (
+              <div className="flex min-w-[320px] flex-1 flex-col">
+                {draftLayout === 'focus' ? (
+                  /* ── 학생별 집중 보기(기본, ADR-093 결정 1): 학생 목록 + 고른 학생의 넓은 본문 ── */
+                  <div className="flex min-h-0 flex-1" data-testid="focus-layout">
+                    {listMode === 'list' && (
+                      <RecordDraftStudentList
+                        items={listItems}
+                        selectedRef={selectedStudentRef}
+                        checkedRefs={checkedRefs}
+                        showCheckboxes={ownAiEnabled}
+                        mode="list"
+                        onSelect={selectStudent}
+                        onToggleChecked={toggleChecked}
+                        onCheckUnwritten={checkUnwrittenVisible}
+                        onClearChecked={clearChecked}
+                      />
+                    )}
+                    <div className="flex min-w-0 flex-1 flex-col">
+                      {listMode === 'selector' && (
+                        <RecordDraftStudentList
+                          items={listItems}
+                          selectedRef={selectedStudentRef}
+                          checkedRefs={checkedRefs}
+                          showCheckboxes={ownAiEnabled}
+                          mode="selector"
+                          onSelect={selectStudent}
+                          onToggleChecked={toggleChecked}
+                          onCheckUnwritten={checkUnwrittenVisible}
+                          onClearChecked={clearChecked}
+                        />
+                      )}
+                      {selectedStudent &&
+                      visibleStudents.some((s) => s.studentRef === selectedStudent.studentRef) ? (
+                        <RecordDraftRow
+                          key={`${selectedStudent.studentRef}:${activeArea}:${subject ?? ''}`}
+                          variant="focus"
+                          student={selectedStudent}
+                          area={activeArea}
+                          level={level}
+                          subject={subject}
+                          classId={classId}
+                          draft={selectedDraft}
+                          index={0}
+                          selected
+                          checked={checkedRefs.has(selectedStudent.studentRef)}
+                          mirrorCount={mirrorCounts.get(selectedStudent.studentRef) ?? 0}
+                          highlightOn={highlightOn}
+                          showAiButton={ownAiEnabled}
+                          {...(aiBadge !== undefined ? { aiBadge } : {})}
+                          {...(standardTexts !== undefined ? { standardTexts } : {})}
+                          rowKey={rowKeyOf(selectedStudent.studentRef)}
+                          {...liveTextProp(selectedStudent.studentRef)}
+                          onLiveText={noteLiveText}
+                          {...(deliverBox !== null &&
+                          deliverBox.rowKey === rowKeyOf(selectedStudent.studentRef)
+                            ? { deliver: deliverBox }
+                            : {})}
+                          {...(focusRequest !== null &&
+                          focusRequest.studentRef === selectedStudent.studentRef
+                            ? { focusToken: focusRequest.token }
+                            : {})}
+                          onSelect={selectStudent}
+                          onToggleChecked={toggleChecked}
+                          onOpenAi={openAiFor}
+                          onOpenBoard={openBoardFor}
+                          onOpenEvidence={openEvidenceFor}
+                          onJumpNext={() => stepStudent(1, true)}
+                          {...(selectedIndex > 0 ? { onPrev: () => stepStudent(-1, false) } : {})}
+                          {...(selectedIndex >= 0 && selectedIndex < visibleStudents.length - 1
+                            ? { onNext: () => stepStudent(1, false) }
+                            : {})}
+                        />
+                      ) : (
+                        <p className="py-10 text-center text-sm text-sp-muted">
+                          {visibleStudents.length === 0
+                            ? '표시할 학생이 없습니다.'
+                            : '왼쪽에서 학생을 고르세요.'}
+                        </p>
+                      )}
+                    </div>
+                  </div>
                 ) : (
-                  visibleStudents.map((s, i) => (
-                    <RecordDraftRow
-                      key={`${s.studentRef}:${activeArea}:${subject ?? ''}`}
-                      student={s}
-                      area={activeArea}
-                      level={level}
-                      subject={subject}
-                      classId={classId}
-                      draft={draftFor(s.studentRef)}
-                      index={i}
-                      selected={s.studentRef === selectedStudentRef}
-                      mirrorCount={mirrorCounts.get(s.studentRef) ?? 0}
-                      highlightOn={highlightOn}
-                      showAiButton={ownAiEnabled}
-                      {...(standardTexts !== undefined ? { standardTexts } : {})}
-                      rowKey={rowKeyOf(s.studentRef)}
-                      onLiveText={noteLiveText}
-                      {...(deliverBox !== null && deliverBox.rowKey === rowKeyOf(s.studentRef)
-                        ? { deliver: deliverBox }
-                        : {})}
-                      onSelect={selectStudent}
-                      onOpenAi={openAiFor}
-                      onOpenBoard={openBoardFor}
-                      onJumpNext={() => focusRowTextarea(i + 1)}
-                    />
-                  ))
+                  /* ── 전체 훑어보기: 30명 행을 세로로(예전 목록 그대로) ── */
+                  <>
+                    {/* 입력창 안내 — 목록 전체에 1회만 노출(행마다 반복 제거) */}
+                    <p className="flex flex-wrap items-center gap-x-2 gap-y-1 px-4 py-1.5 text-xs text-sp-muted border-b border-sp-border">
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                        <span className="material-symbols-outlined text-sm">open_in_full</span>
+                        입력창 우하단을 끌어 크기를 조절할 수 있습니다.
+                      </span>
+                      <span className="inline-flex items-center gap-1 whitespace-nowrap">
+                        <span className="material-symbols-outlined text-sm">keyboard_return</span>
+                        <kbd className="rounded bg-sp-surface px-1 font-semibold text-sp-text">
+                          Ctrl+Enter
+                        </kbd>
+                        로 다음 학생 칸으로 이동합니다.
+                      </span>
+                      {ownAiEnabled && checkedRefs.size > 0 && (
+                        <span className="ml-auto inline-flex items-center gap-1 whitespace-nowrap font-semibold text-sp-accent">
+                          고른 {checkedRefs.size}명
+                          <button
+                            type="button"
+                            onClick={clearChecked}
+                            className="rounded-md px-1 font-medium text-sp-muted hover:text-sp-text"
+                          >
+                            선택 해제
+                          </button>
+                        </span>
+                      )}
+                    </p>
+
+                    {/* 학생 세로 스크롤 리스트 */}
+                    <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto">
+                      {visibleStudents.length === 0 ? (
+                        <p className="py-10 text-center text-sm text-sp-muted">
+                          표시할 학생이 없습니다.
+                        </p>
+                      ) : (
+                        visibleStudents.map((s, i) => (
+                          <RecordDraftRow
+                            key={`${s.studentRef}:${activeArea}:${subject ?? ''}`}
+                            variant="overview"
+                            student={s}
+                            area={activeArea}
+                            level={level}
+                            subject={subject}
+                            classId={classId}
+                            draft={draftFor(s.studentRef)}
+                            index={i}
+                            selected={s.studentRef === selectedStudentRef}
+                            checked={checkedRefs.has(s.studentRef)}
+                            mirrorCount={mirrorCounts.get(s.studentRef) ?? 0}
+                            highlightOn={highlightOn}
+                            showAiButton={ownAiEnabled}
+                            {...(standardTexts !== undefined ? { standardTexts } : {})}
+                            rowKey={rowKeyOf(s.studentRef)}
+                            {...liveTextProp(s.studentRef)}
+                            onLiveText={noteLiveText}
+                            {...(deliverBox !== null && deliverBox.rowKey === rowKeyOf(s.studentRef)
+                              ? { deliver: deliverBox }
+                              : {})}
+                            onSelect={selectStudent}
+                            onToggleChecked={toggleChecked}
+                            onOpenAi={openAiFor}
+                            onOpenBoard={openBoardFor}
+                            onOpenEvidence={openEvidenceFor}
+                            onJumpNext={() => focusRowTextarea(i + 1)}
+                          />
+                        ))
+                      )}
+                    </div>
+                  </>
                 )}
               </div>
-            </div>
+            )}
 
-            {/* 오른쪽 패널 — 고른 학생의 [AI 초안 | 근거] */}
-            <RecordDraftSidePanel
-              studentName={selectedStudent?.name ?? null}
-              area={activeArea}
-              tab={sideTab}
-              onTabChange={setSideTab}
-              evidences={selectedAreaEvidences}
-              mirrors={selectedMirrors}
-              threads={selectedThreads}
-              {...(selectedDraft !== undefined ? { draft: selectedDraft } : {})}
-              obsById={obsById}
-              onOpenBoard={() => selectedStudent && openBoardFor(selectedStudent.studentRef)}
-              aiPanel={
-                aiTarget && selectedStudent ? (
-                  <RecordDraftAiPanel
-                    key={`${selectedStudent.studentRef}:${activeArea}:${subject ?? ''}`}
-                    areaLabel={RECORD_AREA_LABELS[activeArea]}
-                    roster={roster}
-                    target={aiTarget}
-                    threads={selectedThreads}
-                    studentEvidences={selectedEvidences}
-                    remaining={aiRemaining}
-                    draftKey={aiDraftKey}
-                    {...(selectedDraft?.roleMarks !== undefined
-                      ? { existingRoleMarks: selectedDraft.roleMarks }
-                      : {})}
-                    highlightOn={highlightOn}
-                    onApply={applyAiDraft}
-                    onRemark={remarkDraft}
-                    onActiveChange={setAiActive}
-                    onFocusStudent={selectStudent}
-                    area={activeArea}
-                    level={level}
-                    getSourceText={() => readLiveText(selectedStudent.studentRef)}
-                    onLengthRun={(kind, targetBytes) =>
-                      runLengthAdjustFor(
-                        selectedStudent.studentRef,
-                        selectedStudent.name,
-                        selectedAreaEvidences,
-                        undefined,
-                        kind,
-                        targetBytes,
-                      )
-                    }
-                    onLengthApply={(picked, outcome, kind, targetBytes) =>
-                      applyLengthAdjust(
-                        selectedStudent.studentRef,
+            {/* 오른쪽 보조 공간 — 고른 학생의 [AI 초안 | 근거]. 눌렀을 때만 있다. */}
+            {panelVisible && (
+              <RecordDraftSidePanel
+                studentName={selectedStudent?.name ?? null}
+                area={activeArea}
+                tab={sideTab}
+                onTabChange={setSideTab}
+                onClose={closePanel}
+                placement={layout.placement}
+                width={layout.panelWidth}
+                evidences={selectedAreaEvidences}
+                mirrors={selectedMirrors}
+                threads={selectedThreads}
+                {...(selectedDraft !== undefined ? { draft: selectedDraft } : {})}
+                obsById={obsById}
+                onOpenBoard={() => selectedStudent && openBoardFor(selectedStudent.studentRef)}
+                aiPanel={
+                  aiTarget && selectedStudent ? (
+                    <RecordDraftAiPanel
+                      key={`${selectedStudent.studentRef}:${activeArea}:${subject ?? ''}`}
+                      areaLabel={RECORD_AREA_LABELS[activeArea]}
+                      roster={roster}
+                      target={aiTarget}
+                      threads={selectedThreads}
+                      studentEvidences={selectedEvidences}
+                      remaining={aiRemaining}
+                      picked={aiPicked}
+                      onClearPicked={clearChecked}
+                      draftKey={aiDraftKey}
+                      {...(selectedDraft?.roleMarks !== undefined
+                        ? { existingRoleMarks: selectedDraft.roleMarks }
+                        : {})}
+                      highlightOn={highlightOn}
+                      onApply={applyAiDraft}
+                      onRemark={remarkDraft}
+                      onFocusStudent={selectStudent}
+                      area={activeArea}
+                      level={level}
+                      getSourceText={() => readLiveText(selectedStudent.studentRef)}
+                      onLengthRun={(kind, targetBytes, sourceText) =>
+                        runLengthAdjustFor(
+                          selectedStudent.studentRef,
+                          selectedStudent.name,
+                          selectedAreaEvidences,
+                          undefined,
+                          kind,
+                          targetBytes,
+                          sourceText,
+                        )
+                      }
+                      onLengthApply={(
                         picked,
                         outcome,
                         kind,
                         targetBytes,
-                        undefined,
-                        undefined,
-                      )
-                    }
-                    onInsertToEditor={(text) => deliverToEditor(selectedStudent.studentRef, text)}
-                    hasUnsavedInput={hasUnsavedInputFor(selectedStudent.studentRef)}
-                  />
-                ) : null
-              }
-            />
+                        sourceVersionId,
+                        threadId,
+                      ) =>
+                        applyLengthAdjust(
+                          selectedStudent.studentRef,
+                          picked,
+                          outcome,
+                          kind,
+                          targetBytes,
+                          sourceVersionId,
+                          threadId,
+                        )
+                      }
+                      onLengthCancel={() => lengthAbortRef.current?.abort()}
+                      onInsertToEditor={(text) => {
+                        deliverToEditor(selectedStudent.studentRef, text);
+                        // ★넣기만 했지 저장되지 않았다는 걸 그 자리에서 말한다(R-5). 앱을 껐다 켜면 사라진다.
+                        flashCopyMsg(
+                          '편집칸에 넣었어요. 한도를 넘어 저장되지 않아요: 줄인 뒤 저장하세요.',
+                          false,
+                        );
+                      }}
+                      hasUnsavedInput={hasUnsavedInputFor(selectedStudent.studentRef)}
+                    />
+                  ) : null
+                }
+              />
+            )}
           </div>
 
           {showExport && (
@@ -1099,401 +1493,6 @@ export function RecordDraftView({
           )}
         </>
       )}
-    </div>
-  );
-}
-
-// ───────────────────────── 학생 1행 ─────────────────────────
-
-const HEIGHT_KEY = (studentRef: string, area: RecordArea): string => `rd-h:${studentRef}:${area}`;
-
-function RecordDraftRow({
-  student,
-  area,
-  level,
-  subject,
-  classId,
-  draft,
-  index,
-  selected,
-  mirrorCount,
-  highlightOn,
-  showAiButton,
-  standardTexts,
-  rowKey,
-  onLiveText,
-  deliver,
-  onSelect,
-  onOpenAi,
-  onOpenBoard,
-  onJumpNext,
-}: {
-  student: RecordDraftStudentRow;
-  area: RecordArea;
-  level: SchoolLevel;
-  subject?: string;
-  classId?: string;
-  draft?: RecordDraft;
-  index: number;
-  /** 오른쪽 패널이 보고 있는 학생인가. */
-  selected: boolean;
-  /** 거울 카드 수 — 저장 미분류에 더해 [미분류 N건]을 만든다. */
-  mirrorCount: number;
-  /** 형광펜 스위치 — 켜져 있을 때만 편집 칸 뒤에 거울 레이어를 깐다. */
-  highlightOn: boolean;
-  /** [AI ▸] 버튼 노출 — 실험실 스위치(내 AI로 실행)를 켠 선생님에게만. */
-  showAiButton: boolean;
-  /** 이 수업반이 가르친 성취기준 원문 — 복사 검사에만 쓴다(AI 에는 안 간다). */
-  standardTexts?: readonly string[];
-  /** 이 행의 3축 마운트 키. 등록부에 기록할 때 쓴다(부모가 만든 것을 그대로 받는다). */
-  rowKey: string;
-  /** 화면의 현재 입력을 부모 등록부에 **기록만** 한다(ADR-088). 부모는 읽기만 한다. */
-  onLiveText: (rowKey: string, value: string) => void;
-  /**
-   * [편집칸에 넣기] 배달 — 한 번만 배달되는 상자. `token` 이 바뀔 때만 편집 칸에 넣는다.
-   * ★부모가 행에 값을 쓰는 **유일한 경로**다. 이 자리에는 §E-2 비교 게이트가 이미 걸려 있다.
-   */
-  deliver?: { readonly rowKey: string; readonly text: string; readonly token: number };
-  onSelect: (studentRef: string) => void;
-  onOpenAi: (studentRef: string) => void;
-  onOpenBoard: (studentRef: string) => void;
-  onJumpNext: () => void;
-}) {
-  const upsert = useRecordDraftsStore((s) => s.upsert);
-  const setStatus = useRecordDraftsStore((s) => s.setStatus);
-
-  const [text, setText] = useState(draft?.content ?? '');
-  const [focused, setFocused] = useState(false);
-  const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
-  /** 저장이 거부된 이유(한도 초과 등). 조용한 실패를 만들지 않기 위한 자리. */
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
-  const layerRef = useRef<HTMLDivElement | null>(null);
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /**
-   * 선생님이 이 칸을 마지막으로 고친 시각(렌더를 일으키지 않는 기억 상자).
-   * 아래 되돌리기 효과가 **저장이 거부된 글을 지우지 못하게** 막는 도장이다.
-   */
-  const lastEditAtRef = useRef(0);
-
-  // 외부(AI 패널·loopback)로 초안이 갱신되면 편집 중이 아닐 때 반영(자동 입력).
-  useEffect(() => {
-    if (focused) return;
-    // ★내 손글씨가 저장된 것보다 최신이면 되돌리지 않는다.
-    //   `focused` 가 의존 목록에 있어 **초점이 빠지는 것만으로** 이 효과가 다시 돈다.
-    //   저장이 성공했으면 같은 글이라 티가 안 나지만, **한도 초과로 저장이 거부되면**
-    //   `draft.content` 는 옛 글 그대로라 방금 쓴 글이 화면에서 사라진다(붉은 오류만 남는다).
-    //   `upsert` 는 성공할 때 `updatedAt` 을 저장 시각으로 찍으므로, 정상 저장·AI 반영·동기화
-    //   뒤에는 언제나 `updatedAt > lastEdit` 이 되어 **기존 자동 입력 경로는 그대로 산다.**
-    //   ★[편집칸에 넣기] 배달도 이 도장을 찍어야 한다 - 안 찍으면 배달한 글만 되돌아간다.
-    if (lastEditAtRef.current > (draft?.updatedAt ?? 0)) return;
-    setText(draft?.content ?? '');
-  }, [draft?.content, draft?.updatedAt, focused]);
-
-  // 저장된 입력창 높이 복원.
-  useEffect(() => {
-    const saved = (() => {
-      try {
-        return localStorage.getItem(HEIGHT_KEY(student.studentRef, area));
-      } catch {
-        return null;
-      }
-    })();
-    if (saved && taRef.current) taRef.current.style.height = saved;
-  }, [student.studentRef, area]);
-
-  const limit = resolveAreaLimit(area, level);
-  const bytes = neisByteLength(text);
-  const ratio = limit > 0 ? bytes / limit : 0;
-  const verified = isAreaLimitVerified(area, level);
-  const byteCls =
-    bytes > limit && verified ? 'text-red-500' : ratio > 0.8 ? 'text-amber-500' : 'text-sp-muted';
-  const barCls =
-    bytes > limit && verified ? 'bg-red-500' : ratio > 0.8 ? 'bg-amber-500' : 'bg-emerald-500';
-
-  const persist = (value: string): Promise<boolean> => {
-    const input: RecordDraftUpsertInput = {
-      area,
-      studentRef: student.studentRef,
-      content: value,
-      ...(classId !== undefined ? { classId } : {}),
-      ...(student.studentKey !== undefined ? { studentKey: student.studentKey } : {}),
-      ...(student.studentId !== undefined ? { studentId: student.studentId } : {}),
-      ...(subject !== undefined ? { subject } : {}),
-      // 성취기준 복사 검사용. 없으면 칸을 만들지 않는다 — T4 는 부재를 'skipped' 로 정직히 보고한다.
-      ...(standardTexts !== undefined && standardTexts.length > 0 ? { standardTexts } : {}),
-      level,
-    };
-    setSaveState('saving');
-    setSaveError(null);
-    // 성공 여부를 돌려준다 - 화면 이동이 이 값을 기다린다(계획 §4.3). 실패하면 이동하지 않는다.
-    return upsert(input)
-      .then(() => {
-        setSaveState('saved');
-        return true;
-      })
-      .catch((err: unknown) => {
-        setSaveState('idle');
-        // 조용히 삼키면 선생님은 저장된 줄 안다. 한도 초과는 이유를 그대로 보여 준다.
-        setSaveError(err instanceof RecordDraftLimitError ? err.message : '저장하지 못했습니다.');
-        return false;
-      });
-  };
-
-  const onChange = (value: string): void => {
-    setText(value);
-    // 되돌리기 효과가 이 글을 지우지 못하게 도장을 찍는다(위 lastEditAtRef 주석 참조).
-    lastEditAtRef.current = Date.now();
-    // 분량 조절이 볼 "화면의 현재 글"을 부모 등록부에 기록한다. 저장이 거부돼도 이건 남는다.
-    onLiveText(rowKey, value);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => persist(value), 700);
-  };
-
-  /**
-   * [편집칸에 넣기] 배달 — **선생님이 그 글을 방금 친 것과 완전히 같게 취급한다.**
-   *
-   * ★배달은 `onChange` 를 타지 않는데, 등록부 기록도 편집 시각 도장도 **둘 다 타이핑에 걸려 있다.**
-   *   빼먹으면 두 가지가 한꺼번에 무너진다:
-   *   1. 등록부에 조절 전 옛 글이 남아, 넣은 직후 다시 조절하면 옛 글이 대상이 된다.
-   *   2. 도장이 안 찍혀 다음 초점 이동·동기화에 **넣은 글이 그대로 되돌아간다.**
-   *      C0 (ㄴ)을 완벽히 고쳐도 이 경로만 무너진다.
-   */
-  const deliveredTokenRef = useRef(0);
-  useEffect(() => {
-    if (!deliver || deliver.rowKey !== rowKey) return;
-    if (deliver.token === deliveredTokenRef.current) return;
-    deliveredTokenRef.current = deliver.token;
-    setText(deliver.text);
-    lastEditAtRef.current = Date.now();
-    onLiveText(rowKey, deliver.text);
-  }, [deliver, rowKey, onLiveText]);
-
-  const flush = (): Promise<boolean> => {
-    setFocused(false);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    if (taRef.current) {
-      try {
-        localStorage.setItem(HEIGHT_KEY(student.studentRef, area), taRef.current.style.height);
-      } catch {
-        /* localStorage 불가 - 무시 */
-      }
-    }
-    // 저장할 것이 없으면 성공으로 본다(대기분 없음).
-    if (text.trim().length > 0 && text !== (draft?.content ?? '')) return persist(text);
-    return Promise.resolve(true);
-  };
-
-  // ★이동 전에 대기분을 밀어 넣을 수 있게 등록한다(계획 §4.3). 등록은 마운트당 한 번이고,
-  //   실제로 부를 때는 ref 를 통해 **가장 최신 flush** 를 쓴다 - 매 렌더마다 등록/해제하면
-  //   이동이 걸린 순간 등록이 잠깐 비어 저장을 놓친다.
-  const flushRef = useRef(flush);
-  flushRef.current = flush;
-  useEffect(() => registerDraftFlush(() => flushRef.current()), []);
-
-  const status: RecordDraftStatus | null = draft?.status ?? null;
-  // ?? [] 는 매 렌더 새 배열을 만든다 — 아래 useMemo 의 의존이 매번 바뀌므로 memo 로 고정한다.
-  const flags = useMemo(() => draft?.groundingFlags ?? [], [draft?.groundingFlags]);
-  const hasRisk = flags.some(
-    (f) => f === 'unverified_high_risk_term' || f === 'pii_leak' || f === 'prohibited_item',
-  );
-  // 무엇이 걸렸는지까지 보여 준다 — "적으면 안 되는 항목"만으로는 어디를 고쳐야 할지 알 수 없다.
-  const prohibitedWhy = useMemo(
-    () =>
-      flags.includes('prohibited_item') ? summarizeProhibited(detectProhibitedTerms(text)) : [],
-    [flags, text],
-  );
-
-  // 근거 준비도(US-4) — 현재 영역의 근거 건수·최근 날짜 + 미분류 건수(보드로 가는 버튼).
-  const evidenceRecords = useRecordEvidenceStore((s) => s.records);
-  const evidenceForArea = useMemo(
-    () =>
-      evidenceRecords.filter((e) => e.studentRef === student.studentRef && e.areas.includes(area)),
-    [evidenceRecords, student.studentRef, area],
-  );
-  const evidenceCount = evidenceForArea.length;
-  const allThreads = useInquiryThreadStore((s) => s.records);
-  const threadIdSet = useMemo(() => new Set(allThreads.map((t) => t.id)), [allThreads]);
-  // 저장 미분류 + 거울(아직 근거로 안 넣은 원본) — 보드의 미분류 열과 같은 수.
-  const unclassifiedCount = useMemo(
-    () =>
-      evidenceRecords.filter(
-        (e) => e.studentRef === student.studentRef && !isClassified(e, threadIdSet),
-      ).length + mirrorCount,
-    [evidenceRecords, student.studentRef, threadIdSet, mirrorCount],
-  );
-
-  const recentEvidenceDate = useMemo(() => {
-    let best = '';
-    for (const e of evidenceForArea) {
-      const d = e.date ?? '';
-      if (d > best) best = d;
-    }
-    return best;
-  }, [evidenceForArea]);
-  const needsReview = !!draft && (draft.status === 'reviewing' || flags.length > 0);
-
-  const copyNeis = async (): Promise<void> => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch {
-      /* 클립보드 불가 — 무시 */
-    }
-  };
-
-  const showLayer = highlightOn && draft?.roleMarks !== undefined && draft.roleMarks.length > 0;
-
-  return (
-    <div
-      onClick={() => onSelect(student.studentRef)}
-      className={`grid grid-cols-[140px_1fr_128px] gap-3 border-b border-sp-border px-4 py-3 transition-colors ${
-        selected ? 'bg-blue-500/5' : ''
-      }`}
-    >
-      {/* 학생 + 상태 + 근거 */}
-      <div className="flex flex-col gap-2 pt-0.5">
-        <div className="flex items-center gap-2 text-sm font-semibold text-sp-text">
-          <span className="flex h-6 w-6 items-center justify-center rounded-md bg-sp-surface text-xs text-sp-muted">
-            {student.number}
-          </span>
-          {student.name}
-        </div>
-        {status ? (
-          <button
-            type="button"
-            onClick={() => draft && void setStatus(draft.id, NEXT_STATUS[status])}
-            className={`w-fit rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_META[status].cls}`}
-            title="클릭하여 상태 변경 (작성 중 → 검토 중 → 검토 완료)"
-          >
-            {STATUS_META[status].label}
-          </button>
-        ) : (
-          <span className="w-fit rounded-full bg-sp-surface px-2 py-0.5 text-xs font-semibold text-sp-muted">
-            초안 없음
-          </span>
-        )}
-        {/* 근거 준비도(US-4): 근거 창고 건수·최근 날짜 — 이 행의 "근거 N건"은 이것 하나뿐이다(P5). */}
-        <span className="inline-flex items-center gap-0.5 text-xs text-sp-muted">
-          <span className="material-symbols-outlined text-xs">inventory_2</span>
-          근거{' '}
-          <b className={evidenceCount > 0 ? 'text-sp-accent' : 'text-sp-muted'}>
-            {evidenceCount}건
-          </b>
-          {recentEvidenceDate ? ` · 최근 ${formatObsDate(recentEvidenceDate)}` : ''}
-        </span>
-        {unclassifiedCount > 0 && (
-          <button
-            type="button"
-            onClick={() => onOpenBoard(student.studentRef)}
-            title="아직 주제로 묶지 않은 근거입니다. 눌러서 근거 정리 보드로 갑니다."
-            className="w-fit rounded-full bg-sp-surface px-2 py-0.5 text-xs font-medium text-sp-muted ring-1 ring-sp-border hover:text-sp-text"
-          >
-            미분류 {unclassifiedCount}건
-          </button>
-        )}
-        {needsReview && (
-          <span className="w-fit rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-semibold text-amber-600">
-            검토 필요
-          </span>
-        )}
-        {showAiButton && (
-          <button
-            type="button"
-            onClick={() => onOpenAi(student.studentRef)}
-            aria-label={`${student.name} AI 초안`}
-            className="flex w-fit items-center gap-1 rounded-md bg-sp-card px-2 py-1 text-xs font-medium text-sp-accent ring-1 ring-sp-border hover:bg-sp-surface"
-          >
-            <span className="material-symbols-outlined text-sm">auto_awesome</span>AI ▸
-          </button>
-        )}
-      </div>
-
-      {/* 입력창 + 플래그 */}
-      <div className="flex flex-col gap-1.5">
-        <div className="relative">
-          {showLayer && <RoleHighlightLayer ref={layerRef} text={text} marks={draft?.roleMarks} />}
-          <textarea
-            ref={taRef}
-            value={text}
-            data-rd-index={index}
-            onChange={(e) => onChange(e.target.value)}
-            onFocus={() => {
-              setFocused(true);
-              onSelect(student.studentRef);
-            }}
-            onBlur={flush}
-            onScroll={(e) => {
-              if (layerRef.current) layerRef.current.scrollTop = e.currentTarget.scrollTop;
-            }}
-            onKeyDown={(e) => {
-              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
-                e.preventDefault();
-                onJumpNext(); // 다음 입력창으로 포커스 이동 → 현재 칸 blur+자동저장
-              }
-            }}
-            aria-label={`${student.name} ${RECORD_AREA_LABELS[area]} 초안`}
-            placeholder="AI에게 초안을 요청하면 자동 입력됩니다: 또는 직접 작성하세요"
-            className={`relative min-h-[48px] w-full resize-y border-sp-border text-sp-text placeholder:text-sp-muted focus:border-sp-accent focus:outline-none focus:ring-2 focus:ring-blue-500/30 ${DRAFT_TEXT_METRICS} ${
-              showLayer ? 'bg-transparent' : 'bg-sp-surface'
-            }`}
-          />
-        </div>
-        {saveError !== null && (
-          <div className="flex items-start gap-1 rounded-lg bg-red-500/5 px-2.5 py-1.5 text-xs leading-snug text-red-500 ring-1 ring-red-500/20">
-            <span className="material-symbols-outlined text-sm">error</span>
-            <span>{saveError}</span>
-          </div>
-        )}
-        {saveState !== 'idle' && (
-          <span
-            className={`flex w-fit items-center gap-1 text-xs ${
-              saveState === 'saved' ? 'text-emerald-500' : 'text-sp-muted'
-            }`}
-          >
-            <span className="material-symbols-outlined text-xs">
-              {saveState === 'saved' ? 'check_circle' : 'sync'}
-            </span>
-            {saveState === 'saved' ? '저장됨' : '저장 중…'}
-          </span>
-        )}
-        {flags.length > 0 && (
-          <div
-            className={`flex items-start gap-1 rounded-lg px-2.5 py-1.5 text-xs leading-snug ring-1 ${
-              hasRisk
-                ? 'bg-red-500/5 text-red-500 ring-red-500/20'
-                : 'bg-amber-500/5 text-amber-600 ring-amber-500/20'
-            }`}
-          >
-            <span className="material-symbols-outlined text-sm">warning</span>
-            <span>
-              검토 필요 · {flags.map(flagLabel).join(', ')}
-              {prohibitedWhy.length > 0 ? ` (${prohibitedWhy.join(', ')})` : ''}: 모든 문장은 교사가
-              사실을 직접 확인해야 합니다.
-            </span>
-          </div>
-        )}
-      </div>
-
-      {/* 바이트 카운터 + 복사 */}
-      <div className="flex flex-col items-end gap-2 pt-0.5">
-        <span className={`whitespace-nowrap text-xs font-semibold tabular-nums ${byteCls}`}>
-          {bytes.toLocaleString()} / {limit.toLocaleString()} B
-        </span>
-        <span className="h-1 w-full overflow-hidden rounded-full bg-sp-border">
-          <span
-            className={`block h-full rounded-full ${barCls}`}
-            style={{ width: `${Math.min(100, Math.round(ratio * 100))}%` }}
-          />
-        </span>
-        <button
-          type="button"
-          onClick={() => void copyNeis()}
-          disabled={text.trim().length === 0}
-          className="flex items-center gap-1 rounded-lg bg-blue-500/10 px-3 py-1.5 text-xs font-medium text-sp-accent ring-1 ring-blue-500/20 transition-colors hover:bg-blue-500/20 disabled:opacity-40"
-        >
-          <span className="material-symbols-outlined text-sm">content_copy</span>복사
-        </button>
-      </div>
     </div>
   );
 }

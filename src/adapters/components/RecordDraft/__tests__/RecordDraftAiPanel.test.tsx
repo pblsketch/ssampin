@@ -26,6 +26,7 @@ import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { OWN_AI_MODELS } from '@domain/rules/ownAiCliRules';
 import { useOwnAiStatusStore } from '@adapters/stores/useOwnAiStatusStore';
 import { useRecordAiDraftStore } from '@adapters/stores/useRecordAiDraftStore';
+import { activeStudentRefsOf, useRecordAiRunStore } from '@adapters/stores/useRecordAiRunStore';
 import type { OwnAiConnection } from '@domain/entities/OwnAiProvider';
 import type { RoleMark } from '@domain/rules/narrativeParagraphs';
 
@@ -127,6 +128,8 @@ beforeEach(() => {
   useAssistStore.setState({ ownAiEnabled: false, provider: 'ssampin' });
   useOwnAiStatusStore.setState({ connections: { claude: null, codex: null } });
   useRecordAiDraftStore.setState({ records: [], loaded: true });
+  // 실행 단계는 스토어에 있다(ADR-093) — 테스트 사이에 큐가 새지 않게 비운다.
+  useRecordAiRunStore.getState().reset();
 });
 
 afterEach(() => {
@@ -138,8 +141,9 @@ afterEach(() => {
 describe('★구독이 없으면 요청을 보내지 않는다 (D2)', () => {
   it('연결 전에는 눌러도 안내만 하고 실행이 0회다', () => {
     panel();
-    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
-
+    const btn = screen.getByRole('button', { name: '이 학생 초안 쓰기' }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true); // 무엇을 눌러야 하는지는 보이되, 연결 전엔 잠겨 있다
+    fireEvent.click(btn);
     expect(runCalls).toHaveLength(0);
     expect(screen.getByText(/구독 AI/)).toBeTruthy();
     expect(screen.queryByText(/쌤핀 AI 로 이어서/)).toBeNull();
@@ -148,7 +152,7 @@ describe('★구독이 없으면 요청을 보내지 않는다 (D2)', () => {
   it('실험실 스위치만 켜고 연결이 없으면 여전히 실행 0회다', () => {
     useAssistStore.setState({ ownAiEnabled: true });
     panel();
-    fireEvent.click(screen.getByRole('button', { name: /AI로 초안 쓰기/ }));
+    fireEvent.click(screen.getByRole('button', { name: '이 학생 초안 쓰기' }));
     expect(runCalls).toHaveLength(0);
   });
 });
@@ -156,15 +160,15 @@ describe('★구독이 없으면 요청을 보내지 않는다 (D2)', () => {
 describe('연결되면 단위를 고를 수 있다 (D8)', () => {
   beforeEach(connectClaude);
 
-  it('남은 학생이 없으면 "이 학생만"만 보인다', () => {
+  it('남은 학생이 없으면 "이 학생 초안 쓰기"만 보인다', () => {
     panel();
-    expect(screen.getByRole('button', { name: '이 학생만' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '이 학생 초안 쓰기' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /남은 학생 모두/ })).toBeNull();
   });
 
   it('남은 학생이 있으면 인원수와 함께 보인다', () => {
     panel({ remaining: [target({ studentRef: 's2', displayName: '박서연' })] });
-    expect(screen.getByRole('button', { name: /남은 학생 모두 \(2명\)/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /남은 학생 모두 초안 쓰기 \(2명\)/ })).toBeTruthy();
   });
 });
 
@@ -180,7 +184,7 @@ describe('★보내는 꾸러미에 실명이 없고 기재 금지가 빠진다 
         ],
       }),
     });
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
 
     expect(runCalls).toHaveLength(1);
     const prompt = runCalls[0]?.prompt ?? '';
@@ -209,7 +213,7 @@ describe('★보내는 꾸러미에 실명이 없고 기재 금지가 빠진다 
       ],
     });
     fireEvent.click(screen.getByRole('button', { name: '할인 문구와 선택' }));
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
 
     const prompt = runCalls[0]?.prompt ?? '';
     expect(prompt).toContain('주제에 묶인 근거');
@@ -224,7 +228,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 초안 칸에 들
   it('★답이 와도 [반영] 전에는 저장이 0회다 — 판으로만 남는다', async () => {
     const applied: Applied[] = [];
     panel({}, applied);
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('탐구 흐름을 이어 쓴 초안.');
 
     expect(screen.getByText(/미리보기/)).toBeTruthy();
@@ -235,7 +239,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 초안 칸에 들
   it('[반영] 을 누르면 그 학생 자리에 저장되고 판에 반영 표시가 남는다', async () => {
     const applied: Applied[] = [];
     panel({}, applied);
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('탐구 흐름을 이어 쓴 초안.');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '반영' }));
@@ -248,7 +252,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 초안 칸에 들
   it('기존 초안이 있으면 바꾸기·뒤에 붙이기를 고를 수 있다', async () => {
     const applied: Applied[] = [];
     panel({ target: target({ existingText: '먼저 쓴 문장.' }) }, applied);
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('새 문장.');
 
     expect(screen.getByRole('button', { name: '바꾸기' })).toBeTruthy();
@@ -262,7 +266,7 @@ describe('결과는 미리보기다 — [반영] 을 눌러야 초안 칸에 들
 
   it('★[버리기]는 삭제다 — 그 판이 목록에서 사라진다', async () => {
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('버릴 초안.');
     expect(useRecordAiDraftStore.getState().records).toHaveLength(1);
 
@@ -290,9 +294,9 @@ describe('판(버전)을 남기고 비교한다 (ADR-085)', () => {
 
   it('두 번 만들면 v1·v2 탭이 생기고 최신이 기본이다', async () => {
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('첫 판.');
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('둘째 판.');
 
     const tabs = within(screen.getByRole('tablist', { name: 'AI 초안 판' }));
@@ -306,7 +310,7 @@ describe('판(버전)을 남기고 비교한다 (ADR-085)', () => {
 
   it('[내 글과 비교]는 내 글과 고른 판을 나란히 놓는다', async () => {
     panel({ target: target({ existingText: '내가 쓴 문단.' }) });
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('AI 가 쓴 문단.');
     fireEvent.click(screen.getByRole('button', { name: '내 글과 비교' }));
 
@@ -319,7 +323,7 @@ describe('판(버전)을 남기고 비교한다 (ADR-085)', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const applied: Applied[] = [];
     panel({ target: target({ existingText: '이전 글.' }) }, applied);
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('새 글.');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '바꾸기' }));
@@ -333,7 +337,7 @@ describe('판(버전)을 남기고 비교한다 (ADR-085)', () => {
     expect(screen.queryByRole('button', { name: '되돌리기' })).toBeNull();
 
     // 다시 바꾸고 30초를 흘려보내면 되돌리기가 사라진다.
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('또 새 글.');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '바꾸기' }));
@@ -351,7 +355,7 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
 
   it('받아 온 규정을 CLI 에 함께 보낸다', async () => {
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     expect(runCalls).toHaveLength(1);
     expect(runCalls[0]?.appendSystemPrompt).toBe('[생기부 작성 규정 본문]');
   });
@@ -359,7 +363,7 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
   it('★규정을 못 받아 오면 실행이 0회다 — 초안을 만들지 않고 안내만 한다', async () => {
     fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'unavailable' });
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     expect(runCalls).toHaveLength(0);
     expect(screen.getByText(/규정을 서버에서 받아오지 못해/)).toBeTruthy();
   });
@@ -379,7 +383,7 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
       stale: false,
     });
     const { container } = panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     expect(container.textContent).not.toContain('절대로 화면에 뜨면 안 되는');
   });
 
@@ -391,7 +395,7 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
   it('분당 한도에 걸리면 "1분 뒤" 로 안내한다 — 인터넷 탓을 하지 않는다', async () => {
     fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'rate-limited-minute' });
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     expect(runCalls).toHaveLength(0);
     expect(screen.getByText(/1분 뒤에 다시 눌러/)).toBeTruthy();
     expect(screen.queryByText(/인터넷 연결을 확인/)).toBeNull();
@@ -400,7 +404,7 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
   it('일간 한도는 분당과 다른 안내다 — "내일" 이라고 말한다', async () => {
     fetchRecordPromptL1.mockResolvedValue({ ok: false, reason: 'rate-limited-day' });
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     expect(screen.getByText(/내일 다시 눌러/)).toBeTruthy();
   });
 
@@ -430,7 +434,7 @@ describe('★생기부 규정(1층 프롬프트)은 실행할 때 서버에서 �
       stale: true,
     });
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     expect(runCalls).toHaveLength(1);
     expect(runCalls[0]?.appendSystemPrompt).toBe('[조금 낡은 규정 본문]');
   });
@@ -454,7 +458,7 @@ describe('★별칭을 실제 이름으로 되돌린 뒤 저장한다', () => {
       },
       applied,
     );
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     const prompt = runCalls[0]?.prompt ?? '';
     expect(prompt).not.toContain('박서연');
     expect(prompt).not.toContain('김지훈');
@@ -469,7 +473,7 @@ describe('★별칭을 실제 이름으로 되돌린 뒤 저장한다', () => {
 
   it('★판에도 미리보기에도 ［이름1］ 이 남지 않는다', async () => {
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('［이름1］은 탐구 흐름을 이어 썼다.');
 
     expect(screen.getByText(/김지훈은 탐구 흐름을 이어 썼다/)).toBeTruthy();
@@ -484,7 +488,7 @@ describe('★형광펜 표식 — 저장되는 글에는 표식이 없고 역할
   it('[동기] 류 표식은 본문에서 빠지고 roleMarks 로 간다', async () => {
     const applied: Applied[] = [];
     panel({ highlightOn: true }, applied);
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('[동기] 왜 그런지 물었다.\n\n[과정] 자료를 모았다.\n\n[결과] 답을 찾았다.');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '반영' }));
@@ -501,7 +505,7 @@ describe('★형광펜 표식 — 저장되는 글에는 표식이 없고 역할
 
   it('표식이 하나도 없으면 "표식 없음"을 알리고 글은 그대로 보여 준다', async () => {
     panel({ highlightOn: true });
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('표식 없는 초안.');
     expect(screen.getByText(/표식 없음/)).toBeTruthy();
     expect(screen.getByText('표식 없는 초안.')).toBeTruthy();
@@ -559,15 +563,15 @@ describe('★"남은 학생 모두" 중에는 어느 칸에 저장되는지 못 
     expect(applied.map((a) => a.ref)).toEqual(['s1', 's2']);
   });
 
-  it('실행 중인 학생들을 부모에게 알리고, 끝나면 빈 목록을 보낸다', async () => {
-    const active: (readonly string[])[] = [];
-    panel({
-      remaining: [target({ studentRef: 's2', displayName: '박서연' })],
-      onActiveChange: (refs) => active.push(refs),
-    });
+  it('★실행 중인 학생들은 스토어의 큐에서 읽힌다(ADR-093) — 끝나면 비어 있다', async () => {
+    const active = (): readonly string[] =>
+      activeStudentRefsOf(useRecordAiRunStore.getState().draftPhaseFor('homeroom:subject:수학'));
+    panel({ remaining: [target({ studentRef: 's2', displayName: '박서연' })] });
     await startWith(/남은 학생 모두/);
-    expect(active.at(-1)).toEqual(['s1', 's2']);
+    expect(active()).toEqual(['s1', 's2']);
     await finishWith('김지훈 초안.');
+    // 미리보기 중: 김지훈(보는 중) + 박서연(남음)
+    expect(active()).toEqual(['s1', 's2']);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '반영' }));
     });
@@ -575,7 +579,74 @@ describe('★"남은 학생 모두" 중에는 어느 칸에 저장되는지 못 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '반영' }));
     });
-    expect(active.at(-1)).toEqual([]);
+    expect(active()).toEqual([]);
+  });
+
+  it('★패널이 다시 만들어져도(학생 전환) 큐가 산다 — 스토어가 들기 때문', async () => {
+    const applied: Applied[] = [];
+    const r = panel({ remaining: [target({ studentRef: 's2', displayName: '박서연' })] }, applied);
+    await startWith(/남은 학생 모두/);
+    await finishWith('김지훈 초안.');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+    await finishWith('박서연 초안.');
+    // 부모가 선택을 박서연으로 옮겨 패널을 새로 만든 상황을 흉내 낸다.
+    r.unmount();
+    panel(
+      {
+        target: target({ studentRef: 's2', displayName: '박서연' }),
+        draftKey: { ...KEY, studentRef: 's2' },
+      },
+      applied,
+    );
+    // 새 인스턴스가 박서연 미리보기를 그대로 보여 준다(큐가 죽지 않았다).
+    expect(screen.getByText(/박서연: 미리보기/)).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+    expect(applied.map((a) => a.ref)).toEqual(['s1', 's2']);
+    expect(useRecordAiRunStore.getState().draftPhaseFor('homeroom:subject:수학').kind).toBe('idle');
+  });
+});
+
+describe('★고른 N명 — 체크한 학생만 차례로 쓴다 (오너 요청 2026-09-08)', () => {
+  beforeEach(connectClaude);
+
+  it('고른 학생이 있으면 [고른 N명] 단추가 뜨고, 누르면 그 학생들만 큐에 든다', async () => {
+    const cleared: number[] = [];
+    panel({
+      remaining: [target({ studentRef: 's3', displayName: '이도윤' })],
+      picked: [
+        target({ studentRef: 's2', displayName: '박서연' }),
+        target({ studentRef: 's4', displayName: '최민준' }),
+      ],
+      onClearPicked: () => cleared.push(1),
+    });
+    expect(screen.queryByTestId('picked-overwrite-notice')).toBeNull();
+    await startWith('고른 2명 초안 쓰기');
+    expect(cleared).toHaveLength(1);
+    const phase = useRecordAiRunStore.getState().draftPhaseFor('homeroom:subject:수학');
+    expect(phase.kind).toBe('running');
+    expect(activeStudentRefsOf(phase)).toEqual(['s2', 's4']);
+    expect(runCalls).toHaveLength(1);
+  });
+
+  it('고른 학생 중 이미 초안이 있으면 먼저 알린다 — 소리 없이 덮지 않는다', () => {
+    panel({
+      picked: [
+        target({ studentRef: 's2', displayName: '박서연', existingText: '이미 쓴 글.' }),
+        target({ studentRef: 's4', displayName: '최민준' }),
+      ],
+    });
+    expect(screen.getByTestId('picked-overwrite-notice').textContent).toContain(
+      '1명은 이미 초안이',
+    );
+  });
+
+  it('고른 학생이 없으면 단추가 없다', () => {
+    panel();
+    expect(screen.queryByRole('button', { name: /고른 \d+명/ })).toBeNull();
   });
 });
 
@@ -595,7 +666,7 @@ describe('★어느 AI·모델로 쓰는지 보이고 고를 수 있다 (ADR-084
     panel();
     expect(screen.getByRole('button', { name: 'Claude Code' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Codex' }));
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     expect(runCalls).toHaveLength(1);
     expect(useAssistStore.getState().provider).toBe('codex');
   });
@@ -621,9 +692,12 @@ describe('★어느 AI·모델로 쓰는지 보이고 고를 수 있다 (ADR-084
     const model = OWN_AI_MODELS.claude[1]?.id ?? '';
     useAssistStore.setState({ ownAiModels: { claude: model, codex: '' } });
     panel();
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('탐구 흐름을 이어 쓴 초안.');
-    expect(screen.getByText(new RegExp(`Claude Code ${model}`))).toBeTruthy();
+    // ★내부 이름(claude-sonnet-5)이 아니라 선택 상자와 같은 이름(Sonnet 5)으로 보인다(2026-09-08 R-8).
+    const label = OWN_AI_MODELS.claude[1]?.label ?? '';
+    expect(screen.getByText(new RegExp(`Claude Code ${label.split(' — ')[0]}`))).toBeTruthy();
+    expect(screen.queryByText(new RegExp(`Claude Code ${model}`))).toBeNull();
   });
 });
 
@@ -642,7 +716,7 @@ describe('★C0 (ㄱ) 반영이 실패하면 실패라고 말한다', () => {
         throw new Error('1,782바이트로 한도 1,500바이트를 넘었습니다.');
       },
     });
-    await startWith('이 학생만');
+    await startWith('이 학생 초안 쓰기');
     await finishWith('한도를 넘긴 긴 초안.');
 
     await act(async () => {

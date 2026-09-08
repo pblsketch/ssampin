@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { isTeachingClassArchived } from '@domain/rules/teachingClassArchive';
@@ -57,6 +57,26 @@ export function ClassManagementPage() {
   const [activeTab, setActiveTab] = useState<TabId>('roster');
   const [showAddModal, setShowAddModal] = useState(false);
   const [isClassPanelCollapsed, setIsClassPanelCollapsed] = useState(false);
+  /**
+   * 생기부 초안 화면이 떠 있는 동안 학급 목록을 접고, 나갈 때 **들어오기 전 상태로 되돌린다**(ADR-093 결정 7).
+   * ★사용자가 그 사이 직접 펼쳤다면 건드리지 않는다 — 펼친 건 뜻이 있어서 펼친 것이다.
+   * 현재 값은 ref 로 비춰 둔다: 요청 콜백이 옛 클로저의 값을 보지 않게.
+   */
+  const collapsedRef = useRef(isClassPanelCollapsed);
+  collapsedRef.current = isClassPanelCollapsed;
+  const collapsedBeforeCompactRef = useRef<boolean | null>(null);
+  const handleRequestCompactClassList = useCallback((compact: boolean) => {
+    if (compact) {
+      if (collapsedBeforeCompactRef.current === null)
+        collapsedBeforeCompactRef.current = collapsedRef.current;
+      setIsClassPanelCollapsed(true);
+      return;
+    }
+    const before = collapsedBeforeCompactRef.current;
+    collapsedBeforeCompactRef.current = null;
+    // 아직 접힌 채(사용자가 안 펼쳤다)일 때만 이전 상태로 복원한다.
+    if (before !== null && collapsedRef.current) setIsClassPanelCollapsed(before);
+  }, []);
   const [recordInitialStudentView, setRecordInitialStudentView] = useState<'list' | 'seating'>(
     'list',
   );
@@ -301,6 +321,7 @@ export function ClassManagementPage() {
                       onGoToRosterTab={() => setActiveTab('roster')}
                       initialStudentViewMode={recordInitialStudentView}
                       onGoToSeatingTab={() => setActiveTab('seating')}
+                      onRequestCompactClassList={handleRequestCompactClassList}
                     />
                   )}
                   {activeTab === 'seating' && (

@@ -742,6 +742,7 @@ describe('2차 — 긴 주제 이름 · 영역 1개 · 삭제 되돌리기 (설�
   it('카드 [삭제] 뒤 토스트의 [되돌리기]는 add 가 아니라 restoreRemoved 로 원래 레코드를 되돌린다', async () => {
     board();
     const card = screen.getByRole('button', { name: /미분류 근거 하나/ });
+    fireEvent.click(card); // 조작 줄은 골랐을 때 나온다(ADR-093)
     await act(async () => {
       fireEvent.click(within(card).getByRole('button', { name: '삭제' }));
     });
@@ -771,6 +772,7 @@ describe('2차 — 긴 주제 이름 · 영역 1개 · 삭제 되돌리기 (설�
     restoreRemovedSpy.mockResolvedValueOnce({ id: 'e-새것', restored: false });
     board();
     const card = screen.getByRole('button', { name: /미분류 근거 하나/ });
+    fireEvent.click(card);
     await act(async () => {
       fireEvent.click(within(card).getByRole('button', { name: '삭제' }));
     });
@@ -787,10 +789,17 @@ describe('2차 — 긴 주제 이름 · 영역 1개 · 삭제 되돌리기 (설�
   });
 });
 
-describe('3차 — AI 제외를 카드에서 바로, 여러 장 한 번에 (설계서 §4-5)', () => {
-  it('카드의 [AI 제외] 토글은 겉에 있고, 누르면 setExcludedFromAi 1회 — ★카드 선택 상태는 바뀌지 않는다', async () => {
+describe('AI 제외 — 상태는 겉면 배지, 토글은 골랐을 때·여러 장은 하단 바 (ADR-093 결정 5, 설계서 §4-5 수정)', () => {
+  it('★조작 줄은 고르기 전에는 없고, 고르면 나온다 — 마우스 올리기가 아니라 클릭·키보드로', async () => {
     board();
     const card = screen.getByRole('button', { name: /미분류 근거 하나/ });
+    expect(within(card).queryByTestId('evidence-card-actions')).toBeNull();
+    expect(within(card).queryByRole('button', { name: 'AI 제외' })).toBeNull();
+    // 본문·출처는 겉면에 있다.
+    expect(within(card).getByText('직접 입력')).toBeTruthy();
+    fireEvent.keyDown(card, { key: 'Enter' });
+    expect(card.getAttribute('aria-pressed')).toBe('true');
+    expect(within(card).getByTestId('evidence-card-actions')).toBeTruthy();
     expect(within(card).queryByRole('button', { name: '더 보기' })).toBeNull();
     const toggle = within(card).getByRole('button', { name: 'AI 제외' });
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
@@ -799,8 +808,8 @@ describe('3차 — AI 제외를 카드에서 바로, 여러 장 한 번에 (설�
     });
     expect(setExcludedSpy).toHaveBeenCalledTimes(1);
     expect(setExcludedSpy).toHaveBeenCalledWith('e-A2', true);
-    expect(card.getAttribute('aria-pressed')).toBe('false');
-    expect(screen.queryByRole('toolbar', { name: '선택한 근거 보내기' })).toBeNull();
+    // 토글을 눌러도 선택은 그대로다(전파를 끊었다).
+    expect(card.getAttribute('aria-pressed')).toBe('true');
   });
 
   it('2건 선택 후 하단 바 [AI 제외] → setExcludedFromAiMany 1회(저장 1회), [AI 제외 해제]도 같다', async () => {
@@ -823,26 +832,25 @@ describe('3차 — AI 제외를 카드에서 바로, 여러 장 한 번에 (설�
     expect(setExcludedManySpy).toHaveBeenCalledWith(['e-A2', 'e-A3'], false);
   });
 
-  it('이유 줄은 금지 어휘로 자동 제외된 카드에만 보이고, 메타 줄의 "AI 제외" 배지는 없다', () => {
+  it('★제외 상태는 겉면 배지로 늘 보이고, 이유 줄은 금지 어휘로 자동 제외된 카드에만 보인다', () => {
     board();
     const auto = screen.getByRole('button', { name: /학원에서 미리 배운/ });
     expect(within(auto).getByText(/언급이 있어 자동으로 제외했습니다/).textContent).toContain(
       '학원',
     );
-    expect(within(auto).getByRole('button', { name: 'AI 제외' }).getAttribute('aria-pressed')).toBe(
-      'true',
-    );
-    // 토글 하나뿐 — 같은 말을 하는 배지(span)는 없다.
-    expect(within(auto).queryByText('AI 제외', { selector: 'span' })).toBeNull();
-    expect(within(auto).getAllByRole('button', { name: 'AI 제외' })).toHaveLength(1);
+    expect(within(auto).getByTestId('evidence-excluded-badge').textContent).toContain('AI 제외됨');
+    // 골라야 토글이 나오고, 켜진 카드의 토글은 [AI 제외 해제]다.
+    fireEvent.click(auto);
+    expect(
+      within(auto).getByRole('button', { name: 'AI 제외 해제' }).getAttribute('aria-pressed'),
+    ).toBe('true');
 
     const manual = screen.getByRole('button', { name: /직접 제외한 근거/ });
-    expect(
-      within(manual).getByRole('button', { name: 'AI 제외' }).getAttribute('aria-pressed'),
-    ).toBe('true');
+    expect(within(manual).getByTestId('evidence-excluded-badge')).toBeTruthy();
     expect(within(manual).queryByText(/자동으로 제외했습니다/)).toBeNull();
 
     const clean = screen.getByRole('button', { name: /미분류 근거 하나/ });
+    expect(within(clean).queryByTestId('evidence-excluded-badge')).toBeNull();
     expect(within(clean).queryByText(/자동으로 제외했습니다/)).toBeNull();
   });
 });
@@ -924,6 +932,7 @@ describe('★거울 카드 — 보기만 해서는 저장 0회, 첫 손댄에 �
   it('거울의 [AI 제외]를 켜면 add 1회에 excludedFromAi 가 실린다', async () => {
     board();
     const mirror = column('미분류').getByRole('button', { name: /아직 안 넣은 관찰 하나/ });
+    fireEvent.click(mirror); // 골라야 조작 줄이 나온다
     await act(async () => {
       fireEvent.click(within(mirror).getByRole('button', { name: 'AI 제외' }));
     });

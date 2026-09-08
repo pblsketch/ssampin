@@ -9,7 +9,7 @@
  *
  * 설계: docs/02-design/features/inapp-ai-assist.design.md §3
  */
-import { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { AssistThread } from './AssistThread';
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
@@ -168,7 +168,24 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
   // "내 AI로 실행" — 연결된 공급자와 남은 사용량. 없으면 아래 UI 는 그리지 않는다.
   const provider = useAssistStore((s) => s.provider);
   const setProvider = useAssistStore((s) => s.setProvider);
+  const stop = useAssistStore((s) => s.stop);
   const connectedProviders = useConnectedOwnAiProviders();
+  /**
+   * ★쌤핀 AI(Solar)를 꺼 둔 채 "내 AI"만 켠 선생님 — 선택이 `ssampin` 에 남아 있으면 [보내기]가
+   *   조용히 무시된다(스토어 `ask` 의 차단선). 2026-09-08 실기기 대행 QA R-1 에서 실제로 그랬다.
+   *   그래서 그 상태면 연결된 첫 구독으로 옮긴다. 아래 select 도 꺼진 통로는 보기에서 뺀다.
+   */
+  useEffect(() => {
+    const first = connectedProviders[0];
+    if (!solarEnabled && provider === 'ssampin' && first !== undefined) setProvider(first);
+  }, [solarEnabled, provider, connectedProviders, setProvider]);
+  /** 보낼 수 없는 선택인데 [보내기]를 눌렀을 때 한 줄로 알린다 — 조용히 무시하지 않는다. */
+  const [sendNotice, setSendNotice] = useState<string | null>(null);
+  /** 멈출 수 있는 답이 진행 중인가 — "내 AI"(구독 CLI)가 답하는 턴만 멈출 수 있다. */
+  const stoppable = turns.some(
+    (t) =>
+      t.status === 'thinking' && t.answeredBy !== undefined && t.answeredBy.provider !== 'ssampin',
+  );
   /**
    * 고른 모델. 설정 > AI 연결의 드롭다운과 **같은 값**을 본다 — 두 군데가 서로 다른 값을
    * 들고 있으면 "설정에서 바꿨는데 패널이 옛것을 쓴다"가 된다.
@@ -206,6 +223,17 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
 
   const send = (): void => {
     if (!canSend) return;
+    // ★답할 통로가 없는 선택이면 보내지 않고 **말한다**. 스토어의 차단선은 조용히 돌려보내므로
+    //   여기서 안 알리면 선생님은 버튼이 고장 난 줄 안다(R-1).
+    if (provider === 'ssampin' && !solarEnabled) {
+      setSendNotice(
+        connectedProviders.length > 0
+          ? '쌤핀 AI가 꺼져 있어요. 위에서 답할 AI(Claude Code·Codex)를 골라 주세요.'
+          : '쌤핀 AI가 꺼져 있고 연결된 구독 AI도 없어요. 설정 > AI 연결에서 연결해 주세요.',
+      );
+      return;
+    }
+    setSendNotice(null);
     // 이미지만 붙이고 글을 안 썼으면 기본 질문을 싣는다 — 빈 질문은 보낼 수 없다.
     const question = draft.trim() || ATTACHMENT_ONLY_QUESTION;
     setAttachRejection(null);
@@ -253,7 +281,8 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
                 disabled={busy}
                 className="rounded-lg border border-sp-border bg-sp-bg px-1.5 py-0.5 text-xs text-sp-text disabled:opacity-50"
               >
-                <option value="ssampin">{answererLabel('ssampin')}</option>
+                {/* 쌤핀 AI 는 실험실에서 켰을 때만 고를 수 있다 — 꺼진 통로를 보기에 두면 고르고도 답이 안 온다. */}
+                {solarEnabled && <option value="ssampin">{answererLabel('ssampin')}</option>}
                 {connectedProviders.map((p) => (
                   <option key={p} value={p}>
                     {answererLabel(p)}
@@ -440,12 +469,27 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
               </>
             )}
             {/* 상한에 가까워질 때만 알린다 — 평소에 숫자를 띄우면 글자 수를 세게 만든다. */}
-            <span className="truncate text-xs text-sp-muted">
-              {draft.length > ASSIST_MAX_QUESTION_CHARS - 200
-                ? `${ASSIST_MAX_QUESTION_CHARS - draft.length}자 더 쓸 수 있어요`
-                : '이름은 보내기 전에 가려집니다'}
+            <span
+              role={sendNotice ? 'alert' : undefined}
+              className={`truncate text-xs ${sendNotice ? 'text-sp-error' : 'text-sp-muted'}`}
+            >
+              {sendNotice
+                ? sendNotice
+                : draft.length > ASSIST_MAX_QUESTION_CHARS - 200
+                  ? `${ASSIST_MAX_QUESTION_CHARS - draft.length}자 더 쓸 수 있어요`
+                  : '이름은 보내기 전에 가려집니다'}
             </span>
           </div>
+          {/* [중단] — 구독 CLI 가 답하는 동안만. 누르면 main 이 프로세스를 죽이고 턴은 "중단"으로 끝난다(R-6). */}
+          {stoppable && (
+            <button
+              type="button"
+              onClick={stop}
+              className="rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-xs font-sp-semibold text-sp-text hover:bg-sp-bg"
+            >
+              중단
+            </button>
+          )}
           <button
             type="button"
             onClick={send}

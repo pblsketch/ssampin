@@ -9,7 +9,7 @@
  *   backdrop-filter 가 화면 고정 요소를 가둔다.
  * ★`sp-*` 토큰에 Tailwind 투명도 수식을 붙이지 않는다(규칙이 생성되지 않아 배경이 투명해진다).
  */
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   clampTargetBytes,
@@ -22,6 +22,7 @@ import {
 import { neisByteLength, type RecordArea, type SchoolLevel } from '@domain/entities/RecordDraft';
 import { aiDraftText } from '@domain/entities/RecordAiDraft';
 import type { LengthAdjustCandidate } from '@adapters/components/RecordDraft/lengthAdjustRun';
+import { useRecordAiRunStore, type LengthRunStage } from '@adapters/stores/useRecordAiRunStore';
 
 const btn =
   'rounded-lg px-2.5 py-1.5 text-xs font-medium ring-1 ring-sp-border transition-colors hover:bg-sp-surface';
@@ -34,11 +35,6 @@ const chip = (on: boolean): string =>
       ? 'bg-blue-500/15 text-sp-accent ring-blue-500/30'
       : 'text-sp-muted ring-sp-border hover:text-sp-text'
   }`;
-const mode = (on: boolean): string =>
-  `px-2.5 py-1.5 text-xs font-medium disabled:opacity-40 ${
-    on ? 'bg-sp-accent text-sp-accent-fg' : 'bg-sp-card text-sp-muted hover:text-sp-text'
-  }`;
-
 /** 실행 결과 한 벌 — 부모가 CLI 를 돌려 돌려준다. */
 export interface LengthAdjustOutcome {
   readonly candidates: readonly LengthAdjustCandidate[];
@@ -49,6 +45,11 @@ export interface LengthAdjustOutcome {
 }
 
 export interface RecordDraftLengthPanelProps {
+  /**
+   * 이 조절의 실행 키 = 행의 3축 키(`studentRef:area:subject`). 단계·결과는 이 키로 **스토어**에 남는다(ADR-093 결정 3).
+   * 학생을 바꿨다 돌아와도 결과가 있고, 다른 학생 화면에는 보이지 않는다.
+   */
+  readonly runKey: string;
   readonly area: RecordArea;
   readonly level: SchoolLevel;
   readonly areaLimit: number;
@@ -74,16 +75,19 @@ export interface RecordDraftLengthPanelProps {
   ) => Promise<void>;
   /** [편집칸에 넣기(저장 안 함)] — 한도를 넘겨 저장할 수 없는 결과를 회수한다. */
   readonly onInsertOnly: (text: string) => void;
+  /** [중단] — 진행 중 왕복을 멈춘다(R-6). 없으면 단추를 그리지 않는다. */
+  readonly onCancel?: () => void;
 }
 
-type Stage =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'confirm-prohibited'; readonly categories: readonly string[] }
-  | { readonly kind: 'running'; readonly attempt: 1 | 2 }
-  | { readonly kind: 'result'; readonly outcome: LengthAdjustOutcome }
-  | { readonly kind: 'failed'; readonly message: string };
+/**
+ * 단계 — 스토어의 모양 그대로(`LengthRunStage`). `failed.detail` 은 AI 가 초안 대신 보낸 설명문(R-3) —
+ * 저장 후보가 아니라 읽을거리로만 보여 준다.
+ */
+type Stage = LengthRunStage;
+const IDLE_STAGE: Stage = { kind: 'idle' };
 
 export function RecordDraftLengthPanel({
+  runKey,
   area,
   level,
   areaLimit,
@@ -97,12 +101,22 @@ export function RecordDraftLengthPanel({
   onRun,
   onApply,
   onInsertOnly,
+  onCancel,
 }: RecordDraftLengthPanelProps) {
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<LengthAdjustKind>('shrink');
   const [targetInput, setTargetInput] = useState(String(defaultTargetBytes(area, level)));
   const [clampedNotice, setClampedNotice] = useState(false);
-  const [stage, setStage] = useState<Stage>({ kind: 'idle' });
+  /**
+   * 단계는 스토어가 든다(ADR-093 결정 3, ADR-088 결정 7 이행). 이 패널은 학생이 바뀌면 새로 만들어지는데,
+   * 단계가 인스턴스에 있으면 결과가 사라지고 실행 중 바꾸면 결과가 소리 없이 버려진다(P7).
+   */
+  const storeStage = useRecordAiRunStore((s) => s.length[runKey]);
+  const stage: Stage = storeStage ?? IDLE_STAGE;
+  const setLengthStage = useRecordAiRunStore((s) => s.setLengthStage);
+  const setStage = useCallback(
+    (next: Stage): void => setLengthStage(runKey, next),
+    [setLengthStage, runKey],
+  );
   const [pickedAttempt, setPickedAttempt] = useState<1 | 2>(1);
   const [compareOn, setCompareOn] = useState(false);
   /** 반영 직전 "그 사이에 고치셨어요" 확인. */
@@ -114,6 +128,19 @@ export function RecordDraftLengthPanel({
   const sourceBytes = neisByteLength(sourceText);
   const empty = sourceText.trim().length === 0;
   const targetBytes = clampTargetBytes(Number(targetInput), area, level);
+  /**
+   * 방향은 고르지 않는다(2026-09-08 오너 결정). 대상 글이 목표보다 길면 줄이고, 짧으면 근거로 채운다.
+   * 선생님이 정하는 건 목표 바이트 하나다 — "줄이기/보충하기"를 따로 고르게 하면 짧은 학생에게
+   * 줄이기가 켜진 채 남는 일이 생겼다.
+   */
+  const kind: LengthAdjustKind = sourceBytes > targetBytes ? 'shrink' : 'expand';
+  const gap = sourceBytes - targetBytes;
+  /** 이미 목표 안(하한~목표)이면 조절할 것이 없다. */
+  const alreadyOnTarget =
+    !empty && sourceBytes <= targetBytes && sourceBytes >= goalFloor(targetBytes);
+  /** 채워야 하는데 근거가 없으면 지어내기를 부르는 자리다 — 실행을 잠근다. */
+  const cannotExpand = kind === 'expand' && evidenceCount === 0;
+  const canRun = !empty && !alreadyOnTarget && !cannotExpand;
 
   const result = stage.kind === 'result' ? stage.outcome : null;
   const picked =
@@ -127,6 +154,12 @@ export function RecordDraftLengthPanel({
   useEffect(() => {
     if (verdict === 'over-limit') setOpen(true);
   }, [verdict]);
+  // ★조절 **대상**이 이미 한도를 넘었을 때도 펼친다(2026-09-08 R-4). AI 초안이 1,507B 로 나와
+  //   [바꾸기]가 거부된 순간이 바로 이 섹션을 써야 할 때인데, 접힌 채라 선생님이 찾지 못했다.
+  const sourceOverLimit = areaLimitVerified && !empty && sourceBytes > areaLimit;
+  useEffect(() => {
+    if (sourceOverLimit) setOpen(true);
+  }, [sourceOverLimit]);
 
   const byteCls =
     areaLimitVerified && sourceBytes > areaLimit
@@ -141,8 +174,21 @@ export function RecordDraftLengthPanel({
     setStage({ kind: 'running', attempt: 1 });
     setCompareOn(false);
     try {
-      const outcome = await onRun(k, t);
-      setPickedAttempt(outcome.candidates.length >= 2 ? 2 : 1);
+      const raw = await onRun(k, t);
+      // ★설명문(거절·되묻기)은 저장 후보에서 뺀다(R-3). 전부 설명문이면 실패로 말하고 그 글은
+      //   읽을거리로만 보여 준다 — 편집칸에 넣을 길을 남기지 않는다.
+      const usable = raw.candidates.filter((c) => !c.nonDraft);
+      if (usable.length === 0) {
+        const last = raw.candidates[raw.candidates.length - 1];
+        setStage({
+          kind: 'failed',
+          message: `${last?.nonDraftReason ?? 'AI가 초안 대신 설명을 보냈어요.'} 원문은 그대로예요. 근거를 더 넣거나 목표를 바꿔 다시 시도해 보세요.`,
+          ...(last ? { detail: aiDraftText({ paragraphs: last.paragraphs }) } : {}),
+        });
+        return;
+      }
+      const outcome: LengthAdjustOutcome = { ...raw, candidates: usable };
+      setPickedAttempt(usable[usable.length - 1]?.attempt ?? 1);
       const text = outcome.candidates[outcome.candidates.length - 1];
       // 원문이 그대로 돌아온 경우 — 원인을 모르므로 추측하지 않고 사실만 말한다.
       if (
@@ -260,22 +306,46 @@ export function RecordDraftLengthPanel({
               {stage.attempt === 1
                 ? '1차 조절 중이에요. 1~2분 걸릴 수 있어요.'
                 : '목표에 못 미쳐 자동으로 다시 조절하고 있어요.'}
+              {onCancel && (
+                <button
+                  type="button"
+                  onClick={onCancel}
+                  className={`ml-auto bg-sp-card text-sp-text ${btn}`}
+                >
+                  중단
+                </button>
+              )}
             </p>
           ) : stage.kind === 'failed' ? (
             <div
-              className="flex items-center gap-2 rounded-lg bg-sp-card px-3 py-2"
+              className="flex flex-col gap-2 rounded-lg bg-sp-card px-3 py-2"
               role="status"
               aria-live="polite"
             >
-              <span className="material-symbols-outlined text-sm text-sp-muted">error_outline</span>
-              <p className="flex-1 text-xs leading-relaxed text-sp-muted">{stage.message}</p>
-              <button
-                type="button"
-                onClick={() => setStage({ kind: 'idle' })}
-                className={`shrink-0 bg-sp-bg text-sp-accent ${btn}`}
-              >
-                다시 시도
-              </button>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-sm text-sp-muted">
+                  error_outline
+                </span>
+                <p className="flex-1 text-xs leading-relaxed text-sp-muted">{stage.message}</p>
+                <button
+                  type="button"
+                  onClick={() => setStage({ kind: 'idle' })}
+                  className={`shrink-0 bg-sp-bg text-sp-accent ${btn}`}
+                >
+                  다시 시도
+                </button>
+              </div>
+              {stage.detail !== undefined && (
+                <details className="text-xs text-sp-muted">
+                  <summary className="cursor-pointer">AI가 보낸 설명 보기</summary>
+                  <p
+                    className="mt-1 whitespace-pre-wrap rounded-lg bg-sp-bg px-2 py-1.5 leading-relaxed"
+                    data-testid="length-adjust-non-draft"
+                  >
+                    {stage.detail}
+                  </p>
+                </details>
+              )}
             </div>
           ) : stage.kind === 'confirm-prohibited' ? (
             <div
@@ -435,8 +505,11 @@ export function RecordDraftLengthPanel({
           ) : (
             <>
               <fieldset disabled={lockedByOther} className="contents">
+                {/* 어느 글의 몇 바이트인지 한 줄로 — 판 미리보기 머리의 숫자와 같은 함수·같은 본문이다. */}
                 <div className="flex items-center justify-between text-xs">
-                  <span className={byteCls}>현재 {sourceBytes.toLocaleString()}바이트</span>
+                  <span className={byteCls} data-testid="length-adjust-source-bytes">
+                    {sourceVersionLabel ?? '직접 작성한 글'} {sourceBytes.toLocaleString()}바이트
+                  </span>
                   <span className="text-sp-muted">
                     영역 한도 {areaLimit.toLocaleString()}바이트
                   </span>
@@ -468,53 +541,31 @@ export function RecordDraftLengthPanel({
                   <p className="text-xs text-sp-muted">한도 수치는 확인 중이에요.</p>
                 )}
 
-                <div
-                  className="inline-flex w-fit overflow-hidden rounded-lg ring-1 ring-sp-border"
-                  role="radiogroup"
-                  aria-label="분량 조절 방향"
+                {/* 방향은 목표가 정한다 — 무엇을 할지 한 줄로 말하고, 못 할 때는 왜 못 하는지 말한다. */}
+                <p
+                  className="text-xs leading-relaxed text-sp-muted"
+                  data-testid="length-adjust-plan"
                 >
-                  <button
-                    type="button"
-                    onClick={() => setKind('shrink')}
-                    aria-pressed={kind === 'shrink'}
-                    className={mode(kind === 'shrink')}
-                  >
-                    줄이기
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setKind('expand')}
-                    aria-pressed={kind === 'expand'}
-                    disabled={evidenceCount === 0}
-                    className={mode(kind === 'expand')}
-                  >
-                    근거로 보충하기
-                  </button>
-                </div>
-
-                {kind === 'expand' && (
+                  {alreadyOnTarget
+                    ? '이미 목표 안이에요. 목표를 바꾸면 그에 맞춰 조절합니다.'
+                    : kind === 'shrink'
+                      ? `목표보다 ${gap.toLocaleString()}바이트 많아 줄입니다. 핵심 활동과 교사 평가는 그대로 두고 덜 중요한 문장부터 뺍니다.`
+                      : cannotExpand
+                        ? `목표보다 ${(-gap).toLocaleString()}바이트 적지만 이 영역에 쓸 근거가 없어서 채울 수 없어요. 근거 정리 보드에서 먼저 모아 주세요.`
+                        : `목표보다 ${(-gap).toLocaleString()}바이트 적어 근거 자료로 채웁니다. 새로운 내용은 지어내지 않습니다.`}
+                </p>
+                {kind === 'expand' && !cannotExpand && !alreadyOnTarget && (
                   <p className="text-xs text-sp-muted">
                     주제: {threadTitle ?? '전체 근거'}
                     {threadTitle !== undefined && ' (조절 대상 판 기준)'}
                   </p>
                 )}
-                {kind !== 'expand' && evidenceCount === 0 && (
-                  <p className="text-xs leading-relaxed text-sp-muted">
-                    이 영역에 쓸 근거가 없어서 보충할 수 없어요. 근거 정리 보드에서 먼저 모아
-                    주세요.
-                  </p>
-                )}
-
-                <p className="text-xs leading-relaxed text-sp-muted">
-                  {kind === 'shrink'
-                    ? '핵심 활동과 교사 평가를 유지하며 줄입니다.'
-                    : '빠진 과정과 결과를 근거 자료로 채우고, 새로운 내용은 지어내지 않습니다.'}
-                </p>
 
                 <button
                   type="button"
                   onClick={runOrConfirm}
-                  className={`w-fit self-end ${primaryBtn}`}
+                  disabled={!canRun}
+                  className={`w-fit self-end ${primaryBtn} disabled:opacity-40`}
                 >
                   조절안 만들기
                 </button>

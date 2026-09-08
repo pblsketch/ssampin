@@ -8,11 +8,22 @@ import type { EvidenceCandidate } from '@usecases/studentRecords/collectEvidence
 
 export type SidePanelTab = 'ai' | 'evidence';
 
+/** 패널이 놓이는 방식 — 옆에 나란히(`side`) 또는 본문 자리를 통째로 차지(`sheet`, 좁은 창). */
+export type SidePanelPlacement = 'side' | 'sheet';
+
+const TAB_ORDER: readonly SidePanelTab[] = ['ai', 'evidence'];
+
 interface RecordDraftSidePanelProps {
   readonly studentName: string | null;
   readonly area: RecordArea;
   readonly tab: SidePanelTab;
   readonly onTabChange: (tab: SidePanelTab) => void;
+  /** ✕ — 패널을 닫는다(폭 0). */
+  readonly onClose: () => void;
+  /** 배치. 기본 `side`. `sheet` 면 머리에 [본문으로] 가 붙고 폭이 본문 전체다. */
+  readonly placement?: SidePanelPlacement;
+  /** 나란히 놓일 때의 폭(px). 부모가 창 폭을 재서 정한다. 기본 380. */
+  readonly width?: number;
   /** 이 학생·이 영역의 근거. */
   readonly evidences: readonly RecordEvidence[];
   /** 거울 카드 — 아직 근거로 안 넣은 원본 기록(영역 무관). 미분류 수에 더한다. 기본 빈 목록. */
@@ -34,16 +45,23 @@ function shortDate(date?: string): string {
 }
 
 /**
- * 오른쪽 패널 — 고른 학생의 [AI 초안 | 근거] (설계서 §4·§5).
+ * 오른쪽 보조 공간 — 고른 학생의 [AI 초안 | 근거] (설계서 §3, ADR-093).
  *
  * 학생·영역은 부모(`RecordDraftView`)의 `selectedStudentRef`·`activeArea` 를 **props 로 받는다** —
  * 여기서 `students[0]` 로 시작하지 않는다(P1: 두 화면이 학생 선택을 공유하지 않던 문제).
+ *
+ * ★쌤핀 AI(범용 대화)는 이 안에 두지 않는다 — 이 화면의 AI 는 생기부 초안을 쓰는 일이고, 범용 대화가 같은
+ *   자리에 있으면 헷갈린다(오너 피드백 2026-09-08). 대신 이 화면에 있는 동안 쌤핀 AI 도크와 이 패널은
+ *   **둘 중 하나만** 열린다(부모 `RecordDraftView` 가 배타적으로 다룬다).
  */
 export function RecordDraftSidePanel({
   studentName,
   area,
   tab,
   onTabChange,
+  onClose,
+  placement = 'side',
+  width = 380,
   evidences,
   mirrors = [],
   threads,
@@ -71,13 +89,31 @@ export function RecordDraftSidePanel({
     return { byThread: byThread.filter((g) => g.items.length > 0), unclassified };
   }, [threads, evidences, mirrors, threadIdSet]);
 
-  const tabBtn = (id: SidePanelTab, label: string): ReactNode => (
+  const tabBtn = (id: SidePanelTab, label: string, title?: string): ReactNode => (
     <button
       type="button"
       role="tab"
+      id={`rd-side-tab-${id}`}
       aria-selected={tab === id}
+      aria-controls="rd-side-tabpanel"
+      tabIndex={tab === id ? 0 : -1}
       onClick={() => onTabChange(id)}
-      className={`-mb-px border-b-2 px-3 py-2 text-sm transition-colors ${
+      onKeyDown={(e) => {
+        // ARIA 탭 패턴 — ←/→ 로 이웃 탭으로(영역 탭과 같은 규칙).
+        const idx = TAB_ORDER.indexOf(id);
+        const next =
+          e.key === 'ArrowRight'
+            ? TAB_ORDER[(idx + 1) % TAB_ORDER.length]
+            : e.key === 'ArrowLeft'
+              ? TAB_ORDER[(idx - 1 + TAB_ORDER.length) % TAB_ORDER.length]
+              : undefined;
+        if (next === undefined) return;
+        e.preventDefault();
+        onTabChange(next);
+        requestAnimationFrame(() => document.getElementById(`rd-side-tab-${next}`)?.focus());
+      }}
+      {...(title !== undefined ? { title } : {})}
+      className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm transition-colors ${
         tab === id
           ? 'border-sp-accent font-bold text-sp-text'
           : 'border-transparent font-medium text-sp-muted hover:text-sp-text'
@@ -90,17 +126,49 @@ export function RecordDraftSidePanel({
   return (
     <aside
       aria-label="고른 학생 패널"
-      className="flex min-h-0 w-[380px] shrink-0 flex-col border-l border-sp-border bg-sp-card"
+      data-placement={placement}
+      className={
+        placement === 'sheet'
+          ? 'flex min-h-0 min-w-0 flex-1 flex-col bg-sp-card'
+          : 'flex min-h-0 shrink-0 flex-col border-l border-sp-border bg-sp-card'
+      }
+      style={placement === 'sheet' ? undefined : { width }}
     >
-      <div className="flex items-center gap-1 border-b border-sp-border px-2" role="tablist">
-        {tabBtn('ai', 'AI 초안')}
-        {tabBtn('evidence', '근거')}
-        <span className="ml-auto truncate pr-2 text-xs text-sp-muted">{studentName ?? ''}</span>
+      <div className="flex items-center gap-1 border-b border-sp-border px-2">
+        {placement === 'sheet' && (
+          <button
+            type="button"
+            onClick={onClose}
+            className="mr-1 flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-sp-muted hover:bg-sp-surface hover:text-sp-text"
+          >
+            <span className="material-symbols-outlined text-base">arrow_back</span>본문으로
+          </button>
+        )}
+        <div role="tablist" aria-label="보조 공간" className="flex items-center gap-1">
+          {tabBtn('ai', 'AI 초안', '생기부 초안·분량 조절: 선생님 구독 AI 전용')}
+          {tabBtn('evidence', '근거')}
+        </div>
+        <span className="ml-auto min-w-0 truncate pr-1 text-xs text-sp-muted">
+          {studentName ?? ''}
+        </span>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="패널 닫기"
+          className="shrink-0 rounded-lg px-2 py-1 text-sp-muted hover:bg-sp-surface hover:text-sp-text"
+        >
+          ✕
+        </button>
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div
+        role="tabpanel"
+        id="rd-side-tabpanel"
+        aria-labelledby={`rd-side-tab-${tab}`}
+        className="min-h-0 flex-1 overflow-y-auto"
+      >
         {studentName === null ? (
           <p className="px-3 py-8 text-center text-sm text-sp-muted">
-            학생 행을 누르면 여기서 AI 초안과 근거를 봅니다.
+            학생을 고르면 여기서 AI 초안과 근거를 봅니다.
           </p>
         ) : tab === 'ai' ? (
           aiPanel

@@ -16,6 +16,8 @@ interface ClassRecordDraftViewProps {
   readonly onFlowIntentConsumed?: (requestId: string) => void;
   /** 보드에서 입력·원본으로 돌아가는 요청. */
   readonly onRequestFlow?: (intent: RecordFlowIntent) => void | Promise<void>;
+  /** 초안 화면이 떠 있는 동안 학급 목록을 접어 달라는 요청(ADR-093). 페이지가 복원까지 맡는다. */
+  readonly onRequestCompactHost?: (compact: boolean) => void;
 }
 
 /** 수업반(교과) 생활기록부 초안 — 과목세특·개인세특·동아리 영역. */
@@ -24,6 +26,7 @@ export function ClassRecordDraftView({
   flowIntent,
   onFlowIntentConsumed,
   onRequestFlow,
+  onRequestCompactHost,
 }: ClassRecordDraftViewProps) {
   const classes = useTeachingClassStore((s) => s.classes);
   const load = useTeachingClassStore((s) => s.load);
@@ -68,6 +71,7 @@ export function ClassRecordDraftView({
       flowIntent={flowIntent}
       onFlowIntentConsumed={onFlowIntentConsumed}
       {...(onRequestFlow !== undefined ? { onRequestFlow } : {})}
+      {...(onRequestCompactHost !== undefined ? { onRequestCompactHost } : {})}
       // 수업반을 찾았다는 것이 곧 명단을 읽었다는 뜻이다. 학생 0명인 반도 로드된 상태다.
       rosterLoaded
     />

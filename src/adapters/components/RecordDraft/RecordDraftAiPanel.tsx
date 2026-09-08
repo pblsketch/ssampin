@@ -17,6 +17,11 @@ import {
   useOwnAiStatusStore,
 } from '@adapters/stores/useOwnAiStatusStore';
 import { useRecordAiDraftStore } from '@adapters/stores/useRecordAiDraftStore';
+import {
+  draftRunScope,
+  useRecordAiRunStore,
+  type DraftRunPhase,
+} from '@adapters/stores/useRecordAiRunStore';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import { OWN_AI_PROVIDER_LABELS } from '@domain/entities/OwnAiProvider';
 import { useOwnAiModelCatalog } from '@adapters/hooks/useOwnAiModelCatalog';
@@ -40,10 +45,11 @@ import {
   sameNarrativeBody,
   splitParagraphs,
   NARRATIVE_ROLE_LABELS,
-  type NarrativeParagraph,
   type RoleMark,
 } from '@domain/rules/narrativeParagraphs';
 import type { OwnAiErrorKind } from '@domain/entities/OwnAiProvider';
+import { judgeNonDraftReply } from '@domain/rules/nonDraftReply';
+import { shortModelLabel } from '@adapters/components/Assist/answererLabels';
 import { askOnce, runApi } from '@adapters/components/RecordDraft/ownAiRun';
 import type { KeywordGroup, MaskMapping } from '@domain/privacy/types';
 import { restoreModelText } from '@domain/rules/redactOutbound';
@@ -56,24 +62,17 @@ import type { LengthAdjustCandidate } from '@adapters/components/RecordDraft/len
 import type { LengthAdjustKind } from '@domain/rules/recordLengthGoal';
 import {
   isAreaLimitVerified,
+  neisByteLength,
   resolveAreaLimit,
   type RecordArea,
   type SchoolLevel,
 } from '@domain/entities/RecordDraft';
 import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
 
-/** 한 학생분의 초안 재료. 화면(부모)이 실명 그대로 준다 — 가리는 일은 꾸러미가 한다. */
-export interface DraftTarget {
-  /** 저장할 때 쓰는 학생 키. */
-  readonly studentRef: string;
-  /** 학생 이름(화면용). 모델에게는 **꾸러미가 별칭으로 바꿔서** 보낸다. */
-  readonly displayName: string;
-  /** 이 영역의 근거(주제 무관). 주제를 고르면 `studentEvidences` 에서 그 주제 것만 골라 보낸다. */
-  readonly evidences: readonly DraftPackEvidence[];
-  readonly standardKeywords?: readonly string[];
-  /** 이미 초안이 있으면 "바꾸기 / 뒤에 붙이기"를 물어본다. */
-  readonly existingText?: string;
-}
+import type { DraftTarget } from '@adapters/components/RecordDraft/recordDraftTypes';
+
+/** 한 학생분의 초안 재료 — 정의는 `recordDraftTypes.ts`(실행 스토어와 공유). 예전 import 경로를 위해 다시 내보낸다. */
+export type { DraftTarget } from '@adapters/components/RecordDraft/recordDraftTypes';
 
 /** 주제 칩용 — 이 학생의 근거 전부(영역 무관). 주제를 고르면 threadId 로 거른다. */
 export type ThreadedEvidence = DraftPackEvidence & { readonly threadId?: string };
@@ -90,6 +89,13 @@ export interface RecordDraftAiPanelProps {
   readonly studentEvidences?: readonly ThreadedEvidence[];
   /** "남은 학생 모두"에 쓸 나머지 — 아직 초안이 없는 학생만 부모가 골라 준다. */
   readonly remaining?: readonly DraftTarget[];
+  /**
+   * "고른 N명" — 학생 목록에서 체크한 학생들(오너 요청 2026-09-08). 자기 자신·초안이 있는 학생도 들어 있을 수 있다.
+   * 초안이 있는 학생은 미리보기에서 [바꾸기]/[뒤에 붙이기]를 고른다 — 손으로 쓴 글을 소리 없이 덮지 않는다.
+   */
+  readonly picked?: readonly DraftTarget[];
+  /** [고른 N명]으로 실행을 시작하면 부모가 체크를 비운다. */
+  readonly onClearPicked?: () => void;
   /** 판을 저장할 칸(area + studentRef + subject). 다른 학생 차례에는 studentRef 만 바꿔 쓴다. */
   readonly draftKey: RecordAiDraftKey;
   /** 현재 초안의 형광펜 표식 — [되돌리기]와 [다시 표시]가 쓴다. */
@@ -106,13 +112,6 @@ export interface RecordDraftAiPanelProps {
   ) => Promise<void> | void;
   /** [다시 표시] — 본문은 그대로 두고 표식만 갱신한다. */
   readonly onRemark?: (studentRef: string, roleMarks: readonly RoleMark[]) => Promise<void> | void;
-  /**
-   * 실행 중인 학생들(누른 뒤 ~ 마지막 학생 반영/버리기 전)을 부모에게 알린다. 빈 배열 = 끝.
-   *
-   * ★없으면 큐가 조용히 죽는다: "미작성" 필터를 켠 채 "남은 학생 모두"를 누르면 첫 [반영] 순간
-   *   그 학생이 필터에서 빠져 행이 사라진다(UltraQA P1). 부모가 이 신호로 행을 붙들어 둔다.
-   */
-  readonly onActiveChange?: (studentRefs: readonly string[]) => void;
   /** 큐가 다음 학생으로 넘어갔다 — 부모가 그 학생을 고른 학생으로 바꾼다. */
   readonly onFocusStudent?: (studentRef: string) => void;
 
@@ -126,16 +125,28 @@ export interface RecordDraftAiPanelProps {
    *   한도를 넘겨 저장이 거부된 글(정작 조절해야 할 그 글)이 들어 있지 않다.
    */
   readonly getSourceText?: () => string;
+  /**
+   * @param sourceText 조절할 **실제 원문**. 미리보기 중인 AI 판이 있으면 그 판의 글이고, 없으면
+   *   편집 칸의 글이다. ★2026-09-08 R-2: 라벨은 "AI 초안 v1"인데 원문은 편집 칸(162B)을 보내
+   *   [줄이기]가 늘리기가 됐다. 이제 원문은 이 패널이 정해서 넘긴다.
+   * @param sourceVersionId 원문이 AI 판이면 그 판 id — 조절 결과 판에 "어느 판을 조절했는지" 남긴다.
+   */
   readonly onLengthRun?: (
     kind: LengthAdjustKind,
     targetBytes: number,
+    sourceText: string,
+    sourceVersionId: string | undefined,
   ) => Promise<LengthAdjustOutcome>;
   readonly onLengthApply?: (
     picked: LengthAdjustCandidate,
     outcome: LengthAdjustOutcome,
     kind: LengthAdjustKind,
     targetBytes: number,
+    sourceVersionId: string | undefined,
+    threadId: string | undefined,
   ) => Promise<void>;
+  /** [중단] — 진행 중인 분량 조절 왕복을 멈춘다(R-6). */
+  readonly onLengthCancel?: () => void;
   /** [편집칸에 넣기(저장 안 함)] — 부모가 행에 배달한다. */
   readonly onInsertToEditor?: (text: string) => void;
   /**
@@ -145,28 +156,12 @@ export interface RecordDraftAiPanelProps {
   readonly hasUnsavedInput?: boolean;
 }
 
-type Phase =
-  | { readonly kind: 'idle' }
-  | { readonly kind: 'picking' }
-  | {
-      readonly kind: 'running';
-      readonly done: number;
-      readonly total: number;
-      readonly name: string;
-    }
-  | {
-      readonly kind: 'preview';
-      readonly studentRef: string;
-      readonly name: string;
-      /** 이어서 처리할 학생들(남은 학생 모두). */
-      readonly queue: readonly DraftTarget[];
-    }
-  | {
-      readonly kind: 'stopped';
-      readonly message: string;
-      /** 한도·오류로 멈춘 자리. [이어 하기] 가 여기서 다시 시작한다. */
-      readonly queue: readonly DraftTarget[];
-    };
+/**
+ * 실행 단계 — **스토어가 든다**(`useRecordAiRunStore`, ADR-093 결정 3). 이 패널은 학생·영역이 바뀌면 새로
+ * 만들어지는데, 큐가 패널 상태에 있으면 "남은 학생 모두"가 다음 학생으로 넘어가며 선택을 바꾸는 순간 큐가 사라졌다.
+ */
+type Phase = DraftRunPhase;
+const IDLE_PHASE: Phase = { kind: 'idle' };
 
 /**
  * 모델이 쓴 별칭을 실제 이름으로 되돌린다 — 이 학생뿐 아니라 근거에 등장한 **다른 학생**도.
@@ -183,20 +178,9 @@ const UNDO_MS = 30_000;
  *
  * ★문구만으로는 재시도 폭주를 못 막는다 — 그 버튼은 `runQueue` 를 즉시 다시 부르므로
  *   "1분 뒤에 다시" 라고 써 놓아도 곧바로 눌리면 또 429 가 되고 요청이 더 몰린다.
- * ★[AI로 초안 쓰기] 새 시작까지 막지는 않는다(알려진 한계).
+ * ★[이 학생 초안 쓰기] 새 시작까지 막지는 않는다(알려진 한계).
  */
 const RETRY_COOLDOWN_MS = 60_000;
-
-/** [내 글과 비교] 문단 짝 — 왼쪽 내 글 / 오른쪽 고른 판. */
-function pairParagraphs(
-  mine: readonly string[],
-  theirs: readonly NarrativeParagraph[],
-): readonly { left: string; right: NarrativeParagraph | null }[] {
-  const n = Math.max(mine.length, theirs.length);
-  const rows: { left: string; right: NarrativeParagraph | null }[] = [];
-  for (let i = 0; i < n; i += 1) rows.push({ left: mine[i] ?? '', right: theirs[i] ?? null });
-  return rows;
-}
 
 export function RecordDraftAiPanel({
   areaLabel,
@@ -205,27 +189,50 @@ export function RecordDraftAiPanel({
   threads = [],
   studentEvidences,
   remaining = [],
+  picked = [],
+  onClearPicked,
   draftKey,
   existingRoleMarks,
   highlightOn = false,
   teacherPrompt,
   onApply,
   onRemark,
-  onActiveChange,
   onFocusStudent,
   area,
   level,
   getSourceText,
   onLengthRun,
   onLengthApply,
+  onLengthCancel,
   onInsertToEditor,
   hasUnsavedInput,
 }: RecordDraftAiPanelProps) {
-  const [phase, setPhase] = useState<Phase>({ kind: 'idle' });
+  /**
+   * 실행 단계는 스토어에서 읽고 쓴다. scope(영역·과목·수업반)가 다르면 남의 큐다(idle 로 본다).
+   * 학생은 scope 에 넣지 않는다 — 큐가 학생을 옮겨 다니기 때문이다. 결과는 큐 항목의 `studentRef` 칸으로만 간다.
+   */
+  const runScope = draftRunScope({
+    area: draftKey.area,
+    ...(draftKey.subject !== undefined ? { subject: draftKey.subject } : {}),
+    ...(draftKey.classId !== undefined ? { classId: draftKey.classId } : {}),
+  });
+  const draftRun = useRecordAiRunStore((s) => s.drafts[runScope]);
+  const phase: Phase = draftRun ?? IDLE_PHASE;
+  const setDraftPhase = useRecordAiRunStore((s) => s.setDraftPhase);
+  const setDraftAbort = useRecordAiRunStore((s) => s.setDraftAbort);
+  const setPhase = useCallback(
+    (next: Phase): void => setDraftPhase(runScope, next),
+    [setDraftPhase, runScope],
+  );
   /** 고른 주제(''=전체 근거). 학생이 바뀌면 부모가 이 패널을 새로 만든다(key). */
   const [pickedThreadId, setPickedThreadId] = useState('');
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   const [compareOn, setCompareOn] = useState(false);
+  /**
+   * 설정(공급자·모델) 펼침 — 판이 하나라도 있으면 "Claude Code · Sonnet 5 [바꾸기]" 한 줄로 접는다(ADR-093 결정 6).
+   * 처음(판 없음)에는 펼쳐진 채다: 그때가 설정하는 단계다.
+   */
+  const [setupOpen, setSetupOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [remarking, setRemarking] = useState(false);
   /** 배급 한도로 멈춘 뒤 [이어 하기] 를 다시 누를 수 있는 시각(ms). 0 이면 잠금 없음. */
@@ -253,19 +260,6 @@ export function RecordDraftAiPanel({
   } | null>(null);
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 실행 중인 학생들을 부모에게 알린다. 언마운트되면 "끝"으로 알려 붙들림을 푼다.
-  const activeRefs = useMemo<readonly string[]>(() => {
-    if (phase.kind === 'running') return [target.studentRef, ...remaining.map((r) => r.studentRef)];
-    if (phase.kind === 'preview')
-      return [phase.studentRef, ...phase.queue.map((q) => q.studentRef)];
-    if (phase.kind === 'stopped') return phase.queue.map((q) => q.studentRef);
-    return [];
-  }, [phase, target.studentRef, remaining]);
-  const activeKey = activeRefs.join('\u0000');
-  useEffect(() => {
-    onActiveChange?.(activeKey.length === 0 ? [] : activeKey.split('\u0000'));
-  }, [activeKey, onActiveChange]);
-  useEffect(() => () => onActiveChange?.([]), [onActiveChange]);
   useEffect(
     () => () => {
       if (undoTimer.current) clearTimeout(undoTimer.current);
@@ -330,6 +324,14 @@ export function RecordDraftAiPanel({
   }, [versions, selectedVersionId]);
 
   const pickedThread = threads.find((t) => t.id === pickedThreadId) ?? null;
+  /**
+   * 분량 조절의 대상이 되는 AI 판 — 미리보기 중이고(반영 전) 조절 결과가 아닌 판. 반영된 판은 이미
+   * 편집 칸에 들어가 있으므로 편집 칸의 글을 조절한다(R-2).
+   */
+  const adjustTargetVersion: RecordAiDraft | null =
+    selected !== null && selected.adjust === undefined && selected.appliedAt === undefined
+      ? selected
+      : null;
   /** 보낼 근거 — 주제를 골랐으면 그 주제의 근거만, 아니면 이 영역 전체. */
   const targetForRun = useMemo<DraftTarget>(() => {
     if (pickedThread === null || studentEvidences === undefined) return target;
@@ -356,79 +358,109 @@ export function RecordDraftAiPanel({
     [areaLabel, roster, pickedThread, target.studentRef, teacherPrompt],
   );
 
+  /** [중단] — 손잡이는 스토어에 있다(새 패널 인스턴스에서도 멈출 수 있게, R-6·ADR-093). */
+  const abortRun = (): void => useRecordAiRunStore.getState().draftAbort[runScope]?.abort();
+
   /** 큐를 하나씩 처리한다. 결과가 나오면 판으로 남기고 미리보기에서 멈춰 선생님 판단을 기다린다. */
   const runQueue = useCallback(
     async (queue: readonly DraftTarget[], startedWith: number) => {
       const api = runApi();
       if (!api || !runProvider) return;
       const total = startedWith;
-
-      // ★규정(1층 프롬프트)을 먼저 받는다 — 없으면 초안을 만들지 않는다(D7).
-      //   본문은 여기 지역 변수에만 있고, 디스크에 쓰지 않는다.
-      //   ★전에 받아 둔 값이 있으면 서버가 잠깐 죽어도 계속 만든다(ADR-089) — 그 판단은
-      //     `fetchRecordPromptL1` 안에 있고, 여기서는 `ok` 만 본다.
-      const promptResult = await fetchRecordPromptL1(installId);
-      if (!promptResult.ok) {
-        const kind: OwnAiErrorKind =
-          promptResult.reason === 'rate-limited-minute'
-            ? 'prompt-rate-limited-minute'
-            : promptResult.reason === 'rate-limited-day'
-              ? 'prompt-rate-limited-day'
-              : 'prompt-unavailable';
-        // ★한도로 멈춘 경우에만 [이어 하기] 를 잠깐 잠근다. 그 버튼은 `runQueue` 를 즉시
-        //   다시 부르므로, 안 잠그면 429 → 누름 → 429 로 요청이 더 몰린다.
-        if (kind !== 'prompt-unavailable') {
-          setRetryBlockedUntil(Date.now() + RETRY_COOLDOWN_MS);
-        }
-        setPhase({ kind: 'stopped', message: OWN_AI_ERROR_MESSAGES[kind].draft, queue });
-        return;
-      }
-      const systemPrompt = promptResult.prompt;
-      const promptVersion = promptResult.version;
-
-      for (let i = 0; i < queue.length; i += 1) {
-        const t = queue[i];
-        if (!t) continue;
-        setPhase({ kind: 'running', done: total - queue.length + i, total, name: t.displayName });
-        const pack = buildPrompt(t);
-        try {
-          const raw = await askOnce(api, runProvider, pack.text, systemPrompt);
-          // 별칭을 실제 이름으로 되돌리고 표식을 뗀 뒤에 남긴다 — 판에는 ［이름1］도 [동기]도 없다.
-          const paragraphs = parseNarrativeParagraphs(restoreAliases(raw, pack.mappings));
-          const id = await addVersion({
-            draftKey: { ...draftKey, studentRef: t.studentRef },
-            provider: runProvider,
-            promptVersion,
-            ...(ownAiModels[runProvider] ? { model: ownAiModels[runProvider] } : {}),
-            ...(pickedThread !== null && t.studentRef === target.studentRef
-              ? { threadId: pickedThread.id }
-              : {}),
-            paragraphs,
-            excluded: summarizeExclusions(pack.exclusions),
-          });
-          setSelectedVersionId(id);
-          setCompareOn(false);
-          setPhase({
-            kind: 'preview',
-            studentRef: t.studentRef,
-            name: t.displayName,
-            queue: queue.slice(i + 1),
-          });
-          if (t.studentRef !== target.studentRef) onFocusStudent?.(t.studentRef);
-          return; // 미리보기에서 멈춘다 — [반영] 을 눌러야 다음으로 간다.
-        } catch (kind) {
-          const k = (typeof kind === 'string' ? kind : 'crashed') as OwnAiErrorKind;
-          setPhase({
-            kind: 'stopped',
-            message: OWN_AI_ERROR_MESSAGES[k].draft,
-            queue: queue.slice(i),
-          });
+      const abort = new AbortController();
+      setDraftAbort(runScope, abort);
+      try {
+        // ★규정(1층 프롬프트)을 먼저 받는다 — 없으면 초안을 만들지 않는다(D7).
+        //   본문은 여기 지역 변수에만 있고, 디스크에 쓰지 않는다.
+        //   ★전에 받아 둔 값이 있으면 서버가 잠깐 죽어도 계속 만든다(ADR-089) — 그 판단은
+        //     `fetchRecordPromptL1` 안에 있고, 여기서는 `ok` 만 본다.
+        const promptResult = await fetchRecordPromptL1(installId);
+        if (!promptResult.ok) {
+          const kind: OwnAiErrorKind =
+            promptResult.reason === 'rate-limited-minute'
+              ? 'prompt-rate-limited-minute'
+              : promptResult.reason === 'rate-limited-day'
+                ? 'prompt-rate-limited-day'
+                : 'prompt-unavailable';
+          // ★한도로 멈춘 경우에만 [이어 하기] 를 잠깐 잠근다. 그 버튼은 `runQueue` 를 즉시
+          //   다시 부르므로, 안 잠그면 429 → 누름 → 429 로 요청이 더 몰린다.
+          if (kind !== 'prompt-unavailable') {
+            setRetryBlockedUntil(Date.now() + RETRY_COOLDOWN_MS);
+          }
+          setPhase({ kind: 'stopped', message: OWN_AI_ERROR_MESSAGES[kind].draft, queue });
           return;
         }
+        const systemPrompt = promptResult.prompt;
+        const promptVersion = promptResult.version;
+
+        for (let i = 0; i < queue.length; i += 1) {
+          const t = queue[i];
+          if (!t) continue;
+          setPhase({
+            kind: 'running',
+            done: total - queue.length + i,
+            total,
+            name: t.displayName,
+            studentRef: t.studentRef,
+            queue: queue.slice(i),
+          });
+          const pack = buildPrompt(t);
+          try {
+            const raw = await askOnce(api, runProvider, pack.text, systemPrompt, abort.signal);
+            // 별칭을 실제 이름으로 되돌리고 표식을 뗀 뒤에 남긴다 — 판에는 ［이름1］도 [동기]도 없다.
+            const restored = restoreAliases(raw, pack.mappings);
+            const paragraphs = parseNarrativeParagraphs(restored);
+            // ★초안이 아니라 설명(거절·되묻기)이 왔으면 판으로 남기지 않는다(R-3). 설명문이 판이 되면
+            //   [반영]으로 생기부 칸에 들어간다. 사유와 그 글을 보여 주고 멈춘다.
+            const nonDraft = judgeNonDraftReply(aiDraftText({ paragraphs }));
+            if (nonDraft.nonDraft) {
+              const head = restored.trim().slice(0, 200);
+              setPhase({
+                kind: 'stopped',
+                message: `${nonDraft.reason} 근거를 더 넣거나 다시 시도해 주세요. AI 답: "${head}${restored.trim().length > 200 ? '…' : ''}"`,
+                queue: queue.slice(i),
+              });
+              return;
+            }
+            const id = await addVersion({
+              draftKey: { ...draftKey, studentRef: t.studentRef },
+              provider: runProvider,
+              promptVersion,
+              ...(ownAiModels[runProvider] ? { model: ownAiModels[runProvider] } : {}),
+              ...(pickedThread !== null && t.studentRef === target.studentRef
+                ? { threadId: pickedThread.id }
+                : {}),
+              paragraphs,
+              excluded: summarizeExclusions(pack.exclusions),
+            });
+            setSelectedVersionId(id);
+            setCompareOn(false);
+            setPhase({
+              kind: 'preview',
+              studentRef: t.studentRef,
+              name: t.displayName,
+              queue: queue.slice(i + 1),
+            });
+            if (t.studentRef !== target.studentRef) onFocusStudent?.(t.studentRef);
+            return; // 미리보기에서 멈춘다 — [반영] 을 눌러야 다음으로 간다.
+          } catch (kind) {
+            const k = (typeof kind === 'string' ? kind : 'crashed') as OwnAiErrorKind;
+            setPhase({
+              kind: 'stopped',
+              message: OWN_AI_ERROR_MESSAGES[k].draft,
+              queue: queue.slice(i),
+            });
+            return;
+          }
+        }
+        setPhase({ kind: 'idle' });
+      } finally {
+        // 다 쓴 손잡이는 치운다 — 멈출 실행이 없는데 [중단]이 옛 컨트롤러를 잡는 일이 없게.
+        setDraftAbort(runScope, null);
       }
-      setPhase({ kind: 'idle' });
     },
     [
+      runScope,
       buildPrompt,
       runProvider,
       installId,
@@ -438,12 +470,21 @@ export function RecordDraftAiPanel({
       pickedThread,
       target.studentRef,
       onFocusStudent,
+      setPhase,
+      setDraftAbort,
     ],
   );
 
   const start = (targets: readonly DraftTarget[]): void => {
     setUsage(null, null);
     void runQueue(targets, targets.length);
+  };
+  /** 고른 학생 중 이미 초안이 있는 수 — 덮어쓰기 정책을 실행 전에 말해 둔다. */
+  const pickedWithText = picked.filter((p) => (p.existingText ?? '').trim().length > 0).length;
+  const startPicked = (): void => {
+    if (picked.length === 0) return;
+    start(picked);
+    onClearPicked?.();
   };
 
   /** 미리보기 뒤 다음 학생으로 — 큐가 남았으면 이어 가고, 없으면 쉰다. */
@@ -549,24 +590,25 @@ export function RecordDraftAiPanel({
   const btn =
     'rounded-lg px-2.5 py-1.5 text-xs font-medium ring-1 ring-sp-border transition-colors hover:bg-sp-surface';
 
-  // ── 구독이 연결돼 있지 않을 때: 요청을 보내지 않고 안내만 한다 ──
+  // ── 구독이 연결돼 있지 않을 때: 요청을 보내지 않고 안내만 한다. 단추는 잠긴 채 보여 "무엇을 눌러야 하는지"는 남긴다 ──
   if (!runProvider) {
     return (
       <div className="flex flex-col gap-2 p-3">
         <button
           type="button"
-          onClick={() => setPhase({ kind: 'stopped', message: '', queue: [] })}
-          className={`flex w-fit items-center gap-1 bg-sp-card text-sp-muted ${btn}`}
+          disabled
+          className="flex w-fit items-center gap-1 rounded-lg bg-sp-accent px-2.5 py-1.5 text-xs font-semibold text-sp-accent-fg opacity-50"
         >
-          <span className="material-symbols-outlined text-base">auto_awesome</span>
-          AI로 초안 쓰기
+          <span aria-hidden="true" className="material-symbols-outlined text-base">
+            auto_awesome
+          </span>
+          이 학생 초안 쓰기
         </button>
-        {phase.kind === 'stopped' && (
-          <p className="rounded-lg bg-sp-card px-3 py-2 text-xs leading-relaxed text-sp-muted">
-            생기부 초안은 선생님 구독 AI(Claude Code·Codex)로만 만들 수 있어요. 설정 &gt; 실험실
-            기능에서 &ldquo;내 AI로 실행&rdquo;을 켜고, 설정 &gt; AI 연결에서 연결해 주세요.
-          </p>
-        )}
+        <p className="rounded-lg bg-sp-card px-3 py-2 text-xs leading-relaxed text-sp-muted">
+          생기부 초안은 선생님 구독 AI(Claude Code·Codex)로만 만들 수 있어요. 설정 &gt; 실험실
+          기능에서 &ldquo;내 AI로 실행&rdquo;을 켜고, 설정 &gt; AI 연결에서 연결하면 이 단추가
+          켜집니다.
+        </p>
         {versions.length > 0 && (
           <p className="text-xs text-sp-muted">
             이 칸에 남긴 AI 초안 {versions.length}판은 연결 뒤 다시 볼 수 있습니다.
@@ -629,7 +671,24 @@ export function RecordDraftAiPanel({
       {/* 실행 중이거나 큐가 남아 있을 때만 숨긴다 — 미리보기 중에도 다른 판을 더 만들 수 있다. */}
       {phase.kind !== 'running' && !(phase.kind === 'preview' && phase.queue.length > 0) && (
         <div className="flex flex-wrap items-center gap-1.5">
-          {connected.length > 1 ? (
+          {versions.length > 0 && !setupOpen ? (
+            /* 결과 단계: 설정은 한 줄 요약 + [바꾸기]. 깊이 숨기지 않는다. */
+            <span
+              className="inline-flex items-center gap-1 rounded-lg bg-sp-card px-2 py-1 text-xs text-sp-muted ring-1 ring-sp-border"
+              data-testid="ai-setup-summary"
+            >
+              {OWN_AI_PROVIDER_LABELS[runProvider]} ·{' '}
+              {shortModelLabel(runProvider, ownAiModels[runProvider])}
+              <button
+                type="button"
+                onClick={() => setSetupOpen(true)}
+                className="ml-1 rounded-md px-1 font-medium text-sp-accent hover:bg-sp-surface"
+                aria-label="AI·모델 바꾸기"
+              >
+                바꾸기
+              </button>
+            </span>
+          ) : connected.length > 1 ? (
             <span className="inline-flex overflow-hidden rounded-lg ring-1 ring-sp-border">
               {connected.map((p) => (
                 <button
@@ -652,44 +711,77 @@ export function RecordDraftAiPanel({
               {OWN_AI_PROVIDER_LABELS[runProvider]}
             </span>
           )}
-          <label className="flex items-center gap-1">
-            <span className="sr-only">초안에 쓸 모델 고르기</span>
-            <select
-              value={ownAiModels[runProvider]}
-              onChange={(e) => changeModel(runProvider, e.target.value)}
-              className="rounded-lg border border-sp-border bg-sp-bg px-1 py-1 text-xs text-sp-text"
-            >
-              {modelCatalog[runProvider].map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          {(versions.length === 0 || setupOpen) && (
+            <label className="flex items-center gap-1">
+              <span className="sr-only">초안에 쓸 모델 고르기</span>
+              <select
+                value={ownAiModels[runProvider]}
+                onChange={(e) => changeModel(runProvider, e.target.value)}
+                className="rounded-lg border border-sp-border bg-sp-bg px-1 py-1 text-xs text-sp-text"
+              >
+                {modelCatalog[runProvider].map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          {/* 무엇을 누르면 초안이 쓰이는지 단추 이름이 말한다(오너 피드백 2026-09-08). 맨 앞이 기본 동작. */}
           <button
             type="button"
             onClick={() => start([targetForRun])}
-            className="rounded-lg bg-sp-accent px-2.5 py-1.5 text-xs font-semibold text-sp-accent-fg"
+            className="flex items-center gap-1 rounded-lg bg-sp-accent px-2.5 py-1.5 text-xs font-semibold text-sp-accent-fg"
           >
-            이 학생만
+            <span aria-hidden="true" className="material-symbols-outlined text-sm">
+              auto_awesome
+            </span>
+            이 학생 초안 쓰기
           </button>
+          {picked.length > 0 && (
+            <button
+              type="button"
+              onClick={startPicked}
+              className={`bg-sp-card text-sp-text ${btn}`}
+              title="학생 목록에서 체크한 학생들만 차례로 씁니다."
+            >
+              고른 {picked.length}명 초안 쓰기
+            </button>
+          )}
           {remaining.length > 0 && (
             <button
               type="button"
               onClick={() => start([targetForRun, ...remaining])}
               className={`bg-sp-card text-sp-text ${btn}`}
             >
-              남은 학생 모두 ({remaining.length + 1}명)
+              남은 학생 모두 초안 쓰기 ({remaining.length + 1}명)
             </button>
+          )}
+          {/* 고른 학생 중 이미 글이 있는 학생이 있으면 먼저 말한다 — 각 학생 미리보기에서 바꾸기/붙이기를 고른다. */}
+          {picked.length > 0 && pickedWithText > 0 && (
+            <p className="w-full text-xs text-sp-muted" data-testid="picked-overwrite-notice">
+              고른 학생 중 {pickedWithText}명은 이미 초안이 있어요. 각 학생 미리보기에서 [바꾸기]
+              또는 [뒤에 붙이기]를 고릅니다. 손으로 쓴 글을 저절로 덮지 않아요.
+            </p>
           )}
         </div>
       )}
 
       {phase.kind === 'running' && (
-        <p className="text-sm text-sp-muted">
-          {phase.total > 1 ? `${phase.done + 1}/${phase.total} · ` : ''}
-          {phase.name} 초안을 쓰는 중이에요…
-          <span className="ml-1">({OWN_AI_PROVIDER_LABELS[runProvider]})</span>
+        <p className="flex items-center gap-1 text-sm text-sp-muted">
+          <span>
+            {phase.total > 1 ? `${phase.done + 1}/${phase.total} · ` : ''}
+            {phase.name} 초안을 쓰는 중이에요…
+            <span className="ml-1">({OWN_AI_PROVIDER_LABELS[runProvider]})</span>
+          </span>
+          {/* [중단] — main 이 CLI 를 죽이고, 이 실행은 `cancelled` 로 끝나 "중단했어요"가 뜬다(R-6). */}
+          <button
+            type="button"
+            onClick={abortRun}
+            className="ml-auto rounded-lg bg-sp-card px-2 py-1 text-xs font-medium text-sp-text hover:bg-sp-bg"
+          >
+            중단
+          </button>
         </p>
       )}
 
@@ -739,10 +831,29 @@ export function RecordDraftAiPanel({
             {/* 어느 AI·모델이 썼는지 남긴다. 결과가 마음에 안 들 때 무엇을 바꿔 볼지 알 수 있다. */}
             <span className="text-xs text-sp-muted">
               · {OWN_AI_PROVIDER_LABELS[selected.provider]}
-              {selected.model ? ` ${selected.model}` : ''}
+              {/* 내부 이름(claude-sonnet-5)이 아니라 선택 상자와 같은 이름(Sonnet 5)으로(R-8). */}
+              {selected.model ? ` ${shortModelLabel(selected.provider, selected.model)}` : ''}
               {selected.excluded ? ` · ${selected.excluded}` : ''}
               {selected.appliedAt !== undefined ? ' · 반영됨' : ''}
             </span>
+            {/* 이 판의 분량 — 한도를 넘으면 붉게. [반영]을 누르기 전에 알 수 있어야 한다(2026-09-08 오너 지적). */}
+            {(() => {
+              const bytes = neisByteLength(aiDraftText(selected));
+              const limit =
+                area !== undefined && level !== undefined && isAreaLimitVerified(area, level)
+                  ? resolveAreaLimit(area, level)
+                  : null;
+              const over = limit !== null && bytes > limit;
+              return (
+                <span
+                  className={`ml-auto text-xs tabular-nums ${over ? 'text-red-500' : 'text-sp-muted'}`}
+                  data-testid="ai-version-bytes"
+                >
+                  {bytes.toLocaleString()}
+                  {limit !== null ? ` / ${limit.toLocaleString()}` : ''} B
+                </span>
+              );
+            })()}
           </div>
           {/* 판 탭 — 최신이 기본. */}
           <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="AI 초안 판">
@@ -777,23 +888,40 @@ export function RecordDraftAiPanel({
           )}
 
           {compareOn ? (
-            <div className="grid grid-cols-2 gap-2" aria-label="내 글과 비교">
-              <p className="text-xs font-semibold text-sp-muted">내 글</p>
-              <p className="text-xs font-semibold text-sp-muted">고른 판</p>
-              {pairParagraphs(myParagraphs, selected.paragraphs).map((row, i) => (
-                <div key={i} className="contents">
-                  <p className="whitespace-pre-wrap rounded-lg bg-sp-card px-2 py-1.5 text-sm leading-relaxed text-sp-text ring-1 ring-sp-border">
-                    {row.left}
-                  </p>
-                  <p
-                    className={`whitespace-pre-wrap rounded-lg px-2 py-1.5 text-sm leading-relaxed text-sp-text ring-1 ring-sp-border ${
-                      highlightOn && row.right?.role ? ROLE_BG[row.right.role] : 'bg-sp-card'
-                    }`}
-                  >
-                    {row.right?.text ?? ''}
-                  </p>
-                </div>
-              ))}
+            /* 비교는 위아래로 — 좁은 패널에서 두 열로 쪼개지 않는다(ADR-093 결정 6). 내 글은 구간(표식)별로 이어 그린다. */
+            <div className="flex flex-col gap-2" aria-label="내 글과 비교">
+              <p className="text-xs font-semibold text-sp-muted">
+                내 글 ({neisByteLength(target.existingText ?? '').toLocaleString()}B)
+              </p>
+              <p className="whitespace-pre-wrap rounded-lg bg-sp-card px-2 py-1.5 text-sm leading-relaxed text-sp-text ring-1 ring-sp-border">
+                {myParagraphs.map((t, i, list) => (
+                  <span key={i}>
+                    {t}
+                    {i < list.length - 1 ? ' ' : ''}
+                  </span>
+                ))}
+              </p>
+              <p className="text-xs font-semibold text-sp-muted">
+                고른 판 ({neisByteLength(aiDraftText(selected)).toLocaleString()}B)
+              </p>
+              <p className="whitespace-pre-wrap rounded-lg bg-sp-card px-2 py-1.5 text-sm leading-relaxed text-sp-text ring-1 ring-sp-border">
+                {selected.paragraphs
+                  .filter((p) => p.text.trim().length > 0)
+                  .map((p, i, list) => (
+                    <span key={i}>
+                      <span
+                        className={
+                          highlightOn && p.role
+                            ? `rounded-sm box-decoration-clone ${ROLE_BG[p.role]}`
+                            : ''
+                        }
+                      >
+                        {p.text.trim()}
+                      </span>
+                      {i < list.length - 1 ? ' ' : ''}
+                    </span>
+                  ))}
+              </p>
             </div>
           ) : (
             // 저장될 것과 **같은 글**을 보여 준다 — 미리보기와 저장이 다르면 미리보기가 아니다.
@@ -900,23 +1028,45 @@ export function RecordDraftAiPanel({
         onLengthApply &&
         onInsertToEditor && (
           <RecordDraftLengthPanel
+            runKey={`${target.studentRef}:${area}:${draftKey.subject ?? ''}`}
             area={area}
             level={level}
             areaLimit={resolveAreaLimit(area, level)}
             areaLimitVerified={isAreaLimitVerified(area, level)}
-            getSourceText={getSourceText}
+            // ★라벨과 원문이 **같은 곳**을 가리키게 한다(R-2). 미리보기 중인 AI 판(아직 반영 전)이
+            //   있으면 그 판의 글을 조절하고, 아니면 편집 칸의 글을 조절한다.
+            getSourceText={
+              adjustTargetVersion !== null ? () => aiDraftText(adjustTargetVersion) : getSourceText
+            }
             detectProhibited={(text) => summarizeProhibited(detectProhibitedTerms(text))}
             evidenceCount={targetForRun.evidences.length}
             {...(pickedThread !== null ? { threadTitle: pickedThread.title } : {})}
-            {...(selected !== null && selected.adjust === undefined
+            {...(adjustTargetVersion !== null
               ? {
-                  sourceVersionLabel: `AI 초안 v${versions.findIndex((v) => v.id === selected.id) + 1}`,
+                  sourceVersionLabel: `AI 초안 v${versions.findIndex((v) => v.id === adjustTargetVersion.id) + 1}`,
                 }
               : {})}
             lockedByOther={phase.kind === 'running' || remarking}
-            onRun={onLengthRun}
-            onApply={onLengthApply}
+            onRun={(kind, targetBytes) =>
+              onLengthRun(
+                kind,
+                targetBytes,
+                adjustTargetVersion !== null ? aiDraftText(adjustTargetVersion) : getSourceText(),
+                adjustTargetVersion?.id,
+              )
+            }
+            onApply={(picked, outcome, kind, targetBytes) =>
+              onLengthApply(
+                picked,
+                outcome,
+                kind,
+                targetBytes,
+                adjustTargetVersion?.id,
+                adjustTargetVersion?.threadId,
+              )
+            }
             onInsertOnly={onInsertToEditor}
+            {...(onLengthCancel ? { onCancel: onLengthCancel } : {})}
           />
         )}
 

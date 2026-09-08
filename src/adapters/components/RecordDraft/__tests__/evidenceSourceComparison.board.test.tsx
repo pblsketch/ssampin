@@ -234,8 +234,14 @@ const cardOf = (content: string): HTMLElement =>
   screen.getByRole('button', { name: `${content} 근거 카드` });
 const dialog = (): HTMLElement => screen.getByRole('dialog');
 
+/** 조작 줄([수정]·[삭제]…)은 카드를 골랐을 때만 나온다(ADR-093). 아직 안 골랐으면 고른다. */
+function ensureSelected(card: HTMLElement): void {
+  if (card.getAttribute('aria-pressed') !== 'true') fireEvent.click(card);
+}
+
 /** 카드의 [수정]을 눌러 상세(근거 수정 폼)를 연다. 상세만 '같음'까지 말한다. */
 async function openDetail(content: string): Promise<void> {
+  ensureSelected(cardOf(content));
   await act(async () => {
     fireEvent.click(within(cardOf(content)).getByRole('button', { name: '수정' }));
   });
@@ -400,6 +406,7 @@ describe('AC-15 로딩 실패와 원본 없음을 구별한다', () => {
         initialArea={null}
       />,
     );
+    ensureSelected(cardOf('근거로 다듬은 글'));
     await act(async () => {
       fireEvent.click(within(cardOf('근거로 다듬은 글')).getByRole('button', { name: '수정' }));
     });
@@ -420,6 +427,7 @@ describe('AC-15 로딩 실패와 원본 없음을 구별한다', () => {
 
 describe('AC-16 삭제 안내 4갈래 - 확인한 것만 약속한다', () => {
   const del = async (content: string, label: string): Promise<string> => {
+    ensureSelected(cardOf(content));
     await act(async () => {
       fireEvent.click(within(cardOf(content)).getByRole('button', { name: label }));
     });
@@ -456,6 +464,7 @@ describe('AC-16 삭제 안내 4갈래 - 확인한 것만 약속한다', () => {
 
   it('(d) 직접 입력 근거는 라벨도 문구도 원본 이야기를 꺼내지 않는다', async () => {
     await board();
+    ensureSelected(cardOf('직접 입력한 근거'));
     expect(within(cardOf('직접 입력한 근거')).getByRole('button', { name: '삭제' })).toBeTruthy();
     const text = await del('직접 입력한 근거', '삭제');
     expect(text).toContain('근거 1건을 지웠습니다');

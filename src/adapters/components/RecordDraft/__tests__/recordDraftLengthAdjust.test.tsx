@@ -17,6 +17,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { neisByteLength } from '@domain/entities/RecordDraft';
+import { useRecordAiRunStore } from '@adapters/stores/useRecordAiRunStore';
 import { RecordDraftLengthPanel } from '../RecordDraftLengthPanel';
 import type { LengthAdjustCandidate } from '../lengthAdjustRun';
 import type { LengthAdjustOutcome } from '../RecordDraftLengthPanel';
@@ -32,6 +33,8 @@ function candidate(text: string, over: Partial<LengthAdjustCandidate> = {}): Len
     insufficient: false,
     excluded: '',
     includedCount: 0,
+    nonDraft: false,
+    nonDraftReason: '',
     ...over,
   };
 }
@@ -52,6 +55,7 @@ type PanelOver = Partial<Parameters<typeof RecordDraftLengthPanel>[0]>;
 
 function panel(over: PanelOver = {}) {
   const props = {
+    runKey: 'sA:autonomy:',
     area: 'autonomy' as const,
     level: 'high' as const,
     areaLimit: 1500,
@@ -68,17 +72,62 @@ function panel(over: PanelOver = {}) {
   return { ...render(<RecordDraftLengthPanel {...props} />), props };
 }
 
+/** 섹션을 펼친다 — 이미 펼쳐져 있으면(한도 초과 원문이면 저절로 펼쳐진다, R-4) 건드리지 않는다. */
+function openSection(): void {
+  const header = screen.getByRole('button', { name: /분량 조절/ });
+  if (header.getAttribute('aria-expanded') !== 'true') fireEvent.click(header);
+}
+
 /** 섹션을 펼치고 [조절안 만들기]까지 누른다. */
 async function openAndRun(): Promise<void> {
   await act(async () => {
-    fireEvent.click(screen.getByRole('button', { name: /분량 조절/ }));
+    openSection();
   });
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: '조절안 만들기' }));
   });
 }
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  // 단계는 스토어에 있다(ADR-093) — 테스트 사이에 결과가 새지 않게 비운다.
+  useRecordAiRunStore.getState().reset();
+});
+
+describe('★단계·결과는 스토어가 든다 — 학생을 바꿨다 돌아와도 결과가 있다 (ADR-093, P7)', () => {
+  it('같은 runKey 로 다시 만들면 결과가 그대로 있고, 다른 runKey 는 아무것도 모른다', async () => {
+    const r = panel();
+    await openAndRun();
+    expect(screen.getByTestId('length-adjust-preview').textContent).toBe('줄인 글.');
+    r.unmount();
+    // 다른 학생(runKey) 화면 — 결과가 보이지 않는다.
+    panel({ runKey: 'sB:autonomy:' });
+    expect(screen.queryByTestId('length-adjust-preview')).toBeNull();
+    cleanup();
+    // 원래 학생으로 돌아오면 결과가 있다.
+    panel();
+    expect(screen.getByTestId('length-adjust-preview').textContent).toBe('줄인 글.');
+  });
+
+  it('실행 중에 패널이 새로 만들어져도 "조절 중"이 보이고, 결과가 오면 새 인스턴스에 뜬다', async () => {
+    let resolve: ((o: LengthAdjustOutcome) => void) | null = null;
+    const r = panel({
+      onRun: () =>
+        new Promise<LengthAdjustOutcome>((res) => {
+          resolve = res;
+        }),
+    });
+    await openAndRun();
+    expect(screen.getByText(/1차 조절 중이에요/)).toBeTruthy();
+    r.unmount();
+    panel();
+    expect(screen.getByText(/1차 조절 중이에요/)).toBeTruthy();
+    await act(async () => {
+      resolve?.(outcome(['늦게 온 결과.'], OVER_LIMIT));
+    });
+    expect(screen.getByTestId('length-adjust-preview').textContent).toBe('늦게 온 결과.');
+  });
+});
 
 describe('★조절 대상은 화면의 현재 글이다 (저장된 글이 아니다)', () => {
   it('저장이 거부된 초과 글을 그대로 조절 대상으로 넘긴다', async () => {
@@ -99,7 +148,7 @@ describe('★조절 대상은 화면의 현재 글이다 (저장된 글이 아�
   it('글이 비어 있으면 조절 UI 자체를 그리지 않는다', async () => {
     panel({ getSourceText: () => '   ' });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /분량 조절/ }));
+      openSection();
     });
     expect(screen.getByText(/이 칸에 쓴 글이 없어서/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: '조절안 만들기' })).toBeNull();
@@ -230,14 +279,73 @@ describe('★조절을 시작한 뒤 글을 고쳤으면 바로 덮지 않는다
 });
 
 describe('★근거가 없으면 보충하기를 누를 수 없다 (지어내기를 부르는 자리)', () => {
-  it('근거 0건이면 버튼이 비활성이고 이유가 보인다', async () => {
-    panel({ evidenceCount: 0 });
+  it('짧은 글인데 근거 0건이면 [조절안 만들기]가 잠기고 이유가 보인다', async () => {
+    panel({ evidenceCount: 0, getSourceText: () => SAVED });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /분량 조절/ }));
+      openSection();
     });
-    const expand = screen.getByRole('button', { name: '근거로 보충하기' }) as HTMLButtonElement;
-    expect(expand.disabled).toBe(true);
-    expect(screen.getByText(/근거가 없어서 보충할 수 없어요/)).toBeTruthy();
+    const run = screen.getByRole('button', { name: '조절안 만들기' }) as HTMLButtonElement;
+    expect(run.disabled).toBe(true);
+    expect(screen.getByTestId('length-adjust-plan').textContent).toContain(
+      '근거가 없어서 채울 수 없어요',
+    );
+  });
+});
+
+describe('★방향은 고르지 않는다 — 목표가 정한다 (2026-09-08 오너 결정)', () => {
+  it('목표보다 길면 "줄입니다"라고 말하고 shrink 로 실행한다', async () => {
+    const kinds: string[] = [];
+    panel({
+      onRun: async (kind) => {
+        kinds.push(kind);
+        return outcome(['줄인 글.'], OVER_LIMIT);
+      },
+    });
+    expect(screen.getByTestId('length-adjust-plan').textContent).toContain('많아 줄입니다');
+    expect(screen.queryByRole('button', { name: '줄이기' })).toBeNull();
+    await openAndRun();
+    expect(kinds).toEqual(['shrink']);
+  });
+
+  it('목표보다 짧고 근거가 있으면 "채웁니다"라고 말하고 expand 로 실행한다', async () => {
+    const kinds: string[] = [];
+    panel({
+      getSourceText: () => SAVED,
+      evidenceCount: 3,
+      onRun: async (kind) => {
+        kinds.push(kind);
+        return outcome(['근거로 채운 글.'], SAVED);
+      },
+    });
+    await act(async () => {
+      openSection();
+    });
+    expect(screen.getByTestId('length-adjust-plan').textContent).toContain(
+      '적어 근거 자료로 채웁니다',
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '조절안 만들기' }));
+    });
+    expect(kinds).toEqual(['expand']);
+  });
+
+  it('이미 목표 안이면 조절할 것이 없다고 말하고 버튼이 잠긴다', async () => {
+    const onTarget = '가'.repeat(490); // 1,470바이트 — 하한 1,425 ~ 목표 1,500 안
+    panel({ getSourceText: () => onTarget });
+    await act(async () => {
+      openSection();
+    });
+    expect(screen.getByTestId('length-adjust-plan').textContent).toContain('이미 목표 안');
+    expect(
+      (screen.getByRole('button', { name: '조절안 만들기' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  it('대상 라벨과 바이트를 한 줄로 보여 준다 — 판 미리보기의 숫자와 같은 계산', async () => {
+    panel({ sourceVersionLabel: 'AI 초안 v1' });
+    expect(screen.getByTestId('length-adjust-source-bytes').textContent).toContain(
+      'AI 초안 v1 1,800바이트',
+    );
   });
 });
 
@@ -274,7 +382,7 @@ describe('★목표는 확인된 한도를 넘지 못한다', () => {
   it('2,000을 쳐도 1,500으로 되돌려지고 이유가 보인다', async () => {
     panel();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /분량 조절/ }));
+      openSection();
     });
     const input = screen.getByLabelText('목표 분량(바이트)') as HTMLInputElement;
     fireEvent.change(input, { target: { value: '2000' } });
@@ -329,7 +437,7 @@ describe('★중복 실행은 참조로 막는다', () => {
       },
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /분량 조절/ }));
+      openSection();
     });
     await act(async () => {
       const b = screen.getByRole('button', { name: '조절안 만들기' });
@@ -345,7 +453,7 @@ describe('다른 AI 작업이 도는 중이면 잠근다', () => {
   it('입력과 버튼이 비활성이고 이유가 보인다', async () => {
     panel({ lockedByOther: true });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /분량 조절/ }));
+      openSection();
     });
     expect(screen.getByText('다른 AI 작업이 끝나면 이어서 할 수 있어요.')).toBeTruthy();
     // ★`fieldset disabled` 는 안의 컨트롤을 한꺼번에 끄고 스크린 리더에도 전달된다.
@@ -362,7 +470,7 @@ describe('메타 — 화면 문구 규칙', () => {
   it('이 섹션 문구에 em 대시가 없다 (쌍점을 쓴다)', async () => {
     panel();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /분량 조절/ }));
+      openSection();
     });
     expect(document.body.textContent ?? '').not.toContain('—');
   });
@@ -370,4 +478,65 @@ describe('메타 — 화면 문구 규칙', () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+describe('★대상이 이미 한도를 넘었으면 접혀 있어도 펼친다 (2026-09-08 R-4)', () => {
+  it('한도 초과 원문이면 처음부터 펼쳐져 있다', () => {
+    panel({ getSourceText: () => OVER_LIMIT });
+    expect(screen.getByRole('button', { name: /분량 조절/ }).getAttribute('aria-expanded')).toBe(
+      'true',
+    );
+  });
+
+  it('한도 안이면 접힌 채 시작한다(예전과 같다)', () => {
+    panel({ getSourceText: () => SAVED });
+    expect(screen.getByRole('button', { name: /분량 조절/ }).getAttribute('aria-expanded')).toBe(
+      'false',
+    );
+  });
+});
+
+describe('★설명문(거절)은 저장 후보로 내놓지 않는다 (2026-09-08 R-3)', () => {
+  it('전부 설명문이면 실패로 말하고 [편집칸에 넣기]·[이 글로 바꾸기]가 없다', async () => {
+    const refusal = candidate(
+      '이 요청은 그대로 수행하기 어렵습니다. 추가 근거를 알려주시면 작성하겠습니다.',
+      {
+        nonDraft: true,
+        nonDraftReason: 'AI가 초안 대신 설명(거절·되묻기)을 보냈어요.',
+      },
+    );
+    panel({
+      onRun: async () => ({ candidates: [refusal], sourceText: OVER_LIMIT, sourceProhibited: [] }),
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '조절안 만들기' }));
+    });
+    expect(screen.getByRole('status').textContent).toContain('설명');
+    expect(screen.queryByRole('button', { name: /편집칸에 넣기/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: '이 글로 바꾸기' })).toBeNull();
+    expect(screen.getByTestId('length-adjust-non-draft').textContent).toContain(
+      '수행하기 어렵습니다',
+    );
+  });
+
+  it('설명문과 초안이 섞였으면 초안만 후보로 남긴다', async () => {
+    const refusal = candidate('추가 근거를 알려주시면 작성하겠습니다.', {
+      attempt: 2,
+      nonDraft: true,
+      nonDraftReason: '설명',
+    });
+    const good = candidate('줄인 글.', { attempt: 1 });
+    panel({
+      onRun: async () => ({
+        candidates: [good, refusal],
+        sourceText: OVER_LIMIT,
+        sourceProhibited: [],
+      }),
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '조절안 만들기' }));
+    });
+    expect(screen.getByTestId('length-adjust-preview').textContent).toBe('줄인 글.');
+    expect(screen.queryByRole('tab', { name: /2차/ })).toBeNull();
+  });
 });

@@ -1,19 +1,22 @@
 /**
- * 근거 정리 보드의 **카드 한 장** — 본문·메타·유형 칩·[AI 제외][수정][삭제]·"이것도 이 주제?".
+ * 근거 정리 보드의 **카드 한 장** — 겉면은 본문·날짜·출처·상태, 조작은 **골랐을 때**(ADR-093 결정 5).
  *
  * 스토어를 구독하지 않는다. 무엇을 보여 줄지와 눌렀을 때 무엇을 할지는 전부 부모(`RecordEvidenceBoard`)가
  * props 로 준다 — 저장 관문은 부모가 지킨다(ADR-085 보강).
  * 카드 클릭 = 선택. 단추 줄은 전파를 끊어 선택과 겹치지 않게 한다.
  *
+ * **겉면(항상)**: 본문 · 날짜 · 출처 칩 · 상태 배지(`AI 제외됨`, `원본과 내용이 달라요` + [비교하기], 자동 제외 이유) ·
+ *   "이것도 이 주제?" 칩. 상태와 중요한 경고는 숨기지 않는다.
+ * **골랐을 때**: 영역 칩(2개 이상일 때) · [AI 제외]/[AI 제외 해제] 토글 · [수정] · [원본 보기·수정] · [삭제 | 정리한 근거 삭제].
+ *   마우스 올리기만으로 나타나는 것은 없다 — 클릭·Enter/Space 로 고르면 Tab 으로 들어갈 수 있다.
+ *   ★ADR-085 보강 2 §4-5("토글은 겉에")를 ADR-093 이 바꿨다: 카드마다 5~7개 단추가 늘 붙어 근거 본문이 묻혔다.
+ *     상태는 배지로 겉에 남아 "모르게 되는" 일은 없고, 여러 장은 하단 바에서 한 번에 바꾼다.
+ *
  * **거울 카드**(`mirror`) = 아직 근거로 저장되지 않은 원본 기록(설계서 §4-1). 배경만 한 단계 가라앉히고(`bg-sp-surface`)
- * 별도 배지는 없다 — 출처 칩과 배경 톤만으로 구분한다. [삭제]가 없다(지울 것은 원본이고 그 자리는 관찰 탭이다). 영역 칩도 없다(아직 영역이 없다).
+ * 별도 배지는 없다. [삭제]가 없다(지울 것은 원본이고 그 자리는 관찰 탭이다). 영역 칩도 없다(아직 영역이 없다).
  *
  * **끌 수 있다**(`useDraggable`, 설계서 §4-4 · ADR-085 보강 2 R3). 포인터 센서는 보드가 6px 이동 제약으로 달아
- * 클릭(선택)과 끌기(이동)를 가른다. 키보드 끌기 센서는 없다 — Enter/Space 는 지금처럼 선택이고, 키보드 경로는 하단 바다.
- * 단추 줄은 pointerdown 도 끊어 단추를 누르다가 끌리지 않게 한다.
- *
- * [AI 제외]는 겉에 있다(설계서 §4-5). 예전에는 [ … ]를 눌러야 스위치가 펼쳐졌고, 오너는 "여기서 켜고 끌 수 없다"고
- * 봤다 — 숨긴 조작은 없는 조작이다. 켜진 카드에는 왜 자동으로 켜졌는지 한 줄을 붙인다(교사가 직접 켠 것에는 없음).
+ * 클릭(선택)과 끌기(이동)를 가른다. 키보드 끌기 센서는 없다 — Enter/Space 는 선택이고, 키보드 경로는 하단 바다.
  */
 import type { ReactElement } from 'react';
 import { useDraggable } from '@dnd-kit/core';
@@ -96,6 +99,7 @@ export function EvidenceCard({
     onKeyDown: (e: { stopPropagation: () => void }) => e.stopPropagation(),
     onPointerDown: (e: { stopPropagation: () => void }) => e.stopPropagation(),
   };
+  const showDiffers = !mirror && differsFromSource && onCompareSource !== undefined;
   return (
     <div
       ref={setNodeRef}
@@ -122,15 +126,36 @@ export function EvidenceCard({
       data-evidence-id={ev.id}
     >
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-sp-text">{ev.content}</p>
+      {/* 겉면 메타 — 날짜 · 출처 · 상태 배지. 제외 상태는 골라야 보이는 것이 아니다. */}
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-sp-muted">
         {ev.date ? <span>{shortDate(ev.date)}</span> : null}
         <span className="rounded bg-sp-surface px-1.5 py-0.5">
           {EVIDENCE_SOURCE_LABELS[ev.sourceType ?? 'manual']}
         </span>
+        {!mirror &&
+          ev.areas.length > 0 &&
+          areas.length > 1 &&
+          ev.areas.map((a) => (
+            <span key={a} className="rounded bg-sp-surface px-1.5 py-0.5">
+              {RECORD_AREA_LABELS[a]}
+            </span>
+          ))}
+        {excluded && (
+          <span
+            className="inline-flex items-center gap-0.5 rounded bg-amber-500/15 px-1.5 py-0.5 font-medium text-amber-600"
+            title={exclusionTitle(ev, why)}
+            data-testid="evidence-excluded-badge"
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-xs">
+              block
+            </span>
+            AI 제외됨
+          </span>
+        )}
       </div>
       {/* 원본과 다를 때만. 어느 쪽이 언제 바뀌었다고 말하지 않는다(ADR-086 결정 5).
-          거울 카드는 원본 그 자체라 비교 대상이 아니다. */}
-      {!mirror && differsFromSource && onCompareSource !== undefined && (
+          거울 카드는 원본 그 자체라 비교 대상이 아니다. 중요한 경고라 겉면에 남는다. */}
+      {showDiffers && (
         <div
           className="flex flex-wrap items-center gap-1.5 border-t border-dashed border-amber-500/30 pt-2"
           {...stop}
@@ -150,75 +175,81 @@ export function EvidenceCard({
           </button>
         </div>
       )}
-      {/* 유형 토글 · AI 제외 · 수정 · 삭제 — 카드 클릭(선택)·끌기와 겹치지 않게 전파를 끊는다. */}
-      <div className="flex flex-wrap items-center gap-1.5 border-t border-sp-border pt-2" {...stop}>
-        {areas.length > 1 &&
-          !mirror &&
-          areas.map((area) => {
-            const has = ev.areas.includes(area);
-            return (
-              <button
-                key={area}
-                type="button"
-                aria-pressed={has}
-                onClick={() => onToggleArea(area)}
-                className={boardChip(has)}
-              >
-                {RECORD_AREA_LABELS[area]}
-              </button>
-            );
-          })}
-        <div className="flex-1" />
-        {/* 기재 금지 항목이 섞이면 저장 시 자동으로 켜지고, 자동 판정은 오탐이 나므로 되돌릴 수 있다(ADR-072 결정 5). */}
-        <button
-          type="button"
-          aria-pressed={excluded}
-          onClick={() => onSetExcludedFromAi(!excluded)}
-          title={exclusionTitle(ev, why)}
-          className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ring-1 transition-colors ${
-            excluded
-              ? 'bg-amber-500/15 text-amber-600 ring-amber-500/30 hover:bg-amber-500/25'
-              : 'text-sp-muted ring-sp-border hover:bg-sp-surface hover:text-sp-text'
-          }`}
-        >
-          <span aria-hidden="true" className="material-symbols-outlined text-sm">
-            block
-          </span>
-          AI 제외
-        </button>
-        <button
-          type="button"
-          onClick={onEdit}
-          className={`${boardBtn} text-sp-muted hover:text-sp-text`}
-        >
-          수정
-        </button>
-        {/* 근거를 다듬는 일([수정])과 원본을 고치는 일을 구별한다(계획 §5.3). */}
-        {onOpenSource !== undefined && (
-          <button
-            type="button"
-            onClick={onOpenSource}
-            className={`${boardBtn} text-sp-muted hover:text-sp-text`}
-            title="이 근거가 온 원본 기록으로 갑니다. 근거 내용은 그대로 둡니다."
-          >
-            원본 보기·수정
-          </button>
-        )}
-        {!mirror && (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 ring-1 ring-red-500/20 hover:bg-red-500/10"
-          >
-            {/* 원본에서 온 근거는 "지우는 것이 원본이 아니다"를 라벨에서 먼저 말한다(계획 §5.3). */}
-            {ev.sourceId !== undefined ? '정리한 근거 삭제' : '삭제'}
-          </button>
-        )}
-      </div>
       {why.length > 0 && (
         <p className="text-xs leading-snug text-amber-600">
           {why.join(', ')} 언급이 있어 자동으로 제외했습니다.
         </p>
+      )}
+      {/* 조작 줄 — 골랐을 때만. 유형 토글 · AI 제외 · 수정 · 원본 · 삭제. 전파를 끊어 선택·끌기와 겹치지 않게. */}
+      {on && (
+        <div
+          className="flex flex-wrap items-center gap-1.5 border-t border-sp-border pt-2"
+          data-testid="evidence-card-actions"
+          {...stop}
+        >
+          {areas.length > 1 &&
+            !mirror &&
+            areas.map((area) => {
+              const has = ev.areas.includes(area);
+              return (
+                <button
+                  key={area}
+                  type="button"
+                  aria-pressed={has}
+                  onClick={() => onToggleArea(area)}
+                  className={boardChip(has)}
+                >
+                  {RECORD_AREA_LABELS[area]}
+                </button>
+              );
+            })}
+          <div className="flex-1" />
+          {/* 기재 금지 항목이 섞이면 저장 시 자동으로 켜지고, 자동 판정은 오탐이 나므로 되돌릴 수 있다(ADR-072 결정 5). */}
+          <button
+            type="button"
+            aria-pressed={excluded}
+            onClick={() => onSetExcludedFromAi(!excluded)}
+            title={exclusionTitle(ev, why)}
+            className={`flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-medium ring-1 transition-colors ${
+              excluded
+                ? 'bg-amber-500/15 text-amber-600 ring-amber-500/30 hover:bg-amber-500/25'
+                : 'text-sp-muted ring-sp-border hover:bg-sp-surface hover:text-sp-text'
+            }`}
+          >
+            <span aria-hidden="true" className="material-symbols-outlined text-sm">
+              block
+            </span>
+            {excluded ? 'AI 제외 해제' : 'AI 제외'}
+          </button>
+          <button
+            type="button"
+            onClick={onEdit}
+            className={`${boardBtn} text-sp-muted hover:text-sp-text`}
+          >
+            수정
+          </button>
+          {/* 근거를 다듬는 일([수정])과 원본을 고치는 일을 구별한다(계획 §5.3). */}
+          {onOpenSource !== undefined && (
+            <button
+              type="button"
+              onClick={onOpenSource}
+              className={`${boardBtn} text-sp-muted hover:text-sp-text`}
+              title="이 근거가 온 원본 기록으로 갑니다. 근거 내용은 그대로 둡니다."
+            >
+              원본 보기·수정
+            </button>
+          )}
+          {!mirror && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 ring-1 ring-red-500/20 hover:bg-red-500/10"
+            >
+              {/* 원본에서 온 근거는 "지우는 것이 원본이 아니다"를 라벨에서 먼저 말한다(계획 §5.3). */}
+              {ev.sourceId !== undefined ? '정리한 근거 삭제' : '삭제'}
+            </button>
+          )}
+        </div>
       )}
       {alsoHits.length > 0 && (
         <div

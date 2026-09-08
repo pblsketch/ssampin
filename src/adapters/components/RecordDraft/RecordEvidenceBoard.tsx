@@ -106,6 +106,7 @@ import { evidenceDeleteGuidance, isSameAsSource } from '@domain/rules/evidenceSo
 import type { EvidenceCandidate } from '@usecases/studentRecords/collectEvidenceCandidates';
 import { hasProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
+import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
 
 /** 작성주체(담임/교과) — 노출 영역 집합을 결정. */
 type RecordContext = 'homeroom' | 'teaching';
@@ -1837,6 +1838,7 @@ export function RecordEvidenceBoard({
         <p className="py-10 text-center text-sm text-sp-muted">학생을 선택하세요.</p>
       ) : (
         <DndContext
+          accessibility={DND_KO_ACCESSIBILITY}
           sensors={sensors}
           onDragStart={onDragStart}
           onDragEnd={onDragEnd}
