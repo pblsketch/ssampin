@@ -91,6 +91,25 @@ describe('composeConsultationTopic ↔ parseConsultationTopic', () => {
   });
 });
 
+describe('실기기 확인(2026-09-09)에서 학부모 화면이 실제로 저장한 값', () => {
+  // 예약 화면에서 [학교생활]·[진로·진학] 을 고르고 자유 글을 적어 실제로 저장된 문자열.
+  // 가운뎃점이 든 주제가 구분자(` · `, 앞뒤 공백)와 헷갈리지 않는지를 이 값으로 못 박는다.
+  const REAL = '[주제] 학교생활 · 진로·진학\n요즘 친구 문제로 힘들어하는 것 같습니다.';
+
+  it('가운뎃점이 든 주제를 쪼개지 않는다', () => {
+    expect(parseConsultationTopic(REAL)).toEqual({
+      topics: ['학교생활', '진로·진학'],
+      note: '요즘 친구 문제로 힘들어하는 것 같습니다.',
+    });
+  });
+
+  it('엑셀·캘린더용 한 줄 표기', () => {
+    expect(formatConsultationTopicLine(REAL)).toBe(
+      '학교생활, 진로·진학 / 요즘 친구 문제로 힘들어하는 것 같습니다.',
+    );
+  });
+});
+
 describe('formatConsultationTopicLine', () => {
   it('엑셀·캘린더용으로 줄바꿈 없이 한 줄로 눕힌다', () => {
     const composed = composeConsultationTopic(['학교생활', '교우관계'], '친구 문제');
