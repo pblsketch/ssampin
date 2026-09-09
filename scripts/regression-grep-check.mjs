@@ -566,6 +566,28 @@ const presenceChecks = [
       /selfAssessment: readQuestions\(assignment\.self_assessment\)\.map\(\(q\) => \(\{\s*id: q\.id,\s*prompt: q\.prompt,\s*\.\.\.\(q\.maxLength !== undefined \? \{ maxLength: q\.maxLength \} : \{\}\),\s*\}\)\),/,
     name: 'REGRESSION #84: 과제 공개 조회의 자기평가 문항 조립이 id·prompt·maxLength **세 칸으로 닫혀 있다** (slot 등을 더하면 빨간불 — 갈래 이름이 학생 브라우저로 새는 것을 막는다)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #79~#80 (2026-09-09, ADR-099) - 생기부 작성 방식.
+  //
+  //  이 기능의 위험은 "화면만 바뀌고 결과는 그대로"가 아니라 **서로 싸우는 두 지시를 함께 보내는 것**이다.
+  //  서버 1층 규정(판본 2)은 "첫 문장은 교사 평가", "이 순서를 바꾸지 마십시오"를 못 박는데,
+  //  앱이 다른 구성을 보내면 모델은 둘 중 하나를 버리고 어느 쪽을 버릴지는 우리가 못 정한다.
+  //  그래서 두 자리를 글자로 박는다.
+  //   #79 앱이 규정 판본을 확인한 값(applyPromptVersionGate)으로만 요청서를 만든다.
+  //   #80 구성을 실을 때 고정 순서 문장을 **함께** 보내지 않는다(순서는 구성에 넘긴다).
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/components/RecordDraft/RecordDraftAiPanel.tsx',
+    pattern:
+      /applyPromptVersionGate\(runStyleRef\.current, promptVersion\);[\s\S]{0,200}?const runStyle = gated\.style;[\s\S]{0,2000}?buildPrompt\(t, runStyle\)/,
+    name: 'REGRESSION #79: 초안 패널은 규정 판본 문지기를 거친 작성 방식으로만 요청서를 만든다 (판본 2 에 새 구성을 보내지 않는다)',
+  },
+  {
+    file: 'src/domain/services/recordDraftPack.ts',
+    pattern:
+      /emitComposition && composition !== null\s*\?\s*narrativeMarkInstruction\(\{\s*followComposition: true,/,
+    name: 'REGRESSION #80: 작성 구성을 실으면 표식 지시가 순서를 다시 못 박지 않는다 (두 지시가 싸우지 않는다)',
+  },
 ];
 
 // ============================================================
