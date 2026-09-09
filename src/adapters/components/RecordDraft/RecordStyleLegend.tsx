@@ -6,12 +6,13 @@
  *
  * 그래서 이 배지는 "색 안내"가 아니라 **"지금 고른 작성 방식 요약"** 이다:
  *   1. 방식 이름을 늘 보여준다(형광펜 스위치와 무관하다 — 방식은 형광펜이 꺼져도 그대로 적용된다).
- *   2. 구성 요소를 화살표로 이어 **순서대로** 보여준다. 「적용될 설정」의 세로 번호 목록과 같은 값이다.
+ *   2. 구성 요소를 **번호를 붙여 순서대로** 보여준다. 「적용될 설정」의 세로 번호 목록과 같은 값·같은 어휘다.
  *   3. 색점은 형광펜을 켰을 때만 붙는다. 껐을 때는 본문에 칠해진 색이 없어 색 안내가 뜻을 잃는다.
  *
  * ★형광펜 색은 넷 그대로다(동기 sky · 과정 violet · 결과 emerald · 평가 amber). 방식마다 색을 늘리면
  *   옛 초안의 `roleMarks` 와 파서가 깨진다. 바뀌는 것은 **이름과 순서**뿐이다.
- * ★같은 색이 잇달아 나오는 방식이 있다(행동특성은 과정 셋). 색을 바꾸지 않고 화살표와 이름으로 가른다.
+ * ★같은 색이 잇달아 나오는 방식이 있다(행동특성은 과정 셋). 색을 늘리지 않고 **번호와 이름**으로 가른다.
+ *   색을 요소마다 따로 주면 본문에 칠해지는 색과 달라진다 — 모델이 붙이는 표식은 넷뿐이기 때문이다.
  * ★한 줄 높이를 지킨다: 좁아지면 요소를 줄바꿈하지 않고 접는다(막대가 두 줄이 되면 아래 본문이 출렁인다).
  * ★색만으로 뜻을 전하지 않는다 — 순번·이름·역할 이름을 `sr-only` 문장으로 함께 읽어 준다.
  */
@@ -55,14 +56,11 @@ export function RecordStyleLegend({
         {focus.label}
       </span>
       {/* 구성 요소는 넉넉할 때만. 좁으면 단계 수로 줄인다. */}
-      <span className="hidden items-center gap-1 text-sp-muted lg:inline-flex">
+      <span className="hidden items-center gap-2 text-sp-muted lg:inline-flex">
         {modules.map((m, i) => (
           <span key={m.id} className="inline-flex items-center gap-1 whitespace-nowrap">
-            {i > 0 && (
-              <span className="material-symbols-outlined text-sm text-sp-border">
-                chevron_right
-              </span>
-            )}
+            {/* 번호가 순서이자 낱낱의 이름표다: 같은 역할이 잇달아도 몇 번째 항목인지 갈린다. */}
+            <span className="font-semibold text-sp-text">{i + 1}</span>
             {highlightOn && (
               <span
                 data-testid="legend-role-dot"

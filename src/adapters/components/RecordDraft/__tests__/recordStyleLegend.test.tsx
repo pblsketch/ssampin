@@ -52,10 +52,19 @@ describe('작성 방식 배지 — 고른 방식이 그대로 보인다', () => 
     expect(all).not.toContain('탐구 과정');
   });
 
-  it('행동특성은 과정 색이 잇달아도 요소 이름으로 갈린다', () => {
+  it('행동특성은 과정 색이 잇달아도 번호와 이름으로 갈린다', () => {
     const style: RecordWritingStyle = { ...DEFAULT_RECORD_WRITING_STYLE, focus: 'lifeRelation' };
     render(<RecordStyleLegend style={style} highlightOn={true} />);
-    expect(inOrder(text(), ['반복 관찰된 특성', '대표 생활 장면', '자기관리·관계·책임'])).toBe(
+    // 색은 넷뿐이라 과정이 셋 잇달아 나온다. 번호가 낱낱의 이름표 노릇을 한다.
+    expect(inOrder(text(), ['2반복 관찰된 특성', '3대표 생활 장면', '4자기관리·관계·책임'])).toBe(
+      true,
+    );
+  });
+
+  it('요소마다 번호가 순서대로 붙는다: 색이 겹쳐도 몇 번째인지 갈린다', () => {
+    const style: RecordWritingStyle = { ...DEFAULT_RECORD_WRITING_STYLE, focus: 'compareJudge' };
+    render(<RecordStyleLegend style={style} highlightOn={true} />);
+    expect(inOrder(text(), ['1교사 판단', '3비교 기준', '4사용한 근거', '6자신의 결론'])).toBe(
       true,
     );
   });
