@@ -120,7 +120,7 @@ describe('ConsultationSupabaseClient.getBookings — 실패를 빈 목록으로 
   // ADR-095: 새 사유 코드는 "업데이트하세요"에 삼켜지면 안 된다(수용 기준 #6).
   it.each([
     ['not_connected', /구글 계정 연결이 필요합니다/],
-    ['different_account', /같은 구글 계정으로 연결해 주세요/],
+    ['different_account', /만든 사람의 구글 계정으로만 열 수 있습니다/],
     ['legacy_closed', /기간이 끝났습니다/],
   ] as const)('사유 %s 는 그 안내로 뜬다', async (reason, pattern) => {
     vi.stubGlobal(
