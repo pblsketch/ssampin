@@ -4,6 +4,7 @@ import { useSoundStore } from '@adapters/stores/useSoundStore';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 import { DualToolContext } from './DualToolContext';
 import { ToolServicesContext } from './ToolServicesContext';
+import { useToolPopupSession } from './popup/toolPopupSession';
 
 interface ToolLayoutProps {
   title: string;
@@ -79,9 +80,14 @@ export function ToolLayout({
 
   const dualCtx = useContext(DualToolContext);
   const singleSvc = useContext(ToolServicesContext);
+  // 쌤도구 팝업 — 본문에서는 '팝업으로 옮기기', 팝업 창에서는 '항상 위·본문으로 가져오기·닫기'.
+  const popupSession = useToolPopupSession();
+  const inPopupWindow = popupSession?.placement === 'popup';
+  const canMoveToPopup = popupSession?.placement === 'main' && dualCtx === null;
   const canEnterDual = useCanEnterDual();
   const isNarrow = useIsNarrow();
-  const showDualEntry = singleSvc !== null && dualCtx === null;
+  const showDualEntry =
+    singleSvc !== null && dualCtx === null && popupSession?.placement !== 'popup';
 
   const soundEnabled = useSoundStore((s) => s.settings.enabled);
   const soundLoaded = useSoundStore((s) => s.loaded);
@@ -174,7 +180,7 @@ export function ToolLayout({
       {/* Header */}
       <div className={`flex items-center justify-between ${isFullscreen ? 'mb-2' : 'mb-6'}`}>
         <div className="flex items-center gap-4 min-w-0 flex-1">
-          {!isFullscreen && (
+          {!isFullscreen && !inPopupWindow && (
             <>
               <button
                 onClick={onBack}
@@ -273,6 +279,63 @@ export function ToolLayout({
                 </>
               )}
             </div>
+          )}
+
+          {/* 쌤도구 팝업 — 본문에서 별도 창으로 옮기기 */}
+          {canMoveToPopup && (
+            <button
+              type="button"
+              onClick={popupSession.moveToPopup}
+              disabled={popupSession.busy}
+              className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+              title="팝업으로 옮기기 — 진행 상태 그대로 별도 창으로"
+              aria-label="팝업으로 옮기기"
+            >
+              <span className="material-symbols-outlined text-icon-lg">open_in_new</span>
+            </button>
+          )}
+
+          {/* 쌤도구 팝업 창 안의 조작 */}
+          {inPopupWindow && popupSession !== null && (
+            <>
+              {popupSession.supportsAlwaysOnTop && (
+                <button
+                  type="button"
+                  onClick={popupSession.toggleAlwaysOnTop}
+                  className={`p-2 rounded-lg transition-all ${
+                    popupSession.alwaysOnTop
+                      ? 'bg-sp-accent/15 text-sp-accent'
+                      : 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
+                  }`}
+                  title={popupSession.alwaysOnTop ? '항상 위 끄기' : '항상 위로 두기'}
+                  aria-label="항상 위로 두기"
+                  aria-pressed={popupSession.alwaysOnTop}
+                >
+                  <span className="material-symbols-outlined text-icon-lg">
+                    {popupSession.alwaysOnTop ? 'push_pin' : 'keep'}
+                  </span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={popupSession.returnToMain}
+                disabled={popupSession.busy}
+                className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                title="본문으로 가져오기 — 진행 상태 그대로 쌤핀 창으로"
+                aria-label="본문으로 가져오기"
+              >
+                <span className="material-symbols-outlined text-icon-lg">move_item</span>
+              </button>
+              <button
+                type="button"
+                onClick={popupSession.closePopup}
+                className="p-2 rounded-lg text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all"
+                title="창 닫기 — 이 실행을 끝냅니다"
+                aria-label="창 닫기"
+              >
+                <span className="material-symbols-outlined text-icon-lg">close</span>
+              </button>
+            </>
           )}
 
           {/* Dual mode entry button (single mode only) */}

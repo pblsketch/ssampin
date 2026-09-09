@@ -380,6 +380,30 @@ interface ElectronAPI {
    */
   widgetDiagDump?: (label: string) => Promise<void>;
   closeWindow: () => Promise<void>;
+
+  /**
+   * 쌤도구 팝업 (v2.5.x~) — 도구를 별도 창으로 띄워 다른 페이지와 함께 쓴다.
+   * 설계: docs/02-design/features/tool-popup.design.md
+   */
+  toolPopup?: {
+    open: (
+      toolId: string,
+      snapshot: unknown,
+      capturedAt: number,
+    ) => Promise<{ ok: boolean; focusedExisting?: boolean; reason?: string }>;
+    claimHandoff: (handoffId: string) => Promise<{ snapshot: unknown; capturedAt: number } | null>;
+    markReady: () => Promise<boolean>;
+    focus: (toolId: string) => Promise<boolean>;
+    close: (toolId?: string) => Promise<boolean>;
+    setAlwaysOnTop: (toolId: string | null, flag: boolean) => Promise<boolean>;
+    list: () => Promise<string[]>;
+    returnToMain: (snapshot: unknown, capturedAt: number) => Promise<boolean>;
+    onChanged: (callback: (openToolIds: string[]) => void) => () => void;
+    onReturned: (
+      callback: (payload: { toolId: string; snapshot: unknown; capturedAt: number }) => void,
+    ) => () => void;
+  };
+
   // ─── 아이콘 모드 (v2.0.2~) ───
   iconShow: () => Promise<void>;
   iconHide: () => Promise<void>;

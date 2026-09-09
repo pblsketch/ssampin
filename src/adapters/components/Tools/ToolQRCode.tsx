@@ -2,6 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { ToolLayout } from './ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolPopupInitial, useToolPopupSlot } from './popup/toolPopupSession';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 
 interface ToolQRCodeProps {
@@ -108,18 +109,30 @@ function FullscreenQR({
 
 // ─── 메인 컴포넌트 ──────────────────────────────────────────
 
+/** 팝업으로 옮길 때 함께 가는 QR코드 상태(만들어 둔 그림은 입력에서 다시 그린다). */
+export interface QRCodeSnapshot {
+  readonly tab: TabMode;
+  readonly urlInput: string;
+  readonly textInput: string;
+  readonly qrSize: QRSize;
+  readonly errorLevel: ErrorLevel;
+}
+
 export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
+  const popupInitial = useToolPopupInitial<QRCodeSnapshot>('qrcode');
   const { track } = useAnalytics();
   useEffect(() => {
     track('tool_use', { tool: 'qr' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [tab, setTab] = useState<TabMode>('url');
-  const [urlInput, setUrlInput] = useState('');
-  const [textInput, setTextInput] = useState('');
+  const [tab, setTab] = useState<TabMode>(() => popupInitial?.data.tab ?? 'url');
+  const [urlInput, setUrlInput] = useState(() => popupInitial?.data.urlInput ?? '');
+  const [textInput, setTextInput] = useState(() => popupInitial?.data.textInput ?? '');
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [qrSize, setQrSize] = useState<QRSize>(256);
-  const [errorLevel, setErrorLevel] = useState<ErrorLevel>('M');
+  const [qrSize, setQrSize] = useState<QRSize>(() => popupInitial?.data.qrSize ?? 256);
+  const [errorLevel, setErrorLevel] = useState<ErrorLevel>(
+    () => popupInitial?.data.errorLevel ?? 'M',
+  );
   const [showOptions, setShowOptions] = useState(false);
   const [showFullscreen, setShowFullscreen] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
@@ -171,6 +184,27 @@ export function ToolQRCode({ onBack, isFullscreen }: ToolQRCodeProps) {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [currentValue, qrSize, errorLevel, generateQR]);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  // QR 그림은 입력에서 다시 그리면 되므로 담지 않는다(용량만 커진다).
+  // 최근 목록은 저장소에 있어 두 창이 같은 것을 본다.
+  const captureForPopup = useCallback((): QRCodeSnapshot => {
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    return { tab, urlInput, textInput, qrSize, errorLevel };
+  }, [tab, urlInput, textInput, qrSize, errorLevel]);
+
+  const resumeFromPopup = useCallback((snapshot: QRCodeSnapshot) => {
+    setTab(snapshot.tab);
+    setUrlInput(snapshot.urlInput);
+    setTextInput(snapshot.textInput);
+    setQrSize(snapshot.qrSize);
+    setErrorLevel(snapshot.errorLevel);
+  }, []);
+
+  useToolPopupSlot<QRCodeSnapshot>('qrcode', { capture: captureForPopup, resume: resumeFromPopup });
 
   // 히스토리에 추가
   const addToHistory = useCallback((value: string, mode: TabMode) => {

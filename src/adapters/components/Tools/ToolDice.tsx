@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolPopupInitial, useToolPopupSlot } from './popup/toolPopupSession';
 import { useToolSound } from '@adapters/hooks/useToolSound';
 import { secureRandom, pickIndexWithMemory } from '@domain/rules/randomRules';
 
@@ -218,6 +219,13 @@ function Dice3D({ value, isRolling, rollId, size }: Dice3DProps) {
 
 type DiceCount = 1 | 2 | 3;
 
+/** 팝업으로 옮길 때 함께 가는 주사위 상태. */
+export interface DiceSnapshot {
+  readonly diceCount: DiceCount;
+  readonly results: readonly number[];
+  readonly history: readonly (readonly number[])[];
+}
+
 export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
   const { track } = useAnalytics();
   const { playProgress, playResult } = useToolSound('dice');
@@ -225,10 +233,13 @@ export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
     track('tool_use', { tool: 'dice' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [diceCount, setDiceCount] = useState<DiceCount>(1);
-  const [results, setResults] = useState<number[]>([1]);
+  const popupInitial = useToolPopupInitial<DiceSnapshot>('dice');
+  const [diceCount, setDiceCount] = useState<DiceCount>(() => popupInitial?.data.diceCount ?? 1);
+  const [results, setResults] = useState<number[]>(() => [...(popupInitial?.data.results ?? [1])]);
   const [isRolling, setIsRolling] = useState(false);
-  const [history, setHistory] = useState<number[][]>([]);
+  const [history, setHistory] = useState<number[][]>(() =>
+    (popupInitial?.data.history ?? []).map((roll) => [...roll]),
+  );
   const [rollId, setRollId] = useState(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -261,6 +272,26 @@ export function ToolDice({ onBack, isFullscreen }: ToolDiceProps) {
       setHistory((prev) => [newResults, ...prev].slice(0, 10));
     }, 1500);
   }, [isRolling, diceCount, history, playProgress, playResult]);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  const captureForPopup = useCallback((): DiceSnapshot => {
+    // ★먼저 멈춘다 — 굴리는 중이면 그 판은 버리고 직전 결과만 옮긴다(이력이 두 번 쌓이지 않게).
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    setIsRolling(false);
+    return { diceCount, results, history };
+  }, [diceCount, results, history]);
+
+  const resumeFromPopup = useCallback((snapshot: DiceSnapshot) => {
+    setDiceCount(snapshot.diceCount);
+    setResults([...snapshot.results]);
+    setHistory(snapshot.history.map((roll) => [...roll]));
+    setIsRolling(false);
+  }, []);
+
+  useToolPopupSlot<DiceSnapshot>('dice', { capture: captureForPopup, resume: resumeFromPopup });
 
   const handleDiceCountChange = useCallback(
     (count: DiceCount) => {

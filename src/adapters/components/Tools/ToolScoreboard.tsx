@@ -4,6 +4,7 @@ import type { KeyboardShortcut } from './types';
 import type { Team } from '@domain/entities/Team';
 import { getRanking } from '@domain/rules/scoreRules';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolPopupInitial, useToolPopupSlot } from './popup/toolPopupSession';
 
 interface ToolScoreboardProps {
   onBack: () => void;
@@ -354,15 +355,25 @@ function ScoreboardView({
 
 /* ──────────────── Main Component ──────────────── */
 
+/** 팝업으로 옮길 때 함께 가는 점수판 상태. */
+export interface ScoreboardSnapshot {
+  readonly viewMode: ViewMode;
+  readonly teamCount: number;
+  readonly teams: readonly Team[];
+}
+
 export function ToolScoreboard({ onBack, isFullscreen }: ToolScoreboardProps) {
+  const popupInitial = useToolPopupInitial<ScoreboardSnapshot>('scoreboard');
   const { track } = useAnalytics();
   useEffect(() => {
     track('tool_use', { tool: 'scoreboard' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [viewMode, setViewMode] = useState<ViewMode>('setup');
-  const [teamCount, setTeamCount] = useState(4);
-  const [teams, setTeams] = useState<Team[]>(() => makeDefaultTeams(4));
+  const [viewMode, setViewMode] = useState<ViewMode>(() => popupInitial?.data.viewMode ?? 'setup');
+  const [teamCount, setTeamCount] = useState(() => popupInitial?.data.teamCount ?? 4);
+  const [teams, setTeams] = useState<Team[]>(() =>
+    popupInitial ? popupInitial.data.teams.map((team) => ({ ...team })) : makeDefaultTeams(4),
+  );
   const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set());
   const animTimers = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -373,6 +384,26 @@ export function ToolScoreboard({ onBack, isFullscreen }: ToolScoreboardProps) {
       timers.forEach((t) => clearTimeout(t));
     };
   }, []);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  const captureForPopup = useCallback((): ScoreboardSnapshot => {
+    // ★먼저 멈춘다 — 점수 애니메이션 타이머가 남아 있으면 옮긴 뒤에도 화면이 튄다.
+    animTimers.current.forEach((timer) => clearTimeout(timer));
+    animTimers.current.clear();
+    setAnimatingIds(new Set());
+    return { viewMode, teamCount, teams };
+  }, [viewMode, teamCount, teams]);
+
+  const resumeFromPopup = useCallback((snapshot: ScoreboardSnapshot) => {
+    setViewMode(snapshot.viewMode);
+    setTeamCount(snapshot.teamCount);
+    setTeams(snapshot.teams.map((team) => ({ ...team })));
+  }, []);
+
+  useToolPopupSlot<ScoreboardSnapshot>('scoreboard', {
+    capture: captureForPopup,
+    resume: resumeFromPopup,
+  });
 
   // Team count change → regenerate teams
   const handleTeamCountChange = useCallback((count: number) => {

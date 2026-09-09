@@ -19,6 +19,8 @@ import {
 import { CircleProgress } from './CircleProgress';
 import { AlarmSoundSelector } from './AlarmSoundSelector';
 import type { AlarmSoundId, PreWarningSettings } from '@domain/entities/Settings';
+import { advanceCountdown } from '@domain/rules/toolPopupSession';
+import { useToolPopupInitial, useToolPopupSlot } from '../popup/toolPopupSession';
 
 type PresentationState = 'setup' | 'running' | 'paused' | 'slide-done' | 'all-done';
 type InputMode = 'custom' | 'students' | 'teachingClass';
@@ -38,17 +40,55 @@ const DURATION_PRESETS = [
   { label: '5분', seconds: 300 },
 ];
 
+/** 팝업으로 옮길 때 함께 가는 발표 타이머 상태. */
+export interface PresentationSnapshot {
+  readonly presenters: readonly Presenter[];
+  /** Map 은 그대로 넘어가지 않으므로 쌍의 배열로 담는다. */
+  readonly order: readonly (readonly [string, number])[];
+  readonly duration: number;
+  readonly inputMode: InputMode;
+  readonly state: PresentationState;
+  readonly currentIndex: number;
+  readonly remaining: number;
+  readonly autoAdvance: boolean;
+}
+
+/** 발표 타이머에서 시간이 흐르는 상태 — 카운트다운 복원 규칙에 넘길 때 쓴다. */
+function toCountdownState(state: PresentationState): 'running' | 'paused' | 'idle' {
+  if (state === 'running') return 'running';
+  if (state === 'paused') return 'paused';
+  return 'idle';
+}
+
 export function PresentationMode() {
+  const popupInitial = useToolPopupInitial<PresentationSnapshot>('timer-presentation');
+  const [restoredInitial] = useState(() =>
+    popupInitial
+      ? advanceCountdown(
+          {
+            state: toCountdownState(popupInitial.data.state),
+            remaining: popupInitial.data.remaining,
+            capturedAt: popupInitial.capturedAt,
+          },
+          Date.now(),
+        )
+      : null,
+  );
+
   // ─── 발표자 리스트 관리 ────────────────────────
-  const [presenters, setPresenters] = useState<Presenter[]>([]);
+  const [presenters, setPresenters] = useState<Presenter[]>(() => [
+    ...(popupInitial?.data.presenters ?? []),
+  ]);
   const [newName, setNewName] = useState('');
-  const [duration, setDuration] = useState(DEFAULT_DURATION);
-  const [inputMode, setInputMode] = useState<InputMode>('custom');
+  const [duration, setDuration] = useState(() => popupInitial?.data.duration ?? DEFAULT_DURATION);
+  const [inputMode, setInputMode] = useState<InputMode>(
+    () => popupInitial?.data.inputMode ?? 'custom',
+  );
 
   // ─── 타이머 상태 ──────────────────────────────
-  const [state, setState] = useState<PresentationState>('setup');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [remaining, setRemaining] = useState(0);
+  const [state, setState] = useState<PresentationState>(() => popupInitial?.data.state ?? 'setup');
+  const [currentIndex, setCurrentIndex] = useState(() => popupInitial?.data.currentIndex ?? 0);
+  const [remaining, setRemaining] = useState(() => restoredInitial?.remaining ?? 0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const preWarningFiredRef = useRef(false);
 
@@ -60,7 +100,7 @@ export function PresentationMode() {
   const tcDropdownRef = useRef<HTMLDivElement>(null);
 
   // ─── 옵션 ─────────────────────────────────────
-  const [autoAdvance, setAutoAdvance] = useState(false);
+  const [autoAdvance, setAutoAdvance] = useState(() => popupInitial?.data.autoAdvance ?? false);
   const [showSoundPanel, setShowSoundPanel] = useState(false);
   const [showPreWarningPanel, setShowPreWarningPanel] = useState(false);
 
@@ -158,10 +198,15 @@ export function PresentationMode() {
     [tcClasses],
   );
 
+  // 같은 밀리초에 둘을 더하면 id 가 겹쳐 순서표에서 한 명이 사라진다(React key 중복도 난다).
+  // 팝업 이관은 이 id 로 순서를 담으므로 반드시 서로 달라야 한다.
+  const presenterSeqRef = useRef(0);
+
   const addPresenter = useCallback(() => {
     const name = newName.trim();
     if (!name) return;
-    const id = `c-${Date.now()}`;
+    presenterSeqRef.current += 1;
+    const id = `c-${Date.now()}-${presenterSeqRef.current}`;
     setPresenters((prev) => {
       const next = [...prev, { id, name }];
       // 직접 입력 모드: 입력 순서 = 발표 순서
@@ -187,7 +232,9 @@ export function PresentationMode() {
 
   // ─── 발표 순서 관리 ──────────────────────────
   // orderMap: presenter id → 발표 순서 (1-based). 비어있으면 미지정.
-  const [orderMap, setOrderMap] = useState<Map<string, number>>(new Map());
+  const [orderMap, setOrderMap] = useState<Map<string, number>>(
+    () => new Map(popupInitial?.data.order ?? []),
+  );
   const [editingOrder, setEditingOrder] = useState<{ id: string; value: string } | null>(null);
 
   const setPresenterOrder = useCallback((id: string, order: number) => {
@@ -350,6 +397,87 @@ export function PresentationMode() {
       }
     };
   }, [state, nextPresenter]);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  // capture 는 **먼저 멈춘다** — 옮기는 동안 이 창에서 발표 종료 알람이 울리면 안 된다.
+  const captureForPopup = useCallback((): PresentationSnapshot => {
+    clearTimer();
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+    return {
+      presenters,
+      order: [...orderMap.entries()],
+      duration,
+      inputMode,
+      state,
+      currentIndex,
+      remaining,
+      autoAdvance,
+    };
+  }, [
+    clearTimer,
+    presenters,
+    orderMap,
+    duration,
+    inputMode,
+    state,
+    currentIndex,
+    remaining,
+    autoAdvance,
+  ]);
+
+  const resumeFromPopup = useCallback(
+    (snapshot: PresentationSnapshot, capturedAt: number) => {
+      const restored = advanceCountdown(
+        {
+          state: toCountdownState(snapshot.state),
+          remaining: snapshot.remaining,
+          capturedAt,
+        },
+        Date.now(),
+      );
+      clearTimer();
+      setPresenters([...snapshot.presenters]);
+      setOrderMap(new Map(snapshot.order));
+      setDuration(snapshot.duration);
+      setInputMode(snapshot.inputMode);
+      setCurrentIndex(snapshot.currentIndex);
+      setAutoAdvance(snapshot.autoAdvance);
+      if (snapshot.state === 'running' && restored.state === 'running') {
+        beginCountdown(restored.remaining);
+        return;
+      }
+      setRemaining(restored.remaining);
+      if (restored.alarmDueDuringTransfer) {
+        // 옮기는 사이에 발표 시간이 끝났다 — 여기서 한 번만 알린다.
+        playAlarmSound(selectedSoundRef.current, volumeRef.current, boostRef.current, null);
+        setState('slide-done');
+        return;
+      }
+      setState(snapshot.state);
+    },
+    [beginCountdown, clearTimer],
+  );
+
+  useToolPopupSlot<PresentationSnapshot>('timer-presentation', {
+    capture: captureForPopup,
+    resume: resumeFromPopup,
+  });
+
+  // 넘겨받은 발표가 진행 중이었으면 이 창에서 이어서 돌린다.
+  useEffect(() => {
+    if (restoredInitial === null) return;
+    if (restoredInitial.state === 'running') {
+      beginCountdown(restoredInitial.remaining);
+    } else if (restoredInitial.alarmDueDuringTransfer) {
+      playAlarmSound(selectedSoundRef.current, volumeRef.current, boostRef.current, null);
+      setState('slide-done');
+    }
+    // 마운트 때 한 번만 — 이후 재실행되면 발표 시간이 처음부터 다시 돈다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ─── 알람음 핸들러 ────────────────────────────
   const handleSelectSound = useCallback(

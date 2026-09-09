@@ -14,6 +14,7 @@ import {
   ONECLICK_PORTAL_TOOL_ID,
   useOneClickPortalLauncher,
 } from '@adapters/components/Tools/useOneClickPortalLauncher';
+import { ToolPopupCardAction } from '@adapters/components/Tools/popup/ToolPopupCardAction';
 
 interface ToolsGridProps {
   onNavigate: (page: PageId) => void;
@@ -340,44 +341,48 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
             ) : (
               <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {visibleTools.map((tool) => (
-                  <button
-                    key={tool.id}
-                    onClick={() => {
-                      // 원클릭업무포털은 웹사이트가 아니라 설치된 외부 프로그램이라
-                      // 설치·실행 여부를 확인하는 전용 흐름을 탄다.
-                      if (tool.id === ONECLICK_PORTAL_TOOL_ID) {
-                        trackExternalToolUse(tool.id, track);
-                        void oneclickPortal.handleCardClick();
-                        return;
-                      }
-                      if (tool.externalUrl) {
-                        // ★바깥으로 나가는 도구는 **여기서 세지 않으면 영영 0 이다.**
-                        //   화면 이동이 없어 방문 기록조차 안 남는다(2026-08 한 달 내내 0건).
-                        trackExternalToolUse(tool.id, track);
-                        openExternal(tool.externalUrl);
-                        return;
-                      }
-                      // 앱 안의 도구는 각자 자기 화면에서 센다 — 여기서 또 세면 두 번이 된다.
-                      onNavigate(tool.id);
-                    }}
-                    className="bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
-                  >
-                    <div className="text-4xl mb-3">{tool.emoji}</div>
-                    <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
-                      {tool.name}
-                      {tool.badge && (
-                        <span className="text-caption font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
-                          {tool.badge}
-                        </span>
-                      )}
-                      {tool.externalUrl && (
-                        <span className="material-symbols-outlined text-icon-sm text-sp-muted">
-                          open_in_new
-                        </span>
-                      )}
-                    </h3>
-                    <p className="text-sm text-sp-muted mt-1">{tool.description}</p>
-                  </button>
+                  // 카드 안에 버튼을 겹쳐 넣으면 안 되므로(중첩 button), 보조 버튼은 형제로 둔다.
+                  // h-full: 이 감싸개가 격자 칸이 되므로, 예전처럼 카드가 칸을 꽉 채우도록 늘려 준다.
+                  <div key={tool.id} className="relative h-full">
+                    <button
+                      onClick={() => {
+                        // 원클릭업무포털은 웹사이트가 아니라 설치된 외부 프로그램이라
+                        // 설치·실행 여부를 확인하는 전용 흐름을 탄다.
+                        if (tool.id === ONECLICK_PORTAL_TOOL_ID) {
+                          trackExternalToolUse(tool.id, track);
+                          void oneclickPortal.handleCardClick();
+                          return;
+                        }
+                        if (tool.externalUrl) {
+                          // ★바깥으로 나가는 도구는 **여기서 세지 않으면 영영 0 이다.**
+                          //   화면 이동이 없어 방문 기록조차 안 남는다(2026-08 한 달 내내 0건).
+                          trackExternalToolUse(tool.id, track);
+                          openExternal(tool.externalUrl);
+                          return;
+                        }
+                        // 앱 안의 도구는 각자 자기 화면에서 센다 — 여기서 또 세면 두 번이 된다.
+                        onNavigate(tool.id);
+                      }}
+                      className="w-full h-full bg-sp-card rounded-2xl p-6 text-left border border-transparent hover:border-blue-500/30 hover:scale-[1.02] transition-all group"
+                    >
+                      <div className="text-4xl mb-3">{tool.emoji}</div>
+                      <h3 className="text-lg font-bold text-sp-text group-hover:text-sp-accent transition-colors flex items-center gap-1.5 flex-wrap">
+                        {tool.name}
+                        {tool.badge && (
+                          <span className="text-caption font-extrabold tracking-wider px-2 py-[3px] rounded-md bg-gradient-to-br from-amber-400 to-amber-500 text-amber-950 shadow-sm ring-1 ring-amber-500/50">
+                            {tool.badge}
+                          </span>
+                        )}
+                        {tool.externalUrl && (
+                          <span className="material-symbols-outlined text-icon-sm text-sp-muted">
+                            open_in_new
+                          </span>
+                        )}
+                      </h3>
+                      <p className="text-sm text-sp-muted mt-1">{tool.description}</p>
+                    </button>
+                    <ToolPopupCardAction toolId={tool.id} />
+                  </div>
                 ))}
               </div>
             )}

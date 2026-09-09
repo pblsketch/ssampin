@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { ToolLayout } from './ToolLayout';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
+import { useToolPopupInitial, useToolPopupSlot } from './popup/toolPopupSession';
 import { useToolSound } from '@adapters/hooks/useToolSound';
 import { pickWithMemory } from '@domain/rules/randomRules';
 
@@ -18,6 +19,14 @@ type CoinResult = 'heads' | 'tails' | null;
 
 const BASE_SPINS = 6; // number of full 360-degree rotations before landing
 
+/** 팝업으로 옮길 때 함께 가는 동전 상태. */
+export interface CoinSnapshot {
+  readonly rotation: number;
+  readonly result: CoinResult;
+  readonly showResult: boolean;
+  readonly stats: CoinStats;
+}
+
 export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
   const { track } = useAnalytics();
   const { playProgress, playResult } = useToolSound('coin');
@@ -25,14 +34,17 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
     track('tool_use', { tool: 'coin' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [rotation, setRotation] = useState(0);
+  const popupInitial = useToolPopupInitial<CoinSnapshot>('coin');
+  const [rotation, setRotation] = useState(() => popupInitial?.data.rotation ?? 0);
   const [isFlipping, setIsFlipping] = useState(false);
-  const [result, setResult] = useState<CoinResult>(null);
-  const [showResult, setShowResult] = useState(false);
-  const [stats, setStats] = useState<CoinStats>({ heads: 0, tails: 0 });
+  const [result, setResult] = useState<CoinResult>(() => popupInitial?.data.result ?? null);
+  const [showResult, setShowResult] = useState(() => popupInitial?.data.showResult ?? false);
+  const [stats, setStats] = useState<CoinStats>(
+    () => popupInitial?.data.stats ?? { heads: 0, tails: 0 },
+  );
 
   // Track cumulative rotation so we always spin forward
-  const cumulativeRotationRef = useRef(0);
+  const cumulativeRotationRef = useRef(popupInitial?.data.rotation ?? 0);
   const flipTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 직전 결과 회피용 (anti-repeat 항상 ON)
   const lastResultRef = useRef<CoinResult>(null);
@@ -88,6 +100,29 @@ export function ToolCoin({ onBack, isFullscreen }: ToolCoinProps) {
       }));
     }, 1550);
   }, [isFlipping, playProgress, playResult]);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  const captureForPopup = useCallback((): CoinSnapshot => {
+    // ★먼저 멈춘다 — 던지는 중이면 그 판은 버리고 직전 결과·누적만 옮긴다(이중 집계 방지).
+    if (flipTimerRef.current) {
+      clearTimeout(flipTimerRef.current);
+      flipTimerRef.current = null;
+    }
+    setIsFlipping(false);
+    return { rotation, result, showResult, stats };
+  }, [rotation, result, showResult, stats]);
+
+  const resumeFromPopup = useCallback((snapshot: CoinSnapshot) => {
+    setRotation(snapshot.rotation);
+    cumulativeRotationRef.current = snapshot.rotation;
+    setResult(snapshot.result);
+    setShowResult(snapshot.showResult);
+    setStats(snapshot.stats);
+    setIsFlipping(false);
+    lastResultRef.current = snapshot.result;
+  }, []);
+
+  useToolPopupSlot<CoinSnapshot>('coin', { capture: captureForPopup, resume: resumeFromPopup });
 
   const handleResetStats = useCallback(() => {
     setStats({ heads: 0, tails: 0 });

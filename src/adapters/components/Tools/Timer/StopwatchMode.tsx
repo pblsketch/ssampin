@@ -1,15 +1,39 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { formatTimeMs } from '@domain/rules/timerRules';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
+import { advanceStopwatch } from '@domain/rules/toolPopupSession';
+import { useToolPopupInitial, useToolPopupSlot } from '../popup/toolPopupSession';
 import type { StopwatchState, LapRecord } from './types';
 
+/** 팝업으로 옮길 때 함께 가는 스톱워치 상태. */
+export interface StopwatchSnapshot {
+  readonly elapsedMs: number;
+  readonly state: StopwatchState;
+  readonly laps: readonly LapRecord[];
+}
+
 export function StopwatchMode() {
-  const [elapsed, setElapsed] = useState(0);
-  const [state, setState] = useState<StopwatchState>('idle');
-  const [laps, setLaps] = useState<LapRecord[]>([]);
+  const popupInitial = useToolPopupInitial<StopwatchSnapshot>('timer-stopwatch');
+  // 옮기는 사이에도 스톱워치는 흐른다 — 찍은 시각부터 지금까지를 더해 복원한다.
+  const [restoredInitial] = useState(() =>
+    popupInitial
+      ? advanceStopwatch(
+          {
+            state: popupInitial.data.state,
+            elapsedMs: popupInitial.data.elapsedMs,
+            capturedAt: popupInitial.capturedAt,
+          },
+          Date.now(),
+        )
+      : null,
+  );
+
+  const [elapsed, setElapsed] = useState(() => restoredInitial?.elapsedMs ?? 0);
+  const [state, setState] = useState<StopwatchState>(() => restoredInitial?.state ?? 'idle');
+  const [laps, setLaps] = useState<LapRecord[]>(() => [...(popupInitial?.data.laps ?? [])]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startTimeRef = useRef(0);
-  const accumulatedRef = useRef(0);
+  const accumulatedRef = useRef(restoredInitial?.elapsedMs ?? 0);
 
   const clearSW = useCallback(() => {
     if (intervalRef.current) {
@@ -50,6 +74,42 @@ export function StopwatchMode() {
       ...prev,
     ]);
   }, [elapsed, laps]);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  const captureForPopup = useCallback((): StopwatchSnapshot => {
+    // ★먼저 멈춘다. 멈춘 시점까지의 경과를 담아야 두 창에서 각자 흐르지 않는다.
+    const total = state === 'running' ? accumulatedRef.current + (Date.now() - startTimeRef.current) : elapsed;
+    clearSW();
+    return { elapsedMs: total, state, laps };
+  }, [clearSW, elapsed, state, laps]);
+
+  const resumeFromPopup = useCallback(
+    (snapshot: StopwatchSnapshot, capturedAt: number) => {
+      const restored = advanceStopwatch(
+        { state: snapshot.state, elapsedMs: snapshot.elapsedMs, capturedAt },
+        Date.now(),
+      );
+      clearSW();
+      setLaps([...snapshot.laps]);
+      setElapsed(restored.elapsedMs);
+      setState(restored.state);
+      accumulatedRef.current = restored.elapsedMs;
+      if (restored.state === 'running') start();
+    },
+    [clearSW, start],
+  );
+
+  useToolPopupSlot<StopwatchSnapshot>('timer-stopwatch', {
+    capture: captureForPopup,
+    resume: resumeFromPopup,
+  });
+
+  // 넘겨받은 스톱워치가 돌고 있었으면 이 창에서 이어서 돌린다.
+  useEffect(() => {
+    if (restoredInitial?.state === 'running') start();
+    // 마운트 때 한 번만.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     return clearSW;

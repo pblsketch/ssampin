@@ -10,6 +10,7 @@ import { shuffleArray, pickWithMemory } from '@domain/rules/randomRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
+import { useToolPopupInitial, useToolPopupSlot } from './popup/toolPopupSession';
 
 interface ToolRandomProps {
   onBack: () => void;
@@ -24,7 +25,25 @@ interface RangeConfig {
   end: number;
 }
 
+/** 팝업으로 옮길 때 함께 가는 랜덤 뽑기 상태. */
+export interface RandomSnapshot {
+  readonly mode: PickMode;
+  readonly dataSource: DataSource;
+  readonly excludedIds: readonly string[];
+  readonly rangeConfig: RangeConfig;
+  readonly customText: string;
+  readonly selectedRosterId: string | null;
+  readonly rosterExcludedNames: readonly string[];
+  readonly pickedItems: readonly string[];
+  readonly excludePicked: boolean;
+  readonly multipleCount: number;
+  readonly result: readonly string[];
+  readonly showResult: boolean;
+  readonly revealedCount: number;
+}
+
 export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
+  const popupInitial = useToolPopupInitial<RandomSnapshot>('random');
   const { track } = useAnalytics();
   const { playProgress, playResult, stopAll: stopSound } = useToolSound('random');
   useEffect(() => {
@@ -32,17 +51,27 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   // --- Mode & Data Source ---
-  const [mode, setMode] = useState<PickMode>('single');
-  const [dataSource, setDataSource] = useState<DataSource>('students');
+  const [mode, setMode] = useState<PickMode>(() => popupInitial?.data.mode ?? 'single');
+  const [dataSource, setDataSource] = useState<DataSource>(
+    () => popupInitial?.data.dataSource ?? 'students',
+  );
 
   // --- Data Source State ---
-  const [excludedIds, setExcludedIds] = useState<Set<string>>(new Set());
-  const [rangeConfig, setRangeConfig] = useState<RangeConfig>({ start: 1, end: 35 });
-  const [customText, setCustomText] = useState('');
+  const [excludedIds, setExcludedIds] = useState<Set<string>>(
+    () => new Set(popupInitial?.data.excludedIds ?? []),
+  );
+  const [rangeConfig, setRangeConfig] = useState<RangeConfig>(
+    () => popupInitial?.data.rangeConfig ?? { start: 1, end: 35 },
+  );
+  const [customText, setCustomText] = useState(() => popupInitial?.data.customText ?? '');
 
   // --- Class Roster State ---
-  const [selectedRosterId, setSelectedRosterId] = useState<string | null>(null);
-  const [rosterExcludedNames, setRosterExcludedNames] = useState<Set<string>>(new Set());
+  const [selectedRosterId, setSelectedRosterId] = useState<string | null>(
+    () => popupInitial?.data.selectedRosterId ?? null,
+  );
+  const [rosterExcludedNames, setRosterExcludedNames] = useState<Set<string>>(
+    () => new Set(popupInitial?.data.rosterExcludedNames ?? []),
+  );
 
   // --- Seating Store ---
   const students = useStudentStore((s) => s.students);
@@ -60,19 +89,27 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   const loadTc = useTeachingClassStore((s) => s.load);
 
   // --- Pick State ---
-  const [pickedItems, setPickedItems] = useState<string[]>([]);
-  const [excludePicked, setExcludePicked] = useState(true);
-  const [multipleCount, setMultipleCount] = useState(3);
+  const [pickedItems, setPickedItems] = useState<string[]>(() => [
+    ...(popupInitial?.data.pickedItems ?? []),
+  ]);
+  const [excludePicked, setExcludePicked] = useState(
+    () => popupInitial?.data.excludePicked ?? true,
+  );
+  const [multipleCount, setMultipleCount] = useState(() => popupInitial?.data.multipleCount ?? 3);
 
   // --- Animation State ---
   const [isAnimating, setIsAnimating] = useState(false);
   const [slotDisplay, setSlotDisplay] = useState<string>('');
-  const [result, setResult] = useState<string[]>([]);
-  const [showResult, setShowResult] = useState(false);
-  const [revealedCount, setRevealedCount] = useState(0);
+  const [result, setResult] = useState<string[]>(() => [...(popupInitial?.data.result ?? [])]);
+  const [showResult, setShowResult] = useState(() => popupInitial?.data.showResult ?? false);
+  const [revealedCount, setRevealedCount] = useState(() => popupInitial?.data.revealedCount ?? 0);
 
   // --- Refs ---
   const animationRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  /** 모드·자료원 변경 초기화 효과의 첫 실행을 건너뛰는 표시(팝업 복원 보호). */
+  const skipResetOnMountRef = useRef(true);
+  /** 명단 제외 목록 초기화 효과의 첫 실행을 건너뛰는 표시(팝업 복원 보호). */
+  const skipRosterResetOnMountRef = useRef(true);
   const speedRef = useRef(50);
   const stepCountRef = useRef(0);
 
@@ -91,6 +128,71 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
       }
     };
   }, []);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  // capture 는 **먼저 멈춘다** — 돌아가던 뽑기 애니메이션이 두 창에서 각자 결과를 내면 안 된다.
+  const captureForPopup = useCallback((): RandomSnapshot => {
+    if (animationRef.current) {
+      clearInterval(animationRef.current);
+      animationRef.current = null;
+    }
+    stopSound();
+    setIsAnimating(false);
+    setSlotDisplay('');
+    return {
+      mode,
+      dataSource,
+      excludedIds: [...excludedIds],
+      rangeConfig,
+      customText,
+      selectedRosterId,
+      rosterExcludedNames: [...rosterExcludedNames],
+      pickedItems,
+      excludePicked,
+      multipleCount,
+      result,
+      showResult,
+      revealedCount,
+    };
+  }, [
+    stopSound,
+    mode,
+    dataSource,
+    excludedIds,
+    rangeConfig,
+    customText,
+    selectedRosterId,
+    rosterExcludedNames,
+    pickedItems,
+    excludePicked,
+    multipleCount,
+    result,
+    showResult,
+    revealedCount,
+  ]);
+
+  const resumeFromPopup = useCallback((snapshot: RandomSnapshot) => {
+    // 되돌릴 때도 "다시 뽑기"는 하지 않는다 — 이미 나온 결과를 그대로 보여 준다.
+    skipResetOnMountRef.current = true;
+    setMode(snapshot.mode);
+    setDataSource(snapshot.dataSource);
+    setExcludedIds(new Set(snapshot.excludedIds));
+    setRangeConfig(snapshot.rangeConfig);
+    setCustomText(snapshot.customText);
+    setSelectedRosterId(snapshot.selectedRosterId);
+    setRosterExcludedNames(new Set(snapshot.rosterExcludedNames));
+    setPickedItems([...snapshot.pickedItems]);
+    setExcludePicked(snapshot.excludePicked);
+    setMultipleCount(snapshot.multipleCount);
+    setResult([...snapshot.result]);
+    setShowResult(snapshot.showResult);
+    setRevealedCount(snapshot.revealedCount);
+  }, []);
+
+  useToolPopupSlot<RandomSnapshot>('random', {
+    capture: captureForPopup,
+    resume: resumeFromPopup,
+  });
 
   // Build the pool of items based on data source
   const getPool = useCallback((): string[] => {
@@ -146,7 +248,12 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   ]);
 
   // Reset state when mode or data source changes
+  // ★첫 실행은 건너뛴다 — 팝업에서 넘겨받은 결과·이력을 마운트하자마자 지워 버리기 때문이다.
   useEffect(() => {
+    if (skipResetOnMountRef.current) {
+      skipResetOnMountRef.current = false;
+      return;
+    }
     setResult([]);
     setShowResult(false);
     setPickedItems([]);
@@ -364,7 +471,12 @@ export function ToolRandom({ onBack, isFullscreen }: ToolRandomProps) {
   }, [stopSound]);
 
   // Reset roster exclusions when data source changes
+  // ★첫 실행은 건너뛴다 — 팝업에서 넘겨받은 제외 목록을 마운트하자마자 비워 버리기 때문이다.
   useEffect(() => {
+    if (skipRosterResetOnMountRef.current) {
+      skipRosterResetOnMountRef.current = false;
+      return;
+    }
     setRosterExcludedNames(new Set());
   }, [dataSource]);
 

@@ -154,6 +154,11 @@ import { ShareWindowApp } from '@adapters/components/MultiSurvey/v2/Share/ShareW
 import { SidePinApp } from '@adapters/components/SidePin/SidePinApp';
 import { WidgetSyncBanner } from '@widgets/components/WidgetSyncBanner';
 import { parseNavigationTarget } from '@adapters/utils/navigationTarget';
+import { parseToolPopupQuery } from '@domain/rules/toolPopupRules';
+import { ToolPopupApp } from '@adapters/components/Tools/popup/ToolPopupApp';
+import { MainToolPopupHost } from '@adapters/components/Tools/popup/MainToolPopupHost';
+import { useToolPopupStore } from '@adapters/stores/useToolPopupStore';
+import { getToolPopupBridge } from '@adapters/components/Tools/popup/toolPopupBridge';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -185,6 +190,11 @@ function isMultiSurveyShareMode(): boolean {
 function isSidePinMode(): boolean {
   const params = new URLSearchParams(window.location.search);
   return params.get('mode') === 'sidePin';
+}
+
+/** 쌤도구 팝업 창인지. 허용목록 밖 도구는 여기서 이미 걸러진다. */
+function isToolPopupMode(): boolean {
+  return parseToolPopupQuery(window.location.search) !== null;
 }
 
 function getQuickAddKindFromUrl(): QuickAddKind {
@@ -413,16 +423,16 @@ function renderPage(
   }
   // 단일 모드 tool-* 페이지는 공통 ToolServicesContext로 감싸 "병렬 모드 열기" 버튼을 활성화
   const singleToolServices: ToolServicesValue = { onRequestDualMode: ctx.onRequestDualMode };
-  if (page === 'tool-timer') {
-    return (
-      <ToolServicesContext.Provider value={singleToolServices}>
-        <ToolTimer onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />
-      </ToolServicesContext.Provider>
-    );
-  }
+  // MainToolPopupHost 가 팝업 지원 9종을 감싸 [팝업으로 옮기기]를 붙이고,
+  // 이미 별도 창에서 도는 도구는 본문에서 중복으로 그리지 않는다.
   const wrap = (el: React.ReactNode) => (
-    <ToolServicesContext.Provider value={singleToolServices}>{el}</ToolServicesContext.Provider>
+    <ToolServicesContext.Provider value={singleToolServices}>
+      <MainToolPopupHost page={page}>{el}</MainToolPopupHost>
+    </ToolServicesContext.Provider>
   );
+  if (page === 'tool-timer') {
+    return wrap(<ToolTimer onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
+  }
   if (page === 'tool-random') {
     return wrap(<ToolRandom onBack={() => onNavigate('tools')} isFullscreen={isFullscreen} />);
   }
@@ -624,6 +634,11 @@ export function App() {
   }
   if (isSidePinMode()) {
     return <SidePinApp />;
+  }
+  // 쌤도구 팝업 창은 대시보드(MainApp)를 만들지 않는다 —
+  // 창마다 데이터 초기화·알림 작업이 중복으로 돌면 안 된다.
+  if (isToolPopupMode()) {
+    return <ToolPopupApp />;
   }
   return <MainApp />;
 }
@@ -1280,6 +1295,17 @@ function MainApp() {
     void initNeisSync();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 쌤도구 팝업에서 [본문으로 가져오기]를 누르면 스냅샷을 받아 그 도구 화면을 연다.
+  const putReturnedToolPopup = useToolPopupStore((s) => s.putReturned);
+  const subscribeToolPopup = useToolPopupStore((s) => s.subscribe);
+  useEffect(() => {
+    subscribeToolPopup();
+    return getToolPopupBridge().onReturned((payload) => {
+      putReturnedToolPopup(payload.toolId, payload.snapshot);
+      setCurrentPage(payload.toolId);
+    });
+  }, [putReturnedToolPopup, subscribeToolPopup]);
 
   // 테마 CSS 변수 주입 (useLayoutEffect)
   useThemeApplier();

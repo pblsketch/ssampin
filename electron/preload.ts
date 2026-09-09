@@ -148,6 +148,55 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   setAlwaysOnTop: (flag: boolean): Promise<void> =>
     ipcRenderer.invoke('window:setAlwaysOnTop', flag),
+
+  // ─────────────────────────────────────────────────────────────
+  // 쌤도구 팝업 — 도구를 별도 창으로 띄우기 (설계 §4·§5)
+  //   허용한 요청만 노출한다. 도구 id 검사와 발신 창 확인은 main 이 한 번 더 한다.
+  // ─────────────────────────────────────────────────────────────
+  toolPopup: {
+    /** 본문 → 팝업. 스냅샷을 넘기고, 새 창이 준비를 마친 뒤에야 성공으로 돌아온다. */
+    open: (
+      toolId: string,
+      snapshot: unknown,
+      capturedAt: number,
+    ): Promise<{ ok: boolean; focusedExisting?: boolean; reason?: string }> =>
+      ipcRenderer.invoke('toolPopup:open', toolId, snapshot, capturedAt),
+    /** 팝업 창이 넘겨받은 스냅샷을 1회 가져간다. */
+    claimHandoff: (handoffId: string): Promise<{ snapshot: unknown; capturedAt: number } | null> =>
+      ipcRenderer.invoke('toolPopup:claimHandoff', handoffId),
+    /** 팝업 화면 준비 완료 신호. 이 신호가 와야 보낸 쪽이 실행을 놓는다. */
+    markReady: (): Promise<boolean> => ipcRenderer.invoke('toolPopup:ready'),
+    focus: (toolId: string): Promise<boolean> => ipcRenderer.invoke('toolPopup:focus', toolId),
+    close: (toolId?: string): Promise<boolean> =>
+      ipcRenderer.invoke('toolPopup:close', toolId ?? null),
+    setAlwaysOnTop: (toolId: string | null, flag: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('toolPopup:setAlwaysOnTop', toolId, flag),
+    list: (): Promise<string[]> => ipcRenderer.invoke('toolPopup:list'),
+    /** 팝업 → 본문. 도구 id 는 main 이 발신 창에서 역조회한다. */
+    returnToMain: (snapshot: unknown, capturedAt: number): Promise<boolean> =>
+      ipcRenderer.invoke('toolPopup:returnToMain', snapshot, capturedAt),
+    /** 열린 팝업 목록 변화 구독. */
+    onChanged: (callback: (openToolIds: string[]) => void): (() => void) => {
+      const handler = (_event: unknown, ids: string[]): void => callback(ids);
+      ipcRenderer.on('toolPopup:changed', handler);
+      return (): void => {
+        ipcRenderer.removeListener('toolPopup:changed', handler);
+      };
+    },
+    /** 팝업이 본문으로 돌아왔을 때 메인 창이 받는 신호. */
+    onReturned: (
+      callback: (payload: { toolId: string; snapshot: unknown; capturedAt: number }) => void,
+    ): (() => void) => {
+      const handler = (
+        _event: unknown,
+        payload: { toolId: string; snapshot: unknown; capturedAt: number },
+      ): void => callback(payload);
+      ipcRenderer.on('toolPopup:returned', handler);
+      return (): void => {
+        ipcRenderer.removeListener('toolPopup:returned', handler);
+      };
+    },
+  },
   setWidget: (options: {
     width: number;
     height: number;

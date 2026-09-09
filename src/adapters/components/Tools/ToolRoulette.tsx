@@ -8,6 +8,7 @@ import { isStudentActive } from '@domain/rules/studentActivity';
 import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
+import { useToolPopupInitial, useToolPopupSlot } from './popup/toolPopupSession';
 import { secureRandom, pickIndexWithMemory } from '@domain/rules/randomRules';
 
 interface ToolRouletteProps {
@@ -59,15 +60,31 @@ function truncateName(name: string, maxLen: number): string {
   return name.slice(0, maxLen - 1) + '…';
 }
 
+/** 팝업으로 옮길 때 함께 가는 룰렛 상태. */
+export interface RouletteSnapshot {
+  readonly items: readonly string[];
+  readonly inputMode: 'students' | 'teachingClass' | 'custom';
+  readonly rotation: number;
+  readonly winner: string | null;
+  readonly winnerIndex: number | null;
+  readonly history: readonly string[];
+  readonly historyIdx: readonly number[];
+}
+
 export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
+  const popupInitial = useToolPopupInitial<RouletteSnapshot>('roulette');
   const { track } = useAnalytics();
   const { playProgress, playResult } = useToolSound('roulette');
   useEffect(() => {
     track('tool_use', { tool: 'roulette' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [items, setItems] = useState<string[]>(['항목 1', '항목 2', '항목 3']);
-  const [inputMode, setInputMode] = useState<'students' | 'teachingClass' | 'custom'>('custom');
+  const [items, setItems] = useState<string[]>(() => [
+    ...(popupInitial?.data.items ?? ['항목 1', '항목 2', '항목 3']),
+  ]);
+  const [inputMode, setInputMode] = useState<'students' | 'teachingClass' | 'custom'>(
+    () => popupInitial?.data.inputMode ?? 'custom',
+  );
   const [showTcDropdown, setShowTcDropdown] = useState(false);
   const tcClasses = useTeachingClassStore((s) => s.classes);
   // 선택지 열거는 활성 반만 (보관된 반은 새 뽑기 대상 아님). 해석(find)은 전체 유지.
@@ -76,13 +93,17 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
   const loadTc = useTeachingClassStore((s) => s.load);
   const tcDropdownRef = useRef<HTMLDivElement>(null);
   const [newItemText, setNewItemText] = useState('');
-  const [rotation, setRotation] = useState(0);
+  const [rotation, setRotation] = useState(() => popupInitial?.data.rotation ?? 0);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [winner, setWinner] = useState<string | null>(null);
-  const [history, setHistory] = useState<string[]>([]);
-  const [winnerIndex, setWinnerIndex] = useState<number | null>(null);
+  const [winner, setWinner] = useState<string | null>(() => popupInitial?.data.winner ?? null);
+  const [history, setHistory] = useState<string[]>(() => [...(popupInitial?.data.history ?? [])]);
+  const [winnerIndex, setWinnerIndex] = useState<number | null>(
+    () => popupInitial?.data.winnerIndex ?? null,
+  );
   // 인덱스 회피 메모리 (anti-repeat 항상 ON) + 사전 결정된 다음 winner
-  const [historyIdx, setHistoryIdx] = useState<number[]>([]);
+  const [historyIdx, setHistoryIdx] = useState<number[]>(() => [
+    ...(popupInitial?.data.historyIdx ?? []),
+  ]);
   const pendingIdxRef = useRef<number | null>(null);
 
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
@@ -268,6 +289,55 @@ export function ToolRoulette({ onBack, isFullscreen }: ToolRouletteProps) {
       setWinner(null);
     }, 2000);
   }, [isSpinning, items, playResult]);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  // 회전 중에 옮겨도 **다시 뽑지 않는다.** 당첨 항목은 회전을 시작할 때 이미 정해져 있으므로
+  // (pendingIdxRef), 여기서 그 결과를 그대로 확정해 스냅샷에 담는다.
+  const captureForPopup = useCallback((): RouletteSnapshot => {
+    if (winnerTimerRef.current) {
+      clearTimeout(winnerTimerRef.current);
+      winnerTimerRef.current = null;
+    }
+    let nextWinner = winner;
+    let nextWinnerIndex = winnerIndex;
+    let nextHistory: readonly string[] = history;
+    let nextHistoryIdx: readonly number[] = historyIdx;
+    if (isSpinning && items.length > 0) {
+      const idx = pendingIdxRef.current ?? 0;
+      const safeIdx = ((idx % items.length) + items.length) % items.length;
+      nextWinnerIndex = safeIdx;
+      nextWinner = items[safeIdx] ?? null;
+      nextHistory = [nextWinner ?? '', ...history].slice(0, 10);
+      nextHistoryIdx = [safeIdx, ...historyIdx].slice(0, 10);
+    }
+    setIsSpinning(false);
+    return {
+      items,
+      inputMode,
+      rotation,
+      winner: nextWinner,
+      winnerIndex: nextWinnerIndex,
+      history: nextHistory,
+      historyIdx: nextHistoryIdx,
+    };
+  }, [winner, winnerIndex, history, historyIdx, isSpinning, items, inputMode, rotation]);
+
+  const resumeFromPopup = useCallback((snapshot: RouletteSnapshot) => {
+    setItems([...snapshot.items]);
+    setInputMode(snapshot.inputMode);
+    setRotation(snapshot.rotation);
+    setWinner(snapshot.winner);
+    setWinnerIndex(snapshot.winnerIndex);
+    setHistory([...snapshot.history]);
+    setHistoryIdx([...snapshot.historyIdx]);
+    setIsSpinning(false);
+    pendingIdxRef.current = snapshot.winnerIndex;
+  }, []);
+
+  useToolPopupSlot<RouletteSnapshot>('roulette', {
+    capture: captureForPopup,
+    resume: resumeFromPopup,
+  });
 
   const handleLoadPreset = useCallback((presetItems: readonly string[]) => {
     setItems([...presetItems].slice(0, 20));

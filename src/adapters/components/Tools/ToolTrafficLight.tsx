@@ -3,6 +3,8 @@ import { ToolLayout } from './ToolLayout';
 import type { KeyboardShortcut } from './types';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
+import { advanceCountdown } from '@domain/rules/toolPopupSession';
+import { useToolPopupInitial, useToolPopupSlot } from './popup/toolPopupSession';
 
 type LightColor = 'red' | 'yellow' | 'green' | null;
 type Mode = 'manual' | 'auto';
@@ -92,15 +94,41 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
+/** 팝업으로 옮길 때 함께 가는 신호등 상태. */
+export interface TrafficLightSnapshot {
+  readonly mode: Mode;
+  readonly activeLight: LightColor;
+  readonly selectedDuration: number;
+  readonly customDuration: string;
+  readonly isCustom: boolean;
+  readonly isRunning: boolean;
+  readonly timeLeft: number;
+}
+
 export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps) {
+  const popupInitial = useToolPopupInitial<TrafficLightSnapshot>('traffic-light');
+  const [restoredInitial] = useState(() =>
+    popupInitial
+      ? advanceCountdown(
+          {
+            state: popupInitial.data.isRunning ? 'running' : 'paused',
+            remaining: popupInitial.data.timeLeft,
+            capturedAt: popupInitial.capturedAt,
+          },
+          Date.now(),
+        )
+      : null,
+  );
   const { track } = useAnalytics();
   const { playResult: playStateSound } = useToolSound('trafficLight');
   useEffect(() => {
     track('tool_use', { tool: 'traffic_light' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [mode, setMode] = useState<Mode>('manual');
-  const [activeLight, setActiveLightRaw] = useState<LightColor>(null);
+  const [mode, setMode] = useState<Mode>(() => popupInitial?.data.mode ?? 'manual');
+  const [activeLight, setActiveLightRaw] = useState<LightColor>(
+    () => popupInitial?.data.activeLight ?? null,
+  );
 
   const setActiveLight = useCallback((color: LightColor | ((prev: LightColor) => LightColor)) => {
     setActiveLightRaw(color);
@@ -108,11 +136,15 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
   }, [playStateSound]);
 
   // Auto mode state
-  const [selectedDuration, setSelectedDuration] = useState<number>(180);
-  const [customDuration, setCustomDuration] = useState<string>('');
-  const [isCustom, setIsCustom] = useState(false);
-  const [isRunning, setIsRunning] = useState(false);
-  const [timeLeft, setTimeLeft] = useState<number>(0);
+  const [selectedDuration, setSelectedDuration] = useState<number>(
+    () => popupInitial?.data.selectedDuration ?? 180,
+  );
+  const [customDuration, setCustomDuration] = useState<string>(
+    () => popupInitial?.data.customDuration ?? '',
+  );
+  const [isCustom, setIsCustom] = useState(() => popupInitial?.data.isCustom ?? false);
+  const [isRunning, setIsRunning] = useState(() => restoredInitial?.state === 'running');
+  const [timeLeft, setTimeLeft] = useState<number>(() => restoredInitial?.remaining ?? 0);
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
@@ -160,8 +192,10 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
     setIsRunning(false);
   }, []);
 
-  const startTimer = useCallback(() => {
-    const duration = getEffectiveDuration();
+  const startTimer = useCallback((fromSeconds?: number) => {
+    // 이관 복원처럼 "남은 시간부터" 이어 세야 할 때가 있어 인자를 받는다.
+    const duration = fromSeconds ?? getEffectiveDuration();
+    if (duration <= 0) return;
     setTimeLeft(duration);
     setActiveLight('green');
     setIsRunning(true);
@@ -197,6 +231,63 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
       }
     }, 1000);
   }, [getEffectiveDuration]);
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  const captureForPopup = useCallback((): TrafficLightSnapshot => {
+    // ★먼저 멈춘다 — 두 창에서 각자 세다가 종료음이 두 번 나면 안 된다.
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    return { mode, activeLight, selectedDuration, customDuration, isCustom, isRunning, timeLeft };
+  }, [mode, activeLight, selectedDuration, customDuration, isCustom, isRunning, timeLeft]);
+
+  const resumeFromPopup = useCallback(
+    (snapshot: TrafficLightSnapshot, capturedAt: number) => {
+      const restored = advanceCountdown(
+        {
+          state: snapshot.isRunning ? 'running' : 'paused',
+          remaining: snapshot.timeLeft,
+          capturedAt,
+        },
+        Date.now(),
+      );
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      setMode(snapshot.mode);
+      setActiveLightRaw(snapshot.activeLight);
+      setSelectedDuration(snapshot.selectedDuration);
+      setCustomDuration(snapshot.customDuration);
+      setIsCustom(snapshot.isCustom);
+      setTimeLeft(restored.remaining);
+      if (restored.state === 'running') {
+        startTimer(restored.remaining);
+      } else {
+        setIsRunning(false);
+        if (restored.alarmDueDuringTransfer) setActiveLightRaw('red');
+      }
+    },
+    [startTimer],
+  );
+
+  useToolPopupSlot<TrafficLightSnapshot>('traffic-light', {
+    capture: captureForPopup,
+    resume: resumeFromPopup,
+  });
+
+  // 넘겨받은 신호등 타이머가 돌고 있었으면 이 창에서 이어서 센다.
+  useEffect(() => {
+    if (restoredInitial === null) return;
+    if (restoredInitial.state === 'running') {
+      startTimer(restoredInitial.remaining);
+    } else if (restoredInitial.alarmDueDuringTransfer) {
+      setActiveLightRaw('red');
+    }
+    // 마운트 때 한 번만.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const resetTimer = useCallback(() => {
     stopTimer();
@@ -407,7 +498,7 @@ export function ToolTrafficLight({ onBack, isFullscreen }: ToolTrafficLightProps
             <div className="flex gap-3">
               {!isRunning && timeLeft === 0 && (
                 <button
-                  onClick={startTimer}
+                  onClick={() => startTimer()}
                   className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 text-white font-medium text-sm transition-all shadow"
                 >
                   ▶ 시작

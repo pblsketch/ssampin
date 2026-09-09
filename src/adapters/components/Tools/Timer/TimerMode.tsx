@@ -4,6 +4,8 @@ import type { AlarmSoundId, PreWarningSettings } from '@domain/entities/Settings
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
+import { advanceCountdown } from '@domain/rules/toolPopupSession';
+import { useToolPopupInitial, useToolPopupSlot } from '../popup/toolPopupSession';
 import type { TimerState } from './types';
 import { PRESETS } from './types';
 import { CircleProgress } from './CircleProgress';
@@ -20,11 +22,36 @@ import {
   deleteCustomAudio,
 } from './timerAudio';
 
+/** 팝업으로 옮길 때 함께 가는 타이머 상태. */
+export interface TimerModeSnapshot {
+  readonly totalSeconds: number;
+  readonly remaining: number;
+  readonly state: TimerState;
+  readonly selectedPreset: number;
+}
+
 export function TimerMode() {
-  const [totalSeconds, setTotalSeconds] = useState(300);
-  const [remaining, setRemaining] = useState(300);
-  const [state, setState] = useState<TimerState>('idle');
-  const [selectedPreset, setSelectedPreset] = useState(300);
+  // 넘겨받은 상태가 있으면 그것으로 시작한다. 옮기는 사이 흐른 시간은 아래에서 반영한다.
+  const popupInitial = useToolPopupInitial<TimerModeSnapshot>('timer-countdown');
+  const [restoredInitial] = useState(() =>
+    popupInitial
+      ? advanceCountdown(
+          {
+            state: popupInitial.data.state,
+            remaining: popupInitial.data.remaining,
+            capturedAt: popupInitial.capturedAt,
+          },
+          Date.now(),
+        )
+      : null,
+  );
+
+  const [totalSeconds, setTotalSeconds] = useState(() => popupInitial?.data.totalSeconds ?? 300);
+  const [remaining, setRemaining] = useState(() => restoredInitial?.remaining ?? 300);
+  const [state, setState] = useState<TimerState>(() => restoredInitial?.state ?? 'idle');
+  const [selectedPreset, setSelectedPreset] = useState(
+    () => popupInitial?.data.selectedPreset ?? 300,
+  );
   const [showCustom, setShowCustom] = useState(false);
   const [showSoundPanel, setShowSoundPanel] = useState(false);
   const [showPreWarningPanel, setShowPreWarningPanel] = useState(false);
@@ -70,12 +97,19 @@ export function TimerMode() {
   const boostRef = useRef(boost);
   boostRef.current = boost;
 
-  const start = useCallback(() => {
-    if (remaining <= 0) return;
+  const start = useCallback((fromSeconds?: number) => {
+    // 이관 복원처럼 "지금 상태보다 앞선 값"으로 시작해야 할 때가 있어 인자를 받는다.
+    const initialRemaining = fromSeconds ?? remaining;
+    if (initialRemaining <= 0) return;
+    // 겹쳐 도는 일이 없도록 항상 먼저 정리한다.
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
     setState('running');
     setShowSoundPanel(false);
 
-    if (remaining <= preWarningRef.current.secondsBefore) {
+    if (initialRemaining <= preWarningRef.current.secondsBefore) {
       preWarningTriggeredRef.current = true;
     }
 
@@ -256,6 +290,60 @@ export function TimerMode() {
     });
   }, [updateSettings, settings.alarmSound]);
 
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  // capture 는 **먼저 멈춘다**. 그래야 옮기는 동안 이 창에서 알람이 울리지 않고,
+  // 소유자가 언제나 한 곳뿐이라 같은 타이머가 두 번 끝나지 않는다.
+  const captureForPopup = useCallback((): TimerModeSnapshot => {
+    clearTimer();
+    if (preWarningBannerTimeoutRef.current) {
+      clearTimeout(preWarningBannerTimeoutRef.current);
+      preWarningBannerTimeoutRef.current = null;
+    }
+    return { totalSeconds, remaining, state, selectedPreset };
+  }, [clearTimer, totalSeconds, remaining, state, selectedPreset]);
+
+  const resumeFromPopup = useCallback(
+    (snapshot: TimerModeSnapshot, capturedAt: number) => {
+      const restored = advanceCountdown(
+        { state: snapshot.state, remaining: snapshot.remaining, capturedAt },
+        Date.now(),
+      );
+      setTotalSeconds(snapshot.totalSeconds);
+      setSelectedPreset(snapshot.selectedPreset);
+      setRemaining(restored.remaining);
+      setState(restored.state);
+      setFlashCount(0);
+      preWarningTriggeredRef.current = false;
+      setShowPreWarningBanner(false);
+      if (restored.state === 'running') {
+        start(restored.remaining);
+      } else if (restored.alarmDueDuringTransfer) {
+        playAlarmSound(selectedSound, volume, boost, customDataUrl);
+        setFlashCount(6);
+      }
+    },
+    [start, selectedSound, volume, boost, customDataUrl],
+  );
+
+  useToolPopupSlot<TimerModeSnapshot>('timer-countdown', {
+    capture: captureForPopup,
+    resume: resumeFromPopup,
+  });
+
+  // 넘겨받은 타이머가 돌고 있었으면 이 창에서 이어서 돌린다.
+  // 옮기는 사이에 시간이 다 됐으면 여기서 **한 번만** 알람을 울린다.
+  useEffect(() => {
+    if (restoredInitial === null) return;
+    if (restoredInitial.state === 'running') {
+      start(restoredInitial.remaining);
+    } else if (restoredInitial.alarmDueDuringTransfer) {
+      playAlarmSound(selectedSound, volume, boost, customDataUrl);
+      setFlashCount(6);
+    }
+    // 마운트 때 한 번만 — 이후 재실행되면 타이머가 두 번 돈다.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     return () => {
       clearTimer();
@@ -310,12 +398,20 @@ export function TimerMode() {
       />
 
       {state === 'finished' && (
+        // 덮개 배경은 클래스가 아니라 인라인이다. `bg-sp-bg/90` 처럼 sp-* 토큰에 투명도 수식을
+        // 붙이면 Tailwind 가 규칙을 **아예 만들지 않아** 조용히 투명해진다(실측: rgba(0,0,0,0)).
+        // 그래서 뒤의 7xl 숫자가 "시간 종료!" 글씨와 겹쳐 보였다. 여기서는 가릴 것이 같은 자리의
+        // 같은 크기 숫자라 반투명이 곧 겹침이므로, 아예 불투명하게 덮는다.
+        // 유리 모드는 --sp-card 만 건드리고 --sp-bg 는 손대지 않으므로 항상 불투명하다.
         <div
           className={`absolute inset-0 z-40 rounded-2xl flex flex-col items-center justify-center transition-colors duration-200 ${
-            isFlashing ? 'bg-red-600/30' : 'bg-sp-bg/90'
+            isFlashing ? 'bg-red-600/30' : ''
           }`}
+          style={isFlashing ? undefined : { backgroundColor: 'var(--sp-bg)' }}
         >
-          <p className="text-5xl md:text-7xl font-bold text-red-400 mb-8 animate-pulse">
+          {/* text-red-400 은 밝은 테마 배경에서 대비가 2.1~2.8 로 큰 글씨 기준(3:1)에도 못 미쳤다.
+              sp-error 는 테마별로 값이 갈려(라이트 #dc2626 · 다크 #f87171) 12개 테마 전부 3.7 이상이다. */}
+          <p className="text-5xl md:text-7xl font-bold text-sp-error mb-8 animate-pulse">
             시간 종료!
           </p>
           <button
@@ -436,7 +532,7 @@ export function TimerMode() {
           </button>
         ) : (
           <button
-            onClick={start}
+            onClick={() => start()}
             disabled={remaining <= 0}
             className="w-20 h-20 rounded-full bg-sp-accent text-white flex items-center justify-center hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20 disabled:opacity-30 disabled:cursor-not-allowed"
             title="시작"

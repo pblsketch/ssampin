@@ -5,6 +5,7 @@ import { DEFAULT_WORK_SYMBOLS } from '@adapters/stores/useSettingsStore';
 import type { WorkSymbolItem } from '@domain/entities/Settings';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useToolSound } from '@adapters/hooks/useToolSound';
+import { useToolPopupInitial, useToolPopupSlot } from './popup/toolPopupSession';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 
 interface ToolWorkSymbolsProps {
@@ -503,7 +504,13 @@ function SettingsModal({ symbols, onSave, onClose }: SettingsModalProps) {
 
 // ─── Main Component ────────────────────────────────────────────
 
+/** 팝업으로 옮길 때 함께 가는 활동 기호 상태(기호 목록 자체는 설정에 있어 두 창이 공유한다). */
+export interface WorkSymbolsSnapshot {
+  readonly selectedIndex: number;
+}
+
 export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) {
+  const popupInitial = useToolPopupInitial<WorkSymbolsSnapshot>('work-symbols');
   const { track } = useAnalytics();
   const { playResult: playSwitchSound } = useToolSound('workSymbols');
   useEffect(() => {
@@ -514,7 +521,7 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
   const updateSettings = useSettingsStore((s) => s.update);
 
   const symbols = settings.workSymbols.symbols;
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(() => popupInitial?.data.selectedIndex ?? 0);
   const [showSettings, setShowSettings] = useState(false);
   const [animPhase, setAnimPhase] = useState<'idle' | 'out' | 'in'>('idle');
   const pendingIndex = useRef<number | null>(null);
@@ -549,6 +556,31 @@ export function ToolWorkSymbols({ onBack, isFullscreen }: ToolWorkSymbolsProps) 
     },
     [selectedIndex, animPhase, playSwitchSound],
   );
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  const captureForPopup = useCallback((): WorkSymbolsSnapshot => {
+    // ★먼저 멈춘다 — 전환 애니메이션이 남아 있으면 옮긴 뒤에도 화면이 한 번 더 바뀐다.
+    if (hideTimeout.current) {
+      clearTimeout(hideTimeout.current);
+      hideTimeout.current = null;
+    }
+    const pending = pendingIndex.current;
+    pendingIndex.current = null;
+    setAnimPhase('idle');
+    // 전환 중이었다면 가려던 기호를 최종 상태로 본다(중간에서 멈추지 않는다).
+    return { selectedIndex: pending ?? selectedIndex };
+  }, [selectedIndex]);
+
+  const resumeFromPopup = useCallback((snapshot: WorkSymbolsSnapshot) => {
+    pendingIndex.current = null;
+    setAnimPhase('idle');
+    setSelectedIndex(snapshot.selectedIndex);
+  }, []);
+
+  useToolPopupSlot<WorkSymbolsSnapshot>('work-symbols', {
+    capture: captureForPopup,
+    resume: resumeFromPopup,
+  });
 
   // Keyboard shortcuts (1~N)
   useToolKeydown(

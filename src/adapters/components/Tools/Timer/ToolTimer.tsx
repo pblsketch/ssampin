@@ -6,6 +6,7 @@ import type { Tab } from './types';
 import { TimerMode } from './TimerMode';
 import { StopwatchMode } from './StopwatchMode';
 import { PresentationMode } from './PresentationMode';
+import { useToolPopupInitial, useToolPopupSlot } from '../popup/toolPopupSession';
 
 interface ToolTimerProps {
   onBack: () => void;
@@ -24,7 +25,13 @@ export function ToolTimer({ onBack, isFullscreen }: ToolTimerProps) {
     track('tool_use', { tool: 'timer' });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [tab, setTab] = useState<Tab>('timer');
+  // 팝업으로 옮길 때 지금 보고 있는 탭도 함께 간다.
+  const popupInitial = useToolPopupInitial<{ tab: Tab }>('timer-shell');
+  const [tab, setTab] = useState<Tab>(() => popupInitial?.data.tab ?? 'timer');
+  useToolPopupSlot<{ tab: Tab }>('timer-shell', {
+    capture: () => ({ tab }),
+    resume: (snapshot) => setTab(snapshot.tab),
+  });
 
   const displayShortcuts = useMemo<KeyboardShortcut[]>(() => {
     if (tab === 'timer') {

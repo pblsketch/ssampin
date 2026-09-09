@@ -31,6 +31,9 @@ import {
 import { registerMiniAppHandlers } from './ipc/miniapp';
 import { comboToAccelerator, isSafeGlobalShortcutCombo } from './shortcutAccelerator';
 import { registerReminderIpc } from './ipc/reminder';
+import { registerToolPopupIpc } from './ipc/toolPopup';
+import type { ToolPopupIpcHandle } from './ipc/toolPopup';
+import type { PopupToolId } from '../src/domain/entities/ToolPopup';
 import { initReminderState } from './ipc/reminderState';
 import { initNotifyDiag } from './notifyDiag';
 import { computeExpandedBounds, pinFromExpanded, type IconAnchor } from './iconWindowGeometry';
@@ -161,6 +164,13 @@ let widgetWindow: BrowserWindow | null = null;
 let liveSyncHost: LiveSyncHost | null = null;
 let quickAddWindow: BrowserWindow | null = null;
 let stickerPickerWindow: BrowserWindow | null = null;
+/** 쌤도구 팝업 창 관리자 — registerToolPopupIpc() 에서 채워진다. */
+let toolPopup: ToolPopupIpcHandle | null = null;
+
+/** 살아 있는 쌤도구 팝업 창들. 아직 등록 전이면 빈 배열. */
+function toolPopupWindows(): BrowserWindow[] {
+  return toolPopup?.getBrowserWindows() ?? [];
+}
 let widgetWasActive = false;
 let widgetActiveBeforeSleep = false; // suspend/lock 시점의 스냅샷
 let isSystemSuspending = false; // 시스템 이벤트(화면보호기/잠금/절전)로 인한 close 구분 플래그
@@ -185,6 +195,7 @@ function getAllAppWindows(): BrowserWindow[] {
   if (widgetWindow && !widgetWindow.isDestroyed()) windows.push(widgetWindow);
   if (iconWindow && !iconWindow.isDestroyed()) windows.push(iconWindow);
   for (const sidePinWindow of sidePin?.getWindows() ?? []) windows.push(sidePinWindow);
+  for (const popup of toolPopupWindows()) windows.push(popup);
   return windows;
 }
 
@@ -6167,6 +6178,16 @@ if (!gotTheLock) {
     createWindow();
     registerOAuthHandlers(mainWindow!);
     registerPKCEFallbackHandlers();
+    toolPopup = registerToolPopupIpc({
+      preloadPath: path.join(__dirname, 'preload.js'),
+      indexHtmlPath: path.join(__dirname, '../dist/index.html'),
+      devServerUrl: () => process.env['VITE_DEV_SERVER_URL'],
+      getMainWindow: () => mainWindow,
+      isTrustedSender: (webContentsId) =>
+        getAllAppWindows().some((win) => win.webContents.id === webContentsId),
+      broadcastChanged: (openToolIds: readonly PopupToolId[]) =>
+        broadcastToAllWindows('toolPopup:changed', openToolIds),
+    });
     registerLiveVoteHandlers(mainWindow!);
     registerLiveSurveyHandlers(mainWindow!);
     registerLiveWordCloudHandlers(mainWindow!);
@@ -6415,6 +6436,8 @@ app.on('will-quit', () => {
   stopPresentationWatch();
   destroyQuickAddWindow();
   destroyStickerPickerWindow();
+  // 앱을 완전히 끄면 쌤도구 팝업도 함께 정리한다(트레이 숨기기는 닫지 않는다).
+  toolPopup?.manager.closeAll();
   // live-sync loopback 서버 정리(control.json 제거). 비동기지만 best-effort.
   void liveSyncHost?.stop();
 });
