@@ -21,6 +21,12 @@ import {
 } from '../_shared/cors.ts';
 import { decrypt, encrypt } from '../_shared/crypto.ts';
 import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
+import {
+  droppedAnswerCount,
+  isSelfAssessmentOnly,
+  mergeSubmission,
+  sanitizeAnswers,
+} from '../_shared/selfAssessment.ts';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 // 멀티파트 전체 본문 상한 — 파일 10MB + 메타데이터 여유분. 봇/스팸 폭주 1차 차단.
@@ -299,6 +305,8 @@ serve(async (req: Request) => {
     const studentName = formData.get('studentName') as string;
     const file = formData.get('file') as File | null;
     const textContent = formData.get('textContent') as string | null;
+    /** 자기평가 답변(JSON 문자열). 과제 문항과 대조하는 건 과제를 읽은 뒤다. */
+    const selfAssessmentRaw = formData.get('selfAssessment') as string | null;
 
     if (!assignmentId || !studentNumber || !studentName) {
       return errorResponse('필수 필드가 누락되었습니다', 400);
@@ -308,8 +316,11 @@ serve(async (req: Request) => {
       return errorResponse('이름이 너무 깁니다', 400);
     }
 
-    if (!file && !textContent) {
-      return errorResponse('파일 또는 텍스트를 제출해야 합니다', 400);
+    // ★"아무것도 안 낸" 경우만 여기서 막는다. 자기평가만 받는 과제는 파일도 글도 없으므로
+    //   예전의 `!file && !textContent` 단정으로는 정상 제출까지 막힌다. 실제로 답이 들어왔는지는
+    //   과제의 문항 정의와 대조한 뒤에 다시 본다(아래 4-b).
+    if (!file && !textContent && !selfAssessmentRaw) {
+      return errorResponse('제출할 내용을 입력해 주세요', 400);
     }
 
     if (textContent && textContent.length > MAX_TEXT_CONTENT) {
@@ -348,6 +359,22 @@ serve(async (req: Request) => {
       return errorResponse('과제를 찾을 수 없습니다', 404);
     }
 
+    // 2-b. 자기평가 답변을 과제의 문항 정의와 대조한다.
+    //      학생 화면은 브라우저라 아무 값이나 보낼 수 있다 — 모르는 문항 id 는 버리고,
+    //      문항 원문·슬롯은 저장된 정의에서 복사하며, 길이는 서버가 자른다.
+    const { answers: selfAssessmentAnswers, error: selfAssessmentError } = sanitizeAnswers(
+      selfAssessmentRaw,
+      assignment.self_assessment,
+    );
+    if (selfAssessmentError) {
+      return errorResponse(selfAssessmentError, 400);
+    }
+
+    // 2-c. 결국 아무것도 안 낸 제출인가. 자기평가만 받는 과제에서 빈 답만 보낸 경우가 여기 걸린다.
+    if (!file && !textContent && !selfAssessmentAnswers) {
+      return errorResponse('제출할 내용을 입력해 주세요', 400);
+    }
+
     // 3. 마감 체크
     const isLate = isPastDeadline(assignment.deadline);
     if (isLate && !assignment.allow_late) {
@@ -357,7 +384,11 @@ serve(async (req: Request) => {
     // 4. 재제출 체크 (학년+반+번호로 고유 식별)
     const { data: existingSubmission } = await supabase
       .from('submissions')
-      .select('id, drive_file_id')
+      // ★자기평가가 생기면서 "일부만 다시 내는" 제출이 가능해졌다(파일만, 또는 돌아보기만).
+      //   아래 upsert 가 안 보낸 칸을 옛 값으로 살리려면 지금 값을 함께 읽어야 한다.
+      .select(
+        'id, student_id, drive_file_id, file_name, file_size, text_content, self_assessment, is_late',
+      )
       .eq('assignment_id', assignmentId)
       .eq('student_grade', studentGrade)
       .eq('student_class', studentClass)
@@ -371,6 +402,13 @@ serve(async (req: Request) => {
     // 5. 파일 형식 체크 (파일이 있을 때만)
     if (file && !isAllowedFile(file.name, assignment.file_type_restriction)) {
       return errorResponse('허용되지 않는 파일 형식입니다', 400);
+    }
+
+    // 5-b. 자기평가만 받는 과제에는 올릴 폴더가 없다(070 으로 drive_folder_id 가 NULL 허용이 됐다).
+    //      학생 화면은 파일 칸을 안 그리지만 브라우저는 고쳐서 보낼 수 있으므로 서버가 막는다.
+    //      막지 않으면 아래 업로드가 폴더 자리에 null 을 넣고 부른다.
+    if (file && !assignment.drive_folder_id) {
+      return errorResponse('이 과제는 파일 제출을 받지 않습니다', 400);
     }
 
     // 6~7. 교사 OAuth 토큰 복호화 + 만료 시 자동 갱신 (파일 업로드 필요 시)
@@ -449,20 +487,61 @@ serve(async (req: Request) => {
     }
 
     // 9. submissions upsert (assignment_id + student_grade + student_class + student_number 기준)
+    //
+    // ★안 보낸 칸은 지우지 않고 옛 값을 살린다.
+    //
+    // 자기평가가 생기기 전에는 파일이나 글 중 하나가 반드시 있어야 제출이 통과했으므로(위쪽
+    // "아무것도 안 낸 경우만 막는다" 관문의 옛 판본) 통째로 덮어써도 잃을 것이 없었다. 이제는 "돌아보기만" 내는 제출이 가능해서,
+    // 그대로 두면 월요일에 낸 **파일이 수요일 돌아보기 제출에 지워진다**(드라이브 파일은 남지만
+    // 기록에서 떨어져 나가 선생님 화면에 미제출로 보인다). 반대로 돌아보기를 먼저 쓴 학생이
+    // 파일만 내면 답변이 사라진다.
+    // 병합 규칙은 `_shared/selfAssessment.ts` 의 순수 함수에 있다 — 여기 인라인으로 두면
+    // 어느 게이트도 안 본다. ★그 규칙을 실제로 돌리는 게이트는
+    // `src/infrastructure/supabase/__tests__/selfAssessmentEdgeMerge.meta.test.ts`(vitest → `npm run test`)다.
+    // Deno 테스트는 더 넓게 보지만 CI 에 없어 자동으로는 안 돈다. 이 줄(3인자 전달)은 회귀 #78 이 지킨다.
+    const merged = mergeSubmission(
+      existingSubmission ?? null,
+      {
+        studentId: studentId || null,
+        fileName: file?.name ?? null,
+        fileSize: file?.size ?? null,
+        driveFileId,
+        textContent,
+        selfAssessment: selfAssessmentAnswers,
+        isLate,
+        // ★자기평가만 받는 과제에서는 돌아보기를 다시 쓰는 것이 곧 "다시 냄"이다.
+        //   안 넘기면 첫 제출 때 찍힌 지각 여부가 영원히 굳는다(코드 리뷰 M-1).
+        selfAssessmentOnly: isSelfAssessmentOnly(assignment.submit_type),
+      },
+      // 문항 정의를 함께 넘겨 답변이 문항 순서로 줄 서게 한다.
+      assignment.self_assessment,
+    );
+    // ★자르기는 조용하면 안 된다. "답이 없어졌다"는 신고가 오면 재현할 방법이 있어야 한다.
+    //   ★건수 계산은 **호출부에서 하지 않는다.** "옛 답 수 + 새 답 수 − 저장된 수"로 세면 병합의
+    //   중복 제거 때문에 평범한 재제출마다 거짓 경고가 뜬다(실제로 그렇게 짰다가 리뷰에서 잡혔다).
+    //   산수를 규칙 옆(`_shared`)에 두어야 규칙이 바뀔 때 같이 바뀌고, 게이트도 그걸 본다.
+    const dropped = droppedAnswerCount(
+      existingSubmission?.self_assessment,
+      selfAssessmentAnswers,
+      assignment.self_assessment,
+    );
+    if (dropped > 0) {
+      console.warn(`submit-assignment: 자기평가 저장 상한으로 ${dropped}건이 잘렸습니다`, {
+        assignmentId,
+        dropped,
+        stored: merged.self_assessment?.length ?? 0,
+      });
+    }
+
     const { error: upsertError } = await supabase.from('submissions').upsert(
       {
         assignment_id: assignmentId,
-        student_id: studentId || null,
         student_grade: studentGrade,
         student_class: studentClass,
         student_number: studentNumber,
         student_name: studentName,
         submitted_at: new Date().toISOString(),
-        file_name: file?.name ?? null,
-        file_size: file?.size ?? 0,
-        drive_file_id: driveFileId,
-        text_content: textContent || null,
-        is_late: isLate,
+        ...merged,
       },
       { onConflict: 'assignment_id,student_grade,student_class,student_number' },
     );

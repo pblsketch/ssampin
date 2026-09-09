@@ -2,9 +2,34 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { AssignmentPublic } from './submitApi';
-import { submitAssignment } from './submitApi';
+import {
+  answerLength,
+  answerLimitOf,
+  submitAssignment,
+  type SelfAssessmentQuestion,
+} from './submitApi';
+
 import { SubmitSuccess } from './SubmitSuccess';
 import { SubmitExpired } from './SubmitExpired';
+
+/**
+ * 화면 상태(문항 id → 글)를 서버로 보낼 모양으로 바꾼다.
+ *
+ * ★문항 순서를 따르고 빈 답은 뺀다. 서버도 같은 규칙으로 한 번 더 거른다 — 브라우저는 고칠 수
+ *   있으므로 여기 검사만 믿지 않는다.
+ */
+function collectSelfAnswers(
+  questions: readonly SelfAssessmentQuestion[],
+  answers: Record<string, string>,
+): { questionId: string; answer: string }[] {
+  const out: { questionId: string; answer: string }[] = [];
+  for (const q of questions) {
+    const text = (answers[q.id] ?? '').trim();
+    if (text.length === 0) continue;
+    out.push({ questionId: q.id, answer: text });
+  }
+  return out;
+}
 
 interface SubmitFormProps {
   assignment: AssignmentPublic;
@@ -36,6 +61,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   const [nameWarning, setNameWarning] = useState(false);
   const [remainingTime, setRemainingTime] = useState('');
   const [textContent, setTextContent] = useState('');
+  /** 자기평가 답변 — 문항 id → 학생이 쓴 글. */
+  const [selfAnswers, setSelfAnswers] = useState<Record<string, string>>({});
   const [submittedInfo, setSubmittedInfo] = useState<{
     grade: string;
     class: string;
@@ -124,6 +151,11 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   const showFile = st === 'file' || st === 'both';
   const showText = st === 'text' || st === 'both';
 
+  // 자기평가 문항. 과제에 문항이 있으면 제출 방식과 무관하게 보여 준다(과제에 얹기).
+  // 문항만 있는 과제(단독 열기)는 submitType 이 'selfAssessment' 라 파일·글 칸이 아예 안 뜬다.
+  const selfAssessmentQuestions = assignment.selfAssessment ?? [];
+  const showSelfAssessment = selfAssessmentQuestions.length > 0;
+
   // identifyByName=true면 모든 식별 필드(학년/반/번호) 숨기고 이름만 받음.
   // 이름 매칭 시 명단에서 number를 자동으로 주입해 서버 식별에 사용.
   const identifyByName = assignment.identifyByName === true;
@@ -169,7 +201,8 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
 
     const hasFile = !!file;
     const hasText = !!textContent.trim();
-    if (!hasFile && !hasText) return;
+    const answers = collectSelfAnswers(selfAssessmentQuestions, selfAnswers);
+    if (!hasFile && !hasText && answers.length === 0) return;
 
     setIsSubmitting(true);
     setError(null);
@@ -182,7 +215,12 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
         studentNumber: num,
         studentName,
         file: hasFile ? file : undefined,
+        // ★빈 칸은 보내지 않는다 = "그대로 두기". "지우기"로 읽으면 안 된다 —
+        //   이 화면은 전에 낸 글을 **다시 보여 주지 않으므로**(ADR-096 결정 4), 학생에게 빈 칸은
+        //   "이번엔 안 썼다"는 뜻이지 "지워 달라"가 아니다. 돌아보기만 내려던 학생이 월요일에 낸
+        //   글을 통째로 잃는다.
         textContent: hasText ? textContent : undefined,
+        selfAssessment: answers.length > 0 ? answers : undefined,
       });
 
       if (result.success) {
@@ -210,6 +248,7 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   function handleResubmit() {
     setFile(null);
     setTextContent('');
+    setSelfAnswers({});
     setSubmittedInfo(null);
     setError(null);
     setView('form');
@@ -235,7 +274,10 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
   // 명시적 boolean 조합 — 파일/텍스트는 OR 관계 (둘 중 하나만 있으면 제출 가능).
   const hasFile = file !== null;
   const hasText = textContent.trim().length > 0;
-  const hasSubmitContent = hasFile || hasText;
+  // 자기평가는 **한 문항이라도** 채우면 낸 것으로 본다. 전부 필수로 만들면 빈 칸 하나 때문에
+  // 학생이 제출을 못 하고, 그러면 아예 안 쓴다.
+  const hasSelfAssessment = collectSelfAnswers(selfAssessmentQuestions, selfAnswers).length > 0;
+  const hasSubmitContent = hasFile || hasText || hasSelfAssessment;
   const gradeClassOk =
     !hasAnyGradeClass || (studentGrade.trim().length > 0 && studentClass.trim().length > 0);
   // identifyByName 모드는 이름 1개만 필수, 그 외는 번호 + 이름
@@ -452,6 +494,54 @@ export function SubmitForm({ assignment }: SubmitFormProps) {
               파일과 텍스트를 함께 제출하거나, 하나만 제출할 수도 있습니다
             </p>
           )}
+        </div>
+      )}
+
+      {/* 자기평가 문항 — 활동을 마친 뒤 스스로 돌아보는 칸. 선생님이 문항을 정한다. */}
+      {showSelfAssessment && (
+        <div className="mb-6">
+          <p className="block text-sm font-medium text-sp-text mb-1.5">🪞 돌아보기</p>
+          <p className="text-xs text-sp-muted/60 mb-3">
+            {st === 'selfAssessment'
+              ? '답한 문항만 저장됩니다. 한 개만 써도 제출할 수 있습니다.'
+              : '답한 문항만 저장됩니다. 비워 두어도 제출할 수 있습니다.'}
+          </p>
+          {selfAssessmentQuestions.map((q, i) => {
+            const value = selfAnswers[q.id] ?? '';
+            const limit = answerLimitOf(q);
+            const used = answerLength(value);
+            const over = used > limit;
+            return (
+              <div key={q.id} className="mb-4">
+                <label
+                  htmlFor={`self-${q.id}`}
+                  className="block text-sm text-sp-text mb-1.5 leading-snug"
+                >
+                  <span className="text-sp-muted mr-1">{i + 1}.</span>
+                  {q.prompt}
+                </label>
+                <textarea
+                  id={`self-${q.id}`}
+                  value={value}
+                  onChange={(e) => setSelfAnswers((p) => ({ ...p, [q.id]: e.target.value }))}
+                  // 텍스트 칸과 같은 이유 — 한글 조합 중 onChange 가 늦는 모바일 브라우저 대응.
+                  onCompositionEnd={(e) =>
+                    setSelfAnswers((p) => ({ ...p, [q.id]: e.currentTarget.value }))
+                  }
+                  placeholder="생각나는 대로 적어 주세요"
+                  rows={3}
+                  className="w-full px-4 py-3 bg-sp-card border border-sp-border rounded-lg text-sp-text placeholder-sp-muted/50 focus:outline-none focus:border-sp-accent transition-colors resize-none text-sm"
+                />
+                {used > 0 && (
+                  <p
+                    className={`text-xs mt-1 text-right ${over ? 'text-red-400' : 'text-sp-muted/60'}`}
+                  >
+                    {used} / {limit}자{over && ' — 넘는 글자는 저장되지 않습니다'}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
 

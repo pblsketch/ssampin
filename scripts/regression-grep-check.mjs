@@ -473,8 +473,98 @@ const presenceChecks = [
   // ────────────────────────────────────────────────────────────────────────
   {
     file: 'src/adapters/components/Tools/Timer/TimerMode.tsx',
-    pattern: /state === 'finished'[\s\S]{0,1600}?style=\{isFlashing \? undefined : \{ backgroundColor: 'var\(--sp-bg\)' \}\}/,
+    pattern:
+      /state === 'finished'[\s\S]{0,1600}?style=\{isFlashing \? undefined : \{ backgroundColor: 'var\(--sp-bg\)' \}\}/,
     name: 'REGRESSION #82: 타이머 종료 덮개 배경은 인라인 var(--sp-bg) 로 칠한다 (sp-* 토큰 투명도 수식은 조용히 투명해진다)',
+  },
+
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #76 (2026-09-09) — 자기평가 엣지 규칙의 **게이트 생존** (ADR-096)
+  //
+  //  `supabase/functions/_shared/selfAssessment.ts` 는 학생 제출의 방어선(조작된 브라우저가
+  //  보낸 문항 id 버리기·문항 원문 복사·길이 자르기)과 재제출 병합 규칙(안 보낸 칸은 지우지
+  //  않기)을 함께 든다. 그런데 `supabase/` 는 vitest include 밖이고 `deno test` 는 게이트가
+  //  아니라서(CI 에 없다 — 로컬 deno 로는 `npm run test:edge` 37건이 돌고, 그중 `_shared/selfAssessment.test.ts` 가 29건),
+  //  그 규칙을 자동으로 돌리는 것은 **이 메타 테스트
+  //  하나뿐**이다. 파일이 사라지거나 import 가 끊기면 게이트 4종이 전부 초록인 채로
+  //  학생 글 소실·조작 통과가 되살아난다. 아키텍처 검토가 두 번 연속 짚은 자리다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/infrastructure/supabase/__tests__/selfAssessmentEdgeMerge.meta.test.ts',
+    // ★단순 존재 확인이 아니다. **이음매**(mergeSubmission 이 문항 정의를 정렬로 흘려보내는가)를
+    //   지문으로 박는다. 앞선 판본은 `mergeSubmission(` 호출만 봐서, 세 번째 인자를 지워도
+    //   grep 이 통과했다 — 그러면 두 번에 나눠 쓴 학생의 글이 거꾸로 저장되는데 게이트는 초록이다.
+    // ★거리 상한이 핵심이다. `[\s\S]*?` 만 쓰면 지문 네 조각이 파일 여기저기 **무관한 줄**에
+    //   흩어져 걸려서, 이음매 describe 를 통째로 지워도 통과한다(변이로 실제 확인함).
+    //   그래서 이음매 블록 안으로 가둔다 — 지우면 빨간불이 뜬다.
+    pattern:
+      /from '\.\.\/\.\.\/\.\.\/\.\.\/supabase\/functions\/_shared\/selfAssessment'[\s\S]*?describe\('★이음매[\s\S]{0,900}?mergeSubmission\([\s\S]{0,400}?QUESTIONS,[\s\S]{0,250}?toEqual\(\['q1', 'q2'\]\)[\s\S]*?sanitizeAnswers\(/,
+    name: 'REGRESSION #76: 자기평가 엣지 규칙(학생 입력 방어 + 재제출 병합 + 문항 순서 이음매)을 vitest 가 실제로 돌리는 메타 테스트가 살아 있다',
+  },
+
+  {
+    file: 'src/infrastructure/supabase/__tests__/selfAssessmentEdgeParity.meta.test.ts',
+    // 앱·서버·학생 화면·마이그레이션 네 곳의 상한과 자르기 방식을 맞추는 **유일한** 장치다.
+    // 사라지면 "1,200자까지"라 안내해 놓고 서버가 1,000자에서 자르는 상태가 조용히 생긴다.
+    // ★거리 상한 + 네 곳 전부를 지문에 넣는다. 앞선 판본은 거리 상한 없는 와일드카드만 써서
+    //   **마이그레이션 대조·학생 화면 코드포인트 대조·음성 가드(not.toMatch)를 통째로 지워도 통과**했다
+    //   (슬롭 검토가 변이로 확인). 바로 옆 #76 주석에 적어 둔 교훈을 정작 옆 항목에 적용하지
+    //   않았던 것이다. 지금 판본은 변이 6종을 전부 잡는 것을 확인했다.
+    pattern:
+      /SELF_ASSESSMENT_MAX_ANSWER_LENGTH[\s\S]{0,3500}?★엣지 함수의 \*\*실제 자르기\*\*[\s\S]{0,800}?not\.toMatch\([\s\S]{0,500}?★앱도 문항을 String\.slice[\s\S]{0,500}?not\.toMatch\([\s\S]{0,700}?submitApi\.ts[\s\S]{0,700}?★학생 화면도 글자를 코드 포인트로[\s\S]{0,600}?not\.toMatch\([\s\S]{0,700}?assignments_self_assessment_shape[\s\S]{0,600}?submissions_self_assessment_shape[\s\S]{0,300}?MAX_STORED_ANSWERS/,
+    name: 'REGRESSION #77: 자기평가 상한·자르기 방식을 앱·서버·학생 화면·마이그레이션 네 곳에서 대조하는 메타 테스트가 살아 있다(문항 6 ≠ 저장 가능한 답 12 구분 포함)',
+  },
+
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #78 (2026-09-09) — **운영 경로**가 문항 정의를 실제로 넘기는지 (ADR-096)
+  //
+  //  #76 은 테스트가 살아 있는지를 본다. 하지만 테스트가 아무리 멀쩡해도 학생 제출을 실제로
+  //  받는 자리(`submit-assignment`)가 문항 정의를 안 넘기면 소용이 없다. 그 파일은 vitest·tsc·
+  //  eslint 어느 것도 직접 읽지 않으므로(엣지 함수는 Deno 런타임), 여기서 지문으로 박는다.
+  //  넘기지 않으면 두 번에 나눠 쓴 학생의 답이 거꾸로 저장된다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'supabase/functions/submit-assignment/index.ts',
+    pattern:
+      /mergeSubmission\([\s\S]{0,600}?selfAssessmentOnly: isSelfAssessmentOnly\([\s\S]{0,300}?assignment\.self_assessment,[\s\S]{0,40}?\);/,
+    name: 'REGRESSION #78: 학생 제출을 받는 엣지 함수가 mergeSubmission 에 과제 문항 정의와 자기평가 전용 여부를 함께 넘긴다',
+  },
+
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #81 (2026-09-09) — 학생 화면의 "빈 칸은 안 보낸다" 계약 (ADR-096)
+  //
+  //  서버는 "안 보낸 칸은 지우지 않는다"를 테스트 여러 건으로 잠갔다. 그 짝이 되는 계약이
+  //  **학생 화면 쪽의 "빈 칸이면 아예 안 보낸다"** 인데, `landing/` 은 게이트 4종 **어디에도**
+  //  안 걸린다(루트 tsconfig 의 include 는 `src` 뿐이고, vitest include 는 `src/**`·`electron/**`
+  //  뿐이며, landing 에는 테스트 인프라 자체가 없다). 누가 `selfAssessment: answers` 로
+  //  "단순화"하면 빈 배열이 서버로 가고, 병합 규칙은 멀쩡한데 학생 답이 저장되지 않는다.
+  //  게이트는 전부 초록이다. 슬롭 검토가 HIGH 로 짚은 자리다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'landing/src/components/submit/SubmitForm.tsx',
+    pattern:
+      /if \(!hasFile && !hasText && answers\.length === 0\) return;[\s\S]{0,900}?selfAssessment: answers\.length > 0 \? answers : undefined,/,
+    name: 'REGRESSION #81: 학생 제출 화면이 빈 돌아보기를 서버로 보내지 않는다 (안 보냄 = 그대로 두기 계약의 짝)',
+  },
+
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #84 (2026-09-09) — 학생 화면에 **갈래 이름을 보내지 않는다** (ADR-096)
+  //
+  //  문항의 `slot`(갈래)은 교사 쪽 값이다. 담임 갈래에는 "인성·관계"·"변화" 같은 이름이 있어
+  //  학생 브라우저 개발자 도구에 그대로 보일 이유가 없다. 지금은 필요한 칸만 골라 담는
+  //  조립 구조라 실제로 안 나가는데, 누가 `selfAssessment: readQuestions(...)` 로 "단순화"하면
+  //  그 순간 나간다 — 그리고 **게이트 4종은 전부 초록이다**(엣지 함수는 tsc·eslint·vitest 밖).
+  //  이 범위의 다른 이음매는 전부 지문으로 박아 뒀는데 여기만 비어 있다고 슬롭 검토가 짚었다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'supabase/functions/get-assignment-public/index.ts',
+    // ★거리 와일드카드를 두면 **조립 모양만 유지한 채 새는 변이**를 놓친다. 게다가 머리만 고정하고
+    //   **꼬리를 안 닫으면** `prompt: q.prompt,` **뒤에** `slot: q.slot,`·`...q,` 를 붙이는 변이를 또 놓친다
+    //   — 필드를 더할 때 가장 자연스러운 자리가 바로 거기다(리뷰가 두 번에 걸쳐 짚었다).
+    //   그래서 객체 리터럴을 **세 칸 전부** 지문으로 박아 닫는다. 변이 6종으로 확인했다.
+    pattern:
+      /selfAssessment: readQuestions\(assignment\.self_assessment\)\.map\(\(q\) => \(\{\s*id: q\.id,\s*prompt: q\.prompt,\s*\.\.\.\(q\.maxLength !== undefined \? \{ maxLength: q\.maxLength \} : \{\}\),\s*\}\)\),/,
+    name: 'REGRESSION #84: 과제 공개 조회의 자기평가 문항 조립이 id·prompt·maxLength **세 칸으로 닫혀 있다** (slot 등을 더하면 빨간불 — 갈래 이름이 학생 브라우저로 새는 것을 막는다)',
   },
 ];
 

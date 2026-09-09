@@ -1,6 +1,6 @@
 # 생기부 Phase 3·4 — 설계서 v1.0 (오너 인터뷰 기반)
 
-- 상태: 설계 확정, 구현 전
+- 상태: 설계 확정, 구현 전 — **v1.1 정정 2026-09-08**(Phase 3 §3-0). 구현 계획: [record-self-assessment](../../01-plan/features/record-self-assessment.plan.md)
 - 작성일: 2026-08-25
 - 방식: 오너 인터뷰 4라운드로 결정 (아래 표가 그 결과다)
 - 상위 계획: [record-draft-system-v2](../../01-plan/features/record-draft-system-v2.plan.md) §4 Phase 3·4
@@ -31,6 +31,33 @@
 ---
 
 # Phase 3 — 학생 자기평가서
+
+## 3-0. v1.1 정정 (2026-09-08 코드 재조사)
+
+설계 결정(§0 표)은 그대로다. 코드 위치와 전제 세 가지가 낡아 바로잡는다. 상세와 단계는
+[구현 계획](../../01-plan/features/record-self-assessment.plan.md).
+
+1. **재사용할 학생 화면은 `src/student/` 가 아니라 `landing/` 의 `/submit/{id}`(과제 수합)다.**
+   `src/student/`(`student.html`)는 교실 와이파이 안에서만 열리는 실시간 담벼락·학급규칙 번들이다.
+   §3-3 이 말한 "링크·본인 확인·제출 폼·`identifyByName`·`studentNumber`·`studentName`" 은 전부
+   과제 수합(`landing/src/components/submit/SubmitForm.tsx` · `supabase/functions/submit-assignment`)에
+   있다. 글만 제출하면 드라이브를 거치지 않는 것도 이미 그렇다(`submit-assignment/index.ts:377`).
+2. **§3-5 의 "대기 목록"은 근거 보드 2차의 거울 카드다.** 원본이 미분류 열에 비쳐 보이고 교사가
+   손대는 순간에만 저장된다. 별도 대기 목록 UI 를 만들지 않는다. 저장 시 기재 금지 항목 검사도
+   자동으로 붙는다(`useRecordEvidenceStore.ts` `buildEvidence`).
+3. **`record-evidence.json` 은 이제 동기화된다**(`syncRegistry.ts` 28-b). ADR-072 "남은 한계" 의
+   해당 줄은 사실이 아니다.
+
+여기에 설계서에 없던 보강 둘, 좁힘 하나:
+
+- **AI 에게 "학생 본인 말"임을 알린다.** 지금 근거 팩(`recordDraftPack.ts`)은 출처를 구분하지 않아
+  학생 말과 교사 관찰이 같은 줄로 나열된다. 팩에 `[학생 자기평가]` 표식과 "학생 표현을 그대로 옮기지
+  않는다" 지시를 더한다(1층 프롬프트는 손대지 않는다).
+- **선행 조건: 학생 번호 무결성 S1.** 과제 조회가 마지막에 번호만으로 연결하고(P1-3), 수업반 과제가
+  다른 학생 근거 후보로 뜬다(P1-4). 자기평가는 "누가 썼는가"가 전부라 이 둘이 닫힌 뒤에 붙인다.
+- **§3-4 "앞선 답변 보여주기"는 v1 에서 뺀다.** 학생 식별이 번호·이름 타이핑뿐이라 남의 번호를 넣으면
+  남의 지난 답변이 보인다. 본인 확인 수단(PIN 또는 신원 전환)이 생긴 뒤 v2 로. ⚠️ §0 결정 4 를 좁히는
+  것이라 **오너 확인 필요**(계획서 ADR-096 초안 결정 4).
 
 ## 3-1. 왜 필요한가
 

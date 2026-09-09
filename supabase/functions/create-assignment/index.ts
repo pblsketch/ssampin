@@ -9,6 +9,7 @@ import {
   errorResponse,
   internalErrorResponse,
 } from '../_shared/cors.ts';
+import { isSelfAssessmentOnly, sanitizeQuestions } from '../_shared/selfAssessment.ts';
 
 const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
 
@@ -61,10 +62,22 @@ serve(async (req: Request) => {
       allowLate,
       allowResubmit,
       identifyByName,
+      selfAssessment,
     } = body;
 
-    if (!title || !deadline || !targetName || !studentList || !driveFolderId) {
+    // 자기평가만 받는 과제는 드라이브 폴더가 없다 — 올릴 파일이 없기 때문이다(ADR-096 결정 1).
+    const selfAssessmentOnly = isSelfAssessmentOnly(submitType);
+
+    if (!title || !deadline || !targetName || !studentList) {
       return errorResponse('필수 필드가 누락되었습니다', 400);
+    }
+    if (!selfAssessmentOnly && !driveFolderId) {
+      return errorResponse('필수 필드가 누락되었습니다', 400);
+    }
+
+    const selfAssessmentQuestions = sanitizeQuestions(selfAssessment);
+    if (selfAssessmentOnly && selfAssessmentQuestions === null) {
+      return errorResponse('자기평가 문항이 최소 한 개 필요합니다', 400);
     }
 
     // 3. admin_key 랜덤 생성
@@ -87,8 +100,10 @@ serve(async (req: Request) => {
         target_type: targetType ?? 'class',
         target_name: targetName,
         student_list: studentList,
-        drive_folder_id: driveFolderId,
+        // `??` 가 아니라 `||` — 빈 문자열도 NULL 로 눕힌다(컬럼 주석의 약속이 NULL 이다).
+        drive_folder_id: driveFolderId || null,
         drive_root_folder_id: driveRootFolderId ?? null,
+        self_assessment: selfAssessmentQuestions,
         submit_type: submitType ?? 'file',
         file_type_restriction: fileTypeRestriction ?? 'all',
         allow_late: allowLate ?? true,

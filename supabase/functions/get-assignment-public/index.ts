@@ -10,6 +10,7 @@ import {
   errorResponse,
   internalErrorResponse,
 } from '../_shared/cors.ts';
+import { readQuestions } from '../_shared/selfAssessment.ts';
 
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -51,6 +52,15 @@ serve(async (req: Request) => {
       allowLate: assignment.allow_late,
       allowResubmit: assignment.allow_resubmit,
       identifyByName: assignment.identify_by_name ?? false,
+      // 자기평가 문항. 학생 화면이 이 배열을 보고 입력 칸을 그린다.
+      // 문항이 없으면 빈 배열이라 구버전 학생 화면은 그냥 무시한다.
+      // ★`slot`(갈래)은 빼고 보낸다 — 학생 화면이 안 쓰는 값이고, 담임 갈래 이름("인성·관계",
+      //   "변화")이 개발자 도구에 그대로 보일 이유가 없다. 안 보낼 수 있는 값은 안 보낸다.
+      selfAssessment: readQuestions(assignment.self_assessment).map((q) => ({
+        id: q.id,
+        prompt: q.prompt,
+        ...(q.maxLength !== undefined ? { maxLength: q.maxLength } : {}),
+      })),
       // student_list에서 number, name, grade, classNum 반환 (id 제외)
       students: (
         assignment.student_list as Array<{
