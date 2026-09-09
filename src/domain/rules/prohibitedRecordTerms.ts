@@ -240,3 +240,118 @@ export function summarizeProhibited(hits: readonly ProhibitedHit[]): string[] {
   }
   return out;
 }
+
+// ────────────────────────────────────────────────────────────────────────────
+// 대체어 — 낱말만 금지된 경우, 말을 바꿔 근거를 살린다 (2026-09-09 오너 요청)
+// ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 왜 필요한가: "체육대회 준비물이 부족하자 자기 것을 먼저 빌려주고 마지막에 챙김."은
+ * **수상 기록이 아니라 생활 장면**인데 '대회' 한 낱말 때문에 통째로 빠졌다(실측 2026-09-09).
+ *
+ * 근거(확인일 2026-09-09):
+ * - 학교생활기록부 종합지원포털 Q&A: **'대회'는 수상경력을 제외한 어떤 항목에도 입력하지 않는다.**
+ *   다만 창의적 체험활동 **누가기록**에는 '체육대회' 같은 명칭을 쓸 수 있다.
+ *   https://star.moe.go.kr/web/contents/m30103.do?schM=view&id=15548
+ * - 같은 포털: 학교가 주최한 **행사**(의식행사·발표회·**체육행사**·현장체험학습)는 성격에 맞는
+ *   창의적 체험활동 영역에 넣어 입력할 수 있다.
+ * - 울산 NEIS 자문단 Q&A(전담자 답변): **"운동회" 또는 "체육행사"** 로 명칭을 계획해 운영하면
+ *   문제없고, **교내상이 계획되지 않은** 프로그램이면 관찰한 사실로 특기사항을 쓸 수 있다.
+ *   https://m.cafe.daum.net/neisulsan/AXxH/2455
+ *
+ * ★그래서 이 대체는 **낱말 교체이지 면죄부가 아니다.** 시상 계획이 있던 프로그램이라면 이름을
+ *   바꿔도 기재할 수 없다. 앱은 그것을 알 수 없으므로 **바꿨다는 사실과 주의를 화면에 적는다**
+ *   (조용히 바꾸지 않는다).
+ * ★수상 결과를 가리키는 말이 함께 있으면 **아예 바꾸지 않는다.** 그건 진짜 수상 기록이다.
+ */
+export interface TermSubstitution {
+  readonly from: string;
+  readonly to: string;
+}
+
+/**
+ * ★**표를 아주 좁게 둔다.** 처음에는 일반 규칙(`대회` → `행사`)을 넣었는데, 테스트가 바로 잡았다:
+ *   그러면 **'경진대회'가 '경진행사'가 되어 필터를 통과한다.** 시상을 전제한 이름을 말만 바꿔
+ *   내보내는 것은 규정 우회다.
+ *
+ * ★그래서 **공식 안내가 대체 명칭을 명시한 것만** 넣는다. 지금은 체육대회 한 짝이다
+ *   (포털의 행사 예시에 '체육행사'가 있고, NEIS 자문단 답변이 '운동회·체육행사'를 권한다).
+ * ★나머지 `대회` 는 그대로 제외하되, 화면이 **선생님께 고쳐 적는 법을 알려 준다**
+ *   (`rewriteHintFor`). 시상 계획이 있었는지는 선생님만 안다 — 앱이 대신 판단하지 않는다.
+ */
+export const PROHIBITED_SUBSTITUTIONS: readonly TermSubstitution[] = [
+  { from: '체육대회', to: '체육행사' },
+];
+
+/**
+ * 수상 **결과**를 가리키는 말. 하나라도 있으면 대체하지 않는다.
+ * ★금지어 목록(`SIMPLE_TERMS`)과 따로 둔다 — 여기 있는 '우승'·'1등'은 다른 자리에서 정상 서술일
+ *   수 있어 금지어로 올리면 오탐이 는다. **대체를 막는 조건**으로만 쓴다.
+ */
+const AWARD_RESULT_WORDS: readonly string[] = [
+  '수상',
+  '입상',
+  '상장',
+  '시상',
+  '최우수상',
+  '우수상',
+  '장려상',
+  '금상',
+  '은상',
+  '동상',
+  '대상',
+  '우승',
+  '준우승',
+  '메달',
+  '트로피',
+  '1등',
+  '일등',
+  '1위',
+];
+
+export interface SubstitutionResult {
+  /** 바꾼 뒤의 글. 아무것도 안 바뀌었으면 원문과 같다. */
+  readonly text: string;
+  /** 실제로 바꾼 짝(중복 없이 등장 순서). */
+  readonly applied: readonly TermSubstitution[];
+}
+
+/**
+ * 금지어를 대체어로 바꿔 본다.
+ *
+ * - 수상 결과를 가리키는 말이 함께 있으면 **하나도 바꾸지 않는다**(진짜 수상 기록이다).
+ * - 바꾼 뒤에도 다른 금지 항목이 남아 있으면, 부르는 쪽이 그대로 제외하면 된다.
+ *   이 함수는 판단하지 않고 **바꾼 결과와 무엇을 바꿨는지**만 돌려준다.
+ */
+export function substituteProhibited(text: string): SubstitutionResult {
+  if (typeof text !== 'string' || text.length === 0) return { text, applied: [] };
+  if (AWARD_RESULT_WORDS.some((w) => text.includes(w))) return { text, applied: [] };
+  let out = text;
+  const applied: TermSubstitution[] = [];
+  for (const sub of PROHIBITED_SUBSTITUTIONS) {
+    if (!out.includes(sub.from)) continue;
+    out = out.split(sub.from).join(sub.to);
+    applied.push(sub);
+  }
+  return { text: out, applied };
+}
+
+/** 화면에 보여 줄 한 줄 — "바꿔 보낸 말 N건 (체육대회 → 체육행사)". 없으면 빈 문자열. */
+export function summarizeSubstitutions(applied: readonly TermSubstitution[]): string {
+  if (applied.length === 0) return '';
+  const pairs = applied.map((s) => `${s.from} → ${s.to}`).join(' · ');
+  return `바꿔 보낸 말 ${applied.length}건 (${pairs})`;
+}
+
+/**
+ * 제외된 근거를 **선생님이 직접 살릴 수 있는 경우** 그 방법을 알려 준다.
+ *
+ * ★앱이 대신 바꾸지 않는다. '대회'가 든 활동을 기재할 수 있는지는 **시상 계획이 있었는가**로
+ *   갈리는데, 그건 교육계획서를 아는 선생님만 판단할 수 있다.
+ */
+export function rewriteHintFor(hits: readonly ProhibitedHit[]): string {
+  if (hits.some((h) => h.term === '대회')) {
+    return "'대회'라는 말은 수상경력 말고는 어디에도 적을 수 없어요. 상을 주지 않은 행사였다면 '체육행사'·'발표회'·'○○ 활동'처럼 이름을 바꿔 적으시면 이 근거를 쓸 수 있어요.";
+  }
+  return '';
+}

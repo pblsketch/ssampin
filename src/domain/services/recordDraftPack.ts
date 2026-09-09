@@ -15,13 +15,17 @@
  */
 import {
   detectProhibitedTerms,
+  rewriteHintFor,
+  substituteProhibited,
   summarizeProhibited,
   type ProhibitedHit,
 } from '../rules/prohibitedRecordTerms';
 import { createMaskSession } from '../privacy/maskEngine';
 import type { KeywordGroup, MaskMapping } from '../privacy/types';
 import { redactQuestion } from '../rules/redactOutbound';
-import { NARRATIVE_MARK_INSTRUCTION } from '../rules/narrativeParagraphs';
+import { NARRATIVE_MARK_INSTRUCTION, narrativeMarkInstruction } from '../rules/narrativeParagraphs';
+import type { RecordWritingStyle } from '../entities/RecordWritingStyle';
+import { buildStyleInstruction, resolveComposition } from '../rules/recordStyleCompose';
 import { neisByteLength } from '../entities/RecordDraft';
 import {
   aliasByteDelta,
@@ -61,6 +65,14 @@ export interface DraftPackInput {
   readonly standardKeywords?: readonly string[];
   /** 선생님이 따로 적어 둔 지시(2층 프롬프트). */
   readonly teacherPrompt?: string;
+  /**
+   * 선생님이 고른 **작성 방식**(ADR-099). 없거나 기본값이면 「작성 구성」 블록을 붙이지 않는다 —
+   * 그때 요청서는 이 기능이 생기기 전과 **글자 하나까지 같다.**
+   *
+   * ★판본 문지기(`applyPromptVersionGate`)를 이미 통과한 값이어야 한다. 서버 규정이 아직 새 구성을
+   *   못 받는 판본이면 부르는 쪽이 기존형으로 되돌려서 넘긴다 — 여기서 판본을 알 방법이 없다.
+   */
+  readonly style?: RecordWritingStyle;
 }
 
 /** 왜 빠졌는지 — 화면이 "제외됨 N건"과 사유를 보여 준다. */
@@ -83,6 +95,15 @@ export interface DraftPackExclusion {
   readonly reason: DraftPackExclusionReason;
   /** 기재 금지로 빠진 경우, 어떤 갈래였는지(한국어 라벨). */
   readonly categories?: readonly string[];
+  /** 선생님이 직접 고쳐 살릴 수 있으면 그 방법. 없으면 부재. */
+  readonly hint?: string;
+}
+
+/** 낱말만 바꿔 살린 근거 한 건 — 화면이 "무엇을 무엇으로 바꿨는지" 보여 준다. */
+export interface DraftPackSubstitution {
+  readonly evidenceId: string;
+  readonly from: string;
+  readonly to: string;
 }
 
 export interface DraftPack {
@@ -98,6 +119,11 @@ export interface DraftPack {
   /** 실제로 실린 근거 수. */
   readonly includedCount: number;
   readonly exclusions: readonly DraftPackExclusion[];
+  /**
+   * 금지어를 대체어로 바꿔 **살린** 근거들. 비어 있지 않으면 화면이 반드시 보여 준다 —
+   * 조용히 말을 바꾸면 선생님이 적은 것과 다른 글이 나간 줄 모른다(ADR-099 보강 4).
+   */
+  readonly substitutions: readonly DraftPackSubstitution[];
 }
 
 export const DRAFT_PACK_EXCLUSION_LABELS: Readonly<Record<DraftPackExclusionReason, string>> = {
@@ -128,6 +154,7 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   const lines: string[] = [];
   let usedChars = 0;
   const mappings: MaskMapping[] = [];
+  const substitutions: DraftPackSubstitution[] = [];
 
   // ★명단에 이 학생이 없으면(호출부 실수) 실명이 그대로 나간다 — 여기서 반드시 넣는다.
   const name = input.studentName.trim();
@@ -156,16 +183,29 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
       continue;
     }
     // 기재 금지 검사는 **원문**으로 한다 — 가린 뒤에는 단어가 바뀌어 못 잡을 수 있다.
-    const hits = detectProhibitedTerms(raw);
-    if (hits.length > 0) {
-      exclusions.push({
-        evidenceId: e.id,
-        reason: 'prohibited',
-        categories: hitsToCategories(hits),
-      });
-      continue;
+    // ★낱말만 걸린 경우(예: '체육대회')는 대체어로 바꿔 **살린다**. 바꾼 뒤에도 남는 금지 항목이
+    //   있으면 그때 뺀다. 무엇을 바꿨는지는 반드시 화면에 알린다(ADR-099 보강 4).
+    const rescued = substituteProhibited(raw);
+    const usable = rescued.applied.length > 0 && detectProhibitedTerms(rescued.text).length === 0;
+    const source = usable ? rescued.text : raw;
+    if (!usable) {
+      const hits = detectProhibitedTerms(raw);
+      if (hits.length > 0) {
+        const hint = rewriteHintFor(hits);
+        exclusions.push({
+          evidenceId: e.id,
+          reason: 'prohibited',
+          categories: hitsToCategories(hits),
+          ...(hint.length > 0 ? { hint } : {}),
+        });
+        continue;
+      }
+    } else {
+      for (const sub of rescued.applied) {
+        substitutions.push({ evidenceId: e.id, from: sub.from, to: sub.to });
+      }
     }
-    const content = mask(raw);
+    const content = mask(source);
     const line = e.date ? `- (${e.date}) ${content}` : `- ${content}`;
     if (usedChars + line.length > DRAFT_PACK_MAX_EVIDENCE_CHARS) {
       // 여기서 멈추지 않고 계속 도는 이유: 뒤에 짧은 근거가 있으면 그건 실을 수 있다.
@@ -188,6 +228,16 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   parts.push('근거 자료:');
   parts.push(lines.length > 0 ? lines.join('\n') : '(보낼 수 있는 근거가 없습니다)');
 
+  // 작성 구성(ADR-099) — 선생님이 고른 초점·시작 방식·묶기·요소. **기본값이면 아무것도 붙지 않는다.**
+  // ★선생님 지시보다 **앞**에 둔다 — 뒤쪽(최신성)일수록 세게 먹히므로, 선생님이 손으로 적은 말이
+  //   구성보다 뒤에 와야 강조점을 조절할 수 있다.
+  const composition = input.style ? resolveComposition(input.style) : null;
+  const emitComposition = composition !== null && composition.shouldEmitComposition;
+  if (composition !== null && emitComposition) {
+    parts.push('');
+    parts.push(buildStyleInstruction(composition));
+  }
+
   if (input.teacherPrompt && input.teacherPrompt.trim().length > 0) {
     parts.push('');
     parts.push('선생님 지시:');
@@ -195,15 +245,28 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   }
 
   // 형광펜 표식(ADR-085) — 문단마다 [평가]/[동기]/[과정]/[결과]. 앱이 색으로 바꾸고 저장 본문에서는 뗀다.
-  // ★교사 평가가 **맨 앞** 문단이다(ADR-094). 1층 프롬프트도 같은 순서를 요구한다 — 둘이 어긋나면 안 된다.
+  // ★색은 고정, **순서는 위 「작성 구성」이 정한다**(ADR-099). 구성을 안 붙였으면 예전과 같은 문장이다.
   // ★근거로 되짚기 지시보다 **앞**에 둔다 — 맨 끝(최신성)은 지어내기를 막는 지시의 자리다.
   parts.push('');
-  parts.push(NARRATIVE_MARK_INSTRUCTION);
+  parts.push(
+    emitComposition && composition !== null
+      ? narrativeMarkInstruction({
+          followComposition: true,
+          firstIsEvaluation: composition.firstIsEvaluation,
+        })
+      : NARRATIVE_MARK_INSTRUCTION,
+  );
   parts.push('');
   parts.push(
-    '위 근거만 보고 쓰세요. 활동을 나열하지 말고 하나의 탐구 흐름으로 이어 주세요. ' +
-      '본문의 모든 서술이 근거 자료의 어느 줄에서 나왔는지 짚을 수 있어야 합니다. ' +
-      '근거에 없는 내용은 쓰지 마세요.',
+    // ★"하나의 탐구 흐름" 은 기존형의 묶는 방식이다. 구성을 붙였으면 묶는 방식이 이미 거기 적혀 있고,
+    //   여기서 또 말하면 「성취별로 나눠 쓰기」를 고른 선생님에게 정반대 지시를 함께 보내게 된다.
+    emitComposition
+      ? '위 근거만 보고 쓰세요. ' +
+          '본문의 모든 서술이 근거 자료의 어느 줄에서 나왔는지 짚을 수 있어야 합니다. ' +
+          '근거에 없는 내용은 쓰지 마세요.'
+      : '위 근거만 보고 쓰세요. 활동을 나열하지 말고 하나의 탐구 흐름으로 이어 주세요. ' +
+          '본문의 모든 서술이 근거 자료의 어느 줄에서 나왔는지 짚을 수 있어야 합니다. ' +
+          '근거에 없는 내용은 쓰지 마세요.',
   );
 
   return {
@@ -212,6 +275,7 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
     mappings,
     includedCount: lines.length,
     exclusions,
+    substitutions,
   };
 }
 
@@ -265,6 +329,7 @@ export function buildLengthAdjustPack(input: LengthAdjustPackInput): LengthAdjus
   const lines: string[] = [];
   let usedChars = 0;
   const mappings: MaskMapping[] = [];
+  const substitutions: DraftPackSubstitution[] = [];
 
   const name = input.studentName.trim();
   const roster = input.roster.some((g) => g.values.includes(name))
@@ -300,16 +365,25 @@ export function buildLengthAdjustPack(input: LengthAdjustPackInput): LengthAdjus
         exclusions.push({ evidenceId: e.id, reason: 'empty' });
         continue;
       }
-      const hits = detectProhibitedTerms(raw);
-      if (hits.length > 0) {
-        exclusions.push({
-          evidenceId: e.id,
-          reason: 'prohibited',
-          categories: hitsToCategories(hits),
-        });
-        continue;
+      // 새로 쓰는 자리와 같은 구제를 쓴다 — 여기만 다르면 같은 근거가 화면마다 달리 취급된다.
+      const rescued = substituteProhibited(raw);
+      const usable = rescued.applied.length > 0 && detectProhibitedTerms(rescued.text).length === 0;
+      if (!usable) {
+        const hits = detectProhibitedTerms(raw);
+        if (hits.length > 0) {
+          exclusions.push({
+            evidenceId: e.id,
+            reason: 'prohibited',
+            categories: hitsToCategories(hits),
+          });
+          continue;
+        }
+      } else {
+        for (const sub of rescued.applied) {
+          substitutions.push({ evidenceId: e.id, from: sub.from, to: sub.to });
+        }
       }
-      const content = mask(raw);
+      const content = mask(usable ? rescued.text : raw);
       const line = e.date ? `- (${e.date}) ${content}` : `- ${content}`;
       if (usedChars + line.length > DRAFT_PACK_MAX_EVIDENCE_CHARS) {
         exclusions.push({ evidenceId: e.id, reason: 'too-long' });
@@ -372,8 +446,11 @@ export function buildLengthAdjustPack(input: LengthAdjustPackInput): LengthAdjus
 
   // 형광펜 표식 지시는 **앞**에, 지어내기를 막는 지시는 **맨 끝**에 둔다.
   // 실측에서 지어내기 금지를 뒤쪽에 두었을 때만 모델이 얇은 근거로 지어내기를 멈췄다(최신성 효과).
+  // ★분량 조절은 **순서를 요구하지 않는다**(ADR-099). 이미 쓰인 글의 분량만 손대는 일인데 순서를
+  //   다시 못 박으면, 다른 구성으로 쓴 초안을 줄이라고 했을 때 모델이 글을 통째로 다시 짠다.
+  //   「작성 구성」 블록도 싣지 않는다 — 여기는 새로 쓰는 자리가 아니다.
   parts.push('');
-  parts.push(NARRATIVE_MARK_INSTRUCTION);
+  parts.push(narrativeMarkInstruction({ keepExistingOrder: true }));
   parts.push('');
   if (input.kind === 'shrink') {
     parts.push('위 글에 있는 내용만 쓰세요. 새로운 활동이나 성과를 덧붙이지 마세요.');
@@ -390,11 +467,40 @@ export function buildLengthAdjustPack(input: LengthAdjustPackInput): LengthAdjus
     mappings,
     includedCount: lines.length,
     exclusions,
+    substitutions,
     modelTargetBytes: target,
     modelFloorBytes: floor,
     finalTargetBytes: input.targetBytes,
     sourceProhibited,
   };
+}
+
+/**
+ * 미리보기에 붙일 한 줄 — 빠진 것과 **말을 바꿔 살린 것**을 함께 알린다.
+ *
+ * ★대체는 조용히 하지 않는다. 그리고 **면죄부가 아니다** — 시상이 계획됐던 프로그램이면 이름을
+ *   바꿔도 기재할 수 없는데, 그건 앱이 알 수 없으므로 선생님께 한 줄로 짚어 준다.
+ */
+export function summarizeDraftPackNotes(pack: DraftPack): string {
+  const parts: string[] = [];
+  const excluded = summarizeExclusions(pack.exclusions);
+  if (excluded.length > 0) parts.push(excluded);
+  const hint = pack.exclusions.find((x) => x.hint !== undefined)?.hint;
+  if (hint !== undefined) parts.push(hint);
+  if (pack.substitutions.length > 0) {
+    const seen = new Set<string>();
+    const pairs: string[] = [];
+    for (const s of pack.substitutions) {
+      const key = `${s.from}>${s.to}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      pairs.push(`${s.from} → ${s.to}`);
+    }
+    parts.push(
+      `말을 바꿔 보낸 근거 있음 (${pairs.join(' · ')}). 시상이 계획됐던 행사라면 이름을 바꿔도 기재할 수 없어요.`,
+    );
+  }
+  return parts.join(' · ');
 }
 
 /** "제외됨 N건" 옆에 붙일 짧은 사유 요약. 빠진 게 없으면 빈 문자열. */
@@ -424,7 +530,9 @@ export function buildNarrativeRemarkPack(input: {
   const r = redactQuestion(input.content.trim(), input.roster, session);
   const text = [
     '아래 글의 **문장은 한 글자도 바꾸지 말고**, 문단마다 첫머리에 역할 표식만 붙여서 그대로 돌려주세요.',
-    NARRATIVE_MARK_INSTRUCTION,
+    // ★순서를 요구하지 않는 변형을 쓴다(ADR-099). "한 글자도 바꾸지 말라" 면서 순서를 못 박으면
+    //   자기모순이고, 다른 구성으로 쓴 초안에서는 모델이 순서를 고치려 들어 답이 버려진다.
+    narrativeMarkInstruction({ keepExistingOrder: true }),
     '설명이나 다른 말은 덧붙이지 마세요.',
     '',
     '글:',

@@ -6,6 +6,7 @@ import type { SubjectColorMap } from '../valueObjects/SubjectColor';
 import type { TodoSettings } from './TodoSettings';
 import type { MiniApp } from './MiniApp';
 import type { ReminderSettings } from './RecordReminder';
+import type { RecordStylePreset, RecordWritingStyle } from './RecordWritingStyle';
 
 export interface DashboardThemeSettings {
   readonly presetId: PresetThemeId | 'custom';
@@ -727,6 +728,16 @@ export interface Settings {
    * 미설정 = `focus`.
    */
   readonly recordDraftViewMode?: 'focus' | 'overview';
+  /**
+   * 생기부 **작성 방식** — 영역별로 마지막에 고른 값(ADR-099). 키는 `RecordArea` 값.
+   * 미설정·모르는 키 = 기존형(`DEFAULT_RECORD_WRITING_STYLE`). 옛 설정 파일은 그대로 읽힌다.
+   */
+  readonly recordWritingStyles?: Readonly<Record<string, RecordWritingStyle>>;
+  /**
+   * 「내 작성 방식」 — 이름 붙여 저장한 구성(ADR-099). 상한 `RECORD_STYLE_PRESET_MAX`.
+   * ★학생 원문·근거·초안 본문은 담지 않는다. 이름·구성·추가 지시뿐이다.
+   */
+  readonly recordStylePresets?: readonly RecordStylePreset[];
   /** AI 도우미 챗봇 표시 여부 (기본: true) */
   readonly showChatbot?: boolean;
   /** 온보딩에서 선택한 교사 역할 (복수) */

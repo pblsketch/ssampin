@@ -3,6 +3,9 @@ import {
   detectProhibitedTerms,
   hasProhibitedTerms,
   summarizeProhibited,
+  substituteProhibited,
+  summarizeSubstitutions,
+  rewriteHintFor,
   PROHIBITED_CATEGORY_LABELS,
 } from '@domain/rules/prohibitedRecordTerms';
 
@@ -76,5 +79,62 @@ describe('detectProhibitedTerms — 기재 금지 항목 탐지', () => {
   it('summarizeProhibited 는 갈래를 한국어 라벨로 중복 없이 돌려준다', () => {
     const hits = detectProhibitedTerms('토익 점수와 토플 점수를 밝힘');
     expect(summarizeProhibited(hits)).toEqual([PROHIBITED_CATEGORY_LABELS.language]);
+  });
+});
+
+describe('대체어 — 낱말만 걸린 근거를 살린다 (2026-09-09)', () => {
+  it('체육대회는 체육행사로 바뀌고, 바꾼 뒤에는 금지 항목이 남지 않는다', () => {
+    const r = substituteProhibited(
+      '체육대회 준비물이 부족하자 자기 것을 먼저 빌려주고 마지막에 챙김.',
+    );
+    expect(r.text).toContain('체육행사');
+    expect(r.text).not.toContain('체육대회');
+    expect(r.applied).toEqual([{ from: '체육대회', to: '체육행사' }]);
+    expect(detectProhibitedTerms(r.text)).toEqual([]);
+  });
+
+  it('★일반 규칙(대회 → 행사)을 두지 않는다 — 경진대회가 경진행사가 되어 필터를 통과한다', () => {
+    for (const t of [
+      '경진대회에 참여함.',
+      '공모전에 출품함.',
+      '올림피아드를 준비함.',
+      '교내 독서대회에 나감.',
+    ]) {
+      const r = substituteProhibited(t);
+      expect(r.applied).toEqual([]);
+      expect(detectProhibitedTerms(r.text).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("살릴 수 없는 '대회' 근거에는 선생님이 고쳐 적는 법을 알려 준다", () => {
+    const hint = rewriteHintFor(detectProhibitedTerms('교내 독서대회에 나감.'));
+    expect(hint).toContain('이름을 바꿔 적으시면');
+    expect(rewriteHintFor(detectProhibitedTerms('토익 점수를 받음.'))).toBe('');
+  });
+
+  it('수상 결과가 함께 적혀 있으면 하나도 바꾸지 않는다 — 진짜 수상 기록이다', () => {
+    for (const t of [
+      '교내 체육대회에서 우승함.',
+      '체육대회에 나가 최우수상을 받음.',
+      '체육대회 1등으로 시상대에 오름.',
+    ]) {
+      const r = substituteProhibited(t);
+      expect(r.applied).toEqual([]);
+      expect(r.text).toBe(t);
+      expect(detectProhibitedTerms(t).length).toBeGreaterThan(0);
+    }
+  });
+
+  it('바꿀 것이 없으면 원문 그대로 돌려준다', () => {
+    const t = '모둠 발표에서 자료 정리를 맡음.';
+    const r = substituteProhibited(t);
+    expect(r.text).toBe(t);
+    expect(r.applied).toEqual([]);
+  });
+
+  it('무엇을 바꿨는지 한 줄로 요약한다', () => {
+    const r = substituteProhibited('체육대회 준비물을 챙김.');
+    expect(summarizeSubstitutions(r.applied)).toBe('바꿔 보낸 말 1건 (체육대회 → 체육행사)');
+    expect(summarizeSubstitutions([])).toBe('');
   });
 });

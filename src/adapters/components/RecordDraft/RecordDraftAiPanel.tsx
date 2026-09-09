@@ -11,6 +11,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useAssistStore } from '@adapters/stores/useAssistStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { RecordStylePicker } from '@adapters/components/RecordDraft/RecordStylePicker';
+import {
+  DEFAULT_RECORD_WRITING_STYLE,
+  RECORD_STYLE_CATALOG_VERSION,
+  type RecordDraftStyleStamp,
+  type RecordStylePreset,
+  type RecordWritingStyle,
+} from '@domain/entities/RecordWritingStyle';
+import {
+  applyPromptVersionGate,
+  normalizeWritingStyle,
+  resolveComposition,
+} from '@domain/rules/recordStyleCompose';
 import { fetchRecordPromptL1 } from '@adapters/di/container';
 import {
   useConnectedOwnAiProviders,
@@ -28,7 +42,7 @@ import { useOwnAiModelCatalog } from '@adapters/hooks/useOwnAiModelCatalog';
 import {
   buildNarrativeRemarkPack,
   buildRecordDraftPack,
-  summarizeExclusions,
+  summarizeDraftPackNotes,
   type DraftPackEvidence,
 } from '@domain/services/recordDraftPack';
 import {
@@ -39,6 +53,7 @@ import {
 } from '@domain/entities/RecordAiDraft';
 import type { InquiryThread } from '@domain/entities/InquiryThread';
 import {
+  dropUnmarkedParagraphs,
   hasAnyRole,
   parseNarrativeParagraphs,
   roleMarksOf,
@@ -267,6 +282,36 @@ export function RecordDraftAiPanel({
     [],
   );
 
+  // ── 작성 방식(ADR-099) ──────────────────────────────────────
+  /**
+   * 영역별로 마지막에 고른 값을 설정에 기억한다. 학생을 바꿔도 그대로고, 행특과 세특은 서로 다른 값을 든다.
+   * ★모르는 영역·옛 설정이면 기존형이다 — 고르지 않은 선생님에게는 오늘과 같은 요청서가 나간다.
+   */
+  const settingsStyles = useSettingsStore((st) => st.settings.recordWritingStyles);
+  const settingsPresets = useSettingsStore((st) => st.settings.recordStylePresets);
+  const updateSettings = useSettingsStore((st) => st.update);
+  const styleAreaKey = area ?? draftKey.area;
+  // ★저장된 값은 **읽는 자리에서 한 번** 지금 카탈로그에 맞춘다(없어진 초점·요소 정리, ADR-099 보강).
+  const savedStyle = settingsStyles?.[styleAreaKey];
+  const writingStyle: RecordWritingStyle =
+    savedStyle === undefined ? DEFAULT_RECORD_WRITING_STYLE : normalizeWritingStyle(savedStyle);
+  const stylePresets: readonly RecordStylePreset[] = settingsPresets ?? [];
+  const setWritingStyle = (next: RecordWritingStyle): void => {
+    void updateSettings({
+      recordWritingStyles: { ...(settingsStyles ?? {}), [styleAreaKey]: next },
+    });
+  };
+  const setStylePresets = (next: readonly RecordStylePreset[]): void => {
+    void updateSettings({ recordStylePresets: next });
+  };
+  /**
+   * 실행 중에는 시작 시점 값으로 **고정**한다. 큐가 도는 동안 설정을 바꿔도 진행 중 요청은 안 바뀐다.
+   * (화면은 잠기고, 이 참조가 실제로 나간 값을 든다.)
+   */
+  const runStyleRef = useRef<RecordWritingStyle>(writingStyle);
+  /** 마지막으로 받아 둔 작성 규정 판본. 판본이 모자라면 새 구성을 아예 안 쓴다. */
+  const [seenPromptVersion, setSeenPromptVersion] = useState<number | undefined>(undefined);
+
   const ownAiEnabled = useAssistStore((s) => s.ownAiEnabled);
   const provider = useAssistStore((s) => s.provider);
   const connected = useConnectedOwnAiProviders();
@@ -341,9 +386,31 @@ export function RecordDraftAiPanel({
     };
   }, [pickedThread, studentEvidences, target]);
 
+  /**
+   * 요청서 조립. ★작성 방식은 **인자로 받는다** — 화면 상태를 여기서 읽으면 큐가 도는 중 선생님이
+   * 설정을 바꿨을 때 학생마다 다른 구성으로 나간다(요청 시작 시 고정 계약, ADR-099 §11).
+   */
+  /** 실제로 보낼 근거(선생님이 뺀 것·빈 것 제외) — 작성 방식 검사가 이 수를 본다. */
+  const sendableEvidences = useMemo(
+    () =>
+      targetForRun.evidences.filter(
+        (e) => e.excludedFromAi !== true && e.content.trim().length > 0,
+      ),
+    [targetForRun.evidences],
+  );
+  /** 서로 다른 날짜의 수 — 「피드백·수정」이 전후를 가릴 수 있는지 판정하는 유일한 기계적 신호다. */
+  const distinctEvidenceDates = useMemo(
+    () => new Set(sendableEvidences.map((e) => e.date).filter((d) => d !== undefined)).size,
+    [sendableEvidences],
+  );
+
   const buildPrompt = useCallback(
-    (t: DraftTarget) =>
-      buildRecordDraftPack({
+    (t: DraftTarget, style: RecordWritingStyle) => {
+      // 선생님 지시는 두 곳에서 온다: 부모가 준 것(옛 경로)과 작성 방식의 추가 지시. 둘 다 있으면 잇는다.
+      const extra = (style.instruction ?? '').trim();
+      const base = (teacherPrompt ?? '').trim();
+      const merged = [base, extra].filter((x) => x.length > 0).join('\n');
+      return buildRecordDraftPack({
         studentName: t.displayName,
         roster,
         areaLabel,
@@ -353,10 +420,22 @@ export function RecordDraftAiPanel({
           : {}),
         evidences: t.evidences,
         ...(t.standardKeywords === undefined ? {} : { standardKeywords: t.standardKeywords }),
-        ...(teacherPrompt === undefined ? {} : { teacherPrompt }),
-      }),
+        ...(merged.length > 0 ? { teacherPrompt: merged } : {}),
+        style,
+      });
+    },
     [areaLabel, roster, pickedThread, target.studentRef, teacherPrompt],
   );
+
+  /** 판에 남길 발자국. ★추가 지시 **본문은 담지 않는다**(판 파일은 Drive 로 동기화된다). */
+  const styleStampOf = (style: RecordWritingStyle): RecordDraftStyleStamp => ({
+    focus: style.focus,
+    opening: style.opening,
+    grouping: style.grouping,
+    moduleIds: resolveComposition(style).modules.map((m) => m.id),
+    catalogVersion: RECORD_STYLE_CATALOG_VERSION,
+    hadInstruction: (style.instruction ?? '').trim().length > 0,
+  });
 
   /** [중단] — 손잡이는 스토어에 있다(새 패널 인스턴스에서도 멈출 수 있게, R-6·ADR-093). */
   const abortRun = (): void => useRecordAiRunStore.getState().draftAbort[runScope]?.abort();
@@ -392,6 +471,11 @@ export function RecordDraftAiPanel({
         }
         const systemPrompt = promptResult.prompt;
         const promptVersion = promptResult.version;
+        setSeenPromptVersion(promptVersion);
+        // ★규정 판본이 새 구성을 못 받는 판본이면 **기존형으로 되돌려** 쓴다(ADR-099 §8).
+        //   조용히 바꾸지 않는다: 되돌렸으면 화면에 그 사실이 뜨고, 판에도 되돌린 뒤의 구성이 남는다.
+        const gated = applyPromptVersionGate(runStyleRef.current, promptVersion);
+        const runStyle = gated.style;
 
         for (let i = 0; i < queue.length; i += 1) {
           const t = queue[i];
@@ -404,12 +488,14 @@ export function RecordDraftAiPanel({
             studentRef: t.studentRef,
             queue: queue.slice(i),
           });
-          const pack = buildPrompt(t);
+          const pack = buildPrompt(t, runStyle);
           try {
             const raw = await askOnce(api, runProvider, pack.text, systemPrompt, abort.signal);
             // 별칭을 실제 이름으로 되돌리고 표식을 뗀 뒤에 남긴다 — 판에는 ［이름1］도 [동기]도 없다.
             const restored = restoreAliases(raw, pack.mappings);
-            const paragraphs = parseNarrativeParagraphs(restored);
+            // ★표식 없는 줄은 버린다 — 모델이 "다시 씁니다" 같은 설명을 본문 사이에 끼워 넣은
+            //   실측 사례가 있다(ADR-099 보강 5). 표식이 하나도 없으면 아무것도 버리지 않는다.
+            const paragraphs = dropUnmarkedParagraphs(parseNarrativeParagraphs(restored));
             // ★초안이 아니라 설명(거절·되묻기)이 왔으면 판으로 남기지 않는다(R-3). 설명문이 판이 되면
             //   [반영]으로 생기부 칸에 들어간다. 사유와 그 글을 보여 주고 멈춘다.
             const nonDraft = judgeNonDraftReply(aiDraftText({ paragraphs }));
@@ -430,8 +516,9 @@ export function RecordDraftAiPanel({
               ...(pickedThread !== null && t.studentRef === target.studentRef
                 ? { threadId: pickedThread.id }
                 : {}),
+              style: styleStampOf(runStyle),
               paragraphs,
-              excluded: summarizeExclusions(pack.exclusions),
+              excluded: summarizeDraftPackNotes(pack),
             });
             setSelectedVersionId(id);
             setCompareOn(false);
@@ -477,6 +564,8 @@ export function RecordDraftAiPanel({
 
   const start = (targets: readonly DraftTarget[]): void => {
     setUsage(null, null);
+    // ★여기서 작성 방식을 **잠근다.** 큐가 도는 동안 설정을 바꿔도 이 실행에는 반영되지 않는다.
+    runStyleRef.current = writingStyle;
     void runQueue(targets, targets.length);
   };
   /** 고른 학생 중 이미 초안이 있는 수 — 덮어쓰기 정책을 실행 전에 말해 둔다. */
@@ -666,6 +755,19 @@ export function RecordDraftAiPanel({
           ))}
         </div>
       )}
+
+      {/* 1-2. 작성 방식 (ADR-099) — 고르지 않으면 기존형이고 요청서는 오늘과 같다. */}
+      <RecordStylePicker
+        style={writingStyle}
+        onChange={setWritingStyle}
+        presets={stylePresets}
+        onPresetsChange={setStylePresets}
+        area={styleAreaKey}
+        evidenceCount={sendableEvidences.length}
+        distinctDateCount={distinctEvidenceDates}
+        {...(seenPromptVersion === undefined ? {} : { promptVersion: seenPromptVersion })}
+        disabled={phase.kind === 'running'}
+      />
 
       {/* 2. 시작 — 공급자·모델·단위 */}
       {/* 실행 중이거나 큐가 남아 있을 때만 숨긴다 — 미리보기 중에도 다른 판을 더 만들 수 있다. */}

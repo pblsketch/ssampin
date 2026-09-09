@@ -11,6 +11,7 @@ import {
   splitParagraphs,
   stripNarrativeMarks,
   NARRATIVE_MARK_INSTRUCTION,
+  dropUnmarkedParagraphs,
   NARRATIVE_ROLES,
 } from '../narrativeParagraphs';
 
@@ -159,5 +160,31 @@ describe('서사 역할 순서', () => {
     expect(NARRATIVE_MARK_INSTRUCTION).toContain('[평가] [동기] [과정] [결과]');
     expect(NARRATIVE_MARK_INSTRUCTION).toContain('[평가] → [동기] → [과정] → [결과]');
     expect(NARRATIVE_MARK_INSTRUCTION).toContain('~하는 학생임.');
+  });
+});
+
+describe('표식 없는 줄 버리기 — 모델의 자기 정정 설명이 본문에 섞이지 않게 (ADR-099 보강 5)', () => {
+  it('표식이 있는 글에서는 표식 없는 줄을 버린다', () => {
+    const parsed = parseNarrativeParagraphs(
+      [
+        '[평가] 어떤 학생임.',
+        '...실은 이 표현이 금지된 비유이므로 다시 씁니다. 아래가 초안입니다.',
+        '[동기] 물음이 있었음.',
+      ].join('\n\n'),
+    );
+    const kept = dropUnmarkedParagraphs(parsed);
+    expect(kept).toHaveLength(2);
+    expect(kept.map((p) => p.role)).toEqual(['evaluation', 'motive']);
+    expect(kept.map((p) => p.text).join(' ')).not.toContain('다시 씁니다');
+  });
+
+  it('표식이 하나도 없으면 아무것도 버리지 않는다 - 옛 초안·다른 모델 호환', () => {
+    const parsed = parseNarrativeParagraphs('첫 문단.\n\n둘째 문단.');
+    expect(dropUnmarkedParagraphs(parsed)).toHaveLength(2);
+  });
+
+  it('버린 뒤에도 순서와 본문은 그대로다', () => {
+    const parsed = parseNarrativeParagraphs('[과정] 자료를 모음.\n\n설명 줄.\n\n[결과] 정리함.');
+    expect(dropUnmarkedParagraphs(parsed).map((p) => p.text)).toEqual(['자료를 모음.', '정리함.']);
   });
 });

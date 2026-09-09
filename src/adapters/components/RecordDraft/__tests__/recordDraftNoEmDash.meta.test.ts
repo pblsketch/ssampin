@@ -24,6 +24,11 @@ const EXTRA_FILES: readonly string[] = [
   // 분량 조절(ADR-086) — 모델에게 가는 지시문 전문이 여기 있다. 검사 밖에 두면 안 된다.
   'domain/services/recordDraftPack.ts',
   'domain/rules/recordLengthGoal.ts',
+  // 작성 방식(ADR-099) — 초점·요소 이름과 지시문이 그대로 모델에게 가고 화면에도 뜬다.
+  'domain/rules/recordStyleCatalog.ts',
+  'domain/rules/recordStyleCompose.ts',
+  'domain/rules/recordStylePresetStore.ts',
+  'domain/entities/RecordWritingStyle.ts',
 ].map((p) => resolve(SRC_ROOT, p));
 
 function sourceFiles(dir: string): string[] {

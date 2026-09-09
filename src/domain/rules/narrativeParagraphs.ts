@@ -5,9 +5,11 @@
  * 골격은 같다 — 교사가 무엇을 봤나(평가) → 무엇에서 출발했고(동기·질문) → 무엇을 했고(과정) →
  * 무엇이 나왔나(결과). 영역마다 어휘를 갈라 두면 선생님이 외울 것이 늘고 색의 뜻이 화면마다 달라진다.
  *
- * ★**교사 평가가 맨 앞이다**(오너 결정 2026-09-08, ADR-094). 예전에는 평가가 맨 뒤였다. 생기부를 읽는
- * 사람이 가장 먼저 보는 것은 "이 학생을 교사가 어떤 사람으로 봤는가"이고, 그 뒤의 탐구 서사는 그
- * 판단의 근거로 읽힌다. 그래서 `NARRATIVE_ROLES` 의 순서가 곧 글의 순서다 — 범례도 이 순서로 뜬다.
+ * ★**교사 평가가 맨 앞이 기본이다**(ADR-094). 생기부를 읽는 사람이 가장 먼저 보는 것은 "이 학생을
+ * 교사가 어떤 사람으로 봤는가"이고, 그 뒤의 서사는 그 판단의 근거로 읽힌다.
+ * ★다만 **고정은 아니다**(ADR-099). 선생님이 시작 방식을 고르면 글의 순서가 달라진다. 그래서
+ * `NARRATIVE_ROLES` 는 이제 **범례를 그리는 차례**일 뿐 글의 차례가 아니다 — 실제 순서는
+ * 요청서의 「작성 구성」(`recordStyleCompose`)이 정하고, 형광펜은 저장된 `roleMarks` 를 따라간다.
  *
  * 표식 주체는 AI 다. `recordDraftPack` 이 문단 첫머리에 `[동기]` 류 표식을 붙여 달라고 지시하고, 이
  * 파서가 표식을 떼어 역할과 **순수 텍스트**로 나눈다. ★저장되는 `RecordDraft.content` 에는 표식이
@@ -18,7 +20,10 @@
 
 export type NarrativeRole = 'motive' | 'process' | 'result' | 'evaluation';
 
-/** 글에 놓이는 순서. **교사 평가가 맨 앞이다**(ADR-094). 범례·지시문이 모두 이 배열을 따른다. */
+/**
+ * 범례를 그리는 차례. 기본 구성(기존형)의 글 순서와 같지만 **글의 순서를 강제하지 않는다**(ADR-099).
+ * 순서가 다른 구성으로 쓴 초안도 같은 색·같은 범례를 쓴다.
+ */
 export const NARRATIVE_ROLES: readonly NarrativeRole[] = [
   'evaluation',
   'motive',
@@ -141,6 +146,23 @@ export function stripNarrativeMarks(text: string): string {
     .join(' ');
 }
 
+/**
+ * 표식이 붙은 문단이 하나라도 있으면 **표식 없는 문단을 버린다**(ADR-099 보강 5).
+ *
+ * ★왜 필요한가: 모델이 초안을 쓰다가 스스로 규정 위반을 발견하고 "…이 표현은 금지된 비유이므로
+ *   다시 씁니다. 아래가 초안입니다." 같은 **설명 줄을 본문 사이에 끼워 넣은 실측 사례**가 있다.
+ *   그 줄은 표식이 없는데, 예전에는 그대로 본문에 이어 붙어 생기부 칸에 들어갔다.
+ *   `judgeNonDraftReply` 는 글 전체가 설명일 때만 걸러 내므로 이런 경우를 놓친다.
+ * ★표식이 **하나도** 없으면 아무것도 버리지 않는다 — 그때는 모델이 표식을 안 쓴 것이지
+ *   설명을 끼워 넣은 것이 아니다(옛 초안·다른 모델 호환).
+ */
+export function dropUnmarkedParagraphs(
+  paragraphs: readonly NarrativeParagraph[],
+): NarrativeParagraph[] {
+  if (!paragraphs.some((p) => p.role !== null)) return [...paragraphs];
+  return paragraphs.filter((p) => p.role !== null);
+}
+
 /** 문단 목록 → 저장용 표식(순서 보존, 역할 없는 문단은 null). */
 export function roleMarksOf(paragraphs: readonly NarrativeParagraph[]): RoleMark[] {
   return paragraphs.map((p) => ({ role: p.role, text: p.text }));
@@ -243,9 +265,42 @@ export function alignRoleMarksInline(
   return out;
 }
 
-/** AI 가 문단마다 붙일 표식 지시 — `recordDraftPack` 과 [다시 표시]가 같은 문장을 쓴다. */
-export const NARRATIVE_MARK_INSTRUCTION =
-  '문단마다 줄 첫머리에 그 문단의 역할을 [평가] [동기] [과정] [결과] 중 하나로 표시하세요. ' +
-  '표식은 문단 첫머리에만, 한 문단에 하나만 씁니다. 문단 사이는 빈 줄로 나눕니다. ' +
-  '순서는 반드시 [평가] → [동기] → [과정] → [결과] 입니다. ' +
-  '첫 문단은 교사 평가이고 "~하는 학생임." 으로 끝냅니다.';
+/**
+ * AI 가 문단마다 붙일 표식 지시.
+ *
+ * ★색(역할 어휘 4종)은 고정이고 **순서만** 가변이다(ADR-099). 선생님이 작성 구성을 고르면
+ *   순서를 여기서 못 박는 대신 요청서의 「작성 구성」을 따르라고 넘긴다 — 두 곳이 서로 다른
+ *   순서를 요구하면 모델은 둘 중 하나를 버리고, 어느 쪽을 버릴지는 우리가 못 정한다.
+ */
+export interface NarrativeMarkOptions {
+  /** 참이면 순서를 여기서 정하지 않고 요청서의 「작성 구성」에 넘긴다. */
+  readonly followComposition?: boolean;
+  /** 첫 문단이 교사 평가인가. 거짓이면 어미 요구를 빼고 평가가 맨 뒤임을 알린다. */
+  readonly firstIsEvaluation?: boolean;
+  /** 참이면 순서를 아예 말하지 않는다 — 이미 쓰인 글에 표식만 붙일 때([다시 표시]). */
+  readonly keepExistingOrder?: boolean;
+}
+
+export function narrativeMarkInstruction(options: NarrativeMarkOptions = {}): string {
+  const head =
+    '문단마다 줄 첫머리에 그 문단의 역할을 [평가] [동기] [과정] [결과] 중 하나로 표시하세요. ' +
+    '표식은 문단 첫머리에만, 한 문단에 하나만 씁니다. 문단 사이는 빈 줄로 나눕니다. ';
+  if (options.keepExistingOrder === true) {
+    return `${head}이미 쓰인 글의 차례를 그대로 두고 표식만 붙입니다.`;
+  }
+  const order =
+    options.followComposition === true
+      ? '순서는 위 「작성 구성」에 적힌 차례를 따릅니다. '
+      : '순서는 반드시 [평가] → [동기] → [과정] → [결과] 입니다. ';
+  const ending =
+    options.firstIsEvaluation === false
+      ? '교사 평가는 마지막 문단입니다. 첫 문단에 평가를 앞세우지 마세요.'
+      : '첫 문단은 교사 평가이고 "~하는 학생임." 으로 끝냅니다.';
+  return `${head}${order}${ending}`;
+}
+
+/**
+ * 기본 표식 지시 — 기존형(교사 평가 먼저) 그대로. **글자 하나까지 예전 값과 같다.**
+ * 구버전 앱도 이 문장을 보내므로, 서버 규정에서 순서를 빼도 구버전 결과는 안 바뀐다.
+ */
+export const NARRATIVE_MARK_INSTRUCTION = narrativeMarkInstruction();

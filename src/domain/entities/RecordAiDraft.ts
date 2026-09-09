@@ -15,6 +15,7 @@
  */
 import type { RecordArea } from './RecordDraft';
 import type { NarrativeParagraph } from '../rules/narrativeParagraphs';
+import type { RecordDraftStyleStamp } from './RecordWritingStyle';
 
 /** 어느 초안 칸의 판인가 — `RecordDraft` 의 upsert 키와 같은 축(area + studentRef + subject). */
 export interface RecordAiDraftKey {
@@ -41,6 +42,12 @@ export interface RecordAiDraft {
    *   내려보내고 있었는데 앱이 버리고 있었다.
    */
   readonly promptVersion?: number;
+  /**
+   * 이 판을 만들 때 쓴 **작성 방식**의 발자국(ADR-099). 선택 필드 — 옛 판에는 없다(기존형으로 읽는다).
+   * ★추가 지시 **본문은 넣지 않는다.** 이 파일은 Drive 로 동기화되는데 지시문에는 학생 이름이
+   *   적혀 있을 수 있고, 마스킹은 보낼 때만 걸린다. 있었는지(`hadInstruction`)만 남긴다.
+   */
+  readonly style?: RecordDraftStyleStamp;
   /** 실명 복원·표식 분리가 끝난 문단들. 표식이 없던 문단은 role=null. */
   readonly paragraphs: readonly NarrativeParagraph[];
   /** "제외됨 N건 (…)" 요약. 빠진 게 없으면 빈 문자열. */

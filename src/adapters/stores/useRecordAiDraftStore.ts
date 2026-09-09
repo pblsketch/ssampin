@@ -7,6 +7,7 @@ import {
   type RecordAiDraftKey,
 } from '@domain/entities/RecordAiDraft';
 import type { NarrativeParagraph } from '@domain/rules/narrativeParagraphs';
+import type { RecordDraftStyleStamp } from '@domain/entities/RecordWritingStyle';
 import { recordAiDraftRepository } from '@adapters/di/container';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
@@ -18,6 +19,8 @@ export interface RecordAiDraftAddInput {
   model?: string;
   /** 이 초안을 만들 때 쓴 작성 규정의 판본(서버가 배급하며 함께 준다). */
   promptVersion?: number;
+  /** 이 판을 만들 때 쓴 작성 방식의 발자국(ADR-099). 추가 지시 본문은 담지 않는다. */
+  style?: RecordDraftStyleStamp;
   paragraphs: readonly NarrativeParagraph[];
   excluded: string;
   /** 분량 조절로 만든 판이면 그 내역. 없으면 새로 쓴 판. */
@@ -87,6 +90,7 @@ export const useRecordAiDraftStore = create<RecordAiDraftState>((set, get) => {
         //   하나씩 열거해 새 객체를 만들기 때문이다(스프레드가 아니다).
         ...(input.adjust !== undefined ? { adjust: input.adjust } : {}),
         ...(input.promptVersion !== undefined ? { promptVersion: input.promptVersion } : {}),
+        ...(input.style !== undefined ? { style: input.style } : {}),
       };
       await persist(enforceAiDraftCap([...get().records, rec], rec.draftKey));
       return rec.id;
