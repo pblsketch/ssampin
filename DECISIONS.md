@@ -108,3 +108,5 @@
 - [ADR-101 · 상담 주제는 선생님이 미리 차려 둔다 — 고른 결과는 새 칸이 아니라 잠긴 메모 안으로 (2026-09-09, 073 운영 적용 · v2.5.1 출시 완료)](docs/03-decisions/ADR-101.md)
 
 - [ADR-V · 실시간 담벼락 v2 릴리즈 라벨](docs/03-decisions/ADR-V-realtime-wall-v2-release-labels.md) — 번호 없음(예전 파일)
+
+- [ADR-102 · 쌤핀 AI 패널의 답은 평문이다 — 지시하는 쪽과 그리는 쪽 양쪽으로 보장한다 (2026-09-10, 구현·게이트 완료 · 미커밋)](docs/03-decisions/ADR-102.md)

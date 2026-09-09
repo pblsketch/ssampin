@@ -89,6 +89,7 @@ import {
   buildCorrelationHints,
   formatCorrelationHintBlock,
 } from '@domain/rules/ownAiCorrelationHints';
+import { buildPanelSystemPrompt } from '@domain/rules/plainAnswerText';
 import { createMaskSession } from '@domain/privacy/maskEngine';
 import { redactQuestion } from '@domain/rules/redactOutbound';
 
@@ -824,7 +825,10 @@ export function AssistDockContainer() {
         provider: effectiveProvider,
         // 폴백은 쌤핀 AI 에 **동의한 경우에만** — 동의 없는 전송을 만들지 않는다.
         solarEnabled: () => useAssistStore.getState().enabled,
-        ...(hintBlock ? { appendSystemPrompt: hintBlock } : {}),
+        // ★형식 지시는 **항상** 붙는다. 예전에는 별칭 힌트가 있을 때만 지시문이 갔고,
+        //   학생 이름이 없는 질문("이번 주 일정 정리해줘")은 아무 지시 없이 CLI 로 나갔다.
+        //   그래서 claude 가 기본값대로 제목·표·굵게로 답했다(실측, 2026-09-10).
+        appendSystemPrompt: buildPanelSystemPrompt(hintBlock),
         onUsage: setUsage,
       });
     },

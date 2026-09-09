@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { AssistTurn } from '@adapters/stores/useAssistStore';
 import { answererLabel, shortModelLabel } from './answererLabels';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
+import { toPlainAnswerText } from '@domain/rules/plainAnswerText';
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 
@@ -533,8 +534,13 @@ export function AssistThread({
             </div>
           )}
 
+          {/* ★평문으로 바꿔서 그린다 + 줄바꿈을 살린다. 둘 다 없으면 마크다운이 글자로 보이고
+              여러 줄짜리 답(일정·명단)이 한 덩어리로 뭉친다 — 실제로 그렇게 보였다.
+              이력(`outboundAnswer`)은 손대지 않는다. 보여 주는 자리만 바꾼다. */}
           {turn.answer.length > 0 && (
-            <p className="text-sm leading-relaxed text-sp-text">{turn.answer}</p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-sp-text">
+              {toPlainAnswerText(turn.answer)}
+            </p>
           )}
 
           {/* 말로 쓴 글을 학생별로 나눈 경우에만 카드를 여러 장으로 편다.
