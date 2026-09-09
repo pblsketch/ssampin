@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { SchedulePublic, SlotPublic } from './bookingApi';
+import { composeConsultationTopic } from './consultationTopic';
 import {
   getSchedulePublic,
   getSlots,
@@ -60,6 +61,8 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [consultationTopic, setConsultationTopic] = useState('');
+  /** 선생님이 만들어 둔 선택지 중 고른 것들. 직접 적은 글과 함께 잠겨서 저장된다. */
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   /** Phase 3 — 예약 완료 후 또는 같은 기기에서 다시 진입한 경우 본인 token. */
   const [myBookingToken, setMyBookingToken] = useState<string | null>(null);
 
@@ -126,6 +129,12 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
     [scheduleId, schedule],
   );
 
+  const toggleTopic = useCallback((topic: string) => {
+    setSelectedTopics((prev) =>
+      prev.includes(topic) ? prev.filter((t) => t !== topic) : [...prev, topic],
+    );
+  }, []);
+
   /* ── 예약 제출 ── */
   const handleBooking = useCallback(async () => {
     if (!schedule || studentNumber === null || !selectedSlotId || !selectedMethod) return;
@@ -145,9 +154,12 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
       );
     }
 
+    // 고른 주제와 직접 적은 글을 한 덩어리로 묶어서 잠근다. 둘 다 비면 빈 문자열이라
+    // 지금까지처럼 아무것도 저장하지 않는다.
+    const topicText = composeConsultationTopic(selectedTopics, consultationTopic);
     let memoEncrypted: string | undefined;
-    if (consultationTopic.trim() && adminKey) {
-      memoEncrypted = await encrypt(consultationTopic.trim(), adminKey, cryptoSalt);
+    if (topicText && adminKey) {
+      memoEncrypted = await encrypt(topicText, adminKey, cryptoSalt);
     }
 
     const result = await bookSlot({
@@ -181,6 +193,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
     parentName,
     parentContact,
     consultationTopic,
+    selectedTopics,
     scheduleId,
     reloadSlots,
   ]);
@@ -216,6 +229,8 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
             onParentContactChange={setParentContact}
             consultationTopic={consultationTopic}
             onTopicChange={setConsultationTopic}
+            selectedTopics={selectedTopics}
+            onToggleTopic={toggleTopic}
             onNext={handleInfoNext}
           />
         )}
@@ -251,6 +266,7 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
               selectedMethod={selectedMethod}
               selectedSlot={selectedSlot}
               consultationTopic={consultationTopic}
+              selectedTopics={selectedTopics}
               onBack={() => setView('method')}
               onSubmit={handleBooking}
               isSubmitting={isSubmitting}
@@ -398,6 +414,8 @@ function InfoView({
   onParentContactChange,
   consultationTopic,
   onTopicChange,
+  selectedTopics,
+  onToggleTopic,
   onNext,
 }: {
   schedule: SchedulePublic;
@@ -409,6 +427,8 @@ function InfoView({
   onParentContactChange: (v: string) => void;
   consultationTopic: string;
   onTopicChange: (v: string) => void;
+  selectedTopics: readonly string[];
+  onToggleTopic: (topic: string) => void;
   onNext: (num: number) => Promise<void>;
 }) {
   const [selected, setSelected] = useState<number | null>(null);
@@ -503,10 +523,67 @@ function InfoView({
         </div>
       )}
 
-      {/* 상담 주제 */}
+      {/* 상담 주제 — 선생님이 만든 선택지(있으면) + 직접 적기 */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 mb-4">
         <h3 className="text-sm font-bold text-gray-900 mb-4">상담 주제 (선택)</h3>
+
+        {schedule.topicOptions.length > 0 && (
+          <div className="mb-4">
+            <p className="text-xs text-gray-500 mb-2">
+              이야기하고 싶은 주제를 골라주세요. 여러 개 고를 수 있습니다.
+            </p>
+            <div className="flex flex-col gap-2" role="group" aria-label="상담 주제 선택">
+              {schedule.topicOptions.map((topic) => {
+                const checked = selectedTopics.includes(topic);
+                return (
+                  <button
+                    key={topic}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    onClick={() => onToggleTopic(topic)}
+                    className={`flex min-h-12 w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition-colors ${
+                      checked
+                        ? 'border-blue-500 bg-blue-50 text-gray-900'
+                        : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border text-white transition-colors ${
+                        checked ? 'border-blue-500 bg-blue-500' : 'border-gray-300 bg-white'
+                      }`}
+                    >
+                      {checked && (
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          className="h-3.5 w-3.5"
+                          viewBox="0 0 20 20"
+                          fill="currentColor"
+                        >
+                          <path
+                            fillRule="evenodd"
+                            d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 111.4-1.4l3.8 3.8 6.8-6.8a1 1 0 011.4 0z"
+                            clipRule="evenodd"
+                          />
+                        </svg>
+                      )}
+                    </span>
+                    {topic}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {schedule.topicOptions.length > 0 && (
+          <label htmlFor="consultation-topic-note" className="mb-1.5 block text-xs text-gray-500">
+            더 하고 싶은 말이 있다면 적어주세요
+          </label>
+        )}
         <textarea
+          id="consultation-topic-note"
           value={consultationTopic}
           onChange={(e) => onTopicChange(e.target.value)}
           placeholder="상담하고 싶은 내용을 간단히 적어주세요"
@@ -749,6 +826,7 @@ function ConfirmView({
   selectedMethod,
   selectedSlot,
   consultationTopic,
+  selectedTopics,
   onBack,
   onSubmit,
   isSubmitting,
@@ -762,6 +840,7 @@ function ConfirmView({
   selectedMethod: 'face' | 'phone' | 'video';
   selectedSlot: SlotPublic;
   consultationTopic: string;
+  selectedTopics: readonly string[];
   onBack: () => void;
   onSubmit: () => void;
   isSubmitting: boolean;
@@ -809,8 +888,11 @@ function ConfirmView({
           {schedule.type === 'parent' && parentContact && (
             <SummaryRow label="연락처" value={parentContact} />
           )}
+          {selectedTopics.length > 0 && (
+            <SummaryRow label="상담 주제" value={selectedTopics.join(', ')} />
+          )}
           {consultationTopic.trim() && (
-            <SummaryRow label="상담 주제" value={consultationTopic.trim()} />
+            <SummaryRow label="직접 적은 내용" value={consultationTopic.trim()} />
           )}
         </div>
       </div>

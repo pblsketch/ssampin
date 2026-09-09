@@ -15,6 +15,14 @@ export interface ConsultationSchedule {
   readonly targetClassName: string;
   readonly targetStudents: readonly { readonly number: number }[];
   readonly message?: string;
+  /**
+   * 예약 화면에 미리 보여 줄 상담 주제 선택지 (교사가 만든다, 복수 선택).
+   *
+   * 비었거나 없으면 예약 화면은 직접 적는 칸만 보여 준다 — 이 기능 이전 일정이 그렇다.
+   * 고른 결과는 예약 건의 `memoEncrypted` 안에 직접 적은 글과 함께 잠겨 들어간다
+   * (`src/domain/rules/consultationTopic.ts`).
+   */
+  readonly topicOptions?: readonly string[];
   readonly shareUrl: string;
   readonly shortUrl?: string;
   readonly adminKey: string;
@@ -96,6 +104,8 @@ export interface ScheduleUpdatePatch {
   readonly slotMinutes?: number;
   readonly dates?: readonly ConsultationDate[];
   readonly message?: string;
+  /** 상담 주제 선택지 교체. 빈 배열이면 선택지를 없앤다. */
+  readonly topicOptions?: readonly string[];
   /** 차단 슬롯 명시 추가 (date_startTime). Phase 2 동기화에서 주로 활용. */
   readonly blockedSlots?: readonly { readonly date: string; readonly startTime: string }[];
 }

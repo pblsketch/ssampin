@@ -216,6 +216,9 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
       targetClassName: scheduleParams.targetClassName,
       targetStudents: scheduleParams.targetStudents,
       ...(scheduleParams.message !== undefined ? { message: scheduleParams.message } : {}),
+      ...(scheduleParams.topicOptions !== undefined
+        ? { topicOptions: scheduleParams.topicOptions }
+        : {}),
       ...(autoExpiresAt ? { expiresAt: autoExpiresAt } : {}),
       ...(blockedSlots ? { blockedSlots } : {}),
     });
@@ -419,6 +422,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     if (patch.slotMinutes !== undefined) metaPatch.slotMinutes = patch.slotMinutes;
     if (patch.dates !== undefined) metaPatch.dates = patch.dates;
     if (patch.message !== undefined) metaPatch.message = patch.message;
+    if (patch.topicOptions !== undefined) metaPatch.topicOptions = patch.topicOptions;
 
     try {
       await consultationSupabaseClient.updateSchedule(id, current.adminKey, metaPatch);
@@ -455,6 +459,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
       ...(patch.slotMinutes !== undefined ? { slotMinutes: patch.slotMinutes } : {}),
       ...(patch.dates !== undefined ? { dates: patch.dates } : {}),
       ...(patch.message !== undefined ? { message: patch.message } : {}),
+      ...(patch.topicOptions !== undefined ? { topicOptions: patch.topicOptions } : {}),
     };
     const nextSchedules = get().schedules.map((s) => (s.id === id ? updated : s));
     set({ schedules: nextSchedules });

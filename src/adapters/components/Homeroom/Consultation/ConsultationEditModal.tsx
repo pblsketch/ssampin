@@ -2,7 +2,7 @@
  * ConsultationEditModal — 기존 상담 일정의 핵심 필드 즉시 수정.
  *
  * 편집 가능: 제목 / 유형(parent·student) / 방식(face·phone·video) / 슬롯 길이 /
- *           메시지 / 날짜·시간대 (행 단위 추가·삭제·시간 조정).
+ *           메시지 / 상담 주제 선택지 / 날짜·시간대 (행 단위 추가·삭제·시간 조정).
  *
  * 학생 대상(targetStudents)·targetClassName 등 구조적 메타는 이 모달에서 변경하지 않는다.
  * (이 항목들은 일정을 새로 만들도록 안내한다.)
@@ -37,6 +37,7 @@ import type {
   ScheduleUpdatePatch,
 } from '@domain/entities/Consultation';
 import { ScheduleUpdateImpactWarning } from './ScheduleUpdateImpactWarning';
+import { TopicOptionsEditor } from './TopicOptionsEditor';
 
 interface ConsultationEditModalProps {
   schedule: ConsultationSchedule;
@@ -102,6 +103,7 @@ export function ConsultationEditModal({
   const [methods, setMethods] = useState<ConsultationMethod[]>([...schedule.methods]);
   const [slotMinutes, setSlotMinutes] = useState<number>(schedule.slotMinutes);
   const [message, setMessage] = useState<string>(schedule.message ?? '');
+  const [topicOptions, setTopicOptions] = useState<readonly string[]>(schedule.topicOptions ?? []);
   const [entries, setEntries] = useState<DateEntry[]>(toEntries(schedule.dates));
   const initialExpiryDate = useMemo(
     () => (schedule.expiresAt ? expiryIsoToKstDateString(schedule.expiresAt) : ''),
@@ -130,6 +132,7 @@ export function ConsultationEditModal({
       methods?: ConsultationMethod[];
       slotMinutes?: number;
       message?: string;
+      topicOptions?: readonly string[];
       dates?: ConsultationDate[];
     } = {};
     if (title.trim() !== schedule.title) patch.title = title.trim();
@@ -142,6 +145,12 @@ export function ConsultationEditModal({
     }
     if (slotMinutes !== schedule.slotMinutes) patch.slotMinutes = slotMinutes;
     if ((message ?? '') !== (schedule.message ?? '')) patch.message = message;
+    // 선택지는 순서도 화면에 그대로 보이므로 순서가 바뀌어도 변경으로 본다.
+    const originalTopics = schedule.topicOptions ?? [];
+    const topicsChanged =
+      topicOptions.length !== originalTopics.length ||
+      topicOptions.some((t, i) => originalTopics[i] !== t);
+    if (topicsChanged) patch.topicOptions = topicOptions;
     const nextDates = toDates(entries);
     const datesChanged =
       nextDates.length !== schedule.dates.length ||
@@ -152,7 +161,7 @@ export function ConsultationEditModal({
       });
     if (datesChanged) patch.dates = nextDates;
     return patch;
-  }, [title, type, methods, slotMinutes, message, entries, schedule]);
+  }, [title, type, methods, slotMinutes, message, topicOptions, entries, schedule]);
 
   const expiryChanged = expiryDate !== initialExpiryDate;
   const hasChanges = Object.keys(computedPatch).length > 0 || expiryChanged;
@@ -462,6 +471,9 @@ export function ConsultationEditModal({
             className="w-full px-3 py-2 rounded-lg bg-sp-surface border border-sp-border text-sm text-sp-text focus:border-sp-accent outline-none resize-none"
           />
         </div>
+
+        {/* 상담 주제 선택지 */}
+        <TopicOptionsEditor type={type} value={topicOptions} onChange={setTopicOptions} />
 
         {/* 예약 자동 마감일 */}
         <div>

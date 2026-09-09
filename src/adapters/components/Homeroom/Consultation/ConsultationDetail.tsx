@@ -14,6 +14,10 @@ import { canShowLocalCopy, shouldRefreshLocalCopy } from '@domain/rules/consulta
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import { consultationSupabaseClient, consultationLocalCopyStore } from '@adapters/di/container';
 import { decrypt } from '@domain/rules/cryptoUtils';
+import {
+  formatConsultationTopicLine,
+  parseConsultationTopic,
+} from '@domain/rules/consultationTopic';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   getConsultationLinkStatus,
@@ -639,7 +643,9 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
         studentName: booking ? getStudentName(booking.studentNumber) : '-',
         bookerInfo: booking ? (decryptedInfoMap.get(booking.id) ?? '-') : '-',
         method: booking ? getMethodLabel(booking.method) : '-',
-        topic: booking ? (decryptedMemoMap.get(booking.id) ?? '-') : '-',
+        // 고른 주제와 직접 적은 글이 한 칸에 함께 들어 있다. 줄바꿈이 있으면
+        // 엑셀 칸이 깨지므로 한 줄로 눕혀서 넣는다.
+        topic: booking ? formatConsultationTopicLine(decryptedMemoMap.get(booking.id)) || '-' : '-',
       };
     });
     return { columns, rows };
@@ -700,7 +706,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
         const studentName = getStudentName(booking.studentNumber);
         const raw = decryptedInfoMap.get(booking.id);
         const parsed = raw ? parseBookerInfo(raw) : null;
-        const topic = decryptedMemoMap.get(booking.id);
+        const topic = formatConsultationTopicLine(decryptedMemoMap.get(booking.id)) || undefined;
 
         const title = buildConsultationEventTitle(
           booking.studentNumber,
@@ -1233,15 +1239,49 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
                                         <span className="text-sp-text">{raw}</span>
                                       </div>
                                     )}
-                                    {memo && (
-                                      <div className="flex items-start gap-2">
-                                        <span className="material-symbols-outlined text-xs text-sp-muted/60 mt-0.5">
-                                          chat
-                                        </span>
-                                        <span className="text-sp-muted/60 w-12 shrink-0">메모</span>
-                                        <span className="text-sp-text">{memo}</span>
-                                      </div>
-                                    )}
+                                    {memo &&
+                                      (() => {
+                                        // 고른 주제(칩)와 직접 적은 글(문장)을 갈라서 보여 준다.
+                                        // 옛 예약은 고른 주제가 없고 전부 직접 적은 글이다.
+                                        const { topics, note } = parseConsultationTopic(memo);
+                                        return (
+                                          <>
+                                            {topics.length > 0 && (
+                                              <div className="flex items-start gap-2">
+                                                <span className="material-symbols-outlined text-xs text-sp-muted/60 mt-0.5">
+                                                  label
+                                                </span>
+                                                <span className="text-sp-muted/60 w-12 shrink-0">
+                                                  주제
+                                                </span>
+                                                <span className="flex flex-wrap gap-1">
+                                                  {topics.map((t) => (
+                                                    <span
+                                                      key={t}
+                                                      className="px-1.5 py-0.5 rounded border border-sp-accent bg-sp-surface text-caption text-sp-accent"
+                                                    >
+                                                      {t}
+                                                    </span>
+                                                  ))}
+                                                </span>
+                                              </div>
+                                            )}
+                                            {note && (
+                                              <div className="flex items-start gap-2">
+                                                <span className="material-symbols-outlined text-xs text-sp-muted/60 mt-0.5">
+                                                  chat
+                                                </span>
+                                                <span className="text-sp-muted/60 w-12 shrink-0">
+                                                  메모
+                                                </span>
+                                                <span className="text-sp-text whitespace-pre-wrap">
+                                                  {note}
+                                                </span>
+                                              </div>
+                                            )}
+                                          </>
+                                        );
+                                      })()}
                                     {!parsed && !raw && !memo && (
                                       <div className="flex items-center gap-2 text-sp-muted/50">
                                         <span className="material-symbols-outlined text-xs">

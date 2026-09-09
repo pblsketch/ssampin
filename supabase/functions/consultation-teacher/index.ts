@@ -131,6 +131,9 @@ serve(async (req: Request) => {
           target_class_name: s.targetClassName,
           target_students: s.targetStudents,
           message: s.message ?? null,
+          // 교사가 만든 상담 주제 선택지. 예약자가 무엇을 골랐는지는 여기가 아니라
+          // 예약 건의 memo_encrypted 안에 잠겨 들어간다(마이그레이션 073 주석).
+          topic_options: Array.isArray(s.topicOptions) ? s.topicOptions : [],
           admin_key: adminKey,
           is_archived: false,
           expires_at: s.expiresAt ?? null,
@@ -292,6 +295,7 @@ serve(async (req: Request) => {
       if (p.slotMinutes !== undefined) patch.slot_minutes = p.slotMinutes;
       if (p.dates !== undefined) patch.dates = p.dates;
       if (p.message !== undefined) patch.message = p.message;
+      if (p.topicOptions !== undefined) patch.topic_options = p.topicOptions;
       // ★ owner_email·crypto_salt·admin_key 는 여기서 절대 받지 않는다.
       //   받으면 수정 창구가 소유권 이전 창구가 된다.
       if (Object.keys(patch).length === 0) return jsonResponse({ ok: true });

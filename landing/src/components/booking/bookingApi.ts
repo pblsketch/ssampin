@@ -21,6 +21,11 @@ export interface SchedulePublic {
   targetClassName: string;
   targetStudents: ReadonlyArray<{ number: number }>;
   message?: string;
+  /**
+   * 선생님이 미리 만들어 둔 상담 주제 선택지(복수 선택). 비면 직접 적는 칸만 보여 준다.
+   * 마이그레이션 073 이전에 만든 일정에는 이 칸이 없다.
+   */
+  topicOptions: readonly string[];
   isArchived: boolean;
   /** 담임이 수동으로 마감한 시각 (ISO). 있으면 마감. */
   closedAt?: string;
@@ -83,6 +88,7 @@ interface ScheduleRow {
   target_class_name: string;
   target_students: unknown;
   message: string | null;
+  topic_options: unknown;
   is_archived: boolean;
   closed_at: string | null;
   expires_at: string | null;
@@ -101,12 +107,25 @@ interface SlotRow {
 
 // ─── API Functions ────────────────────────────────────────────────────────────
 
+/** 마이그레이션 073 이후에만 있는 칸. 없는 서버에서는 이 목록을 빼고 다시 부른다. */
+const SCHEDULE_BASE_COLUMNS =
+  'id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,is_archived,closed_at,expires_at,crypto_version,crypto_salt';
+
 export async function getSchedulePublic(scheduleId: string): Promise<SchedulePublic | null> {
   try {
-    const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/consultation_schedules?id=eq.${scheduleId}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,is_archived,closed_at,expires_at,crypto_version,crypto_salt`,
+    // 없는 컬럼을 select 하면 PostgREST 는 **행이 아니라 400** 을 준다. 즉 마이그레이션이
+    // 아직 안 붙은 서버에 새 랜딩이 먼저 올라가면 예약 화면 전체가 "일정을 찾을 수 없습니다"
+    // 가 된다. 그래서 새 칸을 빼고 한 번 더 시도한다 — 배포 순서가 어긋나도 예약은 받는다.
+    let res = await fetch(
+      `${SUPABASE_URL}/rest/v1/consultation_schedules?id=eq.${scheduleId}&select=${SCHEDULE_BASE_COLUMNS},topic_options`,
       { headers: headers() },
     );
+    if (!res.ok) {
+      res = await fetch(
+        `${SUPABASE_URL}/rest/v1/consultation_schedules?id=eq.${scheduleId}&select=${SCHEDULE_BASE_COLUMNS}`,
+        { headers: headers() },
+      );
+    }
 
     if (!res.ok) return null;
     const rows = (await res.json()) as ScheduleRow[];
@@ -123,6 +142,9 @@ export async function getSchedulePublic(scheduleId: string): Promise<SchedulePub
       targetClassName: row.target_class_name,
       targetStudents: row.target_students as SchedulePublic['targetStudents'],
       message: row.message ?? undefined,
+      topicOptions: Array.isArray(row.topic_options)
+        ? row.topic_options.filter((t): t is string => typeof t === 'string' && t.trim().length > 0)
+        : [],
       isArchived: row.is_archived,
       closedAt: row.closed_at ?? undefined,
       expiresAt: row.expires_at ?? undefined,

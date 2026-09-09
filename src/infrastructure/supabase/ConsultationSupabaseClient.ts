@@ -183,6 +183,8 @@ export class ConsultationSupabaseClient {
     targetClassName: string;
     targetStudents: ReadonlyArray<{ number: number }>;
     message?: string;
+    /** 예약 화면에 보여 줄 상담 주제 선택지. 비면 직접 적는 칸만 보인다. */
+    topicOptions?: readonly string[];
     /** 자동 만료 시각 (ISO). undefined = 자동 만료 없음 */
     expiresAt?: string;
     blockedSlots?: ReadonlyArray<{ date: string; startTime: string }>;
@@ -235,6 +237,7 @@ export class ConsultationSupabaseClient {
           targetClassName: params.targetClassName,
           targetStudents: params.targetStudents,
           message: params.message ?? null,
+          topicOptions: params.topicOptions ?? [],
           expiresAt: params.expiresAt ?? null,
           slots,
         },
@@ -384,6 +387,7 @@ export class ConsultationSupabaseClient {
       slotMinutes?: number;
       dates?: ReadonlyArray<{ date: string; startTime: string; endTime: string }>;
       message?: string;
+      topicOptions?: readonly string[];
     },
   ): Promise<void> {
     if (Object.keys(patch).length === 0) return;

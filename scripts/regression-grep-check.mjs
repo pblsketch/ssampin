@@ -631,6 +631,47 @@ const presenceChecks = [
       /recomputeSlotAvailability: async[\s\S]{0,1500}?catch \(e\) \{[\s\S]{0,600}?throw e instanceof Error/,
     name: 'REGRESSION #83-4: 자동 시간대 차단이 명단 실패를 빈 결과로 덮지 않는다 (이중 예약 방지)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #85 (2026-09-09, ADR-101) — 상담 주제 선택지의 세 계약.
+  //
+  // 예약자가 고른 주제는 새 DB 칸이 아니라 기존 `memo_encrypted` 안에 직접 적은 글과
+  // **함께 잠겨서** 들어간다. 담는 쪽(학부모 예약 화면)과 푸는 쪽(선생님 앱)이 서로 다른
+  // 프로젝트라 같은 규칙이 **두 벌** 존재한다. 세 가지가 게이트 4종을 전부 초록으로 둔 채
+  // 조용히 깨질 수 있어 글자로 못 박는다.
+  //
+  //  (1)(2) 접두사·구분자가 두 벌에서 같아야 한다. 한쪽만 고치면 선생님 화면에서
+  //         고른 주제가 칩이 아니라 `[주제] ...` 글자 그대로 보인다.
+  //  (3)    마이그레이션 073 의 **컬럼 단위 GRANT**. 044 가 테이블 SELECT 를 회수하고
+  //         그 시점 컬럼만 다시 GRANT 했기 때문에, 이후 추가되는 칸은 anon 이 못 읽는다.
+  //         빠지면 학부모 예약 화면의 일정 조회가 통째로 400 이 된다.
+  //  (4)    없는 칸을 select 하면 PostgREST 는 400 이다. 마이그레이션보다 랜딩이 먼저
+  //         올라가면 예약 화면 전체가 "일정을 찾을 수 없습니다"가 되므로, 새 칸을 빼고
+  //         한 번 더 부르는 길을 남긴다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/domain/rules/consultationTopic.ts',
+    pattern:
+      /export const TOPIC_PREFIX = '\[주제\] ';[\s\S]{0,200}?export const TOPIC_SEPARATOR = ' · ';/,
+    name: 'REGRESSION #85-1: 앱이 상담 주제를 푸는 표식은 `[주제] ` + ` · ` 다',
+  },
+  {
+    file: 'landing/src/components/booking/consultationTopic.ts',
+    pattern:
+      /export const TOPIC_PREFIX = '\[주제\] ';[\s\S]{0,200}?export const TOPIC_SEPARATOR = ' · ';/,
+    name: 'REGRESSION #85-2: 예약 화면이 상담 주제를 담는 표식도 같은 `[주제] ` + ` · ` 다 (한쪽만 고치면 선생님 화면이 글자로 보인다)',
+  },
+  {
+    file: 'supabase/migrations/073_consultation_topic_options.sql',
+    pattern:
+      /GRANT SELECT \(topic_options\)[\s\S]{0,40}?ON public\.consultation_schedules TO anon, authenticated;/,
+    name: 'REGRESSION #85-3: 073 이 topic_options 컬럼 SELECT 를 anon 에게 명시로 준다 (044 이후 새 칸은 자동 GRANT 가 없다)',
+  },
+  {
+    file: 'landing/src/components/booking/bookingApi.ts',
+    pattern:
+      /select=\$\{SCHEDULE_BASE_COLUMNS\},topic_options`[\s\S]{0,400}?if \(!res\.ok\) \{[\s\S]{0,300}?select=\$\{SCHEDULE_BASE_COLUMNS\}`/,
+    name: 'REGRESSION #85-4: 예약 화면이 topic_options 없는 서버에서도 일정을 연다 (배포 순서가 어긋나도 예약은 받는다)',
+  },
 ];
 
 // ============================================================

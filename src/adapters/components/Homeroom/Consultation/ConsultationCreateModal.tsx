@@ -22,6 +22,7 @@ import {
 } from '@domain/rules/consultationTimetableRules';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import { TopicOptionsEditor } from './TopicOptionsEditor';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 
 /* ──────────────── 타입 ──────────────── */
@@ -115,6 +116,8 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
   const [customSlotValue, setCustomSlotValue] = useState('');
   const [dates, setDates] = useState<DateEntry[]>([]);
   const [message, setMessage] = useState('');
+  // 예약 화면에 미리 보여 줄 상담 주제 선택지. 비우면 예전처럼 직접 적는 칸만 뜬다.
+  const [topicOptions, setTopicOptions] = useState<readonly string[]>([]);
   const [saving, setSaving] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [customLinkCode, setCustomLinkCode] = useState('');
@@ -682,6 +685,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
           .filter(isStudentActive)
           .map((s) => ({ number: s.studentNumber ?? 0 })),
         message: message.trim() || undefined,
+        topicOptions,
         customLinkCode: customLinkCode.trim() || undefined,
         blockedSlots: [...blockedSlotKeys].map((key) => {
           const [date, startTime] = key.split('_');
@@ -712,6 +716,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     slotMinutes,
     dates,
     message,
+    topicOptions,
     createSchedule,
     showToast,
     onClose,
@@ -1534,6 +1539,9 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
 
           {currentStep === 1 && (
             <>
+              {/* 상담 주제 선택지 */}
+              <TopicOptionsEditor type={type} value={topicOptions} onChange={setTopicOptions} />
+
               {/* 안내 메시지 */}
               <div>
                 <label className="text-xs font-medium text-sp-muted mb-1.5 block">

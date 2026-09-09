@@ -686,3 +686,65 @@ describe('createSchedule 기본 만료일', () => {
     expect(schedule.expiresAt).toBeUndefined();
   });
 });
+
+// ── 상담 주제 선택지 ─────────────────────────────────────────────────
+
+describe('상담 주제 선택지', () => {
+  it('만들 때 서버로도 보내고 이 기기에도 남긴다', async () => {
+    const schedule = await useConsultationStore.getState().createSchedule({
+      title: '상담',
+      type: 'parent',
+      methods: ['face'],
+      slotMinutes: 20,
+      dates: [{ date: '2026-06-01', startTime: '14:00', endTime: '15:00' }],
+      targetClassName: '3-2',
+      targetStudents: [{ number: 1 }],
+      message: '',
+      topicOptions: ['학교생활', '교우관계'],
+    });
+
+    expect(schedule.topicOptions).toEqual(['학교생활', '교우관계']);
+    expect(clientFakes.createSchedule).toHaveBeenCalledWith(
+      expect.objectContaining({ topicOptions: ['학교생활', '교우관계'] }),
+    );
+  });
+
+  it('선택지를 안 주면 서버 요청에도 넣지 않는다 (옛 동작 그대로)', async () => {
+    await useConsultationStore.getState().createSchedule({
+      title: '상담',
+      type: 'parent',
+      methods: ['face'],
+      slotMinutes: 20,
+      dates: [{ date: '2026-06-01', startTime: '14:00', endTime: '15:00' }],
+      targetClassName: '3-2',
+      targetStudents: [{ number: 1 }],
+      message: '',
+    });
+
+    const payload = clientFakes.createSchedule.mock.calls[0]![0] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('topicOptions');
+  });
+
+  it('수정하면 서버 패치와 이 기기 사본이 함께 바뀐다', async () => {
+    const result = await useConsultationStore
+      .getState()
+      .updateSchedule('sch-1', { topicOptions: ['진로·진학'] });
+
+    expect(result.ok).toBe(true);
+    expect(clientFakes.updateSchedule).toHaveBeenCalledWith('sch-1', 'abcd1234', {
+      topicOptions: ['진로·진학'],
+    });
+    const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
+    expect(s?.topicOptions).toEqual(['진로·진학']);
+  });
+
+  it('선택지를 비우면 빈 배열로 지운다 (undefined 와 구분한다)', async () => {
+    await useConsultationStore.getState().updateSchedule('sch-1', { topicOptions: [] });
+
+    expect(clientFakes.updateSchedule).toHaveBeenCalledWith('sch-1', 'abcd1234', {
+      topicOptions: [],
+    });
+    const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
+    expect(s?.topicOptions).toEqual([]);
+  });
+});
