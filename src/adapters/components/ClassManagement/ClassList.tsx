@@ -9,6 +9,9 @@ import { filterActiveClasses, filterArchivedClasses } from '@domain/rules/teachi
 import { ArchivedClassesSection } from './ArchivedClassesSection';
 import { ArchiveConfirmDialog } from './ArchiveConfirmDialog';
 import { ArchivedTermNotice } from '@adapters/components/SchoolYearWizard/ArchivedTermNotice';
+import { ClassScheduleLine } from './ClassScheduleLine';
+import { useClassScheduleLabels } from '@adapters/hooks/useClassScheduleLabels';
+import type { ClassScheduleLabel } from '@adapters/presenters/classSchedulePresenter';
 import {
   DndContext,
   closestCenter,
@@ -58,6 +61,7 @@ function SortableClassItem({
   selectMode,
   isChecked,
   onToggleCheck,
+  schedule,
 }: {
   cls: TeachingClass;
   isSelected: boolean;
@@ -85,6 +89,8 @@ function SortableClassItem({
   selectMode: boolean;
   isChecked: boolean;
   onToggleCheck: (id: string) => void;
+  /** 이 반의 수업 요일·교시. 시간표에서 못 찾았으면 null — 줄 자체를 그리지 않는다. */
+  schedule: ClassScheduleLabel | null;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: cls.id,
@@ -165,7 +171,7 @@ function SortableClassItem({
       <button
         onClick={() => (selectMode ? onToggleCheck(cls.id) : onSelect(cls.id))}
         aria-pressed={selectMode ? isChecked : undefined}
-        className={`w-full flex items-center gap-3 pl-7 pr-10 py-2.5 rounded-xl transition-all text-left ${
+        className={`w-full pl-7 pr-10 py-2.5 rounded-xl transition-all text-left ${
           selectMode && isChecked
             ? 'bg-sp-surface ring-1 ring-sp-accent border-l-[3px] border-transparent'
             : isSelected && !selectMode
@@ -173,31 +179,35 @@ function SortableClassItem({
               : 'hover:bg-sp-text/5 border-l-[3px] border-transparent'
         }`}
       >
-        <span
-          className={`w-2.5 h-2.5 rounded-full shrink-0 ${getCellDotColor(cls.subject, cls.name, colorBy, subjectColors, classroomColors)}`}
-        />
-        <div className="flex-1 min-w-0">
-          <p
-            className={`text-sm font-medium truncate ${isSelected ? 'text-sp-text' : 'text-sp-muted'}`}
-          >
-            {cls.name}
-          </p>
-          <p className="text-xs text-sp-muted/70 truncate">{cls.subject}</p>
-        </div>
-        {isSelected ? (
-          <span className="flex items-center gap-1 shrink-0">
-            <span className="material-symbols-outlined text-icon-sm text-sp-accent">
-              check_circle
+        <div className="flex items-center gap-3">
+          <span
+            className={`w-2.5 h-2.5 rounded-full shrink-0 ${getCellDotColor(cls.subject, cls.name, colorBy, subjectColors, classroomColors)}`}
+          />
+          <div className="flex-1 min-w-0">
+            <p
+              className={`text-sm font-medium truncate ${isSelected ? 'text-sp-text' : 'text-sp-muted'}`}
+            >
+              {cls.name}
+            </p>
+            <p className="text-xs text-sp-muted truncate">{cls.subject}</p>
+          </div>
+          {isSelected ? (
+            <span className="flex items-center gap-1 shrink-0">
+              <span className="material-symbols-outlined text-icon-sm text-sp-accent">
+                check_circle
+              </span>
+              <span className="text-caption text-sp-accent font-medium bg-sp-accent/10 px-1.5 py-0.5 rounded-full">
+                {cls.students.length}명
+              </span>
             </span>
-            <span className="text-caption text-sp-accent font-medium bg-sp-accent/10 px-1.5 py-0.5 rounded-full">
+          ) : (
+            <span className="text-caption text-sp-muted bg-sp-bg px-1.5 py-0.5 rounded-full shrink-0">
               {cls.students.length}명
             </span>
-          </span>
-        ) : (
-          <span className="text-caption text-sp-muted bg-sp-bg px-1.5 py-0.5 rounded-full shrink-0">
-            {cls.students.length}명
-          </span>
-        )}
+          )}
+        </div>
+        {/* 수업 요일·교시는 배지 아래까지 폭을 쓴다 — 본문 칸 안에 두면 선택된 행에서 '수3 · 금5'가 잘린다 */}
+        {schedule && <ClassScheduleLine schedule={schedule} />}
       </button>
 
       {/* 더보기 버튼 (선택 모드에서는 숨김 — 개별 액션 대신 일괄 보관 바를 쓴다) */}
@@ -299,6 +309,9 @@ export function ClassList({ onAddClass, onBeforeSelect }: ClassListProps) {
   // 활성/보관 분리 — 판정은 도메인 규칙만 사용 (archived 필드 직접 비교 금지)
   const activeClasses = useMemo(() => filterActiveClasses(classes), [classes]);
   const archivedClasses = useMemo(() => filterArchivedClasses(classes), [classes]);
+
+  // 반마다 시간표를 훑지 않도록 활성 목록 전체를 한 번에 계산한다.
+  const scheduleLabels = useClassScheduleLabels(activeClasses);
 
   const [menuOpenId, setMenuOpenId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -582,6 +595,7 @@ export function ClassList({ onAddClass, onBeforeSelect }: ClassListProps) {
                 selectMode={selectMode}
                 isChecked={checkedIds.has(cls.id)}
                 onToggleCheck={toggleCheck}
+                schedule={scheduleLabels.get(cls.id) ?? null}
               />
             ))}
           </SortableContext>

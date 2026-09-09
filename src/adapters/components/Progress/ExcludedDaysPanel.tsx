@@ -21,6 +21,7 @@
 import { useMemo, useState } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { resolvePeriodLabel } from '@domain/rules/periodLabel';
+import { MATCH_STAGE_NOTE } from '@adapters/presenters/classSchedulePresenter';
 import type { LessonCountView } from '@adapters/hooks/useLessonCountEstimate';
 import type { ProgressMatchStage } from '@domain/rules/progressMatching';
 
@@ -48,11 +49,6 @@ function monthKeyKo(iso: string): string {
   const m = /^(\d{4})-(\d{2})-\d{2}$/.exec(iso);
   return m === null ? iso : `${m[1]}년 ${Number(m[2])}월`;
 }
-
-const STAGE_NOTE: Record<Exclude<ProgressMatchStage, 1>, string> = {
-  2: '교실 이름만 맞아서 넣었어요',
-  3: '우리 반 시간표를 보고 넣었어요',
-};
 
 function groupByMonth<T extends { date: string }>(items: readonly T[]): [string, T[]][] {
   const map = new Map<string, T[]>();
@@ -199,7 +195,7 @@ export function ExcludedDaysPanel({ view, onAdjust }: ExcludedDaysPanelProps) {
                               </span>
                               {uncertain && stage !== null && (
                                 <span className="rounded-lg border border-dashed border-sp-border px-1.5 py-0.5 text-[10px] leading-none text-sp-muted">
-                                  {STAGE_NOTE[stage as Exclude<ProgressMatchStage, 1>]}
+                                  {MATCH_STAGE_NOTE[stage as Exclude<ProgressMatchStage, 1>]}
                                 </span>
                               )}
                               <button
