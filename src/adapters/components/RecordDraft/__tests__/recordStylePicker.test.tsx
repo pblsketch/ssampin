@@ -27,6 +27,7 @@ function Harness(props: {
   readonly distinctDateCount?: number;
   readonly promptVersion?: number;
   readonly disabled?: boolean;
+  readonly openSignal?: number;
   readonly onStyle?: (s: RecordWritingStyle) => void;
 }) {
   const [style, setStyle] = useState<RecordWritingStyle>(
@@ -46,6 +47,7 @@ function Harness(props: {
       evidenceCount={props.evidenceCount ?? 3}
       distinctDateCount={props.distinctDateCount ?? 3}
       {...(props.promptVersion === undefined ? {} : { promptVersion: props.promptVersion })}
+      {...(props.openSignal === undefined ? {} : { openSignal: props.openSignal })}
       disabled={props.disabled ?? false}
     />
   );
@@ -267,5 +269,28 @@ describe('실행 중에는 못 바꾼다', () => {
     const detail = document.getElementById('record-style-detail') as HTMLFieldSetElement;
     expect(detail.tagName).toBe('FIELDSET');
     expect(detail.disabled).toBe(true);
+  });
+});
+
+describe('상단 바의 작성 방식 배지에서 펴 달라는 신호', () => {
+  it('신호가 0 이면 저절로 펴지지 않는다: 패널을 열 때마다 펴지면 방해가 된다', () => {
+    render(<Harness openSignal={0} />);
+    expect(screen.queryByTestId('style-applied-plan')).toBeNull();
+  });
+
+  it('신호가 오르면 펴지고 고르는 칸에 초점이 간다', () => {
+    const { rerender } = render(<Harness openSignal={0} />);
+    rerender(<Harness openSignal={1} />);
+    expect(screen.getByTestId('style-applied-plan')).toBeTruthy();
+    expect(document.activeElement).toBe(screen.getByRole('combobox'));
+  });
+
+  it('접은 뒤 다시 눌러도 반응한다: 불리언이 아니라 세는 값이라서', () => {
+    const { rerender } = render(<Harness openSignal={0} />);
+    rerender(<Harness openSignal={1} />);
+    fireEvent.click(screen.getByRole('button', { name: /자세히/ }));
+    expect(screen.queryByTestId('style-applied-plan')).toBeNull();
+    rerender(<Harness openSignal={2} />);
+    expect(screen.getByTestId('style-applied-plan')).toBeTruthy();
   });
 });

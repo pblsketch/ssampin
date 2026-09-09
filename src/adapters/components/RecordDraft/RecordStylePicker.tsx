@@ -14,7 +14,7 @@
  * ★모달을 쓰지 않는다(유리 모드의 backdrop-filter 가 화면 고정 요소를 가둔다). 되묻기는 인라인이다.
  * ★`sp-*` 토큰에 Tailwind 투명도 수식을 붙이지 않는다(규칙이 생성되지 않아 배경이 투명해진다).
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import {
   RECORD_STYLE_INSTRUCTION_MAX,
@@ -86,6 +86,11 @@ export interface RecordStylePickerProps {
   readonly promptVersion?: number;
   /** 실행 중에는 못 바꾼다: 진행 중 요청은 시작 시점 값으로 고정돼 있다. */
   readonly disabled?: boolean;
+  /**
+   * 바깥(상단 바의 작성 방식 배지)에서 "펴 달라"고 보내는 신호. 값이 바뀔 때만 편다.
+   * ★불리언으로 두면 한 번 펴고 접은 뒤 다시 누를 때 반응하지 않는다. 그래서 세는 값이다.
+   */
+  readonly openSignal?: number;
 }
 
 export function RecordStylePicker({
@@ -98,6 +103,7 @@ export function RecordStylePicker({
   distinctDateCount,
   promptVersion,
   disabled = false,
+  openSignal,
 }: RecordStylePickerProps): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const [extrasOpen, setExtrasOpen] = useState(false);
@@ -109,6 +115,17 @@ export function RecordStylePicker({
   const [presetError, setPresetError] = useState<string | null>(null);
   /** 방금 불러온 「내 작성 방식」. 설정을 손대면 풀린다(더 이상 그 방식이 아니다). */
   const [activePresetId, setActivePresetId] = useState<string | null>(null);
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  /**
+   * 바깥에서 온 펴기 신호. 첫 렌더(0)에는 반응하지 않는다 — 패널을 열 때마다 저절로 펴지면 안 된다.
+   * 폈으면 고르는 칸에 초점을 둔다. 키보드만 쓰는 선생님이 배지를 누르고 곧바로 고를 수 있어야 한다.
+   */
+  useEffect(() => {
+    if (openSignal === undefined || openSignal <= 0) return;
+    setOpen(true);
+    selectRef.current?.focus();
+  }, [openSignal]);
 
   const focus = focusById(style.focus);
   const resolved = useMemo(() => resolveComposition(style), [style]);
@@ -192,6 +209,7 @@ export function RecordStylePicker({
         <label className="min-w-0">
           <span className="sr-only">작성 초점 또는 저장한 작성 방식 고르기</span>
           <select
+            ref={selectRef}
             value={selectValue}
             disabled={disabled}
             onChange={(e) => onSelect(e.target.value)}

@@ -117,6 +117,11 @@ export interface RecordDraftAiPanelProps {
   readonly existingRoleMarks?: readonly RoleMark[];
   /** 형광펜 스위치(상단 바). 꺼져 있으면 미리보기에 색을 칠하지 않는다. */
   readonly highlightOn?: boolean;
+  /**
+   * 상단 바의 작성 방식 배지를 누를 때마다 1 씩 오르는 신호. 값이 바뀌면 작성 방식 고르기를 편다.
+   * ★값 자체에는 뜻이 없다(내용을 담지 않는다). 0 은 "아직 누른 적 없음" 이다.
+   */
+  readonly openStyleSignal?: number;
   /** 선생님이 따로 적어 둔 지시(2층 프롬프트). */
   readonly teacherPrompt?: string;
   /** [반영] — 실제 저장은 부모가 한다(기존 upsert 경로). roleMarks 는 표식(없으면 null 로 뗀다). */
@@ -209,6 +214,7 @@ export function RecordDraftAiPanel({
   draftKey,
   existingRoleMarks,
   highlightOn = false,
+  openStyleSignal,
   teacherPrompt,
   onApply,
   onRemark,
@@ -766,6 +772,7 @@ export function RecordDraftAiPanel({
         evidenceCount={sendableEvidences.length}
         distinctDateCount={distinctEvidenceDates}
         {...(seenPromptVersion === undefined ? {} : { promptVersion: seenPromptVersion })}
+        {...(openStyleSignal === undefined ? {} : { openSignal: openStyleSignal })}
         disabled={phase.kind === 'running'}
       />
 

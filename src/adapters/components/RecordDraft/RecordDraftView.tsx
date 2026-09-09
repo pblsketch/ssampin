@@ -24,11 +24,7 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useCurriculumStandards } from '@adapters/hooks/useCurriculumStandards';
 import { standardKeywords, standardsForCodes } from '@domain/rules/curriculumStandardRules';
 import type { ObservationRecord } from '@domain/entities/Observation';
-import {
-  NARRATIVE_ROLES,
-  NARRATIVE_ROLE_LABELS,
-  type RoleMark,
-} from '@domain/rules/narrativeParagraphs';
+import type { RoleMark } from '@domain/rules/narrativeParagraphs';
 import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
 import { RecordEvidenceBoard } from '@adapters/components/RecordDraft/RecordEvidenceBoard';
 import {
@@ -36,6 +32,12 @@ import {
   useEvidenceCandidates,
 } from '@adapters/hooks/useEvidenceCandidates';
 import { RecordDraftAiPanel } from '@adapters/components/RecordDraft/RecordDraftAiPanel';
+import { RecordStyleLegend } from '@adapters/components/RecordDraft/RecordStyleLegend';
+import {
+  DEFAULT_RECORD_WRITING_STYLE,
+  type RecordWritingStyle,
+} from '@domain/entities/RecordWritingStyle';
+import { normalizeWritingStyle } from '@domain/rules/recordStyleCompose';
 import {
   RecordDraftSidePanel,
   type SidePanelPlacement,
@@ -58,7 +60,6 @@ import type {
   RecordDraftLayout,
   RecordDraftStudentRow,
 } from '@adapters/components/RecordDraft/recordDraftTypes';
-import { ROLE_DOT } from '@adapters/components/RecordDraft/narrativeRoleStyles';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { fetchRecordPromptL1 } from '@adapters/di/container';
 import { useConnectedOwnAiProviders } from '@adapters/stores/useOwnAiStatusStore';
@@ -335,9 +336,21 @@ export function RecordDraftView({
     [activeArea, classSubject],
   );
 
-  /** 형광펜 스위치 — 설정에 기억한다. 켰을 때만 색·범례가 보인다. */
+  /** 형광펜 스위치 — 설정에 기억한다. 켰을 때만 본문 색과 배지의 색점이 보인다. */
   const highlightOn = useSettingsStore((s) => s.settings.recordHighlightOn === true);
   const updateSettings = useSettingsStore((s) => s.update);
+
+  /**
+   * 지금 영역에 적용될 작성 방식(ADR-099). 정보 바의 배지가 이 값을 그대로 비춘다.
+   * ★고르는 자리(`RecordDraftAiPanel`)와 **같은 곳을 읽고 같은 함수로 정규화**한다. 둘이 갈리면 배지가 거짓말을 한다.
+   */
+  const writingStyles = useSettingsStore((s) => s.settings.recordWritingStyles);
+  const activeWritingStyle: RecordWritingStyle = useMemo(() => {
+    const saved = writingStyles?.[activeArea];
+    return saved === undefined ? DEFAULT_RECORD_WRITING_STYLE : normalizeWritingStyle(saved);
+  }, [writingStyles, activeArea]);
+  /** 배지를 눌렀을 때 작성 방식 고르기를 펴라는 신호. 값이 바뀐 것만으로 뜻이 있다(내용은 없다). */
+  const [styleOpenSignal, setStyleOpenSignal] = useState(0);
 
   useEffect(() => {
     void load();
@@ -909,6 +922,13 @@ export function RecordDraftView({
     if (useAssistStore.getState().open) setAssistOpen(false);
     setPanelOpen(true);
   };
+  /** 정보 바의 작성 방식 배지 → 오른쪽 AI 패널의 작성 방식 고르기. 패널을 새로 만들지 않는다(도크와 배타). */
+  const openStylePicker = (): void => {
+    setSideTab('ai');
+    if (useAssistStore.getState().open) setAssistOpen(false);
+    setPanelOpen(true);
+    setStyleOpenSignal((v) => v + 1);
+  };
   const openEvidenceFor = (studentRef: string): void => {
     setSelectedStudentRef(studentRef);
     setSideTab('evidence');
@@ -1211,17 +1231,12 @@ export function RecordDraftView({
                 />
               </span>
             </span>
-            {/* 형광펜 범례 — 켰을 때만 */}
-            {highlightOn && (
-              <span className="inline-flex items-center gap-2" aria-label="형광펜 범례">
-                {NARRATIVE_ROLES.map((r) => (
-                  <span key={r} className="inline-flex items-center gap-1">
-                    <span className={`h-2 w-2 rounded-full ${ROLE_DOT[r]}`} />
-                    {NARRATIVE_ROLE_LABELS[r]}
-                  </span>
-                ))}
-              </span>
-            )}
+            {/* 작성 방식 배지 — 이름은 늘, 색점은 형광펜을 켰을 때만. 누르면 고르는 자리로 간다. */}
+            <RecordStyleLegend
+              style={activeWritingStyle}
+              highlightOn={highlightOn}
+              {...(aiTarget !== null ? { onOpen: openStylePicker } : {})}
+            />
             <div className="ml-auto inline-flex overflow-hidden rounded-full ring-1 ring-sp-border text-xs font-medium">
               {FILTERS.map((f) => (
                 <button
@@ -1429,6 +1444,7 @@ export function RecordDraftView({
                         ? { existingRoleMarks: selectedDraft.roleMarks }
                         : {})}
                       highlightOn={highlightOn}
+                      openStyleSignal={styleOpenSignal}
                       onApply={applyAiDraft}
                       onRemark={remarkDraft}
                       onFocusStudent={selectStudent}

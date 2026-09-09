@@ -446,13 +446,16 @@ describe('★형광펜 스위치가 꺼져 있으면 편집 칸 뒤에 거울 �
     };
     view();
     expect(screen.queryAllByTestId('role-highlight-layer')).toHaveLength(0);
+    // 배지 자체는 스위치와 무관하게 뜬다(작성 방식은 형광펜을 꺼도 그대로 적용된다). 색점만 없다.
+    expect(screen.getByTestId('record-style-legend')).toBeTruthy();
+    expect(screen.queryAllByTestId('legend-role-dot')).toHaveLength(0);
 
-    // 켜면 표식 있는 행에만 레이어가 깔리고, 범례가 정보 바에 뜬다.
+    // 켜면 표식 있는 행에만 레이어가 깔리고, 배지에 형광펜 색점이 붙는다.
     cleanup();
     settingsState.settings = { recordHighlightOn: true };
     view();
     expect(screen.getAllByTestId('role-highlight-layer')).toHaveLength(1);
-    expect(screen.getByLabelText('형광펜 범례')).toBeTruthy();
+    expect(screen.queryAllByTestId('legend-role-dot').length).toBeGreaterThan(0);
   });
 });
 
