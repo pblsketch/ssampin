@@ -3,6 +3,7 @@ dist/
 dist-electron/
 release/
 .dev-data/
+.dev-data-*/
 *.log
 .DS_Store
 Thumbs.db
