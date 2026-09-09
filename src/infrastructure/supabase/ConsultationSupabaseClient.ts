@@ -8,7 +8,7 @@
  *    구버전 앱은 401/403 을 받으므로, 실패를 빈 값으로 삼키지 말고 업데이트를 안내한다.
  */
 
-import { throwIfPermissionError } from './supabaseAccessError';
+import { throwIfConsultationDenied } from './supabaseAccessError';
 
 // ── DB row types (snake_case) ──────────────────────────────────────────────
 
@@ -25,16 +25,8 @@ interface SlotRow {
   blocked_by?: string | null;
 }
 
-interface BookingRow {
-  id: string;
-  schedule_id: string;
-  slot_id: string;
-  student_number: number;
-  booker_info_encrypted: string | null;
-  method: string;
-  memo_encrypted: string | null;
-  created_at: string;
-}
+// BookingRow 는 예약 목록을 표에서 직접 읽던 시절의 타입이다. 지금은 교사 창구가
+// camelCase 로 돌려주므로(ADR-095) 필요 없어져 지웠다.
 
 // ── Public types (camelCase) ───────────────────────────────────────────────
 
@@ -120,8 +112,66 @@ export class ConsultationSupabaseClient {
     };
   }
 
+  // ── 교사용 서버 창구 (ADR-095) ──────────────────────────────────────────
+  //
+  // 명단 조회와 일정 수정은 이제 anon 열쇠로 표를 직접 건드리지 않고 엣지 함수를 거친다.
+  // 신분증은 관리 키가 아니라 **구글 계정 확인**이다. 토큰을 여기서 직접 만들지 않고
+  // 게터로 받는 이유는, 이 클래스가 구글 인증 구현을 알지 못하게 하려는 것이다
+  // (데스크톱과 모바일이 서로 다른 방식으로 토큰을 만든다).
+
+  private googleTokenGetter: (() => Promise<string | null>) | null = null;
+
+  /** 앱 조립 지점(di/container)이 한 번 꽂아 준다. */
+  setGoogleTokenGetter(getter: () => Promise<string | null>): void {
+    this.googleTokenGetter = getter;
+  }
+
+  private async googleToken(): Promise<string | null> {
+    if (!this.googleTokenGetter) return null;
+    try {
+      return await this.googleTokenGetter();
+    } catch {
+      // 토큰을 못 만드는 것도 "연결 안 됨"이다 — 서버가 not_connected 로 답하게 둔다.
+      // 여기서 예외를 올리면 사유가 아니라 알 수 없는 오류로 보인다.
+      return null;
+    }
+  }
+
   /**
-   * 상담 일정을 Supabase에 등록하고, 슬롯을 자동 생성한다.
+   * 엣지 함수 호출. 실패는 **삼키지 않는다** — 사유를 담아 throw 한다.
+   *
+   * 빈 배열로 돌려주면 화면에 "예약 없음"으로 보여 선생님이 자료가 사라졌다고 믿는다
+   * (설문 쪽에서 실제로 있었던 신고다). 권한 문제는 반드시 눈에 보이게 실패시킨다.
+   */
+  private async callEdge<T>(
+    fnName: 'consultation-teacher',
+    body: Record<string, unknown>,
+    context: string,
+  ): Promise<T> {
+    this.ensureConfigured();
+    const token = await this.googleToken();
+    const res = await fetch(`${this.baseUrl}/functions/v1/${fnName}`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ ...body, googleAccessToken: token ?? '' }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throwIfConsultationDenied(res.status, context, text);
+      throw new Error(`${context}을(를) 처리하지 못했습니다: ${text.slice(0, 200)}`);
+    }
+    return (await res.json()) as T;
+  }
+
+  /**
+   * 상담 일정을 서버에 만든다 — **관리 키와 소금값은 서버가 발급한다.**
+   *
+   * 예전에는 앱이 관리 키를 만들어 보냈다. 그러면 "누가 만들었는가"를 서버가 알 수 없고,
+   * 그 키가 곧 신분증이라 링크를 받은 사람이 신분증을 갖게 된다(ADR-095).
+   * 지금은 서버가 구글 계정을 확인해 소유자를 박고, 키·소금값을 만들어 돌려준다.
+   *
+   * ★ 부르는 쪽은 **이 함수가 성공한 뒤에** 로컬 저장과 공유 링크 조립을 해야 한다.
+   *   먼저 저장하면 서버가 실패했을 때 열리지 않는 반쪽 일정이 남는다.
    */
   async createSchedule(params: {
     id: string;
@@ -133,50 +183,19 @@ export class ConsultationSupabaseClient {
     targetClassName: string;
     targetStudents: ReadonlyArray<{ number: number }>;
     message?: string;
-    adminKey: string;
     /** 자동 만료 시각 (ISO). undefined = 자동 만료 없음 */
     expiresAt?: string;
     blockedSlots?: ReadonlyArray<{ date: string; startTime: string }>;
-  }): Promise<void> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules`, {
-      method: 'POST',
-      headers: {
-        ...this.headers(),
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({
-        id: params.id,
-        title: params.title,
-        type: params.type,
-        methods: params.methods,
-        slot_minutes: params.slotMinutes,
-        dates: params.dates,
-        target_class_name: params.targetClassName,
-        target_students: params.targetStudents,
-        message: params.message ?? null,
-        admin_key: params.adminKey,
-        is_archived: false,
-        expires_at: params.expiresAt ?? null,
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to create consultation schedule: ${err}`);
-    }
-
-    // 슬롯 자동 생성
+  }): Promise<{ adminKey: string; cryptoVersion: number; cryptoSalt: string }> {
+    // 시간대 쪼개기는 그대로 앱에서 한다 — 화면이 미리 보여 주는 것과 같은 계산이라
+    // 서버로 옮기면 두 벌이 된다. 서버는 받은 목록을 그대로 넣는다.
     const slots: Array<{
-      schedule_id: string;
       date: string;
-      start_time: string;
-      end_time: string;
+      startTime: string;
+      endTime: string;
       status: string;
-      blocked_by: string | null;
+      blockedBy: string | null;
     }> = [];
-
-    // slotMinutes 단위로 분할 (학생/학부모 동일)
     const blockedSet = new Set((params.blockedSlots ?? []).map((b) => `${b.date}_${b.startTime}`));
     for (const d of params.dates) {
       let current = parseTime(d.startTime);
@@ -187,32 +206,46 @@ export class ConsultationSupabaseClient {
         // 'teacher' 로 표시해 자동 재계산이 되돌리지 못하게 한다(ADR-060).
         const isBlocked = blockedSet.has(`${d.date}_${startTimeStr}`);
         slots.push({
-          schedule_id: params.id,
           date: d.date,
-          start_time: startTimeStr,
-          end_time: formatTime(current + params.slotMinutes),
+          startTime: startTimeStr,
+          endTime: formatTime(current + params.slotMinutes),
           status: isBlocked ? 'blocked' : 'available',
-          blocked_by: isBlocked ? 'teacher' : null,
+          blockedBy: isBlocked ? 'teacher' : null,
         });
         current += params.slotMinutes;
       }
     }
 
-    if (slots.length === 0) return;
-
-    const slotsRes = await fetch(`${this.baseUrl}/rest/v1/consultation_slots`, {
-      method: 'POST',
-      headers: {
-        ...this.headers(),
-        Prefer: 'return=minimal',
+    const res = await this.callEdge<{
+      id: string;
+      adminKey: string;
+      cryptoVersion: number;
+      cryptoSalt: string;
+    }>(
+      'consultation-teacher',
+      {
+        action: 'create',
+        schedule: {
+          id: params.id,
+          title: params.title,
+          type: params.type,
+          methods: params.methods,
+          slotMinutes: params.slotMinutes,
+          dates: params.dates,
+          targetClassName: params.targetClassName,
+          targetStudents: params.targetStudents,
+          message: params.message ?? null,
+          expiresAt: params.expiresAt ?? null,
+          slots,
+        },
       },
-      body: JSON.stringify(slots),
-    });
-
-    if (!slotsRes.ok) {
-      const err = await slotsRes.text();
-      throw new Error(`Failed to create consultation slots: ${err}`);
-    }
+      '상담 일정 만들기',
+    );
+    return {
+      adminKey: res.adminKey,
+      cryptoVersion: res.cryptoVersion,
+      cryptoSalt: res.cryptoSalt,
+    };
   }
 
   /*
@@ -251,43 +284,40 @@ export class ConsultationSupabaseClient {
   }
 
   /**
+   * 명단 — 시간대와 예약을 **한 번의 호출로** 받는다.
+   *
+   * 두 번 부르면 구글 계정 확인도 두 번 일어난다. 상세 화면은 30초마다 새로 고치므로
+   * 호출을 반으로 줄이는 것이 그대로 부담 절반이다.
+   *
+   * 실패는 빈 배열이 아니라 예외다. 거부를 빈 목록으로 삼키면 화면이 "예약 없음"으로
+   * 보이고, 선생님은 자료가 사라졌다고 판단한다.
+   */
+  async getDetail(
+    scheduleId: string,
+    adminKey: string,
+  ): Promise<{
+    slots: SlotPublic[];
+    bookings: BookingPublic[];
+    cryptoVersion: number;
+    cryptoSalt: string | null;
+  }> {
+    return await this.callEdge<{
+      slots: SlotPublic[];
+      bookings: BookingPublic[];
+      cryptoVersion: number;
+      cryptoSalt: string | null;
+    }>('consultation-teacher', { action: 'detail', scheduleId, adminKey }, '예약 목록');
+  }
+
+  /**
    * 예약 목록 조회 (학생 번호 순)
    *
-   * 예전에는 consultation_bookings 를 직접 조회했다. PostgREST 는 클라이언트가 보낸
-   * 필터를 신뢰할 뿐이라 필터를 뺀 요청으로 전 행이 나왔다(2026-08-14 실측 256행).
-   * 지금은 adminKey 를 함께 보내 **그 일정의 예약만** 받는다 — 마이그레이션 046.
+   * 옛 조회 RPC(get_consultation_bookings)를 직접 부르던 자리다. 그 RPC 는 관리 키만
+   * 대조했고, 그 키가 학부모 링크에 실려 나갔다. 지금은 교사 창구를 거친다(ADR-095).
    */
   async getBookings(scheduleId: string, adminKey: string): Promise<BookingPublic[]> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/get_consultation_bookings`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ p_schedule_id: scheduleId, p_admin_key: adminKey }),
-    });
-
-    // 실패를 빈 목록으로 삼키면 화면에 "예약 없음"으로 보여 선생님이 자료가
-    // 사라졌다고 판단한다. 설문 쪽(getResponses)은 같은 이유로 이미 throw 한다
-    // — 2026-05-14 사용자 신고 사례. 상담에도 같은 규칙을 적용한다.
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throwIfPermissionError(res.status, '예약 목록', body);
-      console.error(
-        `[ConsultationSupabaseClient.getBookings] HTTP ${res.status} ${res.statusText} | scheduleId=${scheduleId} | body=${body.slice(0, 200)}`,
-      );
-      throw new Error(`Supabase getBookings failed: ${res.status} ${res.statusText}`);
-    }
-    const rows = (await res.json()) as BookingRow[];
-
-    return rows.map((r) => ({
-      id: r.id,
-      scheduleId: r.schedule_id,
-      slotId: r.slot_id,
-      studentNumber: r.student_number,
-      bookerInfoEncrypted: r.booker_info_encrypted ?? undefined,
-      method: r.method as BookingPublic['method'],
-      memoEncrypted: r.memo_encrypted ?? undefined,
-      createdAt: r.created_at,
-    }));
+    const { bookings } = await this.getDetail(scheduleId, adminKey);
+    return bookings;
   }
 
   /**
@@ -326,39 +356,18 @@ export class ConsultationSupabaseClient {
   }
 
   /**
-   * 예약 취소 — 예약 삭제 후 슬롯 상태를 available로 복구
+   * 교사가 예약을 취소한다.
    *
-   * 예전에는 세 번에 나눠 했다: slot_id 조회(RPC) → 예약 DELETE(테이블) → 슬롯 PATCH.
-   * 두 가지 문제가 있었다.
-   *   1) 원자적이지 않다. DELETE 는 됐는데 PATCH 가 실패하면 예약은 사라졌는데 슬롯은
-   *      'booked' 로 남아, 아무도 예약할 수 없는 유령 슬롯이 된다.
-   *   2) DELETE 의 WHERE 가 id 를 읽는다. PostgreSQL 은 WHERE 가 읽는 컬럼에도
-   *      SELECT 권한을 요구하므로, 060 에서 consultation_bookings 의 SELECT 를
-   *      회수하면 이 경로가 그대로 깨진다.
-   * 지금은 RPC 한 번으로 끝낸다 — 마이그레이션 059.
+   * 지우기와 시간대 되돌리기를 앱이 따로 하지 않는다 — 하나만 성공하면 아무도 예약할 수
+   * 없는 유령 시간대가 남는다(마이그레이션 059 가 고친 문제다). 서버가 그 RPC 를 그대로
+   * 부르고, 앱은 교사 창구만 거친다(ADR-095).
    */
   async cancelBooking(bookingId: string, scheduleId: string, adminKey: string): Promise<void> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/cancel_consultation_booking_by_admin`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({
-        p_booking_id: bookingId,
-        p_schedule_id: scheduleId,
-        p_admin_key: adminKey,
-      }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throwIfPermissionError(res.status, '예약 정보', body);
-      // P0002(예약 없음) 을 PostgREST 가 404 로 매핑한다. 이미 취소된 예약을 한 번 더
-      // 누른 경우가 대부분이라, 원문 JSON 대신 사람이 읽을 문장을 준다.
-      if (res.status === 404) {
-        throw new Error('이미 취소되었거나 찾을 수 없는 예약입니다. 목록을 새로고침해 주세요.');
-      }
-      throw new Error(`Failed to cancel booking: ${body.slice(0, 200)}`);
-    }
+    await this.callEdge<{ ok: true }>(
+      'consultation-teacher',
+      { action: 'cancelBooking', scheduleId, adminKey, bookingId },
+      '예약 정보',
+    );
   }
 
   /**
@@ -367,6 +376,7 @@ export class ConsultationSupabaseClient {
    */
   async updateSchedule(
     id: string,
+    adminKey: string,
     patch: {
       title?: string;
       type?: 'parent' | 'student';
@@ -376,223 +386,115 @@ export class ConsultationSupabaseClient {
       message?: string;
     },
   ): Promise<void> {
-    this.ensureConfigured();
-
-    const body: Record<string, unknown> = {};
-    if (patch.title !== undefined) body['title'] = patch.title;
-    if (patch.type !== undefined) body['type'] = patch.type;
-    if (patch.methods !== undefined) body['methods'] = patch.methods;
-    if (patch.slotMinutes !== undefined) body['slot_minutes'] = patch.slotMinutes;
-    if (patch.dates !== undefined) body['dates'] = patch.dates;
-    if (patch.message !== undefined) body['message'] = patch.message;
-
-    if (Object.keys(body).length === 0) return;
-
-    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: {
-        ...this.headers(),
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to update consultation schedule: ${err}`);
-    }
+    if (Object.keys(patch).length === 0) return;
+    await this.callEdge<{ ok: true }>(
+      'consultation-teacher',
+      { action: 'updateSchedule', scheduleId: id, adminKey, patch },
+      '상담 일정',
+    );
   }
 
   /**
-   * 예약 마감/재개 — closed_at PATCH.
-   * closed=true 면 현재 시각으로 마감, false 면 NULL 로 재개한다.
+   * 예약 마감/재개.
+   * closed=true 면 현재 시각으로 마감, false 면 재개한다.
    * 마감되면 학부모 예약 페이지가 마감 화면을 표시하고 서버 RPC 도 새 예약을 거부한다.
    */
-  async setClosed(id: string, closed: boolean): Promise<void> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: { ...this.headers(), Prefer: 'return=minimal' },
-      body: JSON.stringify({ closed_at: closed ? new Date().toISOString() : null }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to update consultation closed state: ${err}`);
-    }
+  async setClosed(id: string, adminKey: string, closed: boolean): Promise<void> {
+    await this.callEdge<{ ok: true }>(
+      'consultation-teacher',
+      { action: 'setClosed', scheduleId: id, adminKey, closed },
+      '상담 일정',
+    );
+  }
+
+  /** 보관/보관 해제 */
+  async setArchived(id: string, adminKey: string, archived: boolean): Promise<void> {
+    await this.callEdge<{ ok: true }>(
+      'consultation-teacher',
+      { action: 'setArchived', scheduleId: id, adminKey, archived },
+      '상담 일정',
+    );
+  }
+
+  /** 자동 만료 시각 변경. null 이면 자동 만료 해제. */
+  async setExpiresAt(id: string, adminKey: string, iso: string | null): Promise<void> {
+    await this.callEdge<{ ok: true }>(
+      'consultation-teacher',
+      { action: 'setExpiresAt', scheduleId: id, adminKey, expiresAt: iso },
+      '상담 일정',
+    );
   }
 
   /**
-   * 보관/보관 해제 — is_archived PATCH.
-   * (기존 archiveSchedule 이 로컬만 갱신하던 버그를 이 메서드로 서버까지 반영한다.)
-   */
-  async setArchived(id: string, archived: boolean): Promise<void> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: { ...this.headers(), Prefer: 'return=minimal' },
-      body: JSON.stringify({ is_archived: archived }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to update consultation archived state: ${err}`);
-    }
-  }
-
-  /**
-   * 자동 만료 시각 변경 — expires_at PATCH. null 이면 자동 만료 해제.
-   */
-  async setExpiresAt(id: string, iso: string | null): Promise<void> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_schedules?id=eq.${id}`, {
-      method: 'PATCH',
-      headers: { ...this.headers(), Prefer: 'return=minimal' },
-      body: JSON.stringify({ expires_at: iso }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to update consultation expiry: ${err}`);
-    }
-  }
-
-  /**
-   * 슬롯 재생성.
+   * 시간대 재생성.
    *
-   * 알고리즘:
-   *  1) 현재 슬롯 조회
-   *  2) 새 dates × slotMinutes 로 (date_startTime) 키 집합 계산
-   *  3) 현재 슬롯 중 새 키 집합에 없고 status !== 'booked' 인 것만 DELETE
-   *     (예약 있는 슬롯은 반드시 보존 — caller 가 사전 영향 분석으로 처리해야 함)
-   *  4) 새 키 집합에 있으나 현재 없는 슬롯만 INSERT
-   *  5) blockedSlots 키에 해당하는 신규 슬롯은 status='blocked' 로
+   * 어떤 시간대를 남기고 지울지는 **서버가 정한다** — 예약이 있는 시간대는 지우지 않고,
+   * 반드시 이 일정 것만 손댄다. 앱이 지울 목록을 계산해 보내면, 남의 일정 시간대 id 를
+   * 끼워 넣어 그 일정을 막을 수 있다.
    */
   async replaceSlots(
     scheduleId: string,
+    adminKey: string,
     params: {
       dates: ReadonlyArray<{ date: string; startTime: string; endTime: string }>;
       slotMinutes: number;
       blockedSlots?: ReadonlyArray<{ date: string; startTime: string }>;
     },
   ): Promise<void> {
-    this.ensureConfigured();
-
-    // 1) 현재 슬롯
-    const currentSlots = await this.getSlots(scheduleId);
-    const currentByKey = new Map<string, SlotPublic>();
-    for (const s of currentSlots) currentByKey.set(`${s.date}_${s.startTime}`, s);
-
-    // 2) 새 키 집합
     const blockedSet = new Set((params.blockedSlots ?? []).map((b) => `${b.date}_${b.startTime}`));
-    const desired: Array<{
+    const slots: Array<{
       date: string;
       startTime: string;
       endTime: string;
-      blocked: boolean;
+      status: string;
+      blockedBy: string | null;
     }> = [];
     for (const d of params.dates) {
-      let cursor = parseTime(d.startTime);
+      let current = parseTime(d.startTime);
       const end = parseTime(d.endTime);
-      while (cursor + params.slotMinutes <= end) {
-        const startStr = formatTime(cursor);
-        desired.push({
+      while (current + params.slotMinutes <= end) {
+        const startTimeStr = formatTime(current);
+        const isBlocked = blockedSet.has(`${d.date}_${startTimeStr}`);
+        slots.push({
           date: d.date,
-          startTime: startStr,
-          endTime: formatTime(cursor + params.slotMinutes),
-          blocked: blockedSet.has(`${d.date}_${startStr}`),
+          startTime: startTimeStr,
+          endTime: formatTime(current + params.slotMinutes),
+          status: isBlocked ? 'blocked' : 'available',
+          blockedBy: isBlocked ? 'teacher' : null,
         });
-        cursor += params.slotMinutes;
+        current += params.slotMinutes;
       }
     }
-    const desiredKeys = new Set(desired.map((d) => `${d.date}_${d.startTime}`));
-
-    // 3) 삭제 대상: 새 키 집합에 없고 booked 도 아닌 슬롯
-    const toDelete = currentSlots.filter(
-      (s) => !desiredKeys.has(`${s.date}_${s.startTime}`) && s.status !== 'booked',
+    await this.callEdge<{ ok: true }>(
+      'consultation-teacher',
+      { action: 'replaceSlots', scheduleId, adminKey, slots },
+      '상담 시간대',
     );
-    if (toDelete.length > 0) {
-      const ids = toDelete.map((s) => s.id).join(',');
-      const delRes = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=in.(${ids})`, {
-        method: 'DELETE',
-        headers: { ...this.headers(), Prefer: 'return=minimal' },
-      });
-      if (!delRes.ok) {
-        const err = await delRes.text();
-        throw new Error(`Failed to delete obsolete slots: ${err}`);
-      }
-    }
-
-    // 4) 추가 대상: 새 키 집합에 있으나 현재 없는 슬롯
-    const toInsert = desired
-      .filter((d) => !currentByKey.has(`${d.date}_${d.startTime}`))
-      .map((d) => ({
-        schedule_id: scheduleId,
-        date: d.date,
-        start_time: d.startTime,
-        end_time: d.endTime,
-        status: d.blocked ? 'blocked' : 'available',
-        // 편집 화면에서 교사가 고른 차단 → 자동 재계산이 손대지 않도록 'teacher'
-        blocked_by: d.blocked ? 'teacher' : null,
-      }));
-    if (toInsert.length > 0) {
-      const insRes = await fetch(`${this.baseUrl}/rest/v1/consultation_slots`, {
-        method: 'POST',
-        headers: { ...this.headers(), Prefer: 'return=minimal' },
-        body: JSON.stringify(toInsert),
-      });
-      if (!insRes.ok) {
-        const err = await insRes.text();
-        throw new Error(`Failed to insert new slots: ${err}`);
-      }
-    }
   }
 
   /**
-   * 예약 재배정 — atomic RPC.
+   * 교사(관리자)가 예약 시간을 옮긴다.
    *
-   * `reschedule_consultation_booking(p_booking_id, p_new_slot_id, p_schedule_id)`
-   * 함수가 FOR UPDATE 잠금으로 동시 race 를 차단한다.
-   * SQL: supabase/sql/2026-05-19__reschedule_rpc.sql
+   * 동시에 같은 자리를 노리는 요청을 서버 RPC 의 잠금이 막는다(FOR UPDATE).
+   * 앱은 교사 창구를 거치고, 서버가 그 RPC 를 그대로 부른다.
    */
   async rescheduleBooking(params: {
     bookingId: string;
     newSlotId: string;
     scheduleId: string;
+    adminKey: string;
   }): Promise<{ success: boolean; message: string }> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/reschedule_consultation_booking`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({
-        p_booking_id: params.bookingId,
-        p_new_slot_id: params.newSlotId,
-        p_schedule_id: params.scheduleId,
-      }),
-    });
-
-    if (!res.ok) {
-      if (res.status === 409) {
-        return {
-          success: false,
-          message: '선택한 시간대는 이미 예약되었거나 차단되었습니다.',
-        };
-      }
-      const text = await res.text().catch(() => '');
-      return {
-        success: false,
-        message: text || '예약 시간 변경에 실패했습니다.',
-      };
-    }
-
-    const raw = (await res.json().catch(() => null)) as {
-      success?: boolean;
-      message?: string;
-    } | null;
-    if (raw && typeof raw === 'object') {
-      return {
-        success: raw.success ?? true,
-        message: raw.message ?? '예약 시간이 변경되었습니다.',
-      };
-    }
-    return { success: true, message: '예약 시간이 변경되었습니다.' };
+    return await this.callEdge<{ success: boolean; message: string }>(
+      'consultation-teacher',
+      {
+        action: 'rescheduleBooking',
+        scheduleId: params.scheduleId,
+        adminKey: params.adminKey,
+        bookingId: params.bookingId,
+        newSlotId: params.newSlotId,
+      },
+      '예약 시간 변경',
+    );
   }
 
   /**
@@ -603,21 +505,17 @@ export class ConsultationSupabaseClient {
    * 해제 시에는 blocked_by 도 함께 NULL 로 되돌려 상태가 어긋나지 않게 한다.
    */
   async bulkUpdateSlotStatus(
+    scheduleId: string,
+    adminKey: string,
     slotIds: readonly string[],
     status: 'available' | 'blocked',
   ): Promise<void> {
-    this.ensureConfigured();
     if (slotIds.length === 0) return;
-    const ids = slotIds.join(',');
-    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=in.(${ids})`, {
-      method: 'PATCH',
-      headers: { ...this.headers(), Prefer: 'return=minimal' },
-      body: JSON.stringify({ status, blocked_by: status === 'blocked' ? 'auto' : null }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to bulk update slot status: ${err}`);
-    }
+    await this.callEdge<{ ok: true }>(
+      'consultation-teacher',
+      { action: 'bulkSlotStatus', scheduleId, adminKey, slotIds: [...slotIds], status },
+      '상담 시간대',
+    );
   }
 
   /**
@@ -625,46 +523,53 @@ export class ConsultationSupabaseClient {
    *
    * `bulkUpdateSlotStatus` 와 달리 `blocked_by='teacher'` 를 남기므로
    * 이후 자동 재계산이 이 슬롯을 건드리지 않는다(ADR-060).
-   *
-   * 예약이 있는 슬롯은 호출자가 막아야 한다(이 메서드는 status 를 덮어쓴다).
    */
-  async setSlotBlockedByTeacher(slotId: string, blocked: boolean): Promise<void> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/consultation_slots?id=eq.${slotId}`, {
-      method: 'PATCH',
-      headers: { ...this.headers(), Prefer: 'return=minimal' },
-      body: JSON.stringify(
-        blocked
-          ? { status: 'blocked', blocked_by: 'teacher' }
-          : { status: 'available', blocked_by: null },
-      ),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to update slot block state: ${err}`);
-    }
+  async setSlotBlockedByTeacher(
+    scheduleId: string,
+    adminKey: string,
+    slotId: string,
+    blocked: boolean,
+  ): Promise<void> {
+    await this.callEdge<{ ok: true }>(
+      'consultation-teacher',
+      { action: 'setSlotBlocked', scheduleId, adminKey, slotId, blocked },
+      '상담 시간대',
+    );
   }
 
   /**
-   * 슬롯 및 예약 폴링
+   * 슬롯 및 예약 폴링.
+   *
+   * ★ 실패를 삼키지 않는다. 예전에는 `catch {}` 로 조용히 넘겼는데, 그러면 서버가
+   *   거부해도 화면은 마지막에 성공한 명단을 그대로 보여 준다 — 선생님은 지금 보이는
+   *   것이 최신이라고 믿는다. 지금은 `onError` 로 올려서 화면이 사유를 말하게 한다.
+   *
+   * ★ 거부된 뒤에는 폴링을 **멈춘다.** 30초마다 같은 거부를 다시 받는 것은 서버와
+   *   구글 확인 호출만 축낸다. 사용자가 다시 열거나 새로 고칠 때 다시 시작한다.
    */
   startPolling(
     scheduleId: string,
     adminKey: string,
     onUpdate: (slots: SlotPublic[], bookings: BookingPublic[]) => void,
     intervalMs = 30_000,
+    onError?: (e: unknown) => void,
   ): () => void {
     let timerId: ReturnType<typeof setInterval> | null = null;
 
+    const stop = () => {
+      if (timerId !== null) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    };
+
     const poll = async () => {
       try {
-        const [slots, bookings] = await Promise.all([
-          this.getSlots(scheduleId),
-          this.getBookings(scheduleId, adminKey),
-        ]);
+        const { slots, bookings } = await this.getDetail(scheduleId, adminKey);
         onUpdate(slots, bookings);
-      } catch {
-        // 폴링 에러 무시
+      } catch (e) {
+        stop();
+        onError?.(e);
       }
     };
 
@@ -673,11 +578,6 @@ export class ConsultationSupabaseClient {
       void poll();
     }, intervalMs);
 
-    return () => {
-      if (timerId !== null) {
-        clearInterval(timerId);
-        timerId = null;
-      }
-    };
+    return stop;
   }
 }

@@ -18,6 +18,14 @@ export interface ConsultationSchedule {
   readonly shareUrl: string;
   readonly shortUrl?: string;
   readonly adminKey: string;
+  /**
+   * 예약자 정보 암호화 판 (ADR-095). 1 = 고정 소금값, 2 = 일정별 난수 소금값.
+   * **복호화 판정에는 쓰지 않는다** — 판정은 암호문의 `v2:` 접두사로 한다.
+   * 이 칸은 통계·감사용이고, 판 1 시절 일정에는 없다.
+   */
+  readonly cryptoVersion?: number;
+  /** 판 2 암호화에 쓰는 일정별 난수 소금값. 서버가 발급하며 판 1 일정에는 없다. */
+  readonly cryptoSalt?: string;
   readonly isArchived: boolean;
   /** 담임이 수동으로 예약을 마감한 시각 (ISO). undefined = 마감 안 됨(예약 진행 중) */
   readonly closedAt?: string;

@@ -13,6 +13,8 @@ const { clientFakes, repoFakes } = vi.hoisted(() => ({
   clientFakes: {
     getSlots: vi.fn(),
     getBookings: vi.fn(),
+    // ADR-095: 명단은 시간대·예약을 한 번에 받는다(구글 확인을 두 번 하지 않으려고).
+    getDetail: vi.fn(),
     updateSchedule: vi.fn(),
     replaceSlots: vi.fn(),
     rescheduleBooking: vi.fn(),
@@ -132,6 +134,14 @@ beforeEach(() => {
   Object.values(repoFakes).forEach((fn) => fn.mockReset());
   clientFakes.getSlots.mockResolvedValue(SLOTS);
   clientFakes.getBookings.mockResolvedValue(BOOKINGS);
+  // getDetail 은 두 fake 를 합쳐서 답한다. 각 테스트가 지금처럼 getSlots/getBookings 만
+  // 정해 줘도 그대로 통하도록 하려는 것이다(ADR-095 로 호출이 하나로 합쳐졌다).
+  clientFakes.getDetail.mockImplementation(async () => ({
+    slots: await clientFakes.getSlots(),
+    bookings: await clientFakes.getBookings(),
+    cryptoVersion: 1,
+    cryptoSalt: null,
+  }));
   clientFakes.updateSchedule.mockResolvedValue(undefined);
   clientFakes.replaceSlots.mockResolvedValue(undefined);
   clientFakes.rescheduleBooking.mockResolvedValue({
@@ -142,7 +152,12 @@ beforeEach(() => {
   clientFakes.setClosed.mockResolvedValue(undefined);
   clientFakes.setArchived.mockResolvedValue(undefined);
   clientFakes.setExpiresAt.mockResolvedValue(undefined);
-  clientFakes.createSchedule.mockResolvedValue(undefined);
+  // 만들기는 서버가 먼저다 — 서버가 관리 키·소금값을 발급한다(ADR-095).
+  clientFakes.createSchedule.mockResolvedValue({
+    adminKey: 'server-issued-key',
+    cryptoVersion: 2,
+    cryptoSalt: 'server-issued-salt',
+  });
   repoFakes.load.mockResolvedValue(null);
   repoFakes.save.mockResolvedValue(undefined);
 });
@@ -164,7 +179,7 @@ describe('updateSchedule', () => {
       expect(result.impact.affected).toHaveLength(0);
       expect(result.impact.preserved).toHaveLength(2);
     }
-    expect(clientFakes.updateSchedule).toHaveBeenCalledWith('sch-1', {
+    expect(clientFakes.updateSchedule).toHaveBeenCalledWith('sch-1', 'abcd1234', {
       title: '새 제목',
     });
     expect(clientFakes.cancelBooking).not.toHaveBeenCalled();
@@ -237,6 +252,7 @@ describe('rescheduleBooking', () => {
       .rescheduleBooking('sch-1', 'bk-1', 'slot-1440');
     expect(result.ok).toBe(true);
     expect(clientFakes.rescheduleBooking).toHaveBeenCalledWith({
+      adminKey: 'abcd1234',
       scheduleId: 'sch-1',
       bookingId: 'bk-1',
       newSlotId: 'slot-1440',
@@ -362,12 +378,18 @@ describe('recomputeSlotAvailability', () => {
     expect(clientFakes.bulkUpdateSlotStatus).not.toHaveBeenCalled();
   });
 
-  it('getSlots 실패 → 안전 no-op', async () => {
+  // ADR-095 로 동작이 바뀐 자리다.
+  //
+  // 예전에는 명단을 못 받으면 **빈 결과를 돌려줬다.** 그러면 부르는 쪽이 "겹치는 일정이
+  // 없다"로 읽어 자동 차단이 조용히 멈추고, 막아 뒀어야 할 시간에 학부모 예약이 들어와
+  // 이중 예약이 된다(계획서 §8 시나리오 4). 지금은 올린다 — 다만 **시간대 상태를
+  // 덮어쓰지 않는다**는 성질은 그대로다.
+  it('명단을 못 받으면 시간대 상태를 건드리지 않고 실패를 올린다', async () => {
     useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
     clientFakes.getSlots.mockRejectedValueOnce(new Error('network'));
-    const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
-    expect(result.blockedAdded).toBe(0);
-    expect(result.availableRestored).toBe(0);
+    await expect(
+      useConsultationStore.getState().recomputeSlotAvailability('sch-1'),
+    ).rejects.toThrow('network');
     expect(clientFakes.bulkUpdateSlotStatus).not.toHaveBeenCalled();
   });
 
@@ -416,7 +438,12 @@ describe('recomputeSlotAvailability', () => {
     const result = await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
 
     expect(result.availableRestored).toBe(1);
-    expect(clientFakes.bulkUpdateSlotStatus).toHaveBeenCalledWith(['slot-auto'], 'available');
+    expect(clientFakes.bulkUpdateSlotStatus).toHaveBeenCalledWith(
+      'sch-1',
+      'abcd1234',
+      ['slot-auto'],
+      'available',
+    );
   });
 
   it('한 일정에 교사 차단과 자동 차단이 섞여 있으면 자동 차단만 풀린다', async () => {
@@ -446,7 +473,12 @@ describe('recomputeSlotAvailability', () => {
     await useConsultationStore.getState().recomputeSlotAvailability('sch-1');
 
     expect(clientFakes.bulkUpdateSlotStatus).toHaveBeenCalledTimes(1);
-    expect(clientFakes.bulkUpdateSlotStatus).toHaveBeenCalledWith(['slot-auto'], 'available');
+    expect(clientFakes.bulkUpdateSlotStatus).toHaveBeenCalledWith(
+      'sch-1',
+      'abcd1234',
+      ['slot-auto'],
+      'available',
+    );
   });
 
   // 마이그레이션 048 이전에 만들어진 행은 blockedBy 가 없다. 048 이 이런 행을
@@ -476,27 +508,49 @@ describe('recomputeSlotAvailability', () => {
 describe('setSlotBlocked', () => {
   beforeEach(() => {
     clientFakes.setSlotBlockedByTeacher.mockReset();
+    // ADR-095: 서버 창구가 유예 판정에 관리 키를 쓰므로, 스토어가 일정에서 키를 찾아
+    // 함께 넘긴다. 일정이 없으면 아예 부르지 않는다(아래 마지막 테스트).
+    useConsultationStore.setState({ schedules: [SCHEDULE], loaded: true });
   });
 
   it('차단 요청을 클라이언트에 그대로 넘긴다', async () => {
     clientFakes.setSlotBlockedByTeacher.mockResolvedValue(undefined);
-    const result = await useConsultationStore.getState().setSlotBlocked('slot-1', true);
+    const result = await useConsultationStore.getState().setSlotBlocked('sch-1', 'slot-1', true);
     expect(result.ok).toBe(true);
-    expect(clientFakes.setSlotBlockedByTeacher).toHaveBeenCalledWith('slot-1', true);
+    expect(clientFakes.setSlotBlockedByTeacher).toHaveBeenCalledWith(
+      'sch-1',
+      'abcd1234',
+      'slot-1',
+      true,
+    );
   });
 
   it('해제 요청도 그대로 넘긴다', async () => {
     clientFakes.setSlotBlockedByTeacher.mockResolvedValue(undefined);
-    const result = await useConsultationStore.getState().setSlotBlocked('slot-1', false);
+    const result = await useConsultationStore.getState().setSlotBlocked('sch-1', 'slot-1', false);
     expect(result.ok).toBe(true);
-    expect(clientFakes.setSlotBlockedByTeacher).toHaveBeenCalledWith('slot-1', false);
+    expect(clientFakes.setSlotBlockedByTeacher).toHaveBeenCalledWith(
+      'sch-1',
+      'abcd1234',
+      'slot-1',
+      false,
+    );
   });
 
   it('실패하면 사용자에게 보여줄 이유와 함께 ok:false', async () => {
     clientFakes.setSlotBlockedByTeacher.mockRejectedValue(new Error('network'));
-    const result = await useConsultationStore.getState().setSlotBlocked('slot-1', true);
+    const result = await useConsultationStore.getState().setSlotBlocked('sch-1', 'slot-1', true);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/막지 못했습니다/);
+  });
+
+  it('일정을 못 찾으면 서버를 부르지 않고 이유를 돌려준다', async () => {
+    useConsultationStore.setState({ schedules: [], loaded: true });
+    const result = await useConsultationStore
+      .getState()
+      .setSlotBlocked('없는-일정', 'slot-1', true);
+    expect(result.ok).toBe(false);
+    expect(clientFakes.setSlotBlockedByTeacher).not.toHaveBeenCalled();
   });
 });
 
@@ -518,7 +572,7 @@ describe('archiveSchedule', () => {
 
     const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
     expect(s?.isArchived).toBe(true);
-    expect(clientFakes.setArchived).toHaveBeenCalledWith('sch-1', true);
+    expect(clientFakes.setArchived).toHaveBeenCalledWith('sch-1', 'abcd1234', true);
   });
 
   it('서버 반영 실패해도 로컬 보관은 유지되고 throw 하지 않음', async () => {
@@ -538,7 +592,7 @@ describe('closeSchedule / reopenSchedule', () => {
     const result = await useConsultationStore.getState().closeSchedule('sch-1');
 
     expect(result.ok).toBe(true);
-    expect(clientFakes.setClosed).toHaveBeenCalledWith('sch-1', true);
+    expect(clientFakes.setClosed).toHaveBeenCalledWith('sch-1', 'abcd1234', true);
     const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
     expect(s?.closedAt).toBeTruthy();
   });
@@ -561,7 +615,7 @@ describe('closeSchedule / reopenSchedule', () => {
     const result = await useConsultationStore.getState().reopenSchedule('sch-1');
 
     expect(result.ok).toBe(true);
-    expect(clientFakes.setClosed).toHaveBeenCalledWith('sch-1', false);
+    expect(clientFakes.setClosed).toHaveBeenCalledWith('sch-1', 'abcd1234', false);
     const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
     expect(s?.closedAt).toBeUndefined();
   });
@@ -575,7 +629,7 @@ describe('setScheduleExpiry', () => {
     const result = await useConsultationStore.getState().setScheduleExpiry('sch-1', iso);
 
     expect(result.ok).toBe(true);
-    expect(clientFakes.setExpiresAt).toHaveBeenCalledWith('sch-1', iso);
+    expect(clientFakes.setExpiresAt).toHaveBeenCalledWith('sch-1', 'abcd1234', iso);
     const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
     expect(s?.expiresAt).toBe(iso);
   });
@@ -589,7 +643,7 @@ describe('setScheduleExpiry', () => {
     const result = await useConsultationStore.getState().setScheduleExpiry('sch-1', null);
 
     expect(result.ok).toBe(true);
-    expect(clientFakes.setExpiresAt).toHaveBeenCalledWith('sch-1', null);
+    expect(clientFakes.setExpiresAt).toHaveBeenCalledWith('sch-1', 'abcd1234', null);
     const s = useConsultationStore.getState().schedules.find((x) => x.id === 'sch-1');
     expect(s?.expiresAt).toBeUndefined();
   });

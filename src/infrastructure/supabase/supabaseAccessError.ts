@@ -55,3 +55,32 @@ export function throwIfPermissionError(status: number, context: string, body?: s
 export function isUpdateRequiredError(e: unknown): boolean {
   return e instanceof Error && e.message.includes('최신 버전으로 업데이트');
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// 상담·설문 교사 창구(ADR-095)의 거부 사유 — 사유를 상태 코드보다 **먼저** 본다.
+//
+// 위의 throwIfPermissionError 는 401/403 이면 무조건 "최신 버전으로 업데이트하세요"로
+// 바꾼다. 그런데 새 엣지 함수는 교무실 규격을 따라 **인증 실패에 401 을 쓴다.**
+// 그대로 두면 사유 코드가 전부 "업데이트하세요"에 삼켜져, 구글 연결이 필요한
+// 선생님에게 엉뚱한 처방을 내밀게 된다(수용 기준 #6).
+//
+// 사유 이름표·문구·판별은 화면도 쓰는 순수 규칙이라 domain 에 두고, 여기서는
+// **HTTP 응답을 그 규칙에 넘기는 일**만 한다.
+// ─────────────────────────────────────────────────────────────────────────
+
+import {
+  ConsultationAccessError,
+  CONSULTATION_DENIAL_TEXT,
+  readDenialReason,
+} from '@domain/rules/consultationAccessReason';
+
+/**
+ * 상담·설문 서버 응답의 실패 처리.
+ *
+ * ★ 순서가 핵심이다. **사유 코드를 먼저** 보고, 없을 때만 기존 상태 코드 처리로 넘긴다.
+ */
+export function throwIfConsultationDenied(status: number, context: string, body?: string): void {
+  const reason = readDenialReason(body);
+  if (reason) throw new ConsultationAccessError(reason, CONSULTATION_DENIAL_TEXT[reason]);
+  throwIfPermissionError(status, context, body);
+}

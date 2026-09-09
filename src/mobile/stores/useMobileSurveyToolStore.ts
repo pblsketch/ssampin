@@ -7,6 +7,7 @@ import type {
 } from '@domain/entities/Survey';
 import type { SurveyResponsePublic } from '@infrastructure/supabase/SurveySupabaseClient';
 import { storage, surveySupabaseClient } from '@mobile/di/container';
+import { describeAccessFailure } from '@domain/rules/consultationAccessReason';
 
 interface SurveyResponseStatus {
   total: number;
@@ -152,7 +153,9 @@ export const useMobileSurveyToolStore = create<MobileSurveyToolState>((set, get)
         },
       }));
     } catch (e) {
-      const msg = e instanceof Error ? e.message : '응답을 불러오지 못했습니다';
+      // 사유 코드(구글 미연결·다른 계정·기한 만료)가 있으면 그 안내를 그대로 쓴다.
+      // 원문 메시지만 쓰면 모바일에서도 "업데이트하세요"류로 뭉개진다(ADR-095).
+      const msg = describeAccessFailure(e);
       set((s) => ({
         responseStatus: {
           ...s.responseStatus,

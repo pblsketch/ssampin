@@ -5,8 +5,14 @@ import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { Notice } from '@adapters/components/common/Notice';
+import {
+  accessDenialReasonOf,
+  describeAccessFailure,
+} from '@domain/rules/consultationAccessReason';
+import { canShowLocalCopy, shouldRefreshLocalCopy } from '@domain/rules/consultationLocalCopy';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
-import { consultationSupabaseClient } from '@adapters/di/container';
+import { consultationSupabaseClient, consultationLocalCopyStore } from '@adapters/di/container';
 import { decrypt } from '@domain/rules/cryptoUtils';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import {
@@ -26,6 +32,20 @@ import type {
 import type { RecordPrefill } from '../HomeroomPage';
 import { RescheduleBookingModal } from './RescheduleBookingModal';
 import { CancelBookingConfirmDialog } from './CancelBookingConfirmDialog';
+
+/**
+ * 사본 저장 시각을 "9월 9일" 처럼 짧게 — 배너 한 줄에 들어가야 한다.
+ *
+ * 해가 다르면 연도를 붙인다. 월·일만 적으면 여덟 달 전 사본도 "얼마 안 된 것"처럼
+ * 읽혀서, 얼마나 오래된 명단인지 오해하게 된다(디자인 검토 2026-09-09).
+ */
+function formatSavedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '이전에';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  const md = `${d.getMonth() + 1}월 ${d.getDate()}일`;
+  return sameYear ? md : `${d.getFullYear()}년 ${md}`;
+}
 
 /* ──────────────── Props ──────────────── */
 
@@ -227,6 +247,29 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   const { track } = useAnalytics();
 
   const [slots, setSlots] = useState<SlotPublic[]>([]);
+  /**
+   * 명단을 못 불러온 이유. null 이면 정상이다.
+   *
+   * ★ 이 상태가 없던 시절에는 서버가 거부해도 화면이 **예약 0건과 똑같이** 보였다.
+   *   "예약이 없는 것"과 "볼 수 없는 것"은 선생님에게 완전히 다른 상황이다(수용 기준 #5).
+   */
+  const [accessError, setAccessError] = useState<string | null>(null);
+  /**
+   * 사본으로 보여 주고 있는 시각(ISO). null 이면 서버에서 받은 지금 명단이다.
+   *
+   * 유예 기한이 지나 서버가 닫은 옛 일정만 여기로 온다(계획서 §6 S4-b). 구글 미연결이나
+   * 다른 계정으로 거부된 경우에는 사본을 열지 않는다 — 지금 이 기기 앞에 있는 사람이
+   * 볼 자격이 있는지 확인하지 못한 상태이기 때문이다.
+   */
+  const [copySavedAt, setCopySavedAt] = useState<string | null>(null);
+  /**
+   * 서버가 방금 알려 준 이 일정의 소금값.
+   *
+   * 기기에 저장된 값(`schedule.cryptoSalt`)보다 이쪽을 먼저 쓴다. 백업에서 복원했거나
+   * 동기화가 늦어 로컬에 소금값이 없으면, 서버는 열쇠를 줬는데 화면만 못 읽어
+   * 예약자 정보가 전부 "(정보 없음)"으로 보이기 때문이다.
+   */
+  const [serverCryptoSalt, setServerCryptoSalt] = useState<string | null>(null);
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
   /** 차단/해제 요청 중인 슬롯 id — 연타로 중복 요청이 나가지 않게 막는다 */
   const [togglingSlotId, setTogglingSlotId] = useState<string | null>(null);
@@ -271,19 +314,76 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     [nonVacant, students],
   );
 
-  /** 변경·취소 직후 호출하여 즉시 슬롯/예약 재조회 */
+  /**
+   * 사본 저장 — 상세를 열 때만, 하루에 한 번만.
+   *
+   * 앱을 켜자마자 활성 일정을 전부 받아 두면 구글 확인 호출이 몰린다. 실제로 열어 본
+   * 일정만 남기고, 같은 날 이미 저장했으면 다시 쓰지 않는다(계획서 §6 S4-b).
+   */
+  const saveLocalCopy = useCallback(
+    async (scheduleId: string, nextSlots: SlotPublic[], nextBookings: BookingPublic[]) => {
+      try {
+        const existing = await consultationLocalCopyStore.get(scheduleId);
+        if (!shouldRefreshLocalCopy(existing?.savedAt, new Date())) return;
+        await consultationLocalCopyStore.save({
+          scheduleId,
+          savedAt: new Date().toISOString(),
+          slots: nextSlots,
+          bookings: nextBookings,
+        });
+      } catch {
+        // 사본 저장 실패는 화면을 막을 이유가 아니다. 지금 명단은 이미 보이고 있다.
+      }
+    },
+    [],
+  );
+
+  /**
+   * 서버가 거부했을 때 — **기한 만료일 때만** 사본을 편다.
+   */
+  const showFromLocalCopy = useCallback(
+    async (e: unknown) => {
+      const message = describeAccessFailure(e);
+      if (!canShowLocalCopy(accessDenialReasonOf(e))) {
+        setAccessError(message);
+        setCopySavedAt(null);
+        return;
+      }
+      const copy = await consultationLocalCopyStore.get(schedule.id);
+      if (!copy) {
+        setAccessError(message);
+        setCopySavedAt(null);
+        return;
+      }
+      setSlots([...copy.slots]);
+      setBookings([...copy.bookings]);
+      setAccessError(null);
+      setCopySavedAt(copy.savedAt);
+    },
+    [schedule.id],
+  );
+
+  /**
+   * 변경·취소 직후 호출하여 즉시 시간대/예약 재조회.
+   *
+   * ★ 실패를 삼키지 않는다. 예전에는 `catch {}` 로 넘겼는데, 그러면 서버가 거부해도
+   *   화면은 마지막에 성공한 명단을 그대로 보여 준다 — 선생님은 그게 지금 상태라고
+   *   믿는다. 지금은 사유를 남겨 화면이 문장으로 말한다(ADR-095).
+   */
   const refreshNow = useCallback(async () => {
     try {
-      const [newSlots, newBookings] = await Promise.all([
-        consultationSupabaseClient.getSlots(schedule.id),
-        consultationSupabaseClient.getBookings(schedule.id, schedule.adminKey),
-      ]);
+      const detail = await consultationSupabaseClient.getDetail(schedule.id, schedule.adminKey);
+      const { slots: newSlots, bookings: newBookings } = detail;
+      setServerCryptoSalt(detail.cryptoSalt);
       setSlots(newSlots);
       setBookings(newBookings);
-    } catch {
-      // 폴링이 다음 주기에 따라잡음
+      setAccessError(null);
+      setCopySavedAt(null);
+      void saveLocalCopy(schedule.id, newSlots, newBookings);
+    } catch (e) {
+      await showFromLocalCopy(e);
     }
-  }, [schedule.id]);
+  }, [schedule.id, schedule.adminKey, saveLocalCopy, showFromLocalCopy]);
 
   /** 슬롯 차단/해제 (교사 직접 조작) */
   const handleToggleBlock = useCallback(
@@ -292,7 +392,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
       setTogglingSlotId(slot.id);
       void useConsultationStore
         .getState()
-        .setSlotBlocked(slot.id, nextBlocked)
+        .setSlotBlocked(schedule.id, slot.id, nextBlocked)
         .then(async (res) => {
           if (!res.ok) {
             showToast(res.reason, 'error');
@@ -337,7 +437,8 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
         setClassTimeBookedCount(res.bookedSlotIds.length);
       })
       .catch(() => {
-        // 무시 — 확인 실패는 기존 화면에 영향 0
+        // 여기서만 조용히 넘긴다. 명단을 못 받는 사유는 위의 배너가 이미 말하고 있고,
+        // 이건 그 위에 얹는 "겹치는 시간이 있어요" 안내라 두 번 말할 필요가 없다.
       });
   }, [schedule.id]);
 
@@ -348,7 +449,9 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
   const handleBlockClassTimeSlots = useCallback(async () => {
     if (classTimeOpenSlotIds.length === 0) return;
     setBlockingClassTime(true);
-    const res = await useConsultationStore.getState().blockSlotsByTeacher(classTimeOpenSlotIds);
+    const res = await useConsultationStore
+      .getState()
+      .blockSlotsByTeacher(schedule.id, classTimeOpenSlotIds);
     setBlockingClassTime(false);
     if (res.blocked > 0) {
       showToast(
@@ -406,15 +509,24 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
       (newSlots, newBookings) => {
         setSlots(newSlots);
         setBookings(newBookings);
+        setAccessError(null);
+        setCopySavedAt(null);
+        void saveLocalCopy(schedule.id, newSlots, newBookings);
       },
+      // 상세 화면이 열려 있는 동안은 30초를 지킨다 — 명단 최신성이 중요하다(수용 기준 #11).
       30_000,
+      // 거부는 빈 명단이 아니라 문장으로 뜬다. 폴링은 여기서 멈춘다(같은 거부를
+      // 30초마다 다시 받지 않는다) — 다시 열거나 새로 고치면 재개된다.
+      (e) => {
+        void showFromLocalCopy(e);
+      },
     );
     stopPollingRef.current = stop;
     return () => {
       stop();
       stopPollingRef.current = null;
     };
-  }, [schedule.id, isOnline]);
+  }, [schedule.id, schedule.adminKey, isOnline, saveLocalCopy, showFromLocalCopy]);
 
   /* ── 첫 날짜 자동 선택 ── */
   useEffect(() => {
@@ -423,15 +535,22 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
     }
   }, [selectedDate, schedule.dates]);
 
-  /* ── 예약자 정보 복호화 ── */
+  /*
+   * ── 예약자 정보 복호화 ──
+   *
+   * 소금값을 함께 넘긴다. **어떤 판으로 풀지는 암호문이 정한다**(`v2:` 접두사) —
+   * 이 일정의 `cryptoVersion` 이 2 라도 접두사가 없는 값은 판 1로 푼다. 옛 랜딩
+   * 번들이 판 2 일정에 판 1 값을 저장할 수 있기 때문이다(ADR-095, §8 시나리오 5).
+   */
   useEffect(() => {
     const decryptAll = async () => {
+      const salt = serverCryptoSalt ?? schedule.cryptoSalt;
       const infoMap = new Map<string, string>();
       const memoMap = new Map<string, string>();
       for (const b of bookings) {
         if (b.bookerInfoEncrypted) {
           try {
-            const info = await decrypt(b.bookerInfoEncrypted, schedule.adminKey);
+            const info = await decrypt(b.bookerInfoEncrypted, schedule.adminKey, salt);
             infoMap.set(b.id, info);
           } catch {
             infoMap.set(b.id, '(정보 없음)');
@@ -439,7 +558,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
         }
         if (b.memoEncrypted) {
           try {
-            const memo = await decrypt(b.memoEncrypted, schedule.adminKey);
+            const memo = await decrypt(b.memoEncrypted, schedule.adminKey, salt);
             memoMap.set(b.id, memo);
           } catch {
             // ignore
@@ -450,7 +569,7 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
       setDecryptedMemoMap(memoMap);
     };
     void decryptAll();
-  }, [bookings, schedule.adminKey]);
+  }, [bookings, schedule.adminKey, schedule.cryptoSalt, serverCryptoSalt]);
 
   /* ── 날짜 목록 (중복 제거, 정렬) ── */
   const uniqueDates = useMemo(() => {
@@ -628,6 +747,20 @@ export function ConsultationDetail({ schedule, onBack, onWriteRecord }: Consulta
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {accessError && (
+        <div className="mb-3">
+          <Notice variant="warning" title="명단을 불러오지 못했습니다">
+            {accessError}
+          </Notice>
+        </div>
+      )}
+      {copySavedAt && (
+        <div className="mb-3">
+          <Notice variant="info" title="이 기기에 받아 둔 명단입니다">
+            {`서버에서 이 일정을 여는 기간이 끝나 ${formatSavedAt(copySavedAt)}에 받아 둔 명단을 보여 드립니다. 지금 들어온 새 예약은 반영되지 않습니다.`}
+          </Notice>
+        </div>
+      )}
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 min-w-0">

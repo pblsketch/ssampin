@@ -3,6 +3,8 @@ import QRCode from 'qrcode';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { Notice } from '@adapters/components/common/Notice';
+import { describeAccessFailure } from '@domain/rules/consultationAccessReason';
 import { StudentGrid } from '@adapters/components/Homeroom/shared/StudentGrid';
 import { ExportModal } from '@adapters/components/Homeroom/shared/ExportModal';
 import type { ReadonlyModeProps } from '@adapters/components/Homeroom/shared/StudentGrid';
@@ -10,7 +12,6 @@ import type { Survey, SurveyResponse, StudentPinMap } from '@domain/entities/Sur
 import { isStudentActive } from '@domain/rules/studentActivity';
 import { numberActiveRoster } from '@domain/rules/rosterNumbering';
 import type { Student } from '@domain/entities/Student';
-import { hashPin } from '@infrastructure/crypto/pinHash';
 import { getStudentResponseProgress } from '@domain/rules/surveyRules';
 import type {
   SurveySupabaseClient,
@@ -62,6 +63,8 @@ export function SurveyStudentDetail({
   const showToast = useToastStore((s) => s.show);
 
   const [responses, setResponses] = useState<SurveyResponsePublic[]>([]);
+  /** 응답을 못 불러온 이유. null 이면 정상이다(ADR-095). */
+  const [accessError, setAccessError] = useState<string | null>(null);
   const [showExport, setShowExport] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -83,45 +86,16 @@ export function SurveyStudentDetail({
     };
   }, []);
 
-  /* ── Supabase에 설문이 없으면 자동 업로드 ── */
-  useEffect(() => {
-    if (!supabaseClient || !isOnline || !survey.adminKey) return;
-
-    const ensureOnline = async () => {
-      try {
-        const existing = await supabaseClient.getSurvey(survey.id);
-        if (!existing) {
-          // PIN 해시 생성
-          let studentPinHashes: Record<string, string> | undefined;
-          if (survey.pinProtection && survey.studentPins) {
-            const entries = await Promise.all(
-              Object.entries(survey.studentPins).map(
-                async ([num, pin]) => [num, await hashPin(pin)] as const,
-              ),
-            );
-            studentPinHashes = Object.fromEntries(entries);
-          }
-
-          await supabaseClient.createSurvey({
-            id: survey.id,
-            title: survey.title,
-            description: survey.description,
-            mode: survey.mode,
-            questions: survey.questions,
-            dueDate: survey.dueDate,
-            adminKey: survey.adminKey!,
-            targetCount: survey.targetCount ?? 30,
-            targetNumbers: survey.targetNumbers,
-            pinProtection: survey.pinProtection,
-            studentPinHashes,
-          });
-        }
-      } catch {
-        // 자동 업로드 실패는 무시 (다음에 재시도)
-      }
-    };
-    void ensureOnline();
-  }, [survey, supabaseClient, isOnline]);
+  /*
+   * ── 자동 재업로드는 없앴다 (ADR-095) ──
+   *
+   * 예전에는 "서버에 설문이 없으면 로컬 관리 키로 다시 올리는" 자기 치유 효과가 있었다.
+   * 이제 관리 키는 **서버가 발급한다.** 다시 올리면 서버에 새 키가 생겨서 기기에 있는
+   * 키와 어긋나고, 그 순간부터 응답을 못 보게 된다.
+   *
+   * 애초에 이 상황이 생기지 않는다 — 만들기가 서버 먼저라, 서버가 실패하면 로컬에도
+   * 저장되지 않는다. 서버에서 설문이 사라진 경우는 새로 만들어야 하는 상황이다.
+   */
 
   /* ── 폴링 (30초) ── */
   useEffect(() => {
@@ -132,8 +106,14 @@ export function SurveyStudentDetail({
     const stop = supabaseClient.startPolling(
       survey.id,
       adminKey,
-      (data) => setResponses(data),
+      (data) => {
+        setResponses(data);
+        setAccessError(null);
+      },
       30_000,
+      // 거부는 빈 응답 목록이 아니라 문장으로 뜬다 — "아직 아무도 안 냈다"와
+      // "볼 수 없다"는 선생님에게 완전히 다른 상황이다(수용 기준 #5, ADR-095).
+      (e) => setAccessError(describeAccessFailure(e)),
     );
     stopPollingRef.current = stop;
 
@@ -243,6 +223,13 @@ export function SurveyStudentDetail({
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
+      {accessError && (
+        <div className="mb-3">
+          <Notice variant="warning" title="응답을 불러오지 못했습니다">
+            {accessError}
+          </Notice>
+        </div>
+      )}
       {/* 헤더 */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2 min-w-0">

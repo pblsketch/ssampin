@@ -20,6 +20,7 @@ import {
   consultationRepository,
   consultationSupabaseClient,
   shortLinkClient,
+  consultationLocalCopyStore,
 } from '@adapters/di/container';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
@@ -64,11 +65,28 @@ interface ConsultationState {
   loaded: boolean;
 
   load: () => Promise<void>;
+  /**
+   * 새 상담 일정 — **서버가 먼저다.**
+   *
+   * 서버가 구글 계정을 확인해 소유자를 박고 관리 키·소금값을 발급한다(ADR-095).
+   * 그래서 서버가 성공한 뒤에야 공유 링크를 조립하고 로컬에 저장한다. 순서를 되돌리면
+   * 서버가 거부했을 때 **열리지 않는 반쪽 일정**이 기기에 남는다.
+   */
   createSchedule: (
     params: Omit<
       ConsultationSchedule,
-      'id' | 'createdAt' | 'shareUrl' | 'shortUrl' | 'adminKey' | 'isArchived'
-    > & { customLinkCode?: string },
+      | 'id'
+      | 'createdAt'
+      | 'shareUrl'
+      | 'shortUrl'
+      | 'adminKey'
+      | 'isArchived'
+      | 'cryptoVersion'
+      | 'cryptoSalt'
+    > & {
+      customLinkCode?: string;
+      blockedSlots?: ReadonlyArray<{ date: string; startTime: string }>;
+    },
   ) => Promise<ConsultationSchedule>;
   deleteSchedule: (id: string) => Promise<void>;
   archiveSchedule: (id: string) => Promise<void>;
@@ -108,7 +126,11 @@ interface ConsultationState {
    * 여기서 건 차단은 `blockedBy: 'teacher'` 로 남아 자동 재계산이 손대지 않는다.
    * 예약이 있는 슬롯은 호출자가 먼저 걸러야 한다.
    */
-  setSlotBlocked: (slotId: string, blocked: boolean) => Promise<SetSlotBlockedResult>;
+  setSlotBlocked: (
+    scheduleId: string,
+    slotId: string,
+    blocked: boolean,
+  ) => Promise<SetSlotBlockedResult>;
 
   /**
    * 일정표/시간표 변경을 반영해 슬롯 가용성을 재계산한다 (Phase 2).
@@ -134,7 +156,10 @@ interface ConsultationState {
    * 교사가 확인한 뒤 여러 슬롯을 한 번에 막는다. `blockedBy: 'teacher'` 로 남아
    * 자동 재계산이 다시 풀지 않는다. 일부 실패해도 나머지는 계속 진행한다.
    */
-  blockSlotsByTeacher: (slotIds: readonly string[]) => Promise<{ blocked: number; failed: number }>;
+  blockSlotsByTeacher: (
+    scheduleId: string,
+    slotIds: readonly string[],
+  ) => Promise<{ blocked: number; failed: number }>;
 
   /**
    * 일정표(useScheduleStore) 와 일정(useEventsStore) 변경을 구독해
@@ -172,11 +197,31 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
   },
 
   createSchedule: async (params) => {
-    const { customLinkCode, ...scheduleParams } = params;
+    const { customLinkCode, blockedSlots, ...scheduleParams } = params;
     const id = generateUUID();
-    const adminKey = generateUUID().slice(0, 8);
-    const shareUrl = `${SHARE_BASE_URL}/${id}#key=${encodeURIComponent(adminKey)}`;
     const createdAt = new Date().toISOString();
+
+    // 예약 자동 만료: 마지막 상담일 다음날 00:00(KST). 이 시각이 지나면 예약 링크가 마감된다.
+    const autoExpiresAt = computeDefaultConsultationExpiry(scheduleParams.dates);
+
+    // ── 1) 서버가 먼저다 ────────────────────────────────────────────────
+    // 실패하면 여기서 예외가 올라가고, 아래의 로컬 저장·링크 조립은 아예 하지 않는다.
+    const issued = await consultationSupabaseClient.createSchedule({
+      id,
+      title: scheduleParams.title,
+      type: scheduleParams.type,
+      methods: scheduleParams.methods,
+      slotMinutes: scheduleParams.slotMinutes,
+      dates: scheduleParams.dates,
+      targetClassName: scheduleParams.targetClassName,
+      targetStudents: scheduleParams.targetStudents,
+      ...(scheduleParams.message !== undefined ? { message: scheduleParams.message } : {}),
+      ...(autoExpiresAt ? { expiresAt: autoExpiresAt } : {}),
+      ...(blockedSlots ? { blockedSlots } : {}),
+    });
+
+    const adminKey = issued.adminKey;
+    const shareUrl = `${SHARE_BASE_URL}/${id}#key=${encodeURIComponent(adminKey)}`;
 
     // 숏링크 만료: 마지막 상담일 + 30일 (예약 마감 후에도 학부모가 "마감" 안내
     // 화면을 볼 수 있도록 숏링크 자체는 여유 있게 유지)
@@ -188,8 +233,8 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
       new Date(lastDate).getTime() + 30 * 24 * 60 * 60 * 1000,
     ).toISOString();
 
-    // 예약 자동 만료: 마지막 상담일 다음날 00:00(KST). 이 시각이 지나면 예약 링크가 마감된다.
-    const expiresAt = computeDefaultConsultationExpiry(scheduleParams.dates);
+    // ── 2) 여기부터는 서버가 성공한 뒤의 뒷정리다 ───────────────────────
+    const expiresAt = autoExpiresAt;
 
     // 숏링크 생성 (실패해도 무시)
     let shortUrl: string | undefined;
@@ -212,6 +257,8 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
       shortUrl,
       createdAt,
       isArchived: false,
+      cryptoVersion: issued.cryptoVersion,
+      cryptoSalt: issued.cryptoSalt,
       ...(expiresAt ? { expiresAt } : {}),
     };
 
@@ -231,6 +278,13 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     };
     await consultationRepository.save(next);
     set({ schedules: next.schedules });
+    // 사본도 함께 지운다. 안 지우면 선생님이 상담을 지워도 예약자 정보(암호문)가
+    // 기기에 남는다 — 아무도 다시 열어 볼 수 없는 개인정보가 되는 것이다(ADR-095 후속).
+    try {
+      await consultationLocalCopyStore.remove(id);
+    } catch {
+      // 사본 삭제 실패로 일정 삭제를 되돌리지는 않는다. 다음 삭제 때 다시 시도된다.
+    }
   },
 
   archiveSchedule: async (id) => {
@@ -243,15 +297,18 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     // 서버에도 보관(is_archived)을 반영한다. 이 호출이 빠져 있어서 "보관"해도
     // 학부모 예약 링크가 닫히지 않던 버그를 여기서 함께 고친다.
     try {
-      await consultationSupabaseClient.setArchived(id, true);
+      const key = schedules.find((s) => s.id === id)?.adminKey;
+      if (key) await consultationSupabaseClient.setArchived(id, key, true);
     } catch {
       // 서버 반영 실패는 무시(로컬은 이미 반영). 온라인 복구 후 재보관/편집으로 정정 가능.
     }
   },
 
   closeSchedule: async (id) => {
+    const closeKey = get().schedules.find((s) => s.id === id)?.adminKey;
+    if (!closeKey) return { ok: false, reason: '상담 일정을 찾을 수 없습니다' };
     try {
-      await consultationSupabaseClient.setClosed(id, true);
+      await consultationSupabaseClient.setClosed(id, closeKey, true);
     } catch (e) {
       return { ok: false, reason: `예약 마감에 실패했습니다: ${String(e)}` };
     }
@@ -267,8 +324,10 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
   },
 
   reopenSchedule: async (id) => {
+    const reopenKey = get().schedules.find((s) => s.id === id)?.adminKey;
+    if (!reopenKey) return { ok: false, reason: '상담 일정을 찾을 수 없습니다' };
     try {
-      await consultationSupabaseClient.setClosed(id, false);
+      await consultationSupabaseClient.setClosed(id, reopenKey, false);
     } catch (e) {
       return { ok: false, reason: `예약 다시 열기에 실패했습니다: ${String(e)}` };
     }
@@ -287,8 +346,10 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
   },
 
   setScheduleExpiry: async (id, iso) => {
+    const expiryKey = get().schedules.find((s) => s.id === id)?.adminKey;
+    if (!expiryKey) return { ok: false, reason: '상담 일정을 찾을 수 없습니다' };
     try {
-      await consultationSupabaseClient.setExpiresAt(id, iso);
+      await consultationSupabaseClient.setExpiresAt(id, expiryKey, iso);
     } catch (e) {
       return { ok: false, reason: `만료일 변경에 실패했습니다: ${String(e)}` };
     }
@@ -314,13 +375,13 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     if (!current) return { ok: false, reason: 'NOT_FOUND' };
 
     // 1) 영향 분석 — 최신 슬롯/예약을 Supabase 에서 조회
+    // 시간대와 예약을 한 번에 받는다 — 따로 부르면 구글 계정 확인도 두 번 일어난다.
     let slots: Awaited<ReturnType<typeof consultationSupabaseClient.getSlots>>;
     let bookingsPublic: Awaited<ReturnType<typeof consultationSupabaseClient.getBookings>>;
     try {
-      [slots, bookingsPublic] = await Promise.all([
-        consultationSupabaseClient.getSlots(id),
-        consultationSupabaseClient.getBookings(id, current.adminKey),
-      ]);
+      const detail = await consultationSupabaseClient.getDetail(id, current.adminKey);
+      slots = detail.slots;
+      bookingsPublic = detail.bookings;
     } catch (e) {
       return { ok: false, reason: `현재 예약 정보를 불러오지 못했습니다: ${String(e)}` };
     }
@@ -351,7 +412,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     }
 
     // 4) schedule 메타 PATCH
-    const metaPatch: Parameters<typeof consultationSupabaseClient.updateSchedule>[1] = {};
+    const metaPatch: Parameters<typeof consultationSupabaseClient.updateSchedule>[2] = {};
     if (patch.title !== undefined) metaPatch.title = patch.title;
     if (patch.type !== undefined) metaPatch.type = patch.type;
     if (patch.methods !== undefined) metaPatch.methods = patch.methods;
@@ -360,7 +421,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     if (patch.message !== undefined) metaPatch.message = patch.message;
 
     try {
-      await consultationSupabaseClient.updateSchedule(id, metaPatch);
+      await consultationSupabaseClient.updateSchedule(id, current.adminKey, metaPatch);
     } catch (e) {
       return { ok: false, reason: `일정 메타 갱신 실패: ${String(e)}` };
     }
@@ -372,7 +433,7 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
       patch.blockedSlots !== undefined;
     if (slotShapeChanged) {
       try {
-        await consultationSupabaseClient.replaceSlots(id, {
+        await consultationSupabaseClient.replaceSlots(id, current.adminKey, {
           dates: patch.dates ?? current.dates,
           slotMinutes: patch.slotMinutes ?? current.slotMinutes,
           blockedSlots: patch.blockedSlots,
@@ -407,11 +468,14 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
   },
 
   rescheduleBooking: async (scheduleId, bookingId, newSlotId) => {
+    const key = get().schedules.find((s) => s.id === scheduleId)?.adminKey;
+    if (!key) return { ok: false, reason: '예약 시간 변경 실패: 상담 일정을 찾을 수 없습니다' };
     try {
       const res = await consultationSupabaseClient.rescheduleBooking({
         scheduleId,
         bookingId,
         newSlotId,
+        adminKey: key,
       });
       if (!res.success) return { ok: false, reason: res.message };
       return { ok: true };
@@ -434,9 +498,13 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     }
   },
 
-  setSlotBlocked: async (slotId, blocked) => {
+  setSlotBlocked: async (scheduleId, slotId, blocked) => {
+    const key = get().schedules.find((s) => s.id === scheduleId)?.adminKey;
+    if (!key) {
+      return { ok: false, reason: '상담 일정을 찾을 수 없습니다' };
+    }
     try {
-      await consultationSupabaseClient.setSlotBlockedByTeacher(slotId, blocked);
+      await consultationSupabaseClient.setSlotBlockedByTeacher(scheduleId, key, slotId, blocked);
       return { ok: true };
     } catch (e) {
       return {
@@ -461,16 +529,13 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     );
     if (presets.length === 0) return empty; // 교시 시간 미등록 — 판단 근거가 없다
 
-    let slots: Awaited<ReturnType<typeof consultationSupabaseClient.getSlots>>;
-    let bookings: Awaited<ReturnType<typeof consultationSupabaseClient.getBookings>>;
-    try {
-      [slots, bookings] = await Promise.all([
-        consultationSupabaseClient.getSlots(scheduleId),
-        consultationSupabaseClient.getBookings(scheduleId, schedule.adminKey),
-      ]);
-    } catch {
-      return empty;
-    }
+    // 한 번에 받는다(구글 확인 호출 절반). 실패는 삼키지 않고 올린다 — 빈 결과로
+    // 돌려주면 화면이 "겹치는 시간 없음"으로 읽어, 막아야 할 시간을 열어 둔 채
+    // 안내가 사라진다. 부르는 쪽(상세 화면)이 사유를 문장으로 말한다.
+    const { slots, bookings } = await consultationSupabaseClient.getDetail(
+      scheduleId,
+      schedule.adminKey,
+    );
 
     // 날짜별 공강 교시 — 각 날짜는 자기 요일 시간표를 본다
     const scheduleStore = useScheduleStore.getState();
@@ -496,11 +561,13 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     });
   },
 
-  blockSlotsByTeacher: async (slotIds) => {
+  blockSlotsByTeacher: async (scheduleId, slotIds) => {
+    const key = get().schedules.find((s) => s.id === scheduleId)?.adminKey;
+    if (!key) return { blocked: 0, failed: slotIds.length };
     let blocked = 0;
     for (const id of slotIds) {
       try {
-        await consultationSupabaseClient.setSlotBlockedByTeacher(id, true);
+        await consultationSupabaseClient.setSlotBlockedByTeacher(scheduleId, key, id, true);
         blocked += 1;
       } catch {
         // 하나 실패해도 나머지는 계속 — 부분 성공을 그대로 돌려준다
@@ -518,12 +585,16 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     let slots: Awaited<ReturnType<typeof consultationSupabaseClient.getSlots>>;
     let bookings: Awaited<ReturnType<typeof consultationSupabaseClient.getBookings>>;
     try {
-      [slots, bookings] = await Promise.all([
-        consultationSupabaseClient.getSlots(scheduleId),
-        consultationSupabaseClient.getBookings(scheduleId, schedule.adminKey),
-      ]);
-    } catch {
-      return { blockedAdded: 0, availableRestored: 0, conflictedBookingIds: [] };
+      const detail = await consultationSupabaseClient.getDetail(scheduleId, schedule.adminKey);
+      slots = detail.slots;
+      bookings = detail.bookings;
+    } catch (e) {
+      // ★ 명단을 못 받았으면 **아무것도 하지 않는다.**
+      //
+      //   예전에는 빈 결과를 돌려줬는데, 그러면 부르는 쪽이 "겹치는 일정이 없다"로 읽어
+      //   자동 차단이 조용히 멈춘다. 막아 뒀어야 할 시간에 학부모 예약이 들어오면
+      //   이중 예약이 된다(계획서 §8 시나리오 4). 실패는 실패로 올린다.
+      throw e instanceof Error ? e : new Error('상담 명단을 불러오지 못했습니다');
     }
 
     // 입력 수집
@@ -572,10 +643,20 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     // 배치 PATCH — 실패해도 다음 주기에 다시 시도, 사용자에게 무영향
     try {
       if (toBlock.length > 0) {
-        await consultationSupabaseClient.bulkUpdateSlotStatus(toBlock, 'blocked');
+        await consultationSupabaseClient.bulkUpdateSlotStatus(
+          scheduleId,
+          schedule.adminKey,
+          toBlock,
+          'blocked',
+        );
       }
       if (toRestore.length > 0) {
-        await consultationSupabaseClient.bulkUpdateSlotStatus(toRestore, 'available');
+        await consultationSupabaseClient.bulkUpdateSlotStatus(
+          scheduleId,
+          schedule.adminKey,
+          toRestore,
+          'available',
+        );
       }
     } catch {
       // 무시 — 다음 폴링이나 다음 구독 트리거에서 다시 시도
@@ -592,14 +673,27 @@ export const useConsultationStore = create<ConsultationState>((set, get) => ({
     let timer: ReturnType<typeof setTimeout> | null = null;
     let inFlight = false;
 
+    // 거부된 뒤에는 잠시 쉰다.
+    //
+    // 시간표·행사가 바뀔 때마다 활성 일정 전체의 명단을 다시 부른다. 서버가 거부하는
+    // 상태(구글 미연결·기한 만료)에서 그대로 두면 같은 거부를 몇 초마다 되받아 서버와
+    // 구글 확인 호출만 축낸다. 한 번 실패하면 5분 쉬고, 성공하면 곧바로 푼다.
+    const BACKOFF_MS = 5 * 60 * 1000;
+    let blockedUntil = 0;
+
     const runAll = async () => {
       if (inFlight) return;
+      if (Date.now() < blockedUntil) return;
       inFlight = true;
       try {
         const active = get().schedules.filter((s) => !s.isArchived);
         for (const s of active) {
           await get().recomputeSlotAvailability(s.id);
         }
+        blockedUntil = 0;
+      } catch {
+        // 왜 거부됐는지는 상세 화면이 문장으로 말한다. 여기서는 재시도만 늦춘다.
+        blockedUntil = Date.now() + BACKOFF_MS;
       } finally {
         inFlight = false;
       }

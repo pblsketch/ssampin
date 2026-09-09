@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useSurveyStore } from '@adapters/stores/useSurveyStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { surveySupabaseClient, shortLinkClient } from '@adapters/di/container';
+import { shortLinkClient } from '@adapters/di/container';
+import { accessDenialReasonOf } from '@domain/rules/consultationAccessReason';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import { SITE_DISPLAY } from '@config/siteUrl';
 import type { SurveyMode, QuestionType } from '@domain/entities/Survey';
 import { generateStudentPins } from '@domain/rules/surveyRules';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
-import { hashPin } from '@infrastructure/crypto/pinHash';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 /* ──────────────── 타입 ──────────────── */
@@ -197,7 +197,7 @@ export function SurveyCreateModal({
         studentPins = generateStudentPins(resolvedTargetNumbers);
       }
 
-      const survey = await createSurvey({
+      await createSurvey({
         title: title.trim(),
         description: description.trim() || undefined,
         mode,
@@ -214,44 +214,20 @@ export function SurveyCreateModal({
         studentPins: studentPins,
       });
 
-      // 학생 응답 모드 → Supabase에 업로드 (공유 링크가 동작하도록)
-      if (mode === 'student' && survey.adminKey) {
-        try {
-          // PIN 해시맵 생성 (원본 PIN은 로컬에만 보관)
-          let studentPinHashes: Record<string, string> | undefined;
-          if (survey.pinProtection && survey.studentPins) {
-            const entries = await Promise.all(
-              Object.entries(survey.studentPins).map(
-                async ([num, pin]) => [num, await hashPin(pin)] as const,
-              ),
-            );
-            studentPinHashes = Object.fromEntries(entries);
-          }
-
-          await surveySupabaseClient.createSurvey({
-            id: survey.id,
-            title: survey.title,
-            description: survey.description,
-            mode: 'student',
-            questions: mappedQuestions,
-            dueDate: survey.dueDate,
-            adminKey: survey.adminKey,
-            targetCount: survey.targetCount ?? 30,
-            targetNumbers: survey.targetNumbers,
-            pinProtection: survey.pinProtection,
-            studentPinHashes,
-          });
-        } catch {
-          showToast('설문은 저장되었지만 온라인 공유 설정에 실패했습니다', 'error');
-          onClose();
-          return;
-        }
-      }
+      // 서버 등록은 store 의 createSurvey 안에서 **먼저** 끝났다(ADR-095).
+      // 서버가 구글 계정을 확인해 소유자를 박고 관리 키를 발급하므로, 여기서 다시
+      // 올리면 키가 두 개가 된다.
 
       showToast('설문이 생성되었습니다', 'success');
       onClose();
-    } catch {
-      showToast('설문 생성에 실패했습니다', 'error');
+    } catch (e) {
+      // 구글 연결이 없으면 "생성 실패"가 아니라 무엇을 해야 하는지 말한다.
+      showToast(
+        accessDenialReasonOf(e) === 'not_connected'
+          ? '구글 계정을 연결해야 학생 응답 설문을 만들 수 있습니다. 설정 > 구글 연결에서 연결해 주세요'
+          : '설문 생성에 실패했습니다',
+        'error',
+      );
     } finally {
       setSaving(false);
     }

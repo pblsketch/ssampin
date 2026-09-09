@@ -120,6 +120,7 @@ import { JsonDDayRepository } from '@adapters/repositories/JsonDDayRepository';
 import { JsonCoolImportHistoryRepository } from '@adapters/repositories/JsonCoolImportHistoryRepository';
 import { JsonStaffContactRepository } from '@adapters/repositories/JsonStaffContactRepository';
 import { JsonAssignmentRepository } from '@adapters/repositories/JsonAssignmentRepository';
+import { ConsultationLocalCopyStore } from '@adapters/repositories/consultationLocalCopyStore';
 import { JsonConsultationRepository } from '@adapters/repositories/JsonConsultationRepository';
 import { JsonSurveyRepository } from '@adapters/repositories/JsonSurveyRepository';
 import { JsonRubricRepository } from '@adapters/repositories/JsonRubricRepository';
@@ -528,6 +529,17 @@ export const consultationRepository: IConsultationRepository = new JsonConsultat
 
 export const consultationSupabaseClient = new ConsultationSupabaseClient();
 
+// 상담·설문 명단은 관리 키가 아니라 **구글 계정 확인**으로 연다(ADR-095).
+// 토큰 만들기는 캘린더 연결과 같은 경로를 쓴다 — 새 구글 권한을 요구하지 않는다.
+// ★ 이 배선이 빠지면 서버가 모든 요청을 not_connected 로 돌려보낸다.
+consultationSupabaseClient.setGoogleTokenGetter(() => authenticateGoogle.getValidAccessToken());
+
+/**
+ * 상담 명단 로컬 사본 — 유예 기한이 지난 뒤 "지난 상담 다시 보기"의 유일한 통로(ADR-095).
+ * 기한 안에 상세를 열어 본 일정만 담긴다.
+ */
+export const consultationLocalCopyStore = new ConsultationLocalCopyStore(storage);
+
 // === 설문/체크리스트 ===
 
 export const surveyRepository: ISurveyRepository = new JsonSurveyRepository(storage);
@@ -574,6 +586,7 @@ export const maskMarkdown = new MaskMarkdown();
 export const manageMaskSessions = new ManageMaskSessions(maskMappingRepository);
 
 export const surveySupabaseClient = new SurveySupabaseClient();
+surveySupabaseClient.setGoogleTokenGetter(() => authenticateGoogle.getValidAccessToken());
 
 export function resetGoogleDriveClient(): void {
   _driveClient = null;

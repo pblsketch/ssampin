@@ -8,7 +8,7 @@
  *    상담 예약보다 우선순위가 높다.
  */
 
-import { throwIfPermissionError } from './supabaseAccessError';
+import { throwIfConsultationDenied } from './supabaseAccessError';
 
 interface SurveyRow {
   id: string;
@@ -25,13 +25,8 @@ interface SurveyRow {
   created_at: string;
 }
 
-interface ResponseRow {
-  id: string;
-  survey_id: string;
-  student_number: number;
-  answers: unknown;
-  submitted_at: string;
-}
+// ResponseRow 는 응답을 표에서 직접 읽던 시절의 타입이다. 지금은 교사 창구가
+// camelCase 로 돌려준다(ADR-095).
 
 export interface SurveyPublic {
   id: string;
@@ -82,8 +77,44 @@ export class SurveySupabaseClient {
     };
   }
 
+  // ── 교사용 서버 창구 (ADR-095) — 상담 쪽과 같은 규격 ────────────────────
+  private googleTokenGetter: (() => Promise<string | null>) | null = null;
+
+  /** 앱 조립 지점(di/container)이 한 번 꽂아 준다. 모바일도 반드시 꽂아야 한다. */
+  setGoogleTokenGetter(getter: () => Promise<string | null>): void {
+    this.googleTokenGetter = getter;
+  }
+
+  private async googleToken(): Promise<string | null> {
+    if (!this.googleTokenGetter) return null;
+    try {
+      return await this.googleTokenGetter();
+    } catch {
+      return null;
+    }
+  }
+
+  private async callEdge<T>(body: Record<string, unknown>, context: string): Promise<T> {
+    this.ensureConfigured();
+    const token = await this.googleToken();
+    const res = await fetch(`${this.baseUrl}/functions/v1/survey-teacher`, {
+      method: 'POST',
+      headers: this.headers(),
+      body: JSON.stringify({ ...body, googleAccessToken: token ?? '' }),
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throwIfConsultationDenied(res.status, context, text);
+      throw new Error(`${context}을(를) 처리하지 못했습니다: ${text.slice(0, 200)}`);
+    }
+    return (await res.json()) as T;
+  }
+
   /**
-   * 설문을 Supabase에 등록 (학생 응답 모드용)
+   * 설문을 서버에 만든다 — **관리 키는 서버가 발급한다.**
+   *
+   * 서버가 구글 계정을 확인해 소유자를 박는다(ADR-095). 부르는 쪽은 이 함수가 성공한
+   * 뒤에야 로컬 저장과 공유 링크 조립을 해야 한다.
    */
   async createSurvey(params: {
     id: string;
@@ -92,38 +123,32 @@ export class SurveySupabaseClient {
     mode: 'teacher' | 'student';
     questions: unknown;
     dueDate?: string;
-    adminKey: string;
     targetCount: number;
     targetNumbers?: readonly number[];
     pinProtection?: boolean;
     studentPinHashes?: Record<string, string>;
-  }): Promise<void> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/surveys`, {
-      method: 'POST',
-      headers: {
-        ...this.headers(),
-        Prefer: 'return=minimal',
+    categoryColor?: string;
+  }): Promise<{ adminKey: string }> {
+    const res = await this.callEdge<{ id: string; adminKey: string }>(
+      {
+        action: 'create',
+        survey: {
+          id: params.id,
+          title: params.title,
+          description: params.description ?? null,
+          mode: params.mode,
+          questions: params.questions,
+          dueDate: params.dueDate ?? null,
+          categoryColor: params.categoryColor ?? '#000000',
+          targetCount: params.targetCount,
+          targetNumbers: params.targetNumbers ? [...params.targetNumbers] : null,
+          pinProtection: params.pinProtection ?? false,
+          studentPinHashes: params.studentPinHashes ?? null,
+        },
       },
-      body: JSON.stringify({
-        id: params.id,
-        title: params.title,
-        description: params.description ?? null,
-        mode: params.mode,
-        questions: params.questions,
-        due_date: params.dueDate ?? null,
-        admin_key: params.adminKey,
-        target_count: params.targetCount,
-        student_numbers: params.targetNumbers ? [...params.targetNumbers] : null,
-        pin_protection: params.pinProtection ?? false,
-        pin_hashes: params.studentPinHashes ?? null,
-      }),
-    });
-
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`Failed to create survey: ${err}`);
-    }
+      '설문 만들기',
+    );
+    return { adminKey: res.adminKey };
   }
 
   /**
@@ -171,31 +196,11 @@ export class SurveySupabaseClient {
    * 지금은 adminKey 를 함께 보내 **그 설문의 응답만** 받는다 — 마이그레이션 046.
    */
   async getResponses(surveyId: string, adminKey: string): Promise<SurveyResponsePublic[]> {
-    this.ensureConfigured();
-    const res = await fetch(`${this.baseUrl}/rest/v1/rpc/get_survey_responses`, {
-      method: 'POST',
-      headers: this.headers(),
-      body: JSON.stringify({ p_survey_id: surveyId, p_admin_key: adminKey }),
-    });
-
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      // 권한 오류는 "무엇을 해야 하는지" 알려준다 (관리 키 불일치와 구분)
-      throwIfPermissionError(res.status, '설문 응답', body);
-      console.error(
-        `[SurveySupabaseClient.getResponses] HTTP ${res.status} ${res.statusText} | surveyId=${surveyId} | body=${body.slice(0, 200)}`,
-      );
-      throw new Error(`Supabase getResponses failed: ${res.status} ${res.statusText}`);
-    }
-    const rows = (await res.json()) as ResponseRow[];
-
-    return rows.map((r) => ({
-      id: r.id,
-      surveyId: r.survey_id,
-      studentNumber: r.student_number,
-      answers: r.answers as SurveyResponsePublic['answers'],
-      submittedAt: r.submitted_at,
-    }));
+    const { responses } = await this.callEdge<{ responses: SurveyResponsePublic[] }>(
+      { action: 'responses', surveyId, adminKey },
+      '설문 응답',
+    );
+    return responses;
   }
 
   /**
@@ -253,22 +258,35 @@ export class SurveySupabaseClient {
   }
 
   /**
-   * 응답 폴링
+   * 응답 폴링.
+   *
+   * ★ 실패를 삼키지 않는다. 예전에는 `catch {}` 였는데, 그러면 서버가 거부해도 화면은
+   *   마지막에 성공한 목록을 계속 보여 준다 — 선생님은 그게 최신이라고 믿는다.
+   *   거부된 뒤에는 폴링을 멈춘다(같은 거부를 30초마다 다시 받지 않는다).
    */
   startPolling(
     surveyId: string,
     adminKey: string,
     onUpdate: (responses: SurveyResponsePublic[]) => void,
     intervalMs = 30_000,
+    onError?: (e: unknown) => void,
   ): () => void {
     let timerId: ReturnType<typeof setInterval> | null = null;
+
+    const stop = () => {
+      if (timerId !== null) {
+        clearInterval(timerId);
+        timerId = null;
+      }
+    };
 
     const poll = async () => {
       try {
         const responses = await this.getResponses(surveyId, adminKey);
         onUpdate(responses);
-      } catch {
-        // 폴링 에러 무시
+      } catch (e) {
+        stop();
+        onError?.(e);
       }
     };
 
@@ -277,11 +295,6 @@ export class SurveySupabaseClient {
       void poll();
     }, intervalMs);
 
-    return () => {
-      if (timerId !== null) {
-        clearInterval(timerId);
-        timerId = null;
-      }
-    };
+    return stop;
   }
 }

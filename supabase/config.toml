@@ -166,3 +166,14 @@ verify_jwt = true
 #   (시크릿 `RECORD_PROMPT_RATELIMIT` 으로 off/observe/enforce 를 정한다).
 [functions.ssampin-record-prompt]
 verify_jwt = false
+
+# 상담·설문 교사 창구 (ADR-095).
+#
+# 교무실 8종과 같은 값(true)을 쓴다. 다만 anon key 는 설치파일 안에 들어 있는 공개값이라
+# 이 설정 자체가 관문은 아니다 — **실질 관문은 함수 안의 구글 신원 확인**이다.
+# 학부모 브라우저는 쌤핀 구글 토큰을 만들 수 없으므로 거기서 막힌다.
+[functions.consultation-teacher]
+verify_jwt = true
+
+[functions.survey-teacher]
+verify_jwt = true

@@ -114,27 +114,59 @@ describe('ConsultationSupabaseClient.getBookings — 실패를 빈 목록으로 
       }),
     );
     const client = await makeClient();
-    await expect(client.getBookings('sched-1', 'admin-key')).rejects.toThrow(/getBookings failed/);
+    await expect(client.getBookings('sched-1', 'admin-key')).rejects.toThrow(/예약 목록/);
   });
 
+  // ADR-095: 새 사유 코드는 "업데이트하세요"에 삼켜지면 안 된다(수용 기준 #6).
+  it.each([
+    ['not_connected', /구글 계정 연결이 필요합니다/],
+    ['different_account', /같은 구글 계정으로 연결해 주세요/],
+    ['legacy_closed', /기간이 끝났습니다/],
+  ] as const)('사유 %s 는 그 안내로 뜬다', async (reason, pattern) => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        text: async () => JSON.stringify({ error: '거부', reason }),
+      }),
+    );
+    const client = await makeClient();
+    try {
+      await client.getBookings('sched-1', 'admin-key');
+      expect.unreachable('throw 했어야 한다');
+    } catch (e) {
+      const msg = (e as Error).message;
+      expect(msg).toMatch(pattern);
+      expect(msg).not.toMatch(/최신 버전으로 업데이트/);
+    }
+  });
+
+  // ADR-095 로 응답 모양이 바뀐 자리다. 옛 조회 RPC 는 표의 snake_case 행을 그대로
+  // 돌려줬지만, 교사 창구는 화면이 쓰는 camelCase 로 시간대와 예약을 함께 준다.
   it('정상 응답은 그대로 매핑한다', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
-        json: async () => [
-          {
-            id: 'b1',
-            schedule_id: 'sched-1',
-            slot_id: 's1',
-            student_number: 3,
-            booker_info_encrypted: null,
-            method: 'face',
-            memo_encrypted: null,
-            created_at: '2026-08-14T00:00:00Z',
-          },
-        ],
+        json: async () => ({
+          mode: 'owner',
+          cryptoVersion: 2,
+          cryptoSalt: 'salt',
+          slots: [],
+          bookings: [
+            {
+              id: 'b1',
+              scheduleId: 'sched-1',
+              slotId: 's1',
+              studentNumber: 3,
+              method: 'face',
+              createdAt: '2026-08-14T00:00:00Z',
+            },
+          ],
+        }),
       }),
     );
     const client = await makeClient();

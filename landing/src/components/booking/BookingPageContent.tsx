@@ -132,17 +132,22 @@ export function BookingPageContent({ scheduleId }: BookingPageContentProps) {
     setIsSubmitting(true);
     setError(null);
 
+    // 이 일정의 소금값이 있으면 판 2로 잠근다(암호문에 `v2:` 접두사가 붙는다).
+    // 없으면 판 1 그대로다 — 학부모가 겪는 동작은 어느 쪽이든 똑같다(ADR-095).
+    const cryptoSalt = schedule.cryptoSalt;
+
     let bookerInfoEncrypted: string | undefined;
     if (schedule.type === 'parent' && adminKey) {
       bookerInfoEncrypted = await encrypt(
         `${parentRelation}|${parentName}|${parentContact}`,
         adminKey,
+        cryptoSalt,
       );
     }
 
     let memoEncrypted: string | undefined;
     if (consultationTopic.trim() && adminKey) {
-      memoEncrypted = await encrypt(consultationTopic.trim(), adminKey);
+      memoEncrypted = await encrypt(consultationTopic.trim(), adminKey, cryptoSalt);
     }
 
     const result = await bookSlot({

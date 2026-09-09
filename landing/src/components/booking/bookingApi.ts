@@ -26,6 +26,13 @@ export interface SchedulePublic {
   closedAt?: string;
   /** 자동 만료 시각 (ISO). 이 시각이 지나면 마감. */
   expiresAt?: string;
+  /**
+   * 예약자 정보 암호화 판 (ADR-095). 1 = 고정 소금값, 2 = 일정별 난수 소금값.
+   * **통계·감사용이다** — 어떤 판으로 풀지는 암호문의 `v2:` 접두사가 정한다.
+   */
+  cryptoVersion?: number;
+  /** 판 2 소금값. 서버가 일정마다 만든 난수이고, 판 1 일정에는 없다. */
+  cryptoSalt?: string;
 }
 
 export interface SlotPublic {
@@ -79,6 +86,8 @@ interface ScheduleRow {
   is_archived: boolean;
   closed_at: string | null;
   expires_at: string | null;
+  crypto_version: number | null;
+  crypto_salt: string | null;
 }
 
 interface SlotRow {
@@ -95,7 +104,7 @@ interface SlotRow {
 export async function getSchedulePublic(scheduleId: string): Promise<SchedulePublic | null> {
   try {
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/consultation_schedules?id=eq.${scheduleId}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,is_archived,closed_at,expires_at`,
+      `${SUPABASE_URL}/rest/v1/consultation_schedules?id=eq.${scheduleId}&select=id,title,type,methods,slot_minutes,dates,target_class_name,target_students,message,is_archived,closed_at,expires_at,crypto_version,crypto_salt`,
       { headers: headers() },
     );
 
@@ -117,6 +126,8 @@ export async function getSchedulePublic(scheduleId: string): Promise<SchedulePub
       isArchived: row.is_archived,
       closedAt: row.closed_at ?? undefined,
       expiresAt: row.expires_at ?? undefined,
+      cryptoVersion: row.crypto_version ?? undefined,
+      cryptoSalt: row.crypto_salt ?? undefined,
     };
   } catch {
     return null;
@@ -385,15 +396,27 @@ export function clearBookingToken(scheduleId: string): void {
 }
 
 // ─── AES-GCM Encryption Helper ───────────────────────────────────────────────
+//
+// ★ 같은 로직이 앱(`src/domain/rules/cryptoUtils.ts`)에도 한 벌 더 있다. 학부모
+//   브라우저가 잠그고 교사 앱이 푸는 구조라, 한쪽만 고치면 이름이 깨진다.
+//
+// ★ 판 2 암호문에는 `v2:` 접두사를 붙인다. 어떤 판으로 풀지를 **값이 스스로 말하게**
+//   하려는 것이다. 캐시된 옛 번들이 판 2 일정에 판 1 값을 저장해도, 접두사가 없으니
+//   앱이 판 1로 읽어 성공한다(ADR-095, 계획서 §8 시나리오 5).
 
-async function deriveKey(password: string): Promise<CryptoKey> {
+/** 판 2 암호문 앞에 붙는 표식 */
+export const CRYPTO_V2_PREFIX = 'v2:';
+
+/** 판 1 의 고정 소금값 — 옛 일정을 계속 읽으려면 그대로 있어야 한다 */
+const V1_SALT = 'ssampin-consultation-v1';
+
+async function deriveKey(password: string, salt: string): Promise<CryptoKey> {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, [
     'deriveKey',
   ]);
-  const salt = enc.encode('ssampin-consultation-v1');
   return crypto.subtle.deriveKey(
-    { name: 'PBKDF2', salt, iterations: 100_000, hash: 'SHA-256' },
+    { name: 'PBKDF2', salt: enc.encode(salt), iterations: 100_000, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: 256 },
     false,
@@ -401,8 +424,11 @@ async function deriveKey(password: string): Promise<CryptoKey> {
   );
 }
 
-export async function encrypt(plaintext: string, key: string): Promise<string> {
-  const derivedKey = await deriveKey(key);
+/**
+ * @param salt 일정별 난수 소금값. 주면 판 2(접두사 붙음), 없으면 판 1(접두사 없음).
+ */
+export async function encrypt(plaintext: string, key: string, salt?: string): Promise<string> {
+  const derivedKey = await deriveKey(key, salt ?? V1_SALT);
   const enc = new TextEncoder();
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
@@ -413,5 +439,6 @@ export async function encrypt(plaintext: string, key: string): Promise<string> {
   const combined = new Uint8Array(iv.length + new Uint8Array(ciphertext).length);
   combined.set(iv);
   combined.set(new Uint8Array(ciphertext), iv.length);
-  return btoa(String.fromCharCode(...combined));
+  const b64 = btoa(String.fromCharCode(...combined));
+  return salt ? `${CRYPTO_V2_PREFIX}${b64}` : b64;
 }

@@ -4,7 +4,8 @@ import { useToastStore } from '@adapters/components/common/Toast';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
-import { consultationSupabaseClient, shortLinkClient } from '@adapters/di/container';
+import { shortLinkClient } from '@adapters/di/container';
+import { accessDenialReasonOf } from '@domain/rules/consultationAccessReason';
 import { validateCustomCode } from '@infrastructure/supabase/ShortLinkClient';
 import type { ConsultationType, ConsultationMethod } from '@domain/entities/Consultation';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -658,7 +659,7 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
     if (!canSubmit) return;
     setSaving(true);
     try {
-      const schedule = await createSchedule({
+      await createSchedule({
         title: title.trim(),
         type,
         methods,
@@ -682,19 +683,6 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
           .map((s) => ({ number: s.studentNumber ?? 0 })),
         message: message.trim() || undefined,
         customLinkCode: customLinkCode.trim() || undefined,
-      });
-
-      await consultationSupabaseClient.createSchedule({
-        id: schedule.id,
-        title: schedule.title,
-        type: schedule.type,
-        methods: schedule.methods,
-        slotMinutes: schedule.slotMinutes,
-        dates: schedule.dates,
-        targetClassName: schedule.targetClassName,
-        targetStudents: schedule.targetStudents,
-        message: schedule.message,
-        adminKey: schedule.adminKey,
         blockedSlots: [...blockedSlotKeys].map((key) => {
           const [date, startTime] = key.split('_');
           return { date: date!, startTime: startTime! };
@@ -704,8 +692,15 @@ export function ConsultationCreateModal({ onClose }: ConsultationCreateModalProp
       showToast('상담 일정이 생성되었습니다', 'success');
       track('consultation_create', { type });
       onClose();
-    } catch {
-      showToast('상담 일정 생성에 실패했습니다', 'error');
+    } catch (e) {
+      // 구글 연결이 없으면 "생성 실패"가 아니라 무엇을 해야 하는지 말한다.
+      // 서버가 소유자를 박으려면 계정 확인이 필요하다(ADR-095).
+      showToast(
+        accessDenialReasonOf(e) === 'not_connected'
+          ? '구글 계정을 연결해야 상담 일정을 만들 수 있습니다. 설정 > 구글 연결에서 연결해 주세요'
+          : '상담 일정 생성에 실패했습니다',
+        'error',
+      );
     } finally {
       setSaving(false);
     }

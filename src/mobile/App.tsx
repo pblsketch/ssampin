@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useGoogleAuthContext } from './contexts/GoogleAuthContext';
 import { useSyncTrigger } from './hooks/useSyncTrigger';
 import { useMobileDriveSyncStore } from './stores/useMobileDriveSyncStore';
+import { surveySupabaseClient } from './di/container';
 import { useMobileAttendanceStore } from './stores/useMobileAttendanceStore';
 import { useMobileStudentStore } from './stores/useMobileStudentStore';
 import { useMobileStudentRecordsStore } from './stores/useMobileStudentRecordsStore';
@@ -295,11 +296,17 @@ export function App() {
   }, [applyTheme]);
 
   // 인증 완료 시 동기화 스토어에 토큰 getter 연결, 로그아웃 시 인증 상태 초기화
+  //
+  // ★ 설문 응답 조회도 같은 토큰을 쓴다(ADR-095). 여기 한 줄이 빠지면 모바일에서
+  //   설문 응답이 "구글 연결이 필요합니다"로만 뜬다 — 드라이브 동기화만 배선되어
+  //   있던 것이 그 상태였다.
   useEffect(() => {
     if (auth.isAuthenticated) {
       setTokenGetter(auth.getValidAccessToken);
+      surveySupabaseClient.setGoogleTokenGetter(auth.getValidAccessToken);
     } else {
       useMobileDriveSyncStore.setState({ isAuthenticated: false });
+      surveySupabaseClient.setGoogleTokenGetter(async () => null);
     }
   }, [auth.isAuthenticated, auth.getValidAccessToken, setTokenGetter]);
 

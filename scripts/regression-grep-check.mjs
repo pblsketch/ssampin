@@ -501,7 +501,6 @@ const presenceChecks = [
       /from '\.\.\/\.\.\/\.\.\/\.\.\/supabase\/functions\/_shared\/selfAssessment'[\s\S]*?describe\('★이음매[\s\S]{0,900}?mergeSubmission\([\s\S]{0,400}?QUESTIONS,[\s\S]{0,250}?toEqual\(\['q1', 'q2'\]\)[\s\S]*?sanitizeAnswers\(/,
     name: 'REGRESSION #76: 자기평가 엣지 규칙(학생 입력 방어 + 재제출 병합 + 문항 순서 이음매)을 vitest 가 실제로 돌리는 메타 테스트가 살아 있다',
   },
-
   {
     file: 'src/infrastructure/supabase/__tests__/selfAssessmentEdgeParity.meta.test.ts',
     // 앱·서버·학생 화면·마이그레이션 네 곳의 상한과 자르기 방식을 맞추는 **유일한** 장치다.
@@ -587,6 +586,50 @@ const presenceChecks = [
     pattern:
       /emitComposition && composition !== null\s*\?\s*narrativeMarkInstruction\(\{\s*followComposition: true,/,
     name: 'REGRESSION #80: 작성 구성을 실으면 표식 지시가 순서를 다시 못 박지 않는다 (두 지시가 싸우지 않는다)',
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #83 (2026-09-09) — 상담·설문 명단 조회의 실패는 **빈 목록이 아니다** (ADR-095)
+  //
+  // 명단 조회가 관리 키 대조에서 구글 신원 확인으로 바뀌면서, 거부가 일상적으로 생긴다
+  // (구글 미연결·다른 계정·유예 기한 만료). 이 실패를 삼켜 빈 배열로 돌려주면 화면은
+  // **예약 0건과 똑같이** 보이고, 선생님은 자료가 사라졌다고 판단한다 — 설문 쪽에서
+  // 2026-05-14 에 실제로 접수된 신고다.
+  //
+  // 특히 자동 시간대 차단(recomputeSlotAvailability)이 조용히 멈추면 막아 뒀어야 할
+  // 시간에 학부모 예약이 들어와 **이중 예약**이 된다(계획서 §8 시나리오 4).
+  //
+  // 네 자리를 글자로 못 박는다. 전부 게이트 4종이 초록인 채로 존재할 수 있는 결함이라
+  // 타입·테스트만으로는 재발을 막지 못한다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/infrastructure/supabase/ConsultationSupabaseClient.ts',
+    pattern: /startPolling\([\s\S]{0,1200}?onError\?\.\(e\)/,
+    name: 'REGRESSION #83-1: 상담 폴링이 실패를 삼키지 않고 사유를 올린다',
+  },
+  {
+    file: 'src/infrastructure/supabase/SurveySupabaseClient.ts',
+    pattern: /startPolling\([\s\S]{0,1200}?onError\?\.\(e\)/,
+    name: 'REGRESSION #83-2: 설문 폴링이 실패를 삼키지 않고 사유를 올린다',
+  },
+  {
+    file: 'src/adapters/components/Homeroom/Consultation/ConsultationDetail.tsx',
+    pattern:
+      /const refreshNow = useCallback\([\s\S]{0,900}?catch \(e\) \{\s*await showFromLocalCopy\(e\);/,
+    name: 'REGRESSION #83-3: 상담 상세의 즉시 새로 고침이 실패를 삼키지 않고 사유 처리로 넘긴다',
+  },
+  {
+    // 넘겨받은 쪽이 실제로 사유를 화면에 올리는지까지 본다. 넘기기만 하고 아무 데도
+    // 안 쓰면 결국 빈 명단으로 보인다 — 두 자리를 함께 못 박아야 계약이 성립한다.
+    file: 'src/adapters/components/Homeroom/Consultation/ConsultationDetail.tsx',
+    pattern:
+      /const showFromLocalCopy = useCallback\([\s\S]{0,700}?const message = describeAccessFailure\(e\);[\s\S]{0,400}?setAccessError\(message\)/,
+    name: 'REGRESSION #83-5: 사유 처리가 화면에 문장을 올린다 (사본을 못 열면 이유를 말한다)',
+  },
+  {
+    file: 'src/adapters/stores/useConsultationStore.ts',
+    pattern:
+      /recomputeSlotAvailability: async[\s\S]{0,1500}?catch \(e\) \{[\s\S]{0,600}?throw e instanceof Error/,
+    name: 'REGRESSION #83-4: 자동 시간대 차단이 명단 실패를 빈 결과로 덮지 않는다 (이중 예약 방지)',
   },
 ];
 
