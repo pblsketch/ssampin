@@ -4,7 +4,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import { filterByStudent, getAttendanceStats } from '@domain/rules/studentRecordRules';
-import { numberActiveRoster } from '@domain/rules/rosterNumbering';
+import { numberActiveRoster, numberRoster } from '@domain/rules/rosterNumbering';
 /* eslint-disable no-restricted-imports */
 import { exportStudentRecordsToExcel } from '@infrastructure/export/ExcelExporter';
 /* eslint-enable no-restricted-imports */
@@ -167,6 +167,11 @@ function SearchMode({
     });
     return items;
   }, [students, records, today]);
+
+  // 좁은 화면(lg 미만)의 학생 고르기 — 점프 리스트와 같은 번호를 써야 한다.
+  // 번호는 배열 위치가 아니라 명렬표의 실제 출석번호다(2026-09-08 검토). 결번 학생도 목록에는
+  // 그대로 두되(감추면 기록을 못 찾는다) 번호는 명렬표대로 보여 준다.
+  const studentOptions = useMemo(() => numberRoster(students), [students]);
 
   // 날짜별 그룹핑 + 정렬
   const grouped = useMemo(() => {
@@ -360,9 +365,9 @@ function SearchMode({
                 className="bg-sp-surface border border-sp-border rounded-lg px-3 py-2 text-sm text-sp-text focus:outline-none focus:ring-1 focus:ring-sp-accent"
               >
                 <option value="">전체 학생</option>
-                {students.map((s, idx) => (
-                  <option key={s.id} value={s.id}>
-                    {idx + 1} {s.name}
+                {studentOptions.map(({ student, number }) => (
+                  <option key={student.id} value={student.id}>
+                    {number} {student.name}
                   </option>
                 ))}
               </select>
