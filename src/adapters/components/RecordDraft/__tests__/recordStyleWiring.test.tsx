@@ -264,6 +264,6 @@ describe('실행 중 설정을 바꿔도 진행 중 요청은 안 바뀐다 (AC-
     connectClaude();
     panel();
     await startDraft();
-    expect((screen.getByRole('combobox') as HTMLSelectElement).disabled).toBe(true);
+    expect((screen.getByTestId('record-style-picker') as HTMLFieldSetElement).disabled).toBe(true);
   });
 });

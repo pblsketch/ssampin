@@ -10,10 +10,17 @@ import {
   DEFAULT_RECORD_WRITING_STYLE,
   type RecordWritingStyle,
 } from '@domain/entities/RecordWritingStyle';
-import { RECORD_FOCUSES, RECORD_MODULES, focusById } from '@domain/rules/recordStyleCatalog';
+import {
+  RECORD_FOCUSES,
+  RECORD_MODULES,
+  focusById,
+  focusChoicesForArea,
+} from '@domain/rules/recordStyleCatalog';
 import {
   applyPromptVersionGate,
   buildStyleInstruction,
+  hasStyleAdjustments,
+  resetToFocusDefaults,
   checkStyleReadiness,
   isDefaultStyle,
   normalizeWritingStyle,
@@ -368,5 +375,60 @@ describe('수업 맥락과 명료성 (오너 검토 2026-09-09, 예시 7편)', (
     expect(t).toContain('자리·몫·층위·빈자리');
     expect(t).toContain('빈자리의 차이를 읽는 자리에 섬');
     expect(t).toContain('독자가 채울 부분이 많다고 결론지음');
+  });
+});
+
+describe('고르개 단순화 (ADR-099 보강 5) — "바꿈" 판정과 되돌리기', () => {
+  it('초점만 고른 상태는 바꿈이 아니다 (초점이 무엇이든)', () => {
+    expect(hasStyleAdjustments(base({ focus: 'collaborate' }))).toBe(false);
+    expect(hasStyleAdjustments(base({}))).toBe(false);
+  });
+
+  it('시작·묶기·요소·추가 지시 가운데 하나라도 손대면 바꿈이다', () => {
+    expect(hasStyleAdjustments(base({ opening: 'performance' }))).toBe(true);
+    expect(hasStyleAdjustments(base({ grouping: 'single' }))).toBe(true);
+    expect(hasStyleAdjustments(base({ disabledModules: ['legacyMotive'] }))).toBe(true);
+    expect(hasStyleAdjustments(base({ extraModules: ['lessonContext'] }))).toBe(true);
+    expect(hasStyleAdjustments(base({ instruction: '발표를 살려 주세요.' }))).toBe(true);
+    // 공백뿐인 지시는 손댄 것이 아니다.
+    expect(hasStyleAdjustments(base({ instruction: '   ' }))).toBe(false);
+  });
+
+  it('되돌리기는 초점만 남기고 전부 기본값으로 — 카탈로그에 없는 옛 요소 id 도 같이 사라진다', () => {
+    const r = resetToFocusDefaults(
+      base({
+        focus: 'designCreate',
+        opening: 'question',
+        grouping: 'single',
+        extraModules: ['lessonContext'],
+        instruction: '무엇이든',
+      }),
+    );
+    expect(r).toEqual({ focus: 'designCreate', opening: 'evaluation', grouping: 'connected' });
+    expect(hasStyleAdjustments(r)).toBe(false);
+  });
+});
+
+describe('고르개 단순화 — 영역에 맞는 방식이 먼저 온다', () => {
+  it('행동특성에서는 「한 해 생활과 관계 종합」과 기본형만 맞고, 맞는 것이 앞에 온다', () => {
+    const list = focusChoicesForArea('behavior');
+    expect(list).toHaveLength(RECORD_FOCUSES.length);
+    const fits = list.filter((c) => c.fitsArea).map((c) => c.focus.id);
+    expect(fits).toEqual(['legacyInquiry', 'lifeRelation']);
+    expect(list.slice(0, 2).every((c) => c.fitsArea)).toBe(true);
+    expect(list.slice(2).every((c) => !c.fitsArea)).toBe(true);
+  });
+
+  it('교과 세특에서는 행동특성용만 뒤로 간다', () => {
+    const list = focusChoicesForArea('subject');
+    expect(list[list.length - 1]?.focus.id).toBe('lifeRelation');
+    expect(list[list.length - 1]?.fitsArea).toBe(false);
+    expect(list.slice(0, -1).every((c) => c.fitsArea)).toBe(true);
+  });
+
+  it('모르는 영역이면 특정 영역용은 전부 뒤로, 기본형은 앞에', () => {
+    const list = focusChoicesForArea('whatever');
+    expect(list[0]?.focus.id).toBe('legacyInquiry');
+    expect(list.filter((c) => c.fitsArea).map((c) => c.focus.id)).toEqual(['legacyInquiry']);
   });
 });

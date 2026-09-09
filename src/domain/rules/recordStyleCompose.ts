@@ -342,3 +342,27 @@ export function applyPromptVersionGate(
     downgraded: true,
   };
 }
+
+/**
+ * 고른 초점의 기본값에서 **무엇이든** 손댔는가(시작·묶기·요소·추가 지시). 화면의 "바꿈" 표시와
+ * [이 설정 저장] 단추가 이 값을 본다. `isDefaultStyle` 과 다르다: 그쪽은 "기존형 그대로인가"다.
+ */
+export function hasStyleAdjustments(style: RecordWritingStyle): boolean {
+  const s = normalizeWritingStyle(style);
+  return (
+    s.opening !== DEFAULT_RECORD_WRITING_STYLE.opening ||
+    s.grouping !== DEFAULT_RECORD_WRITING_STYLE.grouping ||
+    (s.disabledModules?.length ?? 0) > 0 ||
+    (s.extraModules?.length ?? 0) > 0 ||
+    (s.instruction ?? '').trim().length > 0
+  );
+}
+
+/** 초점은 그대로 두고 나머지를 그 초점의 기본값으로 되돌린다. [방식의 기본값으로 되돌리기]. */
+export function resetToFocusDefaults(style: RecordWritingStyle): RecordWritingStyle {
+  return {
+    focus: normalizeWritingStyle(style).focus,
+    opening: DEFAULT_RECORD_WRITING_STYLE.opening,
+    grouping: DEFAULT_RECORD_WRITING_STYLE.grouping,
+  };
+}

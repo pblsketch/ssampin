@@ -52,7 +52,10 @@ export interface RecordFocus {
   readonly extras: readonly RecordModuleId[];
   /** 이 초점을 쓰려면 근거가 최소 몇 건이어야 하는가(경고용, 막지는 않는다). */
   readonly minEvidence: number;
-  /** 이 초점이 특별히 어울리는 영역. 비면 어디든. `RecordArea` 값을 문자열로 둔다(도메인 순환 import 회피). */
+  /**
+   * 이 초점이 어울리는 영역. 비면 어디든(기본형만). `RecordArea` 값을 문자열로 둔다(도메인 순환 import 회피).
+   * ★2026-09-09: 고르개가 "이 영역에 맞음"을 이 값으로 표시하므로 기본형 말고는 전부 적는다.
+   */
   readonly preferredAreas?: readonly string[];
 }
 
@@ -404,6 +407,7 @@ export const RECORD_FOCUSES: readonly RecordFocus[] = [
     ],
     extras: ['counterReview', 'lessonContext'],
     minEvidence: 2,
+    preferredAreas: ['subject', 'individualSubject', 'subjectDev', 'club'],
   },
   {
     id: 'feedbackRevise',
@@ -412,6 +416,7 @@ export const RECORD_FOCUSES: readonly RecordFocus[] = [
     body: ['firstAttempt', 'feedbackReceived', 'chosenRevision', 'revisedPerformance'],
     extras: ['lessonContext'],
     minEvidence: 2,
+    preferredAreas: ['subject', 'individualSubject', 'subjectDev', 'club'],
   },
   {
     id: 'designCreate',
@@ -420,6 +425,7 @@ export const RECORD_FOCUSES: readonly RecordFocus[] = [
     body: ['purposeConstraint', 'strategyChoice', 'makingExecution', 'artifactTrait'],
     extras: ['reviewImprove', 'lessonContext'],
     minEvidence: 1,
+    preferredAreas: ['subject', 'individualSubject', 'subjectDev', 'club', 'autonomy'],
   },
   {
     id: 'collaborate',
@@ -502,3 +508,23 @@ export const RECORD_GROUPING_INSTRUCTIONS: Readonly<Record<RecordGrouping, strin
   byAchievement:
     '근거를 묶는 방식: 서로 독립된 수행이므로 하나의 이야기로 잇지 않습니다. 각 수행에서 확인된 성취를 중심으로 나누어 씁니다.',
 };
+
+/** [바꾸기] 목록의 한 줄 — 지금 영역에 어울리는 방식이 먼저 온다. */
+export interface RecordFocusChoice {
+  readonly focus: RecordFocus;
+  /** 이 영역에 특별히 어울린다고 카탈로그가 말하는가. 표시일 뿐 막지 않는다. */
+  readonly fitsArea: boolean;
+}
+
+/**
+ * 영역에 맞는 방식을 앞에 두고 나머지는 카탈로그 순서 그대로. `preferredAreas` 가 비어 있으면
+ * 어디든 어울린다고 보되, 특정 영역용으로 표시된 것보다 앞서지는 않는다.
+ * ★기본형(`legacyInquiry`)만 `preferredAreas` 가 없어 언제나 "맞음" 이다 — 기본이니까. 나머지는 전부 적는다.
+ */
+export function focusChoicesForArea(area: string): readonly RecordFocusChoice[] {
+  const tagged = RECORD_FOCUSES.map((focus) => ({
+    focus,
+    fitsArea: focus.preferredAreas === undefined || focus.preferredAreas.includes(area),
+  }));
+  return [...tagged.filter((c) => c.fitsArea), ...tagged.filter((c) => !c.fitsArea)];
+}
