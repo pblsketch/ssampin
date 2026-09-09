@@ -94,6 +94,8 @@ export type ThreadedEvidence = DraftPackEvidence & { readonly threadId?: string 
 
 export interface RecordDraftAiPanelProps {
   readonly areaLabel: string;
+  /** 과목 이름(교과 영역일 때만). 요청서의 `과목:` 줄이 된다. */
+  readonly subject?: string;
   /** 실명·학번을 찾아 가릴 명단(`rosterFromAll`). 근거 본문 속 **다른 학생** 이름도 이걸로 가린다. */
   readonly roster: readonly KeywordGroup[];
   /** 지금 고른 학생. */
@@ -204,6 +206,7 @@ const RETRY_COOLDOWN_MS = 60_000;
 
 export function RecordDraftAiPanel({
   areaLabel,
+  subject,
   roster,
   target,
   threads = [],
@@ -420,6 +423,7 @@ export function RecordDraftAiPanel({
         studentName: t.displayName,
         roster,
         areaLabel,
+        ...(subject === undefined ? {} : { subject }),
         // 주제는 누른 학생에게만 — 남의 학생에게 같은 주제를 씌우면 엉뚱한 근거로 쓰게 된다.
         ...(pickedThread !== null && t.studentRef === target.studentRef
           ? { threadTitle: pickedThread.title }
@@ -430,7 +434,7 @@ export function RecordDraftAiPanel({
         style,
       });
     },
-    [areaLabel, roster, pickedThread, target.studentRef, teacherPrompt],
+    [areaLabel, subject, roster, pickedThread, target.studentRef, teacherPrompt],
   );
 
   /** 판에 남길 발자국. ★추가 지시 **본문은 담지 않는다**(판 파일은 Drive 로 동기화된다). */

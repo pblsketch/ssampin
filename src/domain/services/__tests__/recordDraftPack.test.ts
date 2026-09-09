@@ -350,3 +350,23 @@ describe('★분량 조절 꾸러미 — 조절 대상 본문 자체가 밖으�
     expect(pack.exclusions.map((x) => x.reason).sort()).toEqual(['empty', 'prohibited', 'teacher']);
   });
 });
+
+describe('과목 이름 (오너 검토 2026-09-09: 어떤 수업에서의 일인지 밝히려면 과목을 알아야 한다)', () => {
+  it('과목이 있으면 영역 다음 줄에 붙는다', () => {
+    const pack = buildRecordDraftPack(input({ subject: '물리학Ⅰ' }));
+    const at = pack.text.indexOf('영역: 교과 세부능력 및 특기사항');
+    expect(at).toBeGreaterThanOrEqual(0);
+    // 바로 다음 줄이 과목이다.
+    expect(pack.text.slice(at).split(String.fromCharCode(10))[1]).toBe('과목: 물리학Ⅰ');
+  });
+
+  it('과목이 없거나 비어 있으면 줄 자체가 없다 (행특·자율에서 예전과 같은 요청서)', () => {
+    expect(buildRecordDraftPack(input()).text).not.toContain('과목:');
+    expect(buildRecordDraftPack(input({ subject: '  ' })).text).not.toContain('과목:');
+  });
+
+  it('과목 이름도 가리기를 거친다 (선생님이 적은 자유 문자열이다)', () => {
+    const pack = buildRecordDraftPack(input({ subject: '박서연 반 물리' }));
+    expect(pack.text).not.toContain('박서연');
+  });
+});

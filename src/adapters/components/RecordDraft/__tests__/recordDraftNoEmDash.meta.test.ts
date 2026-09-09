@@ -29,6 +29,8 @@ const EXTRA_FILES: readonly string[] = [
   'domain/rules/recordStyleCompose.ts',
   'domain/rules/recordStylePresetStore.ts',
   'domain/entities/RecordWritingStyle.ts',
+  // 작성 방식 예시 초안(ADR-099 보강 4) — 화면에 그대로 뜨는 글이다.
+  'domain/rules/recordStyleSamples.ts',
 ].map((p) => resolve(SRC_ROOT, p));
 
 function sourceFiles(dir: string): string[] {

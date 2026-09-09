@@ -348,3 +348,25 @@ describe('교사의 해석을 요구한다 (오너 지적 2026-09-09, codex 실�
     expect(t).toContain('다시 모아 요약하는 항목을 덧붙이지 않습니다');
   });
 });
+
+describe('수업 맥락과 명료성 (오너 검토 2026-09-09, 예시 7편)', () => {
+  const text = () => buildStyleInstruction(resolveComposition(base({ focus: 'compareJudge' })));
+
+  it('어떤 수업·과제에서의 일인지 첫 수행 항목에서 밝히라고 말한다', () => {
+    expect(text()).toContain('어떤 수업·단원·과제·프로젝트에서 있었던 일인지');
+    expect(text()).toContain('첫 수행 항목의 첫 구절');
+  });
+
+  it('★수업 이름을 요구하면서 지어내기·수업 소개의 학생화도 함께 막는다 (한쪽으로 쏠리지 않게)', () => {
+    const t = text();
+    expect(t).toContain('없으면 지어내지 않고 활동의 종류만 씁니다');
+    expect(t).toContain('학생이 한 일처럼 쓰지 않습니다');
+  });
+
+  it('뭉뚱그리는 낱말로 사실을 대신하지 말라고 ✗/○ 예로 말한다', () => {
+    const t = text();
+    expect(t).toContain('자리·몫·층위·빈자리');
+    expect(t).toContain('빈자리의 차이를 읽는 자리에 섬');
+    expect(t).toContain('독자가 채울 부분이 많다고 결론지음');
+  });
+});

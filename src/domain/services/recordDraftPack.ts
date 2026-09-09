@@ -58,6 +58,11 @@ export interface DraftPackInput {
   readonly roster: readonly KeywordGroup[];
   /** 영역 이름(교과 세특·행동특성 등). */
   readonly areaLabel: string;
+  /**
+   * 과목 이름(교과 영역일 때). 모델이 "어떤 수업에서의 일인지"를 첫 구절에 쓰려면 과목을 알아야 한다
+   * (오너 검토 2026-09-09: 예시 7편 모두 수업 언급이 없었다). 없으면 줄 자체가 안 붙는다.
+   */
+  readonly subject?: string;
   /** 고른 탐구 주제(없으면 전체 근거). */
   readonly threadTitle?: string;
   readonly evidences: readonly DraftPackEvidence[];
@@ -219,6 +224,8 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   const parts: string[] = [];
   parts.push(`학생: ${studentAlias}`);
   parts.push(`영역: ${input.areaLabel}`);
+  if (input.subject && input.subject.trim().length > 0)
+    parts.push(`과목: ${mask(input.subject.trim())}`);
   if (input.threadTitle) parts.push(`주제: ${mask(input.threadTitle)}`);
   if (input.standardKeywords && input.standardKeywords.length > 0) {
     // 원문이 아니라 키워드만 — 성취기준 본문은 앱 밖으로 내보내지 않는다.

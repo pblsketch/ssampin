@@ -1432,6 +1432,7 @@ export function RecordDraftView({
                     <RecordDraftAiPanel
                       key={`${selectedStudent.studentRef}:${activeArea}:${subject ?? ''}`}
                       areaLabel={RECORD_AREA_LABELS[activeArea]}
+                      {...(subject !== undefined ? { subject } : {})}
                       roster={roster}
                       target={aiTarget}
                       threads={selectedThreads}
