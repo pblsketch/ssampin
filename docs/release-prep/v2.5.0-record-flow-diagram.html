@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>쌤핀 v2.5.0 — 흩어진 기록이 하나의 줄기가 되어 초안이 되기까지</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@400;500;600&family=Noto+Serif+KR:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Tokens — ssampin.com 랜딩 브랜드(landing/src/app/globals.css)에서 가져옴 ── */
+    :root {
+      --color-paper:       #f5f0e8;
+      --color-paper-2:     #ece5d4;
+      --color-ink:         #1a1612;
+      --color-muted:       #6b6358;
+      --color-soft:        #8f8579;
+      --color-rule:        rgba(26,22,18,0.12);
+      --color-accent:      #2563eb;
+      --color-accent-tint: rgba(37,99,235,0.08);
+      --color-link:        #d97706;
+      --font-sans:   'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+      --font-serif:  'Instrument Serif', 'Noto Serif KR', 'Times New Roman', serif;
+      --font-mono:   'Geist Mono', ui-monospace, Menlo, monospace;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      min-height: 100vh;
+      padding: 3rem 2rem;
+      color: var(--color-ink);
+      word-break: keep-all;
+    }
+
+    .container { max-width: 1280px; margin: 0 auto; }
+
+    .header { margin-bottom: 2rem; }
+
+    .header-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.75rem;
+    }
+
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.75rem, 3vw + 1rem, 2.5rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      color: var(--color-ink);
+      margin-bottom: 0.625rem;
+    }
+
+    .subtitle {
+      font-size: 1rem;
+      line-height: 1.6;
+      color: var(--color-muted);
+      max-width: 62ch;
+    }
+
+    .diagram-container { background: transparent; border: none; padding: 0; overflow-x: auto; }
+    svg { width: 100%; min-width: 960px; display: block; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: 1.1fr 1fr 0.9fr;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    @media (max-width: 900px) { .cards { grid-template-columns: 1fr; } }
+
+    .card { background: #ffffff; border-radius: 6px; border: 1px solid var(--color-rule); padding: 1.25rem; }
+    .card .eyebrow {
+      font-family: var(--font-mono); font-size: 0.62rem; font-weight: 500;
+      letter-spacing: 0.16em; text-transform: uppercase; color: var(--color-soft); margin-bottom: 0.5rem;
+    }
+    .card-header {
+      display: flex; align-items: center; gap: 0.6rem;
+      margin-bottom: 0.875rem; padding-bottom: 0.875rem; border-bottom: 1px solid rgba(26,22,18,0.08);
+    }
+    .card-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .card-dot.ink    { background: var(--color-ink); }
+    .card-dot.muted  { background: var(--color-muted); }
+    .card-dot.accent { background: var(--color-accent); }
+    .card h3 { font-size: 0.9375rem; font-weight: 600; color: var(--color-ink); letter-spacing: -0.005em; }
+    .card ul { list-style: none; color: var(--color-muted); font-size: 0.8125rem; line-height: 1.6; }
+    .card li { margin-bottom: 0.35rem; padding-left: 0.875rem; position: relative; }
+    .card li::before { content: '—'; position: absolute; left: 0; color: rgba(26,22,18,0.25); font-size: 0.75rem; }
+    .card li strong { color: var(--color-ink); font-weight: 600; }
+
+    .footer {
+      margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid rgba(26,22,18,0.10);
+      font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.06em; color: var(--color-soft);
+      display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <div class="header">
+      <p class="header-eyebrow">SsamPin v2.5.0 · 2026-09-08 · Student record flow</p>
+      <h1>흩어진 기록이 하나의 줄기가 되어 초안이 되기까지</h1>
+      <p class="subtitle">관찰 한 줄, 말로 남긴 메모, 수행평가, 과제 파일. 흩어져 있던 기록이 근거 카드로 분류되고, 주제별로 하나의 줄기로 엮이면, 선생님의 AI가 그 줄기를 따라 초안을 씁니다. 아래 네 장면의 카드는 모두 같은 아홉 장의 기록입니다.</p>
+    </div>
+
+    <!-- Main Diagram — 4-stage transformation · doc-wide 1280×720 -->
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="record-flow-title record-flow-desc">
+        <title id="record-flow-title">쌤핀 v2.5.0 — 흩어진 기록이 하나의 줄기가 되어 초안이 되기까지</title>
+        <desc id="record-flow-desc">같은 아홉 장의 기록이 네 장면을 거친다. 흩어진 관찰·메모·수행평가·과제 파일이 근거 정리 보드에서 미분류와 주제 열로 분류되고, 한 주제의 카드가 시간순 줄기로 엮이며 빠진 고리가 표시되고, 선생님의 AI가 그 줄기를 따라 교사 평가를 맨 앞에 둔 생활기록부 초안을 형광펜 대목으로 쓴다.</desc>
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#6b6358"/>
+          </marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#2563eb"/>
+          </marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#d97706"/>
+          </marker>
+        </defs>
+
+        <!-- Background: paper -->
+        <rect width="100%" height="100%" fill="#f5f0e8"/>
+
+        <!-- ── Stage headers (chip + title + sub) ── -->
+        <rect x="44" y="40" width="32" height="24" rx="12" fill="rgba(26,22,18,0.12)"/>
+        <text x="60" y="56" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">01</text>
+        <text x="44" y="88" fill="#1a1612" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">흩어진 기록</text>
+        <text x="44" y="108" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">관찰 · 메모 · 수행평가 · 과제 파일</text>
+
+        <rect x="340" y="40" width="32" height="24" rx="12" fill="rgba(26,22,18,0.12)"/>
+        <text x="356" y="56" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">02</text>
+        <text x="340" y="88" fill="#1a1612" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">근거 카드로 분류</text>
+        <text x="340" y="108" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">미분류 열에 저절로 · 주제 열로 끌어다 놓기</text>
+
+        <rect x="668" y="40" width="32" height="24" rx="12" fill="rgba(26,22,18,0.12)"/>
+        <text x="684" y="56" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">03</text>
+        <text x="668" y="88" fill="#1a1612" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">하나의 줄기로 엮기</text>
+        <text x="668" y="108" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">시간순 줄기 · 빈 고리 · 키워드</text>
+
+        <rect x="996" y="40" width="32" height="24" rx="12" fill="rgba(26,22,18,0.12)"/>
+        <text x="1012" y="56" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">04</text>
+        <text x="996" y="88" fill="#1a1612" font-size="16" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">생활기록부 초안</text>
+        <text x="996" y="108" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">교사 평가가 맨 앞 · 형광펜 · 분량 맞춤</text>
+
+        <!-- =================================================================
+             STAGE ARROWS — 장면 사이 간격(56px)에, 마지막 하나만 강조·라벨
+             ================================================================= -->
+        <line x1="284" y1="344" x2="340" y2="344" stroke="#6b6358" stroke-width="1" marker-end="url(#arrow)"/>
+        <line x1="612" y1="344" x2="668" y2="344" stroke="#6b6358" stroke-width="1" marker-end="url(#arrow)"/>
+        <line x1="940" y1="344" x2="996" y2="344" stroke="#2563eb" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+        <rect x="936" y="320" width="64" height="16" rx="2" fill="#f5f0e8"/>
+        <text x="968" y="332" fill="#2563eb" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">초안 쓰기</text>
+
+        <!-- =================================================================
+             SCENE 01 — 흩어진 기록 (x 44..284) · 카드 9장, 제각각 놓임
+             ================================================================= -->
+        <g transform="translate(96 168) rotate(-8)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">관찰</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+        <g transform="translate(200 152) rotate(6)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">수행평가</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+        <g transform="translate(140 240) rotate(3)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">말로 남김</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+        <g transform="translate(232 232) rotate(-5)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">과제 파일</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+        <g transform="translate(88 320) rotate(7)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">관찰</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+        <g transform="translate(196 320) rotate(-4)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">관찰</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+        <g transform="translate(120 408) rotate(-6)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">수행평가</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+        <g transform="translate(224 416) rotate(5)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">말로 남김</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+        <g transform="translate(156 496) rotate(4)">
+          <rect x="-36" y="-20" width="72" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+          <text x="-28" y="-4" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">과제 파일</text>
+          <rect x="-28" y="4" width="40" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+          <rect x="-28" y="12" width="28" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        </g>
+
+        <!-- =================================================================
+             SCENE 02 — 근거 정리 보드 (x 340..612) · 열 3개, 같은 9장이 바로 섬
+             ================================================================= -->
+        <!-- 열 머리 -->
+        <text x="340" y="140" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">미분류</text>
+        <line x1="340" y1="148" x2="420" y2="148" stroke="rgba(26,22,18,0.20)" stroke-width="1"/>
+        <text x="436" y="140" fill="#1a1612" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">탐구 보고서</text>
+        <line x1="436" y1="148" x2="516" y2="148" stroke="rgba(26,22,18,0.20)" stroke-width="1"/>
+        <text x="532" y="140" fill="#1a1612" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">토론</text>
+        <line x1="532" y1="148" x2="612" y2="148" stroke="rgba(26,22,18,0.20)" stroke-width="1"/>
+
+        <!-- 미분류 열 (2장) -->
+        <rect x="340" y="156" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="348" y="172" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">관찰</text>
+        <rect x="348" y="180" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="348" y="188" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="340" y="204" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="348" y="220" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">과제 파일</text>
+        <rect x="348" y="228" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="348" y="236" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+
+        <!-- 탐구 보고서 열 (4장) -->
+        <rect x="436" y="156" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="444" y="172" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">관찰</text>
+        <rect x="444" y="180" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="444" y="188" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="436" y="204" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="444" y="220" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">말로 남김</text>
+        <rect x="444" y="228" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="444" y="236" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="436" y="252" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="444" y="268" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">수행평가</text>
+        <rect x="444" y="276" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="444" y="284" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="436" y="300" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="444" y="316" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">과제 파일</text>
+        <rect x="444" y="324" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="444" y="332" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+
+        <!-- 토론 열 (3장) -->
+        <rect x="532" y="156" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="540" y="172" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">관찰</text>
+        <rect x="540" y="180" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="540" y="188" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="532" y="204" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="540" y="220" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">수행평가</text>
+        <rect x="540" y="228" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="540" y="236" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="532" y="252" width="80" height="40" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="540" y="268" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">말로 남김</text>
+        <rect x="540" y="276" width="48" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+        <rect x="540" y="284" width="32" height="4" rx="2" fill="rgba(26,22,18,0.14)"/>
+
+        <!-- 새 주제 자리 (점선) — 마지막 열 아래 -->
+        <rect x="532" y="300" width="80" height="40" rx="4" fill="rgba(26,22,18,0.02)" stroke="rgba(26,22,18,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="572" y="324" fill="#8f8579" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif" text-anchor="middle">+ 새 주제</text>
+
+        <!-- =================================================================
+             SCENE 03 — 하나의 줄기 (x 668..940) · 탐구 보고서 주제의 시간순 줄기
+             ================================================================= -->
+        <line x1="700" y1="144" x2="700" y2="472" stroke="#2563eb" stroke-width="1.2"/>
+
+        <!-- ① 3월 질문 -->
+        <rect x="716" y="152" width="200" height="48" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="728" y="170" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">3월 · 질문</text>
+        <text x="728" y="188" fill="#1a1612" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">왜 실험 결과가 다를까?</text>
+        <circle cx="700" cy="176" r="8" fill="#f5f0e8" stroke="#2563eb" stroke-width="1.2"/>
+        <text x="700" y="180" fill="#2563eb" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">1</text>
+
+        <!-- ② 5월 시행착오 — 빈 고리 -->
+        <rect x="716" y="240" width="200" height="48" rx="4" fill="rgba(26,22,18,0.02)" stroke="rgba(26,22,18,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="728" y="258" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">5월 · 시행착오</text>
+        <text x="728" y="276" fill="#8f8579" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">빈 고리 · 아직 기록이 없어요</text>
+        <circle cx="700" cy="264" r="8" fill="#f5f0e8" stroke="#6b6358" stroke-width="1" stroke-dasharray="3,2"/>
+        <text x="700" y="268" fill="#6b6358" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">2</text>
+
+        <!-- ③ 6월 과정 -->
+        <rect x="716" y="328" width="200" height="48" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="728" y="346" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">6월 · 과정</text>
+        <text x="728" y="364" fill="#1a1612" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">변인을 통제해 다시 설계</text>
+        <circle cx="700" cy="352" r="8" fill="#f5f0e8" stroke="#2563eb" stroke-width="1.2"/>
+        <text x="700" y="356" fill="#2563eb" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">3</text>
+
+        <!-- ④ 7월 결과 -->
+        <rect x="716" y="416" width="200" height="48" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="728" y="434" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">7월 · 결과</text>
+        <text x="728" y="452" fill="#1a1612" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">오차 원인을 정리해 발표</text>
+        <circle cx="700" cy="440" r="8" fill="#f5f0e8" stroke="#2563eb" stroke-width="1.2"/>
+        <text x="700" y="444" fill="#2563eb" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">4</text>
+
+        <text x="716" y="496" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">키워드 · 가설 · 변인 · 재설계</text>
+
+        <!-- =================================================================
+             SCENE 04 — 초안 문서 (x 996..1236) · 형광펜 4색, 번호가 줄기와 이어짐
+             ================================================================= -->
+        <rect x="1004" y="136" width="224" height="392" rx="6" fill="#ffffff" stroke="#1a1612" stroke-width="1"/>
+        <text x="1016" y="156" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">자율활동 · AI 초안 v1</text>
+        <line x1="1016" y1="164" x2="1216" y2="164" stroke="rgba(26,22,18,0.12)" stroke-width="0.8"/>
+
+        <!-- 교사 평가 (황) -->
+        <rect x="1016" y="176" width="200" height="56" rx="4" fill="rgba(245,158,11,0.26)"/>
+        <text x="1024" y="192" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">교사 평가</text>
+        <text x="1024" y="210" fill="#1a1612" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">끝까지 파고드는 학생임.</text>
+        <rect x="1024" y="218" width="120" height="4" rx="2" fill="rgba(26,22,18,0.18)"/>
+
+        <!-- 동기·질문 (하늘) ① -->
+        <rect x="1016" y="244" width="200" height="48" rx="4" fill="rgba(14,165,233,0.20)"/>
+        <text x="1024" y="260" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">동기 · 질문</text>
+        <rect x="1024" y="268" width="160" height="4" rx="2" fill="rgba(26,22,18,0.18)"/>
+        <rect x="1024" y="276" width="104" height="4" rx="2" fill="rgba(26,22,18,0.18)"/>
+        <circle cx="1200" cy="256" r="8" fill="#ffffff" stroke="#1a1612" stroke-width="1"/>
+        <text x="1200" y="260" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">1</text>
+
+        <!-- 과정 (보라) ③ -->
+        <rect x="1016" y="304" width="200" height="48" rx="4" fill="rgba(139,92,246,0.20)"/>
+        <text x="1024" y="320" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">과정</text>
+        <rect x="1024" y="328" width="160" height="4" rx="2" fill="rgba(26,22,18,0.18)"/>
+        <rect x="1024" y="336" width="136" height="4" rx="2" fill="rgba(26,22,18,0.18)"/>
+        <circle cx="1200" cy="316" r="8" fill="#ffffff" stroke="#1a1612" stroke-width="1"/>
+        <text x="1200" y="320" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">3</text>
+
+        <!-- 결과 (초록) ④ -->
+        <rect x="1016" y="364" width="200" height="48" rx="4" fill="rgba(34,197,94,0.22)"/>
+        <text x="1024" y="380" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">결과</text>
+        <rect x="1024" y="388" width="160" height="4" rx="2" fill="rgba(26,22,18,0.18)"/>
+        <rect x="1024" y="396" width="88" height="4" rx="2" fill="rgba(26,22,18,0.18)"/>
+        <circle cx="1200" cy="376" r="8" fill="#ffffff" stroke="#1a1612" stroke-width="1"/>
+        <text x="1200" y="380" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">4</text>
+
+        <!-- 문서 하단 — 분량·점검·반영 -->
+        <line x1="1016" y1="432" x2="1216" y2="432" stroke="rgba(26,22,18,0.12)" stroke-width="0.8"/>
+        <text x="1016" y="456" fill="#6b6358" font-size="12" font-family="'Geist Mono', monospace">1,480 / 1,500 B</text>
+        <text x="1016" y="480" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">여섯 갈래로 한 번 더 점검</text>
+        <text x="1016" y="504" fill="#6b6358" font-size="12" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">미리보기 → [반영] → 저장</text>
+
+        <!-- =================================================================
+             CALLOUTS — 아래 여백에서 점선 리더로. 최대 2개.
+             ================================================================= -->
+        <path d="M 320 592 Q 400 480 476 348" fill="none" stroke="rgba(26,22,18,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+        <circle cx="476" cy="348" r="2" fill="#1a1612"/>
+        <text x="44" y="616" fill="#1a1612" font-size="16" font-style="italic" font-family="'Instrument Serif', 'Noto Serif KR', serif">같은 아홉 장의 기록 — 흩어졌던 것이 주제로, 주제가 줄기로</text>
+
+        <path d="M 1100 592 Q 1108 560 1116 536" fill="none" stroke="rgba(26,22,18,0.40)" stroke-width="1" stroke-dasharray="4,3"/>
+        <circle cx="1116" cy="536" r="2" fill="#1a1612"/>
+        <text x="1236" y="616" fill="#1a1612" font-size="16" font-style="italic" font-family="'Instrument Serif', 'Noto Serif KR', serif" text-anchor="end">첫 문장이 곧 선생님의 평가 — ‘~하는 학생임.’</text>
+
+        <!-- =================================================================
+             LEGEND — 맨 아래 가로 띠
+             ================================================================= -->
+        <line x1="40" y1="656" x2="1240" y2="656" stroke="rgba(26,22,18,0.10)" stroke-width="0.8"/>
+        <text x="40" y="688" fill="#6b6358" font-size="8" font-weight="500" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+
+        <rect x="120" y="676" width="24" height="16" rx="4" fill="#ffffff" stroke="rgba(26,22,18,0.25)" stroke-width="1"/>
+        <text x="152" y="688" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">근거 카드 한 장</text>
+
+        <rect x="272" y="676" width="24" height="16" rx="4" fill="rgba(26,22,18,0.02)" stroke="rgba(26,22,18,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <text x="304" y="688" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">아직 없는 기록 · 빈 자리</text>
+
+        <line x1="464" y1="684" x2="488" y2="684" stroke="#2563eb" stroke-width="1.2"/>
+        <text x="496" y="688" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">줄기 (시간순)</text>
+
+        <circle cx="612" cy="684" r="8" fill="#ffffff" stroke="#1a1612" stroke-width="1"/>
+        <text x="612" y="688" fill="#1a1612" font-size="12" font-weight="600" font-family="'Geist Mono', monospace" text-anchor="middle">1</text>
+        <text x="628" y="688" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">같은 번호 = 이 근거가 이 대목으로</text>
+
+        <rect x="824" y="676" width="20" height="16" rx="4" fill="rgba(245,158,11,0.26)"/>
+        <text x="852" y="688" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">교사 평가</text>
+        <rect x="928" y="676" width="20" height="16" rx="4" fill="rgba(14,165,233,0.20)"/>
+        <text x="956" y="688" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">동기 · 질문</text>
+        <rect x="1044" y="676" width="20" height="16" rx="4" fill="rgba(139,92,246,0.20)"/>
+        <text x="1072" y="688" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">과정</text>
+        <rect x="1116" y="676" width="20" height="16" rx="4" fill="rgba(34,197,94,0.22)"/>
+        <text x="1144" y="688" fill="#6b6358" font-size="12" font-weight="500" font-family="'Geist', 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif">결과</text>
+      </svg>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="cards">
+      <div class="card">
+        <p class="eyebrow">Scene 01 – 02</p>
+        <div class="card-header">
+          <span class="card-dot accent"></span>
+          <h3>흩어진 기록이 근거 카드가 됩니다</h3>
+        </div>
+        <ul>
+          <li><strong>말로 남기기</strong> — 컴퓨터는 윈도우 받아쓰기(Win+H), 휴대폰은 쌤핀이 직접 듣습니다. 여러 학생이 섞인 긴 말은 [학생별로 나누기]로 카드 한 장씩 갈라 봅니다.</li>
+          <li><strong>과제 파일 본문</strong>이 근거로 들어옵니다 — 한글(.hwp·.hwpx)·PDF·워드·엑셀·txt·md. 어느 과제에서 온 글인지 카드에 함께 적힙니다.</li>
+          <li>관찰·수행평가·과제 제출은 <strong>[미분류] 열에 저절로</strong> 모입니다. 손대기 전에는 저장되지 않고, 주제로 보내는 순간 근거가 됩니다. 점수·석차 숫자는 빠집니다.</li>
+          <li>카드를 <strong>주제 열로 끌어다 놓거나</strong> 아래 막대로 보냅니다. 주제 이름은 수행평가·과제·성취기준에서 후보를 뽑아 주고, 키워드가 맞으면 “이것도 이 주제?” 칩이 뜹니다(AI 아님).</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <p class="eyebrow">Scene 03</p>
+        <div class="card-header">
+          <span class="card-dot ink"></span>
+          <h3>한 주제가 하나의 줄기로 엮입니다</h3>
+        </div>
+        <ul>
+          <li>주제 열 머리의 <strong>[줄기 보기]</strong>를 누르면 그 주제의 카드가 시간순 줄기로 서고, 키워드와 다음에 볼 메모가 함께 보입니다.</li>
+          <li><strong>빈 고리</strong> — 질문이 하나뿐이거나 시행착오가 한 건도 없으면 그 자리를 짚어 줍니다. 학기말이 아니라 지금 더 볼 것을 알 수 있습니다.</li>
+          <li>다음에 볼 것을 메모해 두었다가 학기가 끝나면 <strong>[주제 닫기]</strong>로 접어 둡니다.</li>
+          <li>주제로 묶는 것은 필수가 아닙니다. 묶지 않아도 근거와 초안은 지금까지처럼 그대로 됩니다.</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <p class="eyebrow">Scene 04</p>
+        <div class="card-header">
+          <span class="card-dot muted"></span>
+          <h3>줄기를 따라 초안이 써집니다</h3>
+        </div>
+        <ul>
+          <li><strong>내 AI로 실행</strong> — 선생님 본인의 Claude Code·Codex 구독을 연결합니다(실험실). 생기부 초안은 이 구독 AI로만 씁니다.</li>
+          <li>순서는 <strong>교사 평가 → 동기·질문 → 과정 → 결과</strong>. 첫 문장은 “~하는 학생임.”으로 끝나고 뒤 문장들이 그 근거가 됩니다. 형광펜은 화면 표시일 뿐 NEIS에는 한 문단으로 들어갑니다.</li>
+          <li><strong>분량 조절</strong> — 한도(1,500 · 진로 2,100바이트)보다 길면 줄이고 짧으면 근거로 채웁니다. 바이트는 쌤핀이 직접 셉니다.</li>
+          <li><strong>여섯 갈래 점검</strong>은 경고일 뿐 저장을 막지 않습니다. 금지 어휘가 든 근거는 AI에 보내지 않고, 확정한 초안은 AI가 고치지 못합니다.</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      <span>SsamPin · 생활기록부 흐름 v2.5.0</span>
+      <span>www.ssampin.com/docs · 2026-09-08</span>
+    </div>
+
+  </div>
+</body>
+</html>
