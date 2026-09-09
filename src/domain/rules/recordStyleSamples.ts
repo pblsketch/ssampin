@@ -39,7 +39,7 @@ export const RECORD_STYLE_SAMPLES: Readonly<Record<RecordFocusId, RecordStyleSam
       },
       {
         role: 'process',
-        text: '정리한 측정값이 이론값보다 작게 나오자 결과를 그대로 받아들이지 않고, 굴림 마찰과 촬영 프레임 간격을 원인 후보로 나누어 적음. 이 가운데 자신이 통제할 수 있는 조건인 프레임 간격을 먼저 다루기로 하고, 두 번째 촬영에서는 프레임 수를 올려 같은 구간을 다시 잼. 오차를 한 덩어리로 보지 않고 통제할 수 있는 것부터 차례로 확인하는 절차가 드러남.',
+        text: '정리한 측정값이 이론값보다 작게 나오자 결과를 그대로 받아들이지 않고, 굴림 마찰과 촬영 프레임 간격을 원인 후보로 나누어 적음. 이 가운데 자신이 통제할 수 있는 조건인 프레임 간격을 먼저 다루기로 하고, 두 번째 촬영에서는 프레임 수를 올려 같은 구간을 다시 잼. 오차의 원인을 한꺼번에 다루지 않고 통제할 수 있는 것부터 차례로 확인하는 절차가 드러남.',
       },
       {
         role: 'result',
@@ -61,7 +61,7 @@ export const RECORD_STYLE_SAMPLES: Readonly<Record<RecordFocusId, RecordStyleSam
       },
       {
         role: 'process',
-        text: '비교 기준으로는 어느 쪽이 더 많이 말해 주는가가 아니라 어느 쪽이 무엇을 말하지 않고 남겨 두는가를 세움. 즉 매체가 바뀌면 독자가 스스로 채워야 하는 부분도 달라진다는 점을 기준으로 삼은 것임.',
+        text: '비교 기준으로는 어느 쪽이 인물의 속마음을 더 자세히 설명하는가가 아니라, 어느 쪽이 설명을 생략해 독자가 스스로 짐작하게 하는가를 세움.',
       },
       {
         role: 'process',
@@ -69,7 +69,7 @@ export const RECORD_STYLE_SAMPLES: Readonly<Record<RecordFocusId, RecordStyleSam
       },
       {
         role: 'result',
-        text: '합평에서 영상이 더 뛰어나다는 동료 의견이 나오자, 두 매체는 우열을 가릴 대상이 아니라 독자에게 맡기는 몫이 서로 다른 것이라고 답함. 동료의 주장이 두 매체를 같은 잣대로 재고 있다는 점을 짚어 낸 답변임.',
+        text: '합평에서 영상이 더 뛰어나다는 동료 의견이 나오자, 두 매체는 어느 쪽이 낫다고 가릴 대상이 아니라 독자가 짐작해야 하는 부분이 서로 다른 것이라고 답함. 동료가 두 매체를 같은 기준으로 비교하고 있다는 점을 짚어 낸 답변임.',
       },
       {
         role: 'result',
@@ -135,7 +135,7 @@ export const RECORD_STYLE_SAMPLES: Readonly<Record<RecordFocusId, RecordStyleSam
     paragraphs: [
       {
         role: 'evaluation',
-        text: '판단이 갈릴 때 목소리를 높이는 대신 확인할 방법을 만들어 내는, 조정 능력이 돋보이는 학생임.',
+        text: '의견이 갈릴 때 자기 의견을 거듭 주장하는 대신 누가 맞는지 확인할 방법을 만들어 내는, 조정 능력이 돋보이는 학생임.',
       },
       {
         role: 'motive',
@@ -147,7 +147,7 @@ export const RECORD_STYLE_SAMPLES: Readonly<Record<RecordFocusId, RecordStyleSam
       },
       {
         role: 'process',
-        text: '문구가 길다는 의견과 그림이 작다는 의견이 갈려 이야기가 길어지자, 실제 게시 위치에서 3미터 떨어져 읽어 보자고 제안함. 두 의견이 서로 다른 근거 위에 서 있었기 때문에, 실제로 붙일 자리에서 잘 보이는지를 공통의 기준으로 삼자는 제안이었음. 이를 통해 모둠원들이 같은 기준으로 두 의견을 견주게 됨.',
+        text: '문구가 길다는 의견과 그림이 작다는 의견이 갈려 이야기가 길어지자, 실제 게시 위치에서 3미터 떨어져 읽어 보자고 제안함. 두 의견이 각각 다른 이유를 대고 있었기 때문에, 실제로 붙일 자리에서 잘 보이는지를 공통의 기준으로 삼자는 제안이었음. 이를 통해 모둠원들이 같은 기준으로 두 의견을 견주게 됨.',
       },
       {
         role: 'result',
@@ -177,7 +177,7 @@ export const RECORD_STYLE_SAMPLES: Readonly<Record<RecordFocusId, RecordStyleSam
       },
       {
         role: 'result',
-        text: '처음 밝힌 직업을 그대로 두는 대신, 동물과 관련한 일을 진료와 제도라는 서로 다른 축으로 나누어 보고 제도 쪽을 더 살펴보는 방향을 택함. 다만 어떤 직업이 그 일에 해당하는지는 아직 정하지 않았다고 밝히고, 다음 학기에는 관련 기관에서 일하는 사람을 만나 실제 하는 일을 물어보겠다는 계획을 활동지에 남김.',
+        text: '처음 밝힌 직업을 그대로 두는 대신, 동물과 관련한 일을 직접 진료하는 일과 제도를 다루는 일로 나누어 보고 제도 쪽을 더 살펴보는 방향을 택함. 다만 어떤 직업이 그 일에 해당하는지는 아직 정하지 않았다고 밝히고, 다음 학기에는 관련 기관에서 일하는 사람을 만나 실제 하는 일을 물어보겠다는 계획을 활동지에 남김.',
       },
     ],
   },
@@ -187,7 +187,7 @@ export const RECORD_STYLE_SAMPLES: Readonly<Record<RecordFocusId, RecordStyleSam
     paragraphs: [
       {
         role: 'evaluation',
-        text: '맡은 몫보다 한 발 더 나아가 교실의 필요를 먼저 챙기는, 생활 속 책임감이 두드러지는 학생임.',
+        text: '맡은 일 외에도 교실에 필요한 일을 먼저 찾아서 하는, 생활 속 책임감이 두드러지는 학생임.',
       },
       {
         role: 'process',
@@ -195,7 +195,7 @@ export const RECORD_STYLE_SAMPLES: Readonly<Record<RecordFocusId, RecordStyleSam
       },
       {
         role: 'process',
-        text: '체육행사 준비 과정에서 준비물이 부족하자 자기 것을 먼저 빌려주고 자신은 마지막에 챙김. 모자란 상황에서 자기 몫을 뒤로 미루는 선택이 관찰됨. 또한 학급 회의에서 의견이 갈릴 때 먼저 나서 말하기보다 다른 친구의 말을 끝까지 듣고 나서 자기 생각을 덧붙이는 모습이 여러 번 보임.',
+        text: '체육행사 준비 과정에서 준비물이 부족하자 자기 것을 먼저 빌려주고 자신은 마지막에 챙김. 모자란 상황에서 자기 것을 뒤로 미루는 선택이 관찰됨. 또한 학급 회의에서 의견이 갈릴 때 먼저 나서 말하기보다 다른 친구의 말을 끝까지 듣고 나서 자기 생각을 덧붙이는 모습이 여러 번 보임.',
       },
       {
         role: 'process',
