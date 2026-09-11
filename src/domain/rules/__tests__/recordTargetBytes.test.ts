@@ -172,6 +172,34 @@ describe('★근거는 핵심/주변으로 나누고, 넘칠 때만 주변 근�
     expect(text).not.toContain('활동을 차례로 늘어놓지 마세요');
     expect(text).toContain('모두 담으면 넘칩니다');
   });
+
+  // 마무리(오너 검토 2026-09-12) — 1층 규정에 넣었더니 근거 1건(138B) 학생의 글이 459B → 227B 로
+  //  줄고 교사 판단 문장("…태도가 확인됨")이 사라졌다(문구를 세 번 고쳐도 같았다). 근거 양은 앱만
+  //  정확히 아니까 여기서 가른다. 오너 결정: 근거가 부족하면 해석으로 끝나지 않아도 된다.
+  it('★근거가 넉넉하면 마지막 문장을 결과에 두라고 말한다', () => {
+    const text = draftLengthInstruction(1500, 1500, { count: 12, bytes: 1800 });
+    expect(text).toContain('마무리: 마지막 문장은 그 활동이 무엇에 이르렀는지');
+    expect(text).toContain('곁가지 장면에서 글이 끊기면 마무리가 되지 않습니다');
+    // 바로 위의 "요약하는 마무리 문장을 붙이지 마세요"와 부딪히지 않게 뜻을 못 박는다.
+    expect(text).toContain('요약 문장을 붙이라는 뜻이 아니라');
+  });
+
+  it('★근거가 얇으면 마무리 지시를 아예 붙이지 않는다 (해석으로 끝나지 않아도 된다)', () => {
+    const text = draftLengthInstruction(1500, 1500, { count: 1, bytes: 138 });
+    expect(text).not.toContain('마무리:');
+    // 빈약 신호와 일반 지시는 그대로 나간다.
+    expect(text).toContain('절반에 못 미칩니다');
+    expect(text).toContain('근거가 빈약하면 목표 분량을 채우지 않아도 됩니다');
+  });
+
+  it('가르는 자리는 목표의 절반이다 (경계)', () => {
+    expect(draftLengthInstruction(1500, 1500, { count: 5, bytes: 760 })).toContain('마무리:');
+    expect(draftLengthInstruction(1500, 1500, { count: 5, bytes: 740 })).not.toContain('마무리:');
+  });
+
+  it('보낼 근거가 하나도 없으면 마무리 지시도 없다', () => {
+    expect(draftLengthInstruction(1500, 1500, { count: 0, bytes: 0 })).not.toContain('마무리:');
+  });
 });
 
 describe('영역을 정하지 않은 근거', () => {

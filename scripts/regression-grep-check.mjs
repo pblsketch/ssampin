@@ -876,6 +876,15 @@ const presenceChecks = [
       /sourceText: plan\.from === 'first' \? markedNarrativeText\(firstOut\.paragraphs\) : pack\.sourceText,/,
     name: 'REGRESSION #116: 분량 조절의 2차는 목표를 밀지 않고 1차 결과에서 이어 간다 (한도 위 목표가 생기지 않는다)',
   },
+  // REGRESSION #117 (2026-09-12, ADR-110 보강) — 마무리 지시는 **근거가 얇으면 붙지 않는다.**
+  //  1층 규정에 넣었더니 근거 1건 학생의 글이 459B → 227B 로 줄고 교사 판단 문장이 사라졌다(실측 3회).
+  //  이 조건이 사라지면 근거가 부족한 학생의 초안이 다시 사실 문장에서 끊긴다.
+  {
+    file: 'src/domain/services/recordDraftPack.ts',
+    pattern:
+      /if \(!isThinEvidence\(evidence\.bytes, targetBytes\)\) \{[\s\S]{0,300}?'마무리: 마지막 문장은/,
+    name: 'REGRESSION #117: 마무리 지시는 근거가 얇으면 붙지 않는다 (근거가 부족하면 해석으로 끝나지 않아도 된다)',
+  },
 ];
 
 // ============================================================
