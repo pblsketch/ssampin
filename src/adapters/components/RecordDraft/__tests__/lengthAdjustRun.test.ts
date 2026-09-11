@@ -16,8 +16,9 @@ import { INSUFFICIENT_MARK } from '@domain/rules/recordLengthGoal';
 import {
   adjustRecordOf,
   measureAnswer,
-  retryTargetBytes,
+  planRetry,
   runLengthAdjust,
+  shrinkDraftOnce,
   type LengthAdjustCandidate,
 } from '../lengthAdjustRun';
 import type { OwnAiRunApi } from '../ownAiRun';
@@ -58,17 +59,36 @@ function packInput(over: Record<string, unknown> = {}) {
   };
 }
 
-describe('★재조정 목표는 빗나간 만큼 되민다', () => {
-  it('넘쳤으면 넘친 만큼 더 줄이라고 한다', () => {
-    expect(retryTargetBytes(1610, 1500, 1425)).toBe(1390);
+describe('★2차는 1차 결과에서 이어 간다 — 목표는 선생님이 고른 값 그대로 (ADR-110)', () => {
+  it('넘쳤으면 1차 글을 마저 줄인다 (줄이기든 채우기든)', () => {
+    expect(planRetry({ kind: 'shrink', firstBytes: 1610, targetBytes: 1500 })).toEqual({
+      kind: 'shrink',
+      from: 'first',
+    });
+    expect(planRetry({ kind: 'expand', firstBytes: 1610, targetBytes: 1500 })).toEqual({
+      kind: 'shrink',
+      from: 'first',
+    });
   });
 
-  it('모자랐으면 모자란 만큼 더 채우라고 한다', () => {
-    expect(retryTargetBytes(1300, 1500, 1425)).toBe(1625);
+  it('채우다 모자랐으면 1차 글을 마저 채운다', () => {
+    expect(planRetry({ kind: 'expand', firstBytes: 1300, targetBytes: 1500 })).toEqual({
+      kind: 'expand',
+      from: 'first',
+    });
   });
 
-  it('음수나 0으로 내려가지 않는다', () => {
-    expect(retryTargetBytes(5000, 100, 95)).toBeGreaterThanOrEqual(1);
+  it('줄이다 너무 많이 뺐으면 원문으로 돌아가 직전 결과를 알린다 (줄이기는 근거가 없어 채울 수 없다)', () => {
+    expect(planRetry({ kind: 'shrink', firstBytes: 1300, targetBytes: 1500 })).toEqual({
+      kind: 'shrink',
+      from: 'source',
+      previousBytes: 1300,
+    });
+  });
+
+  it('★예전처럼 한도 위 목표(1,300 → 1,625)를 만들지 않는다 — 계획에 목표 숫자가 아예 없다', () => {
+    const plan = planRetry({ kind: 'expand', firstBytes: 1300, targetBytes: 1500 });
+    expect(Object.keys(plan)).not.toContain('targetBytes');
   });
 });
 
@@ -134,9 +154,10 @@ describe('★자동 재조정은 최대 한 번이다', () => {
     expect(r.candidates[0]?.insufficient).toBe(true);
   });
 
-  it('★두 번째 요청도 원문으로 다시 조립한다 — 이미 가린 글을 재사용하지 않는다', async () => {
-    const long = '길게 늘어놓은 문장을 반복한다.'.repeat(5);
-    const { api, calls } = fakeApi([long, long]);
+  it('★두 번째 요청은 1차 글을 같은 조립 함수로 다시 가려 보낸다 — 가린 글을 재사용하지 않는다', async () => {
+    // 모델은 별칭으로 답한다 → 앱이 실명으로 되돌린다 → 2차 꾸러미가 그 실명을 **다시** 가려야 한다.
+    const firstAnswer = `［이름1］은 ${'길게 늘어놓은 문장을 반복한다. '.repeat(5).trim()}`;
+    const { api, calls } = fakeApi([firstAnswer, '짧게 줄였다.']);
     await runLengthAdjust({
       api,
       provider: 'claude',
@@ -144,12 +165,55 @@ describe('★자동 재조정은 최대 한 번이다', () => {
       pack: packInput({ targetBytes: 30 }),
       floorBytes: 28,
     });
+    expect(calls).toHaveLength(2);
     for (const prompt of calls) {
       expect(prompt).not.toContain('김지훈'); // 실명이 두 번 다 없다
       expect(prompt).toContain('［이름1］');
     }
-    // 목표 숫자는 서로 달라야 한다 — 같으면 되민 것이 아니다.
-    expect(calls[0]).not.toBe(calls[1]);
+    // 2차의 "줄일 글"은 원문이 아니라 1차 결과다 — 남은 차이만 고치게 한다(ADR-110).
+    expect(calls[1]).toContain('길게 늘어놓은 문장을 반복한다.');
+    expect(calls[1]).not.toContain('탐구를 이어 갔다');
+    // 목표 **바이트**는 선생님이 고른 값 그대로다 — 예전처럼 반대로 밀지 않는다.
+    //   (괄호 안 글자 수 어림은 보내는 글의 비율로 옮기므로 글이 바뀌면 달라진다. 바이트만 견준다.)
+    const goalBytes = (p: string | undefined): string | undefined =>
+      /목표 분량: ([\d,]+ ~ [\d,]+)바이트/.exec(p ?? '')?.[1];
+    expect(goalBytes(calls[0])).toBeDefined();
+    expect(goalBytes(calls[1])).toBe(goalBytes(calls[0]));
+  });
+
+  it('★줄이다 너무 많이 뺐으면 2차는 원문으로 돌아가 "직전 시도"를 알린다', async () => {
+    const source = '문장을 길게 이어서 쓴 원래 글이다. '.repeat(6).trim();
+    const { api, calls } = fakeApi(['짧다.', '알맞게 줄인 글이다.']);
+    await runLengthAdjust({
+      api,
+      provider: 'claude',
+      systemPrompt: '[규정]',
+      pack: packInput({ sourceText: source, targetBytes: 100 }),
+      floorBytes: 95,
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContain('문장을 길게 이어서 쓴 원래 글이다.');
+    expect(calls[1]).toContain('직전 시도는 약 7바이트였습니다. 너무 많이 줄였으니');
+  });
+
+  it('채우다 모자랐으면 2차는 1차 글에 마저 채운다 — 근거를 다시 싣는다', async () => {
+    const { api, calls } = fakeApi(['조금 채운 글이다.', '더 채운 글이다.']);
+    await runLengthAdjust({
+      api,
+      provider: 'claude',
+      systemPrompt: '[규정]',
+      pack: packInput({
+        kind: 'expand',
+        sourceText: '짧은 글이다.',
+        targetBytes: 300,
+        evidences: [{ id: 'e1', content: '모둠 토의에서 자료를 정리했다.' }],
+      }),
+      floorBytes: 285,
+    });
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toContain(`채울 글:${String.fromCharCode(10)}조금 채운 글이다.`);
+    expect(calls[1]).toContain('근거 자료:');
+    expect(calls[1]).toContain('모둠 토의에서 자료를 정리했다.');
   });
 
   it('규정 지시문을 그대로 함께 보낸다 (조절도 같은 게이트를 받는다)', async () => {
@@ -279,5 +343,70 @@ describe('★설명문(거절)은 저장 후보가 아니다 (2026-09-08 R-3)', 
     const out = measureAnswer('[동기] 왜 그런지 물었다.\n\n[결과] 답을 찾았다.', []);
     expect(out.nonDraft).toBe(false);
     expect(out.nonDraftReason).toBe('');
+  });
+});
+
+describe('★설명 줄은 분량에 섞이지 않는다 (ADR-110)', () => {
+  it('표식 있는 문단 사이의 설명 줄은 버리고 센다 — 초안 쓰기와 같은 규칙', () => {
+    const out = measureAnswer(
+      '줄인 글은 아래와 같습니다.\n\n[과정] 자료를 모았다.\n\n[결과] 답을 찾았다.',
+      [],
+    );
+    expect(out.paragraphs.map((p) => p.text)).toEqual(['자료를 모았다.', '답을 찾았다.']);
+    expect(out.bytes).toBe(neisByteLength('자료를 모았다. 답을 찾았다.'));
+  });
+});
+
+describe('★초안 직후 자동 줄이기 — 한 번만, 표식을 붙여서, 실명은 가려서 (ADR-110)', () => {
+  const PARAS = [
+    { role: 'evaluation' as const, text: '김지훈은 끈기 있게 탐구하는 학생임.' },
+    { role: 'process' as const, text: '자료를 모아 표로 정리함. '.repeat(8).trim() },
+  ];
+  const input = (api: OwnAiRunApi) => ({
+    api,
+    provider: 'claude' as const,
+    systemPrompt: '[규정]',
+    studentName: '김지훈',
+    roster: ROSTER,
+    areaLabel: '교과 세부능력 및 특기사항',
+    paragraphs: PARAS,
+    targetBytes: 100,
+  });
+
+  it('표식을 붙여 한 번 보내고, 실명을 가리고, 답은 실명으로 되돌려 센다', async () => {
+    const { api, calls } = fakeApi([
+      '[평가] ［이름1］은 끈기 있게 탐구하는 학생임.\n\n[과정] 자료를 모아 정리함.',
+    ]);
+    const r = await shrinkDraftOnce(input(api));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('[평가] ［이름1］은 끈기 있게');
+    expect(calls[0]).not.toContain('김지훈');
+    expect(r?.paragraphs.map((p) => p.role)).toEqual(['evaluation', 'process']);
+    expect(r?.paragraphs[0]?.text).toBe('김지훈은 끈기 있게 탐구하는 학생임.');
+    expect(r?.bytes).toBe(
+      neisByteLength('김지훈은 끈기 있게 탐구하는 학생임. 자료를 모아 정리함.'),
+    );
+  });
+
+  it('줄지 않았거나 설명문이면 null — 부르는 쪽이 처음 초안을 쓴다', async () => {
+    const same = `[평가] ［이름1］은 끈기 있게 탐구하는 학생임.\n\n[과정] ${PARAS[1]!.text}`;
+    expect(await shrinkDraftOnce(input(fakeApi([same]).api))).toBeNull();
+    const refusal = '이 요청은 수행하기 어렵습니다. 추가 근거를 알려주시면 다시 쓰겠습니다.';
+    expect(await shrinkDraftOnce(input(fakeApi([refusal]).api))).toBeNull();
+  });
+
+  it('실행이 실패하면 던진다 — 화면이 처음 초안을 지키고 알린다', async () => {
+    let handler: ((e: unknown) => void) | null = null;
+    const api: OwnAiRunApi = {
+      run: async (p) => {
+        queueMicrotask(() => handler?.({ type: 'error', runId: p.runId, kind: 'usage-limit' }));
+        return { ok: true };
+      },
+      onEvent: (fn) => {
+        handler = fn;
+        return () => {};
+      },
+    };
+    await expect(shrinkDraftOnce(input(api))).rejects.toBe('usage-limit');
   });
 });

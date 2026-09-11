@@ -5,7 +5,7 @@
  * 화면이 바뀌어도 같아야 하는 규칙이다. 화면에 두면 학급 운영과 수업 관리가 갈라진다.
  *
  * ★원칙 1: **모델이 센 숫자를 믿지 않는다.** 판정은 언제나 앱이 최종 저장 본문으로 다시 센다.
- * ★원칙 5: **확인된 한도만 강제한다.** 초등처럼 한도 수치가 공식 확인되지 않은 영역은
+ * ★원칙 5: **확인된 한도만 붉게 알린다**(저장은 막지 않는다, 오너 결정 2026-09-11). 초등처럼 한도 수치가 공식 확인되지 않은 영역은
  *   구조적으로 `over-limit` 이 나올 수 없다(`isAreaLimitVerified`).
  *
  * 단서: `judgeLength` 가 안에서 부르는 `resolveAreaLimit` 은 **미지의 (영역 x 학교급)에서
@@ -15,9 +15,9 @@
  * ★이 파일은 도메인이다. 외부 의존성 import 금지.
  */
 import {
-  isAreaLimitVerified,
+  effectiveAreaLimit,
+  isAreaLimitConfirmed,
   neisByteLength,
-  resolveAreaLimit,
   type RecordArea,
   type SchoolLevel,
 } from '../entities/RecordDraft';
@@ -30,16 +30,23 @@ export type LengthAdjustKind = 'shrink' | 'expand';
 
 /**
  * 분량 판정.
- * - `over-limit`: 영역 한도를 넘었다. 저장이 거부되므로 그대로 반영할 수 없다.
+ * - `over-limit`: 확정된 한도를 넘었다. 저장은 되지만 붉게 알린다(ADR-105).
  * - `over-goal`: 선생님이 고른 목표만 넘었다(한도 이내). 선생님이 고를 수 있다.
  * - `under-goal`: 목표 하한에 못 미친다.
  * - `ok`: 목표 하한과 목표 사이.
  */
 export type LengthVerdict = 'over-limit' | 'over-goal' | 'under-goal' | 'ok';
 
-/** 목표 기본값 = 그 영역의 한도. */
-export function defaultTargetBytes(area: RecordArea, level: SchoolLevel): number {
-  return resolveAreaLimit(area, level);
+/**
+ * 목표 기본값 = 그 영역의 한도. `limitOverride` 는 선생님이 이 수업반·영역에 직접 정한 한도(2026-09-11) —
+ * 이 파일의 함수는 모두 같은 인자를 받아 **한 한도**를 쓴다(칩·자르기·판정이 서로 다른 한도를 보지 않게).
+ */
+export function defaultTargetBytes(
+  area: RecordArea,
+  level: SchoolLevel,
+  limitOverride?: number,
+): number {
+  return effectiveAreaLimit(area, level, limitOverride);
 }
 
 /**
@@ -51,17 +58,117 @@ export function defaultTargetBytes(area: RecordArea, level: SchoolLevel): number
  *
  * 확인되지 않은 한도(초등 일부)에서는 자르지 않는다 — 확인 안 된 숫자로 선생님을 막지 않는다.
  */
-export function clampTargetBytes(input: number, area: RecordArea, level: SchoolLevel): number {
+export function clampTargetBytes(
+  input: number,
+  area: RecordArea,
+  level: SchoolLevel,
+  limitOverride?: number,
+): number {
   const floor = 1;
-  const rounded = Number.isFinite(input) ? Math.round(input) : defaultTargetBytes(area, level);
+  const rounded = Number.isFinite(input)
+    ? Math.round(input)
+    : defaultTargetBytes(area, level, limitOverride);
   const atLeast = Math.max(floor, rounded);
-  if (!isAreaLimitVerified(area, level)) return atLeast;
-  return Math.min(atLeast, resolveAreaLimit(area, level));
+  if (!isAreaLimitConfirmed(area, level, limitOverride)) return atLeast;
+  return Math.min(atLeast, effectiveAreaLimit(area, level, limitOverride));
+}
+
+/** 분량 목표 바로 고르기. 한도보다 작은 값만 쓰고, 한도 자체는 늘 끝에 둔다(진로 2,100 등). */
+export const RECORD_TARGET_BYTE_PRESETS: readonly number[] = [750, 1_000, 1_500];
+
+/** 이 영역에서 보여 줄 목표 칩. */
+export function targetPresetsFor(
+  area: RecordArea,
+  level: SchoolLevel,
+  limitOverride?: number,
+): readonly number[] {
+  const limit = effectiveAreaLimit(area, level, limitOverride);
+  return [...RECORD_TARGET_BYTE_PRESETS.filter((n) => n < limit), limit];
+}
+
+/**
+ * 목표 저장 키 — 수업반(담임은 `homeroom`) × 영역. 과목은 수업반이 정하므로 따로 두지 않는다.
+ * ★학기는 키에 없다. 1학기·2학기를 나눠 쓰는 과목은 그 학기에 맞는 값(예: 750)을 고른다.
+ */
+export function recordTargetKey(classId: string | undefined, area: RecordArea): string {
+  return `${classId ?? 'homeroom'}:${area}`;
+}
+
+/**
+ * 선생님이 정한 분량 목표. 없으면 한도. 한도를 넘는 값은 한도로 자른다(`clampTargetBytes`).
+ * ★목표는 **안내**다 — 저장 차단은 여전히 나이스 한도로만 한다. 학교 사정의 숫자로 저장을 막지 않는다.
+ */
+export function resolveTargetBytes(
+  area: RecordArea,
+  level: SchoolLevel,
+  override?: number,
+  limitOverride?: number,
+): number {
+  return override === undefined
+    ? defaultTargetBytes(area, level, limitOverride)
+    : clampTargetBytes(override, area, level, limitOverride);
 }
 
 /** 목표 하한. 1,500이면 1,425. 규정상 최소 분량이 **아니다** (화면 문구가 이걸 지켜야 한다). */
 export function goalFloor(targetBytes: number): number {
   return Math.ceil(targetBytes * GOAL_FLOOR_RATIO);
+}
+
+/**
+ * 초안을 쓴 뒤 **앱이 자동으로 한 번 줄이는** 기준 — 목표보다 이 비율 넘게 길 때만(ADR-110).
+ *
+ * ★오너(2026-09-11): "1,500바이트면 조금 긴 건 괜찮은데 1,700 이상은 문제." 1,500 이면 1,650 까지는 그대로 둔다.
+ *   조금 넘친 것까지 줄이면 왕복 1~2분이 더 걸린다 — 한 문장 안팎은 선생님이 고치는 편이 빠르다.
+ */
+export const DRAFT_AUTO_SHRINK_OVER_RATIO = 0.1;
+
+/** 방금 쓴 초안을 자동으로 한 번 줄여야 하나. 목표 1,500 이면 1,651바이트부터 참. */
+export function needsAutoShrink(bytes: number, targetBytes: number): boolean {
+  return bytes > Math.floor(targetBytes * (1 + DRAFT_AUTO_SHRINK_OVER_RATIO));
+}
+
+/**
+ * 문장 수. 모델은 바이트도 글자 수도 잘 못 세지만 **문장은 센다** — 그래서 "몇 문장을 빼라"를 함께 말한다(ADR-110).
+ * 마침표·물음표·느낌표 뒤에 공백(줄바꿈 포함)이 오면 문장이 끝난 것으로 본다. 소수점(3.5)은 뒤가 숫자라 끊지 않는다.
+ */
+export function countSentences(text: string): number {
+  return text.split(/[.!?。]\s+/).filter((s) => s.trim().length > 0).length;
+}
+
+/**
+ * 바이트를 **이 글의** 공백 포함 글자 수로 옮긴다. 한글은 3바이트지만 공백·문장부호는 1바이트라
+ * "3으로 나누기"는 공백 포함 글자 수보다 적게 나온다. 글이 비었으면 3으로 나눈다.
+ * 모델에게 감을 주는 숫자일 뿐 판정에는 안 쓴다.
+ */
+export function charsForBytes(bytes: number, sample: string): number {
+  const sampleBytes = neisByteLength(sample);
+  const sampleChars = [...sample].length;
+  if (sampleBytes === 0 || sampleChars === 0) return Math.max(1, Math.round(bytes / 3));
+  return Math.max(1, Math.round((bytes * sampleChars) / sampleBytes));
+}
+
+/**
+ * 근거가 목표를 받쳐 주기에 **빈약한가**의 기준 — 보내는 근거 글(가린 뒤 본문·메모)을 모두 합친 바이트가
+ * 목표의 이 비율에 못 미치면 빈약하다고 본다(ADR-110 보강 2). 관찰 메모 몇 줄을 1,500바이트로 늘리려면
+ * 근거에 없는 말을 지어낼 수밖에 없다 — 오너(2026-09-11): "근거가 빈약하면 굳이 목표 바이트에 맞추지 않아도 된다."
+ * ★어림이다. 판정이 아니라 **모델에게 숫자로 알려 줄 신호**다. 경계 근처는 모델이 근거를 보고 판단한다
+ *   ("근거가 빈약하면 채우지 말라"는 일반 지시는 근거 양과 상관없이 늘 나간다).
+ */
+export const THIN_EVIDENCE_RATIO = 0.5;
+
+/** 보내는 근거가 목표에 비해 빈약한가. 목표 1,500 이면 근거가 750바이트 아래일 때 참. */
+export function isThinEvidence(evidenceBytes: number, targetBytes: number): boolean {
+  return evidenceBytes < targetBytes * THIN_EVIDENCE_RATIO;
+}
+
+/**
+ * 보내는 근거가 **목표보다 많은가** — 근거 글만 모아도 목표 분량을 넘으면 다 담을 수 없다(ADR-110 보강 3).
+ * 그러면 요청서가 "다 담을 수 없으니 강점·특성을 드러내는 핵심 근거를 중심으로 골라 쓰라"를 숫자와 함께 말한다.
+ * 오너(2026-09-11): "근거가 너무 많으면 다 담으려 하지 말고, 핵심 근거를 중심으로 엮고, 관련이 약한 근거는 반영하지 않는다."
+ * ★신호일 뿐이다 — 고르라는 일반 지시는 근거 양과 상관없이 늘 나간다. 빈약(`isThinEvidence`)과는 겹치지 않는다.
+ */
+export function isRichEvidence(evidenceBytes: number, targetBytes: number): boolean {
+  return evidenceBytes > targetBytes;
 }
 
 /**
@@ -76,9 +183,14 @@ export function judgeLength(input: {
   readonly targetBytes: number;
   readonly area: RecordArea;
   readonly level: SchoolLevel;
+  /** 선생님이 직접 정한 한도(있으면). */
+  readonly limitOverride?: number;
 }): LengthVerdict {
-  const { bytes, targetBytes, area, level } = input;
-  if (isAreaLimitVerified(area, level) && bytes > resolveAreaLimit(area, level))
+  const { bytes, targetBytes, area, level, limitOverride } = input;
+  if (
+    isAreaLimitConfirmed(area, level, limitOverride) &&
+    bytes > effectiveAreaLimit(area, level, limitOverride)
+  )
     return 'over-limit';
   if (bytes > targetBytes) return 'over-goal';
   if (bytes < goalFloor(targetBytes)) return 'under-goal';

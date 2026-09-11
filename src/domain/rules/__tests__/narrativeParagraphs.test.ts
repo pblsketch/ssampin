@@ -12,6 +12,7 @@ import {
   stripNarrativeMarks,
   NARRATIVE_MARK_INSTRUCTION,
   dropUnmarkedParagraphs,
+  markedNarrativeText,
   NARRATIVE_ROLES,
 } from '../narrativeParagraphs';
 
@@ -186,5 +187,16 @@ describe('표식 없는 줄 버리기 — 모델의 자기 정정 설명이 본�
   it('버린 뒤에도 순서와 본문은 그대로다', () => {
     const parsed = parseNarrativeParagraphs('[과정] 자료를 모음.\n\n설명 줄.\n\n[결과] 정리함.');
     expect(dropUnmarkedParagraphs(parsed).map((p) => p.text)).toEqual(['자료를 모음.', '정리함.']);
+  });
+});
+
+describe('markedNarrativeText — 이미 쓴 글을 모델에게 다시 보낼 때 (ADR-110)', () => {
+  it('★표식을 붙여 되읽으면 같은 문단 목록이 된다 — 줄이고 나서도 형광펜 색이 그대로다', () => {
+    const paras = parseNarrativeParagraphs(
+      '[평가] 끈기 있는 학생임.\n\n[과정] 자료를 모음.\n\n역할 없는 문단.',
+    );
+    const text = markedNarrativeText(paras);
+    expect(text).toBe('[평가] 끈기 있는 학생임.\n\n[과정] 자료를 모음.\n\n역할 없는 문단.');
+    expect(parseNarrativeParagraphs(text)).toEqual(paras);
   });
 });

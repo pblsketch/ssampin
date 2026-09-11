@@ -26,6 +26,8 @@ export type DraftRunPhase =
       /** 지금 쓰는 중인 학생. `queue` 도 이 학생부터 시작한다(`queue.slice(i)`). */
       readonly studentRef: string;
       readonly queue: readonly DraftTarget[];
+      /** 초안이 목표보다 많이 길어 **자동으로 한 번 줄이는 중**이면 그 숫자(ADR-110). 쓰는 중이면 없다. */
+      readonly shrinking?: { readonly fromBytes: number; readonly targetBytes: number };
     }
   | {
       readonly kind: 'preview';

@@ -9,6 +9,10 @@
  * ★결과는 `tmp/record-style-qa/`(gitignored)에 쓴다. 규정 본문은 결과 파일에 쓰지 않는다.
  *
  * 실행: npx tsx scripts/record-style-qa.mts [--only 1,2] [--l1 <path>] [--dry]
+ *
+ * `--scenes` — **두 빌드 비교**(ADR-103 P2 하네스): 같은 묶음을 「P0 정렬만(기존형 요청서)」과 「장면 배열 적용」으로
+ *   두 번 보낸다. 장면은 날짜순으로 기계 배치한다(동기=첫 근거 · 과정=가운데 · 결과=마지막 · 평가=빈 자리) — 선생님이 손으로
+ *   놓은 것과 같은 요청서 경로(`resolveCompositionFromScenes` + `scenes`)를 탄다. 결과는 비교 기록일 뿐 관문이 아니다.
  */
 import { spawn } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -20,7 +24,18 @@ import {
   DEFAULT_RECORD_WRITING_STYLE,
   type RecordWritingStyle,
 } from '../src/domain/entities/RecordWritingStyle';
-import type { DraftPackEvidence } from '../src/domain/services/recordDraftPack';
+import type { DraftPackEvidence, DraftPackScene } from '../src/domain/services/recordDraftPack';
+import { resolveCompositionFromScenes } from '../src/domain/rules/narrativeComposition';
+import {
+  defaultModuleFor,
+  frameForArea,
+  sceneDisplayLabel,
+  type NarrativeFrameId,
+} from '../src/domain/rules/narrativeFrames';
+import { sceneMarkOf } from '../src/domain/rules/narrativeScenes';
+import type { NarrativeScene } from '../src/domain/entities/InquiryThread';
+import type { ResolvedComposition } from '../src/domain/rules/recordStyleCompose';
+import type { RecordArea } from '../src/domain/entities/RecordEvidence';
 
 const args = process.argv.slice(2);
 const argOf = (name: string): string | undefined => {
@@ -28,6 +43,8 @@ const argOf = (name: string): string | undefined => {
   return i >= 0 ? args[i + 1] : undefined;
 };
 const DRY = args.includes('--dry');
+/** 두 빌드 비교 — 묶음마다 P0(기존형)·장면 배열 두 요청서. */
+const SCENES_MODE = args.includes('--scenes');
 const L1_PATH = argOf('--l1') ?? 'E:/test/ssampin-prompts/record-prompt-l1.v3.draft.txt';
 const ONLY = (argOf('--only') ?? '').split(',').filter((x) => x.length > 0);
 const OUT_DIR = resolve('tmp/record-style-qa');
@@ -301,7 +318,55 @@ interface RunCase {
   readonly bundle: Bundle;
   readonly label: string;
   readonly style: RecordWritingStyle;
+  /** 장면 배열 빌드일 때만. 없으면 P0(기존형) 요청서. */
+  readonly narrative?: {
+    readonly composition: ResolvedComposition;
+    readonly scenes: readonly DraftPackScene[];
+  };
 }
+
+/**
+ * 묶음 하나를 날짜순으로 네 자리에 기계 배치한다 — 동기=첫 근거, 과정=가운데 전부, 결과=마지막, 평가=빈 자리.
+ * 근거가 둘이면 과정이 비고, 하나면 동기만 찬다. 화면에서 선생님이 놓는 것과 같은 저장 모양(`NarrativeScene`)이다.
+ */
+function narrativeFor(bundle: Bundle): RunCase['narrative'] {
+  const frame: NarrativeFrameId = frameForArea(bundle.area as RecordArea);
+  const sorted = [...bundle.evidences].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
+  const ids = sorted.map((e) => e.id);
+  const first = ids.slice(0, 1);
+  const last = ids.length > 1 ? ids.slice(-1) : [];
+  const middle = ids.length > 2 ? ids.slice(1, -1) : [];
+  const mk = (id: string, role: NarrativeScene['role'], evidenceIds: readonly string[]): NarrativeScene => ({
+    id,
+    role,
+    moduleId: defaultModuleFor(frame, role),
+    evidenceIds,
+  });
+  const saved: NarrativeScene[] = [
+    mk('s-eval', 'evaluation', []),
+    mk('s-motive', 'motive', first),
+    mk('s-process', 'process', middle),
+    mk('s-result', 'result', last),
+  ];
+  const composition = resolveCompositionFromScenes({
+    saved,
+    resolved: saved,
+    frame,
+    chained: false,
+    placedCount: first.length + middle.length + last.length,
+  });
+  if (composition === null) throw new Error(`no composition for ${bundle.id}`);
+  const scenes: DraftPackScene[] = saved.map((sc) => ({
+    sceneId: sc.id,
+    mark: sceneMarkOf(sc),
+    label: sceneDisplayLabel(frame, sc),
+    evidenceIds: sc.evidenceIds,
+  }));
+  return { composition, scenes };
+}
+
+/** 두 빌드 비교 대상 — 위험 묶음 B9(근거 한 줄)는 장면을 세울 근거가 없어 뺀다. */
+const SCENE_BUNDLE_IDS = ['B1', 'B2', 'B3', 'B4', 'B5a', 'B5b', 'B6a', 'B6b', 'B7', 'B8'] as const;
 
 const ALL: Bundle[] = [...BUNDLES, ...RISK_BUNDLES];
 const byId = (id: string): Bundle => {
@@ -529,7 +594,17 @@ function runClaude(systemPrompt: string, prompt: string): Promise<string> {
 async function main(): Promise<void> {
   const l1 = readFileSync(L1_PATH, 'utf-8').trim();
   mkdirSync(OUT_DIR, { recursive: true });
-  const cases = ONLY.length > 0 ? CASES.filter((c) => ONLY.includes(c.id)) : CASES;
+  const sceneCases: RunCase[] = SCENES_MODE
+    ? SCENE_BUNDLE_IDS.flatMap((bid) => {
+        const bundle = byId(bid);
+        return [
+          { id: `${bid}-p0`, bundle, label: 'P0 정렬만(기존형)', style: style({}) },
+          { id: `${bid}-scenes`, bundle, label: '장면 배열 적용', style: style({}), narrative: narrativeFor(bundle) },
+        ];
+      })
+    : [];
+  const pool = SCENES_MODE ? sceneCases : CASES;
+  const cases = ONLY.length > 0 ? pool.filter((c) => ONLY.includes(c.id)) : pool;
   const index: string[] = [
     `# 실제 생성 결과 (${new Date().toISOString()}) - ${PROVIDER}${MODEL ? ` / ${MODEL}` : ''}`,
     '',
@@ -541,6 +616,9 @@ async function main(): Promise<void> {
       areaLabel: c.bundle.areaLabel,
       evidences: c.bundle.evidences,
       style: c.style,
+      ...(c.narrative === undefined
+        ? {}
+        : { composition: c.narrative.composition, scenes: c.narrative.scenes }),
     });
     writeFileSync(resolve(OUT_DIR, `${c.id}${SUFFIX}.request.txt`), pack.text, 'utf-8');
     if (DRY) {

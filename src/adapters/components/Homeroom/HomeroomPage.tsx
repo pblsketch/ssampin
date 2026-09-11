@@ -3,7 +3,10 @@ import type { CounselingMethod } from '@domain/entities/StudentRecord';
 import { HomeroomTabBar, type HomeroomTab } from './HomeroomTabBar';
 import { HOMEROOM_OPEN_TAB_EVENT, consumePendingHomeroomTab } from './homeroomTabIntent';
 import { flushAllDrafts } from '@adapters/components/RecordDraft/draftFlushRegistry';
-import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
+import {
+  goesToEvidenceScreen,
+  type RecordFlowIntent,
+} from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { RecordsTab } from './Records/RecordsTab';
@@ -63,7 +66,7 @@ export function HomeroomPage() {
    */
   const goWithIntent = useCallback(
     async (intent: RecordFlowIntent): Promise<void> => {
-      const nextTab: HomeroomTab = intent.mode === 'board' ? 'recordDraft' : 'records';
+      const nextTab: HomeroomTab = goesToEvidenceScreen(intent.mode) ? 'recordDraft' : 'records';
       if (!confirmLeaveRecords(nextTab)) return;
       const flushed = await flushAllDrafts();
       if (!flushed) {

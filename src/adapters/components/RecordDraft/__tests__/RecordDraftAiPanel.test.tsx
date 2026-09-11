@@ -172,6 +172,123 @@ describe('연결되면 단위를 고를 수 있다 (D8)', () => {
   });
 });
 
+describe('★서사(장면)로 쓰기 — 관문과 큐 (ADR-103)', () => {
+  beforeEach(() => {
+    connectClaude();
+    // ★서버 규정이 판본 3 이어야 서사 구성이 나간다. 기본 모의값은 판본 1 이라 문지기가 막는다.
+    fetchRecordPromptL1.mockResolvedValue({
+      ok: true,
+      prompt: '[생기부 작성 규정 본문]',
+      version: 3,
+      stale: false,
+    });
+  });
+
+  const EV = { id: 'e1', content: '쿠폰 질문을 했다' };
+
+  const SCENES = [
+    {
+      id: 'sc-eval',
+      role: 'evaluation' as const,
+      moduleId: 'teacherJudgement' as const,
+      evidenceIds: [],
+    },
+    {
+      id: 'sc-motive',
+      role: 'motive' as const,
+      moduleId: 'legacyMotive' as const,
+      evidenceIds: ['e1'],
+    },
+  ];
+
+  const threadWithScenes = (over: Record<string, unknown> = {}) => ({
+    id: 'thr-1',
+    studentRef: 's1',
+    title: '할인 문구와 선택',
+    keywords: [],
+    status: 'open' as const,
+    scenes: SCENES,
+    createdAt: 1,
+    updatedAt: 1,
+    ...over,
+  });
+
+  /** 장면이 가리키는 근거를 화면 재료(`target`)와 주제 재료 양쪽에 같은 id 로 둔다. */
+  const narrativePanel = (over: Record<string, unknown> = {}) =>
+    panel({
+      area: 'subject',
+      target: target({ evidences: [EV] }),
+      threads: [threadWithScenes()],
+      studentEvidences: [{ ...EV, threadId: 'thr-1' }],
+      ...over,
+    });
+
+  it('장면이 있는 주제가 하나면 그 서사로 요청서를 만든다', async () => {
+    narrativePanel();
+    await startWith('이 학생 초안 쓰기');
+    const prompt = runCalls[0]?.prompt ?? '';
+    expect(prompt).toContain('작성 구성');
+    expect(prompt).toContain('1. 쿠폰 질문을 했다'); // 장면 경로는 번호를 붙인다
+    expect(prompt).toContain('근거: 1');
+  });
+
+  it('★규정 판본이 모자라면 서사를 아예 안 보내고 화면이 말한다', async () => {
+    fetchRecordPromptL1.mockResolvedValue({
+      ok: true,
+      prompt: '[생기부 작성 규정 본문]',
+      version: 2,
+      stale: false,
+    });
+    narrativePanel();
+    await startWith('이 학생 초안 쓰기');
+    const prompt = runCalls[0]?.prompt ?? '';
+    expect(prompt).not.toContain('작성 구성');
+    expect(prompt).toContain('- 쿠폰 질문을 했다'); // 예전 줄 형식으로 돌아간다
+    expect(screen.getByText(/기존 방식으로 만들어집니다/)).toBeTruthy();
+  });
+
+  it('장면이 없으면 요청서가 예전 그대로다', async () => {
+    narrativePanel({ threads: [threadWithScenes({ scenes: undefined })] });
+    await startWith('이 학생 초안 쓰기');
+    const prompt = runCalls[0]?.prompt ?? '';
+    expect(prompt).not.toContain('작성 구성');
+    expect(prompt).toContain('- 쿠폰 질문을 했다');
+  });
+
+  it('장면 메모가 구성 줄 아래에 실린다', async () => {
+    narrativePanel({
+      threads: [
+        threadWithScenes({
+          scenes: [SCENES[0], { ...SCENES[1], note: '질문이 출발점이었다' }],
+        }),
+      ],
+    });
+    await startWith('이 학생 초안 쓰기');
+    expect(runCalls[0]?.prompt ?? '').toContain('선생님이 읽은 것: 질문이 출발점이었다');
+  });
+
+  it('★큐의 다른 학생에게는 이 학생의 서사가 가지 않는다', async () => {
+    narrativePanel({
+      threads: [
+        threadWithScenes({
+          scenes: [SCENES[0], { ...SCENES[1], note: '오직 이 학생의 메모' }],
+        }),
+      ],
+      remaining: [target({ studentRef: 's2', displayName: '박서연' })],
+    });
+    await startWith(/남은 학생 모두/);
+    expect(runCalls[0]?.prompt ?? '').toContain('오직 이 학생의 메모');
+    // 다음 학생으로 넘어가도 그 메모가 따라가지 않는다.
+    await finishWith('[평가] 성실한 학생임. ');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '반영' }));
+    });
+    const second = runCalls[1]?.prompt ?? '';
+    expect(second.length).toBeGreaterThan(0);
+    expect(second).not.toContain('오직 이 학생의 메모');
+    expect(second).not.toContain('작성 구성');
+  });
+});
 describe('★보내는 꾸러미에 실명이 없고 기재 금지가 빠진다 (ADR-072)', () => {
   beforeEach(connectClaude);
 
@@ -219,6 +336,32 @@ describe('★보내는 꾸러미에 실명이 없고 기재 금지가 빠진다 
     expect(prompt).toContain('주제에 묶인 근거');
     expect(prompt).not.toContain('묶이지 않은 근거');
     expect(prompt).toContain('주제:');
+  });
+
+  it('주제에 적어 둔 키워드·역량·다음 메모까지 함께 나간다 (P0)', async () => {
+    panel({
+      threads: [
+        {
+          id: 'thr-1',
+          studentRef: 's1',
+          title: '할인 문구와 선택',
+          keywords: ['기회비용'],
+          competencyKeywords: ['경제 현상에 대한 자료 해석력'],
+          nextNotes: '광고 문구 규제를 2학기에 이어 볼 것',
+          status: 'open',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      studentEvidences: [{ id: 'e1', content: '주제에 묶인 근거', threadId: 'thr-1' }],
+    });
+    fireEvent.click(screen.getByRole('button', { name: '할인 문구와 선택' }));
+    await startWith('이 학생 초안 쓰기');
+
+    const prompt = runCalls[0]?.prompt ?? '';
+    expect(prompt).toContain('주제 키워드: 기회비용');
+    expect(prompt).toContain('선생님이 본 역량: 경제 현상에 대한 자료 해석력');
+    expect(prompt).toContain('다음 탐구 메모: 광고 문구 규제를 2학기에 이어 볼 것');
   });
 });
 
@@ -754,6 +897,243 @@ describe('★C0 (ㄷ) 중복 실행 잠금은 참조로 막는다', () => {
       fireEvent.click(btn);
     });
 
+    expect(runCalls).toHaveLength(1);
+  });
+});
+
+describe('분량 목표와 흐름 보기에서 온 주제 (오너 요청 2026-09-11)', () => {
+  beforeEach(connectClaude);
+
+  it('칩을 누르면 목표를 바꾸고, 맨 끝 칩은 한도라고 적힌다', () => {
+    const onChange = vi.fn();
+    panel({ area: 'subject', level: 'high', targetBytes: 1500, onChangeTargetBytes: onChange });
+    fireEvent.click(screen.getByRole('button', { name: '750B' }));
+    expect(onChange).toHaveBeenCalledWith(750);
+    expect(screen.getByRole('button', { name: '한도 1,500B' })).toBeTruthy();
+  });
+
+  it('★요청서에 늘 분량 줄이 실린다 — 목표가 한도와 같아도(ADR-110)', async () => {
+    panel({ area: 'subject', level: 'high', targetBytes: 750, onChangeTargetBytes: () => {} });
+    await startWith('이 학생 초안 쓰기');
+    expect(runCalls[0]?.prompt ?? '').toContain(
+      '분량: 공백을 포함해 750바이트(한글 약 250자)를 넘기지 마세요.',
+    );
+    expect(runCalls[0]?.prompt ?? '').toContain('근거가 넉넉하면 713~750바이트');
+
+    cleanup();
+    runCalls.length = 0;
+    useRecordAiRunStore.getState().reset();
+    panel({ area: 'subject', level: 'high', targetBytes: 1500, onChangeTargetBytes: () => {} });
+    await startWith('이 학생 초안 쓰기');
+    // 예전에는 한도와 같으면 빠졌다 — 1층 규정에 바이트 한도가 없어 모델은 분량을 전혀 몰랐다.
+    expect(runCalls[0]?.prompt ?? '').toContain('근거가 넉넉하면 1,425~1,500바이트');
+    // 근거 한 줄뿐인 학생 — 목표를 채우지 말라는 신호가 숫자와 함께 간다(보강 2).
+    expect(runCalls[0]?.prompt ?? '').toContain('목표 분량의 절반에 못 미칩니다');
+  });
+
+  it('★[이 흐름으로 초안 쓰기]로 온 주제를 골라 둔다', () => {
+    panel({
+      threads: [
+        {
+          id: 'thr-1',
+          studentRef: 's1',
+          title: '할인 문구와 선택',
+          keywords: [],
+          status: 'open',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      studentEvidences: [{ id: 'e1', content: '주제에 묶인 근거', threadId: 'thr-1' }],
+      requestedThread: { threadId: 'thr-1', chain: false, nonce: 1 },
+    });
+    expect(
+      screen.getByRole('button', { name: '할인 문구와 선택' }).getAttribute('aria-pressed'),
+    ).toBe('true');
+  });
+});
+
+describe('근거 지도에서 고른 근거로 초안 쓰기 (ADR-106)', () => {
+  const EVIDENCES = [
+    {
+      id: 'e1',
+      content: '쿠폰 질문을 했다',
+      date: '2026-05-01',
+      links: [{ toId: 'e3', note: '뒷받침' }],
+    },
+    { id: 'e2', content: '고르지 않은 근거', date: '2026-05-02' },
+    { id: 'e3', content: '보고서를 썼다', date: '2026-05-03' },
+    { id: 'e4', content: '보내지 않기로 한 근거', date: '2026-05-04', excludedFromAi: true },
+  ];
+
+  it('★화면의 「초안에 쓸 근거 N건」과 요청서에 실리는 근거가 같고, 연결 줄이 함께 나간다', async () => {
+    connectClaude();
+    panel({
+      target: target({ evidences: EVIDENCES }),
+      studentEvidences: EVIDENCES,
+      requestedSelection: { evidenceIds: ['e3', 'e1', 'e4', 'ghost'], nonce: 1 },
+    });
+    expect(screen.getByRole('button', { name: '고른 근거 3건' })).toBeTruthy();
+    expect(screen.getByTestId('evidence-count-summary').textContent).toContain(
+      '초안에 쓸 근거 2건 · 빠진 근거 1건',
+    );
+    expect(screen.getByTestId('composition-summary').textContent).toContain(
+      '지도에서 고른 근거 3건으로 씁니다.',
+    );
+    expect(screen.getByTestId('composition-summary').textContent).toContain(
+      '근거 사이 연결 1건을 따라 차례를 정합니다.',
+    );
+    await startWith('이 학생 초안 쓰기');
+    const prompt = runCalls[0]?.prompt ?? '';
+    expect(prompt).toContain('1. (2026-05-01) 쿠폰 질문을 했다');
+    expect(prompt).toContain('2. (2026-05-03) 보고서를 썼다');
+    expect(prompt).not.toContain('고르지 않은 근거');
+    expect(prompt).not.toContain('보내지 않기로 한 근거');
+    expect(prompt).toContain('- 1 → 2: 뒷받침');
+  });
+
+  it('주제 칩이나 [전체 근거]를 누르면 고른 근거가 풀린다', () => {
+    connectClaude();
+    panel({
+      target: target({ evidences: EVIDENCES }),
+      studentEvidences: EVIDENCES,
+      threads: [
+        {
+          id: 'thr-1',
+          studentRef: 's1',
+          title: '할인 문구와 선택',
+          keywords: [],
+          status: 'open',
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+      requestedSelection: { evidenceIds: ['e1'], nonce: 1 },
+    });
+    expect(screen.getByRole('button', { name: '고른 근거 1건' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '전체 근거' }));
+    expect(screen.queryByRole('button', { name: /고른 근거/ })).toBeNull();
+    expect(screen.getByTestId('evidence-count-summary').textContent).toContain(
+      '초안에 쓸 근거 3건',
+    );
+  });
+
+  it('없는 id 만 왔으면 받지 않는다 — 빈 선택으로 초안을 만들지 않는다', () => {
+    panel({
+      target: target({ evidences: EVIDENCES }),
+      studentEvidences: EVIDENCES,
+      requestedSelection: { evidenceIds: ['ghost'], nonce: 1 },
+    });
+    expect(screen.queryByRole('button', { name: /고른 근거/ })).toBeNull();
+  });
+});
+
+describe('★초안이 목표를 10% 넘게 넘기면 앱이 한 번 줄인다 (ADR-110, 오너: 1,700 이상이 문제)', () => {
+  beforeEach(connectClaude);
+  const SENT = '탐구 과정에서 자료를 체계적으로 정리함. ';
+  /** 57B 문장 30개 = 1,709B — 목표 1,500 의 110%(1,650)를 넘는다. */
+  const LONG = `[평가] ${SENT.repeat(30).trim()}`;
+  /** 25개 = 1,424B. */
+  const SHORT = `[평가] ${SENT.repeat(25).trim()}`;
+  const open1500 = (): void => {
+    panel({ area: 'subject', level: 'high', targetBytes: 1500, onChangeTargetBytes: () => {} });
+  };
+
+  it('줄이기를 한 번 더 보내고, 처음 판과 줄인 판을 둘 다 남긴 뒤 줄인 판을 보여 준다', async () => {
+    open1500();
+    await startWith('이 학생 초안 쓰기');
+    await finishWith(LONG);
+
+    expect(runCalls).toHaveLength(2);
+    const second = runCalls[1]?.prompt ?? '';
+    expect(second).toContain('줄일 글:');
+    // 문단 역할(형광펜 색)을 지키려고 표식을 붙여 보낸다.
+    expect(second).toContain('[평가] 탐구 과정에서');
+    expect(second).toMatch(/문장으로 치면 약 \d+문장/);
+    expect(second).not.toContain('김지훈');
+    expect(runCalls[1]?.appendSystemPrompt).toBe('[생기부 작성 규정 본문]');
+    expect(
+      screen.getByText(/1,709B로 목표\(1,500B\)보다 길어서 자동으로 한 번 줄이고 있어요/),
+    ).toBeTruthy();
+
+    await finishWith(SHORT);
+    expect(useRecordAiDraftStore.getState().records).toHaveLength(2);
+    expect(screen.getByText(/자동으로 한 번 줄였어요/).textContent).toContain('v1 탭');
+    expect(screen.getByRole('tab', { name: 'v2' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('조금 넘친 것(10% 이내)은 그대로 둔다 — 줄이기를 부르지 않는다', async () => {
+    open1500();
+    await startWith('이 학생 초안 쓰기');
+    await finishWith(`[평가] ${SENT.repeat(28).trim()}`); // 1,595B
+    expect(runCalls).toHaveLength(1);
+    expect(useRecordAiDraftStore.getState().records).toHaveLength(1);
+    expect(screen.queryByText(/자동으로 한 번/)).toBeNull();
+  });
+
+  it('줄인 글이 줄지 않았으면 처음 판만 남기고 그렇게 말한다', async () => {
+    open1500();
+    await startWith('이 학생 초안 쓰기');
+    await finishWith(LONG);
+    await finishWith(LONG);
+    expect(useRecordAiDraftStore.getState().records).toHaveLength(1);
+    expect(screen.getByText(/자동으로 줄이지 못해 처음 판을 그대로/)).toBeTruthy();
+  });
+
+  it('★줄이는 중에 [중단]을 눌러도 처음 초안은 버리지 않는다', async () => {
+    open1500();
+    await startWith('이 학생 초안 쓰기');
+    await finishWith(LONG);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '중단' }));
+    });
+    expect(useRecordAiDraftStore.getState().records).toHaveLength(1);
+    expect(screen.getByText(/자동 줄이기를 멈췄어요/)).toBeTruthy();
+  });
+});
+
+describe('★분량은 1,500 에 묶이지 않는다 — 진로 2,100 · 직접 정한 한도 (오너 확인 2026-09-11)', () => {
+  beforeEach(connectClaude);
+  /** 57B 문장 — n 개면 57n - 1 바이트. */
+  const SENT = '탐구 과정에서 자료를 체계적으로 정리함. ';
+  const draftOf = (n: number): string => `[평가] ${SENT.repeat(n).trim()}`;
+
+  it('진로활동(2,100B)은 요청서도 자동 줄이기 기준도 2,100 을 쓴다', async () => {
+    panel({ area: 'career', level: 'high', targetBytes: 2100, onChangeTargetBytes: () => {} });
+    expect(screen.getByRole('button', { name: '한도 2,100B' })).toBeTruthy();
+    await startWith('이 학생 초안 쓰기');
+    const prompt = runCalls[0]?.prompt ?? '';
+    expect(prompt).toContain('분량: 공백을 포함해 2,100바이트(한글 약 700자)를 넘기지 마세요.');
+    expect(prompt).toContain('근거가 넉넉하면 1,995~2,100바이트');
+    // 2,279B — 1,500 이 기준이었다면 줄였을 길이지만 2,100 의 110%(2,310) 안이라 그대로 둔다.
+    await finishWith(draftOf(40));
+    expect(runCalls).toHaveLength(1);
+  });
+
+  it('진로활동에서 2,310B 를 넘으면 목표 2,100 으로 한 번 줄인다', async () => {
+    panel({ area: 'career', level: 'high', targetBytes: 2100, onChangeTargetBytes: () => {} });
+    await startWith('이 학생 초안 쓰기');
+    await finishWith(draftOf(42)); // 2,393B
+    expect(runCalls).toHaveLength(2);
+    expect(runCalls[1]?.prompt ?? '').toContain('목표 분량: 1,995 ~ 2,100바이트');
+    expect(screen.getByText(/목표\(2,100B\)보다 길어서/)).toBeTruthy();
+  });
+
+  it('선생님이 한도를 2,000 으로 정했으면 요청서가 2,000 을 말하고, 칩 끝도 「한도 2,000B」다', async () => {
+    panel({
+      area: 'subject',
+      level: 'high',
+      targetBytes: 2000,
+      limitOverride: 2000,
+      onChangeTargetBytes: () => {},
+    });
+    expect(screen.getByRole('button', { name: '한도 2,000B' })).toBeTruthy();
+    await startWith('이 학생 초안 쓰기');
+    const prompt = runCalls[0]?.prompt ?? '';
+    expect(prompt).toContain('분량: 공백을 포함해 2,000바이트(한글 약 667자)를 넘기지 마세요.');
+    expect(prompt).toContain('근거가 넉넉하면 1,900~2,000바이트');
+    expect(prompt).toContain('기재요령 기본 한도(1,500바이트)보다 깁니다');
+    await finishWith(draftOf(37)); // 2,108B — 2,000 의 110%(2,200) 안
     expect(runCalls).toHaveLength(1);
   });
 });

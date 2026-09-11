@@ -7,6 +7,7 @@ import type { TodoSettings } from './TodoSettings';
 import type { MiniApp } from './MiniApp';
 import type { ReminderSettings } from './RecordReminder';
 import type { RecordStylePreset, RecordWritingStyle } from './RecordWritingStyle';
+import type { RecordScaffold } from '../rules/narrativeFrames';
 
 export interface DashboardThemeSettings {
   readonly presetId: PresetThemeId | 'custom';
@@ -738,6 +739,38 @@ export interface Settings {
    * ★학생 원문·근거·초안 본문은 담지 않는다. 이름·구성·추가 지시뿐이다.
    */
   readonly recordStylePresets?: readonly RecordStylePreset[];
+  /**
+   * 근거 정리의 보기. `map` = 근거 지도(기본, ADR-106 · 장면 열 ADR-107) · `board` = 보드(열).
+   * ★같은 자료의 두 보기다. 단계가 아니라 보기 모드이므로 언제든 오갈 수 있다.
+   * 미설정 = `map`. `flow`(옛 흐름 보기, ADR-103)는 저장 파일에 남아 있을 수 있는 **옛 값**이라 읽는 쪽이 `map` 으로 본다 —
+   *   타입에 남겨 둔 것은 그 때문이지 화면에 그 보기가 있어서가 아니다.
+   */
+  readonly recordEvidenceViewMode?: 'map' | 'flow' | 'board';
+  /**
+   * 「내 뼈대」 — 이름 붙여 저장한 **장면 배열**(ADR-103). 옛 「내 작성 방식」을 대신한다.
+   * ★근거·메모·학생 자료는 담지 않는다. 자리·카테고리·이름뿐이다.
+   */
+  readonly recordScaffolds?: readonly RecordScaffold[];
+  /**
+   * 영역별로 마지막에 깐 뼈대의 id(ADR-103). 키는 `RecordArea` 값.
+   * ★옛 「내 작성 방식」의 영역별 마지막 선택을 옮겨 온 자리다. 요청서 입력이 아니라
+   *   **[뼈대 고르기]가 무엇을 골라 둘지**만 정한다 — 장면을 깔지 말지는 늘 선생님이 누른다.
+   */
+  readonly recordAreaScaffolds?: Readonly<Record<string, string>>;
+  /**
+   * 생기부 **분량 목표**(바이트) — 키는 `recordTargetKey(classId, area)`(수업반 × 영역, 담임은 `homeroom`).
+   * 미설정 = 나이스 한도. 예: 고1 공통과목처럼 학교가 1학기 750 + 2학기 750 으로 나누면 750.
+   * ★목표는 안내다 — 저장 차단은 여전히 한도로만 한다.
+   */
+  readonly recordTargetBytes?: Readonly<Record<string, number>>;
+  /**
+   * 생기부 **한도**(바이트)를 선생님이 직접 정한 값 — 키는 분량 목표와 같은 `recordTargetKey(classId, area)`.
+   * 미설정 = 기재요령 기본값(중·고 진로 2,100 · 나머지 1,500). 직접 정하면 초등이어도 이 값으로 저장을 막는다.
+   * 오너 결정(2026-09-11): 초등 한도는 학교마다 다를 수 있고, 한 과목을 여러 선생님이 나눠 쓰는 학교도 있다.
+   */
+  readonly recordLimitBytes?: Readonly<Record<string, number>>;
+  /** 옛 작성 방식 → 뼈대 옮기기를 이미 했는가(ADR-103). 옮기기는 한 번뿐이다. */
+  readonly recordScaffoldMigratedAt?: number;
   /** AI 도우미 챗봇 표시 여부 (기본: true) */
   readonly showChatbot?: boolean;
   /** 온보딩에서 선택한 교사 역할 (복수) */

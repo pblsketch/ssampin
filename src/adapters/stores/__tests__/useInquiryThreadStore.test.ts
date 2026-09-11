@@ -113,3 +113,29 @@ describe('useInquiryThreadStore', () => {
     expect(useInquiryThreadStore.getState().records).toHaveLength(1);
   });
 });
+
+describe('주제 차례 — reorderThreads (오너 요청 2026-09-11)', () => {
+  const two: InquiryThread[] = [
+    existing,
+    { ...existing, id: 'thr-2', title: '둘째 주제', createdAt: 2, updatedAt: 2 },
+  ];
+
+  it('준 차례대로 order 를 적고, 같은 차례면 저장하지 않는다', async () => {
+    repoFake.stored = { records: two };
+    await useInquiryThreadStore.getState().reorderThreads(['thr-2', 'thr-old']);
+    const saved = repoFake.stored!.records;
+    expect(saved.find((r) => r.id === 'thr-2')?.order).toBe(0);
+    expect(saved.find((r) => r.id === 'thr-old')?.order).toBe(1);
+    const calls = repoFake.saveCalls;
+    await useInquiryThreadStore.getState().reorderThreads(['thr-2', 'thr-old']);
+    expect(repoFake.saveCalls).toBe(calls);
+  });
+
+  it('★다른 학생의 주제와 섞으면 저장하지 않고 던진다', async () => {
+    repoFake.stored = { records: [...two, { ...existing, id: 'thr-x', studentRef: '남의 학생' }] };
+    await expect(
+      useInquiryThreadStore.getState().reorderThreads(['thr-x', 'thr-old']),
+    ).rejects.toThrow();
+    expect(repoFake.saveCalls).toBe(0);
+  });
+});

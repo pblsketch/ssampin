@@ -558,7 +558,7 @@ export function checkRecordNarrative(input: NarrativeCheckInput): NarrativeCheck
   if (input.evidenceBasis === undefined) {
     skipped.push({
       code: 'change_without_basis',
-      reason: '근거 자료를 아직 읽지 못해 변화 서사의 근거를 보지 못했습니다.',
+      reason: '근거 자료를 아직 읽지 못해 변화의 근거를 보지 못했습니다.',
     });
   } else {
     push(checkChangeBasis(content, input.evidenceBasis));

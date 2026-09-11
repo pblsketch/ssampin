@@ -2415,7 +2415,13 @@ export async function exportRecordDraftsToExcel(
   drafts: readonly RecordDraft[],
   students: ReadonlyArray<RecordDraftStudentRef>,
   areas: readonly RecordArea[],
-  opts?: { level?: SchoolLevel; includeMeta?: boolean; confirmedOnly?: boolean },
+  opts?: {
+    level?: SchoolLevel;
+    includeMeta?: boolean;
+    confirmedOnly?: boolean;
+    /** 선생님이 직접 정한 영역별 한도(있으면). 메타의 "바이트/한도" 가 화면과 같은 한도를 쓴다. */
+    limitOverrides?: Partial<Record<RecordArea, number>>;
+  },
 ): Promise<ArrayBuffer> {
   const level: SchoolLevel = opts?.level ?? 'high';
   const includeMeta = opts?.includeMeta ?? false;
@@ -2441,7 +2447,7 @@ export async function exportRecordDraftsToExcel(
     try {
       const limit = resolveAreaLimit(area, level);
       validAreas.push(area);
-      areaLimits.set(area, limit);
+      areaLimits.set(area, opts?.limitOverrides?.[area] ?? limit);
     } catch {
       // 학교급에 없는 영역 skip
     }

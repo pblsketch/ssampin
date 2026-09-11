@@ -572,14 +572,15 @@ export function ObservationForm({
               : '기록을 저장했습니다',
           'success',
           {
-            label: '근거 보드에서 보기',
+            label: '근거 정리에서 보기',
             onClick: () => {
               void onRequestFlow(
                 createRecordFlowIntent({
                   context: 'teaching',
                   classId,
                   studentRef: topicStudentRef,
-                  mode: 'board',
+                  // 기본 보기가 흐름 그래프다(ADR-103). 보드로 보내면 교사가 방금 놓은 자리를 못 본다.
+                  mode: 'flow',
                   sourceId: recordId,
                   ...(linked !== null ? { evidenceId: linked.evidenceId } : {}),
                   ...(linked?.threadId !== undefined ? { threadId: linked.threadId } : {}),

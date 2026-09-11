@@ -936,7 +936,7 @@ function CellThumbnail({
           : duplicate
             ? 'ring-1 ring-yellow-500/40'
             : cell.isEmpty
-              ? 'ring-1 ring-dashed ring-sp-border'
+              ? 'outline-dashed outline-1 outline-sp-border'
               : 'ring-1 ring-sp-border hover:ring-sp-accent/50',
         dim && !selected ? 'opacity-50' : '',
         disabled ? 'cursor-not-allowed' : 'hover:scale-[1.02]',

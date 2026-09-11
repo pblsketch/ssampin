@@ -7,8 +7,8 @@
  *   깨질 수 있는** 종류다. 계획서 §E 의 연결부가 여기 하나씩 대응한다.
  *
  * 1. 조절 대상이 **저장된 글**이 되면, 한도를 넘겨 저장이 거부된 글은 조절할 길이 없어진다.
- * 2. 한도를 넘긴 결과에 [이 글로 바꾸기]가 남으면 눌러도 저장이 거부된다(죽은 버튼).
- * 3. 조절안 판에 [뒤에 붙이기]가 남으면 합산이 한도를 넘어 또 거부된다.
+ * 2. 한도를 넘긴 결과도 [이 글로 바꾸기]로 반영한다 — 저장은 막지 않고 색으로만 알린다(ADR-105).
+ * 3. 조절안 판에는 [뒤에 붙이기]가 없다(원문을 고쳐 쓴 글이라 붙이면 같은 내용이 두 번).
  * 4. 기재 금지 항목이 든 본문이 **묻지 않고** 나간다.
  * 5. 조절을 시작한 뒤 고친 글이 조용히 덮인다.
  * 6. 근거 0건인데 보충하기를 눌러 지어내기를 부른다.
@@ -66,7 +66,6 @@ function panel(over: PanelOver = {}) {
     lockedByOther: false,
     onRun: async () => outcome(['줄인 글.'], OVER_LIMIT),
     onApply: async () => {},
-    onInsertOnly: () => {},
     ...over,
   };
   return { ...render(<RecordDraftLengthPanel {...props} />), props };
@@ -155,30 +154,21 @@ describe('★조절 대상은 화면의 현재 글이다 (저장된 글이 아�
   });
 });
 
-describe('★한도를 넘긴 결과는 버리지 않고 회수한다', () => {
-  it('[이 글로 바꾸기] 대신 [편집칸에 넣기]가 나오고, 얼마나 줄여야 하는지 알려 준다', async () => {
-    const inserted: string[] = [];
+describe('★한도를 넘긴 결과도 [이 글로 바꾸기]로 반영한다 — 색으로만 알린다 (ADR-105)', () => {
+  it('넘은 바이트를 알려 주고 [이 글로 바꾸기]가 그대로 있다', async () => {
     const over = '나'.repeat(520); // 1,560바이트 — 여전히 한도 초과
-    panel({
-      onRun: async () => outcome([over], OVER_LIMIT),
-      onInsertOnly: (t) => inserted.push(t),
-    });
+    panel({ onRun: async () => outcome([over], OVER_LIMIT) });
     await openAndRun();
-
-    expect(screen.queryByRole('button', { name: '이 글로 바꾸기' })).toBeNull();
-    expect(screen.getByText(/저장하려면 60바이트를 더 줄여야 해요/)).toBeTruthy();
-
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /편집칸에 넣기/ }));
-    });
-    expect(inserted).toEqual([over]);
+    expect(screen.getByText(/바꾸면 한도보다 60B 많아요/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: '이 글로 바꾸기' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /편집칸에 넣기/ })).toBeNull();
   });
 
-  it('한도 이내면 [이 글로 바꾸기]가 나온다', async () => {
+  it('한도 이내면 안내 없이 [이 글로 바꾸기]가 나온다', async () => {
     panel({ onRun: async () => outcome(['짧게 줄인 글.'], OVER_LIMIT) });
     await openAndRun();
     expect(screen.getByRole('button', { name: '이 글로 바꾸기' })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: /편집칸에 넣기/ })).toBeNull();
+    expect(screen.queryByText(/한도보다/)).toBeNull();
   });
 });
 

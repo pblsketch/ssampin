@@ -88,12 +88,50 @@ export interface RecordEvidence {
    * ★브릿지 `normalizeRecord` 화이트리스트에도 같이 넣어야 AI 가 흐름 단위로 읽을 수 있다.
    */
   readonly threadId?: string;
+  /**
+   * 선생님이 이 근거에서 읽은 것 — 카드에 붙는 한 줄 메모(ADR-103, 상한 `NARRATIVE_NOTE_MAX`).
+   *
+   * ★**카드를 따라간다.** 다른 장면·다른 주제로 옮겨도 메모는 그대로다.
+   * ★**원본 기록(관찰 탭)에는 쓰지 않는다.** 원본은 사실이고 이 메모는 해석이다.
+   * ★요청서에 실린다 — 자유 글이라 보낼 때 본문과 **같은 세션으로** 가린다.
+   */
+  readonly note?: string;
+  /**
+   * 이 근거에서 **다른 근거로 이어지는 연결**(근거 지도, ADR-106). 앞 근거가 연결을 갖는다(from 쪽 소유).
+   *
+   * ★주제 소유(`threadId`)와 **독립**이다 — 다른 주제의 근거와도 이을 수 있고, 연결이 소유를 바꾸지 않는다.
+   * ★상대 근거가 지워지면 연결은 **남는다**(읽는 자리 `resolveEvidenceEdges` 가 가린다). 지운 근거를 [되돌리기]로
+   *   살리면 연결도 그대로 돌아온다. 근거 파일 하나에 사니 동기화·백업·학년도 전환이 근거와 같은 축으로 간다.
+   * ★AI 는 연결을 저장하지 않는다 — 제안은 점선이고 [적용] 때 `source: 'ai'` 로 들어온다.
+   * ★브릿지 미러에는 아직 안 실린다(`ENTITY_FIELD_CONTRACT` 의 notMirrored).
+   */
+  readonly links?: readonly EvidenceLink[];
   readonly createdAt: number;
   readonly updatedAt: number;
 }
 
+/** 근거 → 근거 연결 하나. 뒤 근거의 id 와 선생님이 적은 이음말(설명). */
+export interface EvidenceLink {
+  readonly toId: string;
+  /** 이음말 — 자유 글. "변화"·"뒷받침"·"다른 모습" 칩은 입력 지름길일 뿐이다. 상한 `NARRATIVE_NOTE_MAX`. */
+  readonly note?: string;
+  /** 누가 만들었나. 없으면 선생님. AI 제안을 적용한 연결은 `'ai'` — 화면이 배지로 알린다. */
+  readonly source?: 'teacher' | 'ai';
+}
+
 export interface RecordEvidenceData {
   readonly records: readonly RecordEvidence[];
+}
+
+/**
+ * 이 근거가 그 영역에 들어가는가. **영역을 하나도 정하지 않은 근거(유형 미지정)는 어느 영역에도 들어간다.**
+ *
+ * ★예전에는 `areas.includes(area)` 로만 걸러, 영역 없이 저장된 근거(보드에서 '전체'로 둔 채 저장한 원본,
+ *   엑셀 업로드)가 초안 화면·AI 요청서 어디에도 안 나왔다. 근거 정리에서는 보이는데 초안 화면에서는
+ *   사라져 "두 화면이 동기화되지 않는다"로 보였다(오너 제보 2026-09-11). 끌 수 없는 필터는 소실처럼 보인다.
+ */
+export function evidenceInArea(evidence: Pick<RecordEvidence, 'areas'>, area: RecordArea): boolean {
+  return evidence.areas.length === 0 || evidence.areas.includes(area);
 }
 
 /**

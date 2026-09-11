@@ -15,6 +15,7 @@
  *   스토어가 아니라 **저장소**에서 읽으므로(읽기 실패와 빈 목록을 구별하려고) `di/container` 를 가짜로 만든다.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ObservationRecord } from '@domain/entities/Observation';
 
@@ -253,6 +254,17 @@ async function openCompare(content: string): Promise<void> {
   });
 }
 
+beforeEach(() => {
+  // ★기본 보기는 흐름 그래프다(ADR-103). 이 파일이 보는 것은 **보드 보기**라 값을 명시한다.
+  //   옮기기(작성 방식 → 뼈대)도 이미 한 것으로 둔다 — 설정 저장이 검사 중에 끼어들지 않게.
+  useSettingsStore.setState((st) => ({
+    settings: {
+      ...st.settings,
+      recordEvidenceViewMode: 'board' as const,
+      recordScaffoldMigratedAt: 1,
+    },
+  }));
+});
 beforeEach(() => {
   obsRepo.records = [...OBS];
   obsRepo.failRead = null;

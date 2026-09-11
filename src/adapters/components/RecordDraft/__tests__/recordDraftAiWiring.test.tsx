@@ -369,6 +369,31 @@ describe('★저장은 학생 키로 찾는다 — 목록 위치로 찾지 않�
     expect(input.roleMarks).toEqual([{ role: 'motive', text: '박서연 학생 초안' }]);
   });
 
+  it('판이 딛고 선 주제를 초안 칸에도 남긴다 — "이 주제로 쓴 초안" 조회가 성립한다 (P0)', async () => {
+    view();
+    const onApply = lastProps()['onApply'] as (
+      ref: string,
+      text: string,
+      marks: unknown,
+      threadId?: string,
+    ) => Promise<void>;
+    await onApply('sB', '주제로 쓴 초안', null, 'thr-1');
+    const input = (upsertSpy.mock.calls as unknown[][])[0]?.[0] as { threadId?: string };
+    expect(input.threadId).toBe('thr-1');
+  });
+
+  it('주제를 안 넘기면 그 칸을 아예 보내지 않는다 — 미지정은 "바꾸지 않는다" 다', async () => {
+    view();
+    const onApply = lastProps()['onApply'] as (
+      ref: string,
+      text: string,
+      marks: unknown,
+      threadId?: string,
+    ) => Promise<void>;
+    await onApply('sB', '표식만 갱신', null);
+    const input = (upsertSpy.mock.calls as unknown[][])[0]?.[0] as Record<string, unknown>;
+    expect('threadId' in input).toBe(false);
+  });
   it('명단에 없는 학생이면 아무 데도 저장하지 않는다', async () => {
     view();
     const onApply = lastProps()['onApply'] as (ref: string, text: string) => Promise<void>;
@@ -570,8 +595,9 @@ describe('★학생별 집중 보기 — 기본 보기, 학생 목록 + 한 명�
     expect(screen.queryByRole('textbox', { name: /김지훈/ })).toBeNull();
   });
 
-  it('★Ctrl+Enter 에서 저장이 거부되면(한도 초과) 넘어가지 않고 오류를 보여 준다', async () => {
-    upsertSpy.mockRejectedValueOnce(new Error('한도 1,500바이트를 넘었습니다.'));
+  // 한도로는 더 이상 거부하지 않는다(ADR-105) — 저장 실패는 디스크 오류 같은 진짜 실패뿐이고, 그 이유를 그대로 보인다.
+  it('★Ctrl+Enter 에서 저장이 실패하면 넘어가지 않고 이유를 보여 준다', async () => {
+    upsertSpy.mockRejectedValueOnce(new Error('디스크에 쓰지 못했습니다.'));
     view({ openPanel: false });
     const ta = screen.getByRole('textbox', { name: /김지훈/ });
     fireEvent.change(ta, { target: { value: '아주 긴 글' } });
@@ -579,7 +605,7 @@ describe('★학생별 집중 보기 — 기본 보기, 학생 목록 + 한 명�
       fireEvent.keyDown(ta, { key: 'Enter', ctrlKey: true });
     });
     expect(screen.getByRole('textbox', { name: /김지훈/ })).toBeTruthy();
-    expect(screen.getByText('저장하지 못했습니다.')).toBeTruthy();
+    expect(screen.getByText('디스크에 쓰지 못했습니다.')).toBeTruthy();
   });
 
   it('★타이핑한 뒤 저장본이 더 새로워지면(AI 반영·동기화) 옛 글로 되돌리지 않는다(리뷰 지적 1)', async () => {
@@ -780,5 +806,177 @@ describe('★배치 규칙 resolveListMode — 본문 560px 을 못 확보하면
   it('패널 닫힘: 224 + 32 + 560 = 816 이상이면 목록', () => {
     expect(resolveListMode(816, false, 380)).toBe('list');
     expect(resolveListMode(815, false, 380)).toBe('selector');
+  });
+});
+
+describe('초안 화면 위쪽 정리 · 한도 직접 정하기 (오너 요청 2026-09-11)', () => {
+  const original = settingsState.update;
+  afterEach(() => {
+    settingsState.update = original;
+  });
+
+  it('형광펜·영역 전체 복사·내보내기는 ⋯ 메뉴 안에 있다', () => {
+    const update = vi.fn(async (_patch?: unknown) => {});
+    settingsState.update = update;
+    view({ openPanel: false });
+    expect(screen.queryByRole('menuitem', { name: /내보내기/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '초안 도구 더보기' }));
+    expect(screen.getByRole('menuitem', { name: /영역 전체 복사/ })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /내보내기/ })).toBeTruthy();
+    fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /형광펜/ }));
+    expect(update).toHaveBeenCalledWith({ recordHighlightOn: true });
+  });
+
+  it('★한도를 직접 정하면 이 수업반·영역 키로 저장한다', () => {
+    const update = vi.fn(async (_patch?: unknown) => {});
+    settingsState.update = update;
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: /한도 .*직접 정하려면/ }));
+    const input = screen.getByRole('spinbutton', { name: '한도(바이트)' });
+    fireEvent.change(input, { target: { value: '750' } });
+    fireEvent.blur(input);
+    expect(update).toHaveBeenCalledWith({ recordLimitBytes: { 'c1:subject': 750 } });
+  });
+
+  it('직접 정한 한도가 있으면 [직접] 표시가 붙고 편집 칸 막대가 그 한도를 쓴다', () => {
+    settingsState.settings = {
+      recordDraftViewMode: 'overview',
+      recordLimitBytes: { 'c1:subject': 750 },
+    };
+    view({ openPanel: false });
+    expect(screen.getByText('직접')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /한도 750B, 직접 정하려면/ })).toBeTruthy();
+  });
+});
+
+describe('한도를 넘어도 저장되고 색·글자로 알린다 (오너 결정 2026-09-11, ADR-105)', () => {
+  it('편집 칸 막대에 넘은 바이트가 글자로 붙는다', () => {
+    drafts.byRef = {
+      sA: {
+        id: 'd-A',
+        area: 'subject',
+        studentRef: 'sA',
+        content: '가'.repeat(600),
+        status: 'draft',
+        basisObservationIds: [],
+        groundingFlags: [],
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    };
+    view({ openPanel: false });
+    expect(screen.getByText(/300B 초과/)).toBeTruthy();
+  });
+});
+
+describe('[넓게 보기] — 근거 정리와 같은 방식으로 초안 화면을 펼친다 (오너 요청 2026-09-11)', () => {
+  const expandedRoot = (): Element | null => document.querySelector('[data-sp-workspace-expanded]');
+
+  it('누르면 화면 가득 펼쳐지고, 뒷막·Esc 로 돌아온다', () => {
+    view({ openPanel: false });
+    expect(expandedRoot()).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '넓게 보기' }));
+    // 유리 모드 갇힘 규칙(index.css `:has([data-sp-workspace-expanded])`)이 보는 표시와 오버레이 모양.
+    expect(expandedRoot()?.className).toContain('fixed inset-4');
+    expect(screen.getByRole('button', { name: '원래 크기로' }).getAttribute('aria-pressed')).toBe(
+      'true',
+    );
+
+    fireEvent.click(screen.getByTestId('draft-workspace-backdrop'));
+    expect(expandedRoot()).toBeNull();
+    expect(screen.queryByTestId('draft-workspace-backdrop')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '넓게 보기' }));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(expandedRoot()).toBeNull();
+  });
+
+  it('★편집 칸 안의 Esc 로는 돌아오지 않는다 — 쓰던 글 앞에서 화면이 줄지 않게', () => {
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: '넓게 보기' }));
+    const box = screen.getAllByRole('textbox')[0];
+    if (!box) throw new Error('편집 칸이 없다');
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(expandedRoot()).not.toBeNull();
+  });
+
+  it('근거 정리로 바꾸면 푼다 — 근거 정리는 자기 [넓게 보기]가 따로 있다', () => {
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: '넓게 보기' }));
+    fireEvent.click(screen.getByRole('button', { name: '근거 정리' }));
+    expect(expandedRoot()).toBeNull();
+    expect(screen.queryByRole('button', { name: '넓게 보기' })).toBeNull();
+  });
+
+  it('★펼친 동안 한도 창은 펼친 화면 안에 붙는다 — body 에 붙으면 초점 가두기 밖이라 입력이 안 된다', () => {
+    view({ openPanel: false });
+    fireEvent.click(screen.getByRole('button', { name: '넓게 보기' }));
+    fireEvent.click(screen.getByRole('button', { name: /한도 .*직접 정하려면/ }));
+    const dialog = screen.getByRole('dialog', { name: /한도 직접 정하기/ });
+    expect(expandedRoot()?.contains(dialog)).toBe(true);
+  });
+});
+
+describe('★분량 목표는 1,500 에 묶이지 않는다 — 직접 정한 한도를 따른다 (오너 확인 2026-09-11)', () => {
+  /** 한도를 기본값보다 크게 정하면 한 번 확인한다(`window.confirm`) — 검사에서는 "예". */
+  const setLimit = (value: string): void => {
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: /한도 .*직접 정하려면/ }));
+    const input = screen.getByRole('spinbutton', { name: '한도(바이트)' });
+    fireEvent.change(input, { target: { value } });
+    fireEvent.blur(input);
+    confirm.mockRestore();
+  };
+
+  it('직접 정한 한도(2,000)가 있고 목표를 안 골랐으면 AI 패널의 목표가 그 한도다', () => {
+    settingsState.settings = {
+      recordDraftViewMode: 'overview',
+      recordLimitBytes: { 'c1:subject': 2000 },
+    };
+    view();
+    expect(lastProps()['targetBytes']).toBe(2000);
+    expect(lastProps()['limitOverride']).toBe(2000);
+  });
+
+  it('★[한도] 칩(= 지금 한도)을 고르면 숫자로 굳히지 않고 "한도를 따른다"로 둔다 — 다른 값은 그대로 저장', () => {
+    const update = vi.fn(async () => {});
+    settingsState.update = update;
+    settingsState.settings = {
+      recordDraftViewMode: 'overview',
+      recordTargetBytes: { 'c1:subject': 750 },
+    };
+    view();
+    const change = lastProps()['onChangeTargetBytes'] as (n: number) => void;
+    act(() => change(1500));
+    expect(update).toHaveBeenLastCalledWith({ recordTargetBytes: {} });
+    act(() => change(1000));
+    expect(update).toHaveBeenLastCalledWith({ recordTargetBytes: { 'c1:subject': 1000 } });
+  });
+
+  it('★예전에 [한도] 칩을 눌러 1,500 이 저장돼 있어도 한도를 2,000 으로 올리면 목표가 따라간다', () => {
+    const update = vi.fn(async () => {});
+    settingsState.update = update;
+    settingsState.settings = {
+      recordDraftViewMode: 'overview',
+      recordTargetBytes: { 'c1:subject': 1500 },
+    };
+    view({ openPanel: false });
+    setLimit('2000');
+    expect(update).toHaveBeenCalledWith({
+      recordLimitBytes: { 'c1:subject': 2000 },
+      recordTargetBytes: {},
+    });
+  });
+
+  it('선생님이 따로 고른 목표(750)는 한도를 바꿔도 그대로 둔다', () => {
+    const update = vi.fn(async () => {});
+    settingsState.update = update;
+    settingsState.settings = {
+      recordDraftViewMode: 'overview',
+      recordTargetBytes: { 'c1:subject': 750 },
+    };
+    view({ openPanel: false });
+    setLimit('2000');
+    expect(update).toHaveBeenCalledWith({ recordLimitBytes: { 'c1:subject': 2000 } });
   });
 });

@@ -495,6 +495,15 @@ html.sp-glass-on [role='dialog'] .bg-sp-card .bg-sp-card {
   -webkit-backdrop-filter: none;
 }
 
+/* 근거 정리 [넓게 보기] — 같은 화면 인스턴스가 제자리에서 `position: fixed` 로 커진다(포털로 옮기면
+   쓰던 메모가 사라진다). 그런데 규칙 ②의 backdrop-filter 는 fixed 의 기준 상자가 되어 패널을
+   카드 안에 가둔다(유리 모드 실측: 1440 창에서 1016×502). 펼쳐진 동안만 그 카드의 흐림을 끈다 —
+   어차피 뒷막이 덮고 있어 흐림은 보이지 않는다. 특이도는 규칙 ②와 같아(클래스 4+타입 1) 뒤에 있어서 이긴다. */
+html.sp-glass-on .bg-sp-card.bg-sp-card:has([data-sp-workspace-expanded]) {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
 /* 모달 안의 "가라앉은 면"도 유리용 틴트(규칙 ④) 대신 원래 색으로 되돌린다.
    패널이 불투명해졌으므로 유리를 껐을 때와 똑같은 층 관계가 다시 유효하다. */
 html.sp-glass-on [data-sp-overlay-surface] .bg-sp-bg,

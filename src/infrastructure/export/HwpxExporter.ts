@@ -1620,7 +1620,12 @@ export async function exportRecordDraftsToHwpx(
   students: ReadonlyArray<RecordDraftStudentRef>,
   areas: readonly RecordArea[],
   meta: { className?: string },
-  opts?: { level?: SchoolLevel; confirmedOnly?: boolean },
+  opts?: {
+    level?: SchoolLevel;
+    confirmedOnly?: boolean;
+    /** 선생님이 직접 정한 영역별 한도(있으면). */
+    limitOverrides?: Partial<Record<RecordArea, number>>;
+  },
 ): Promise<Uint8Array> {
   const level: SchoolLevel = opts?.level ?? 'high';
   const confirmedOnly = opts?.confirmedOnly ?? false;
@@ -1644,7 +1649,7 @@ export async function exportRecordDraftsToHwpx(
     try {
       const limit = resolveAreaLimit(area, level);
       validAreas.push(area);
-      areaLimits.set(area, limit);
+      areaLimits.set(area, opts?.limitOverrides?.[area] ?? limit);
     } catch {
       // 학교급에 없는 영역 skip
     }

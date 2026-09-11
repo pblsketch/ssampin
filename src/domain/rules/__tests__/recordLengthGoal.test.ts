@@ -15,15 +15,74 @@ import { describe, it, expect } from 'vitest';
 import {
   aliasByteDelta,
   appendedBytes,
+  charsForBytes,
   clampTargetBytes,
+  countSentences,
   defaultTargetBytes,
   goalFloor,
+  isRichEvidence,
+  isThinEvidence,
   judgeLength,
   modelFloorBytes,
   modelTargetBytes,
+  needsAutoShrink,
   stripInsufficientMark,
   INSUFFICIENT_MARK,
 } from '../recordLengthGoal';
+
+describe('근거가 빈약한가 (ADR-110 보강 2 — 오너: 빈약하면 굳이 목표 바이트에 맞추지 않아도 된다)', () => {
+  it('보내는 근거 글이 목표의 절반에 못 미치면 빈약하다 — 목표마다 기준이 따라 움직인다', () => {
+    expect(isThinEvidence(749, 1500)).toBe(true);
+    expect(isThinEvidence(750, 1500)).toBe(false);
+    expect(isThinEvidence(1049, 2100)).toBe(true);
+    expect(isThinEvidence(1050, 2100)).toBe(false);
+    expect(isThinEvidence(374, 750)).toBe(true);
+    expect(isThinEvidence(0, 1500)).toBe(true);
+  });
+});
+
+describe('근거가 목표보다 많은가 (ADR-110 보강 3 — 오너: 다 담지 말고 핵심 근거 중심으로)', () => {
+  it('근거 글만 모아도 목표를 넘으면 많다 — 목표마다 기준이 따라 움직이고, 빈약과 겹치지 않는다', () => {
+    expect(isRichEvidence(1500, 1500)).toBe(false);
+    expect(isRichEvidence(1501, 1500)).toBe(true);
+    expect(isRichEvidence(2101, 2100)).toBe(true);
+    expect(isRichEvidence(751, 750)).toBe(true);
+    for (const bytes of [0, 400, 749, 750, 1000, 1500, 1501, 3000]) {
+      expect(isThinEvidence(bytes, 1500) && isRichEvidence(bytes, 1500)).toBe(false);
+    }
+  });
+});
+
+describe('초안 자동 줄이기 기준과 모델에게 줄 숫자 (ADR-110)', () => {
+  it('★목표의 110% 를 넘을 때만 자동으로 줄인다 — 1,500 이면 1,650 까지는 그대로(오너: 1,700 이상이 문제)', () => {
+    expect(needsAutoShrink(1500, 1500)).toBe(false);
+    expect(needsAutoShrink(1650, 1500)).toBe(false);
+    expect(needsAutoShrink(1651, 1500)).toBe(true);
+    expect(needsAutoShrink(1700, 1500)).toBe(true);
+    expect(needsAutoShrink(825, 750)).toBe(false);
+    expect(needsAutoShrink(826, 750)).toBe(true);
+    // 진로 2,100 · 직접 정한 2,000 — 기준은 늘 **그 목표의** 110% 다(1,500 에 묶이지 않는다).
+    expect(needsAutoShrink(2310, 2100)).toBe(false);
+    expect(needsAutoShrink(2311, 2100)).toBe(true);
+    expect(needsAutoShrink(2200, 2000)).toBe(false);
+    expect(needsAutoShrink(2201, 2000)).toBe(true);
+  });
+
+  it('문장은 마침표·물음표·느낌표 뒤 공백으로 센다 — 소수점은 끊지 않는다', () => {
+    expect(countSentences('자료를 모았다. 표로 정리했다. 발표했다.')).toBe(3);
+    expect(countSentences('점수가 3.5점 올랐다. 왜 그랬을까? 끝!')).toBe(3);
+    expect(countSentences('마침표 없는 글')).toBe(1);
+    expect(countSentences('')).toBe(0);
+  });
+
+  it('바이트를 이 글의 공백 포함 글자 수로 옮긴다 — 3으로 나누면 공백만큼 적게 나온다', () => {
+    const sample = '가나 다라.'; // 한글 4자(12B) + 공백(1B) + 마침표(1B) = 14B, 6자
+    expect(charsForBytes(14, sample)).toBe(6);
+    expect(charsForBytes(1400, sample)).toBe(600);
+    // 글이 비었으면 한글 1자 = 3바이트로.
+    expect(charsForBytes(300, '')).toBe(100);
+  });
+});
 
 describe('목표 기본값과 하한', () => {
   it('기본 목표는 그 영역의 한도다', () => {

@@ -349,9 +349,77 @@ describe('★분량 조절 꾸러미 — 조절 대상 본문 자체가 밖으�
     expect(pack.includedCount).toBe(0);
     expect(pack.exclusions.map((x) => x.reason).sort()).toEqual(['empty', 'prohibited', 'teacher']);
   });
+
+  // ── ADR-110: 모델은 바이트를 못 세지만 문장은 센다 ──
+  const LONG = '김지훈은 자료를 모아 표로 정리했다. '.repeat(40).trim();
+
+  it('★줄이기는 뺄 양을 범위·공백 포함 글자·문장 수로 준다 (ADR-110)', () => {
+    const pack = buildLengthAdjustPack(adjustInput({ sourceText: LONG, targetBytes: 1500 }));
+    expect(pack.text).toMatch(/현재 분량: 약 [\d,]+바이트 \(공백 포함 약 [\d,]+자, 40문장\)/);
+    expect(pack.text).toMatch(
+      /지금 글에서 [\d,]+~[\d,]+바이트\(공백 포함 약 [\d,]+~[\d,]+자\)를 빼야 합니다\. 문장으로 치면 약 \d+문장입니다\./,
+    );
+    // 뺄 양의 아래·위가 목표 위쪽·아래쪽과 맞물린다(최소만 주면 넉넉히 빼 목표 아래로 떨어진다).
+    const m = /지금 글에서 ([\d,]+)~([\d,]+)바이트/.exec(pack.text);
+    const num = (s: string | undefined): number => Number((s ?? '').replace(/,/g, ''));
+    expect(num(m?.[2]) - num(m?.[1])).toBe(pack.modelTargetBytes - pack.modelFloorBytes);
+  });
+
+  it('★표식이 붙은 글도 분량은 표식을 뗀 본문으로 센다 — 표식 바이트가 뺄 양에 섞이지 않는다', () => {
+    const line = (t: string): string | undefined =>
+      t.split(String.fromCharCode(10)).find((l) => l.startsWith('현재 분량:'));
+    const plain = buildLengthAdjustPack(
+      adjustInput({ sourceText: '가나다라 마바사. 아자차카 타파하.' }),
+    );
+    const marked = buildLengthAdjustPack(
+      adjustInput({ sourceText: '[평가] 가나다라 마바사.\n\n[결과] 아자차카 타파하.' }),
+    );
+    expect(line(marked.text)).toBe(line(plain.text));
+    // 표식은 모델에게 그대로 간다 — 문단 역할(형광펜 색)을 지키려고 붙여 보낸 것이다.
+    expect(marked.text).toContain('[평가] 가나다라 마바사.');
+  });
+
+  it('★채우기는 "채워야 한다"로 떠밀지 않는다 — 근거로 채울 수 있을 때만, 없으면 멈춘다 (ADR-110 보강 2)', () => {
+    const pack = buildLengthAdjustPack(
+      adjustInput({
+        kind: 'expand',
+        sourceText: '짧은 글이다.',
+        targetBytes: 300,
+        evidences: [ev({ id: 'e1' })],
+      }),
+    );
+    expect(pack.text).not.toContain('더 채워야 합니다');
+    expect(pack.text).toContain('근거 자료로 채울 수 있다면');
+    expect(pack.text).toContain('근거에 더 쓸 내용이 없으면 그 자리에서 멈추세요');
+  });
+
+  it('채우기는 더할 양을 범위와 문장 수로 주고, 목표 위쪽은 넘기지 말라고 한다', () => {
+    const pack = buildLengthAdjustPack(
+      adjustInput({
+        kind: 'expand',
+        sourceText: '짧은 글이다.',
+        targetBytes: 300,
+        evidences: [ev({ id: 'e1' })],
+      }),
+    );
+    expect(pack.text).toMatch(
+      /지금 글에 [\d,]+~[\d,]+바이트\(공백 포함 약 [\d,]+~[\d,]+자\)를 더하면 목표에 닿습니다\. 문장으로 치면 약 \d+문장입니다\./,
+    );
+    expect(pack.text).toContain('300바이트는 넘기지 마세요');
+  });
+
+  it('직전 시도를 주면 그 숫자와 고칠 방향을 알린다 (같은 원문을 다시 줄일 때)', () => {
+    const pack = buildLengthAdjustPack(
+      adjustInput({ sourceText: LONG, targetBytes: 1500, previousBytes: 1200 }),
+    );
+    expect(pack.text).toContain('직전 시도는 약 1,200바이트였습니다. 너무 많이 줄였으니');
+    expect(buildLengthAdjustPack(adjustInput({ sourceText: LONG })).text).not.toContain(
+      '직전 시도',
+    );
+  });
 });
 
-describe('과목 이름 (오너 검토 2026-09-09: 어떤 수업에서의 일인지 밝히려면 과목을 알아야 한다)', () => {
+describe('과목 이름 (맥락으로만 쓴다 — 본문에 옮기지 않는다, 오너 검토 2026-09-12)', () => {
   it('과목이 있으면 영역 다음 줄에 붙는다', () => {
     const pack = buildRecordDraftPack(input({ subject: '물리학Ⅰ' }));
     const at = pack.text.indexOf('영역: 교과 세부능력 및 특기사항');
@@ -368,5 +436,95 @@ describe('과목 이름 (오너 검토 2026-09-09: 어떤 수업에서의 일인
   it('과목 이름도 가리기를 거친다 (선생님이 적은 자유 문자열이다)', () => {
     const pack = buildRecordDraftPack(input({ subject: '박서연 반 물리' }));
     expect(pack.text).not.toContain('박서연');
+  });
+});
+
+describe('근거 순서 (P0) — 화면의 줄기와 요청서가 같은 순서를 본다', () => {
+  it('날짜 오름차순으로 실린다 (파일에 저장된 순서가 아니다)', () => {
+    const pack = buildRecordDraftPack(
+      input({
+        evidences: [
+          ev({ id: 'c', content: '세 번째', date: '2026-06-01', createdAt: 1 }),
+          ev({ id: 'a', content: '첫 번째', date: '2026-03-01', createdAt: 2 }),
+          ev({ id: 'b', content: '두 번째', date: '2026-04-01', createdAt: 3 }),
+        ],
+      }),
+    );
+    const body = pack.text;
+    expect(body.indexOf('첫 번째')).toBeLessThan(body.indexOf('두 번째'));
+    expect(body.indexOf('두 번째')).toBeLessThan(body.indexOf('세 번째'));
+  });
+
+  it('날짜 없는 근거는 맨 뒤로 가고, 그들끼리는 적힌 시각 순이다', () => {
+    const pack = buildRecordDraftPack(
+      input({
+        evidences: [
+          ev({ id: 'n2', content: '무날짜 나중', createdAt: 200 }),
+          ev({ id: 'n1', content: '무날짜 먼저', createdAt: 100 }),
+          ev({ id: 'd', content: '날짜 있음', date: '2026-05-05', createdAt: 999 }),
+        ],
+      }),
+    );
+    const body = pack.text;
+    expect(body.indexOf('날짜 있음')).toBeLessThan(body.indexOf('무날짜 먼저'));
+    expect(body.indexOf('무날짜 먼저')).toBeLessThan(body.indexOf('무날짜 나중'));
+  });
+
+  it('[채우기](expand)도 같은 순서로 싣는다 — 한쪽만 정렬하면 화면마다 달라진다', () => {
+    const pack = buildLengthAdjustPack({
+      kind: 'expand',
+      studentName: '김지훈',
+      roster: ROSTER,
+      areaLabel: '교과 세부능력 및 특기사항',
+      sourceText: '짧은 초안임.',
+      targetBytes: 1500,
+      evidences: [
+        ev({ id: 'c', content: '세 번째', date: '2026-06-01', createdAt: 1 }),
+        ev({ id: 'a', content: '첫 번째', date: '2026-03-01', createdAt: 2 }),
+      ],
+    });
+    expect(pack.text.indexOf('첫 번째')).toBeLessThan(pack.text.indexOf('세 번째'));
+  });
+});
+
+describe('주제 정보 동봉 (P0) — 이름만 보내던 것을 넓힌다', () => {
+  const NOTE = {
+    keywords: ['기회비용', '프레이밍'],
+    competencyKeywords: ['경제 현상에 대한 자료 해석력'],
+    nextNotes: '광고 문구 규제를 2학기에 이어 볼 것',
+  };
+
+  it('주제를 골랐으면 키워드·역량·다음 메모가 함께 나간다', () => {
+    const pack = buildRecordDraftPack(input({ threadTitle: '할인 문구와 선택', threadNote: NOTE }));
+    expect(pack.text).toContain('주제: 할인 문구와 선택');
+    expect(pack.text).toContain('주제 키워드: 기회비용, 프레이밍');
+    expect(pack.text).toContain('선생님이 본 역량: 경제 현상에 대한 자료 해석력');
+    expect(pack.text).toContain('다음 탐구 메모: 광고 문구 규제를 2학기에 이어 볼 것');
+  });
+
+  it('주제를 안 골랐으면 한 줄도 붙지 않는다 (예전과 같은 요청서)', () => {
+    const pack = buildRecordDraftPack(input({ threadNote: NOTE }));
+    expect(pack.text).not.toContain('주제 키워드:');
+    expect(pack.text).not.toContain('선생님이 본 역량:');
+    expect(pack.text).not.toContain('다음 탐구 메모:');
+  });
+
+  it('빈 칸은 줄 자체를 만들지 않는다', () => {
+    const pack = buildRecordDraftPack(
+      input({ threadTitle: '주제', threadNote: { keywords: [], nextNotes: '  ' } }),
+    );
+    expect(pack.text).not.toContain('주제 키워드:');
+    expect(pack.text).not.toContain('다음 탐구 메모:');
+  });
+
+  it('주제 정보도 가리기를 거친다 — 선생님이 적은 자유 글이다', () => {
+    const pack = buildRecordDraftPack(
+      input({
+        threadTitle: '모둠 탐구',
+        threadNote: { keywords: ['박서연 사례'], nextNotes: '김지훈에게 다시 물어볼 것' },
+      }),
+    );
+    expect(pack.text).not.toContain('박서연');
+    expect(pack.text).not.toContain('김지훈');
   });
 });

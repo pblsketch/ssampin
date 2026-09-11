@@ -24,6 +24,8 @@
  *   쓸모(사용한 개념·적용 한계·남은 물음)는 **기존형의 "더 넣을 수 있는 요소"** 로 살렸다.
  * ★없어진 세 값은 `RecordFocusIdLegacy` 로 남는다 — 이미 저장된 설정·「내 작성 방식」이 있기 때문이다.
  */
+import type { NarrativeRole } from '../rules/narrativeParagraphs';
+
 export type RecordFocusId =
   | 'legacyInquiry'
   | 'compareJudge'
@@ -102,7 +104,15 @@ export type RecordModuleId =
   // 생활·관계 종합(행동특성 및 종합의견)
   | 'repeatedTrait'
   | 'lifeScenes'
-  | 'selfAndRelation';
+  | 'selfAndRelation'
+  // 생활 틀 신설 6종(ADR-103) — 이름은 담임 슬롯(`observationSlots.ts` HOMEROOM_SLOTS)과 같은 낱말이다.
+  // ★어느 초점의 `body`·`extras` 에도 넣지 않는다. 작성 방식(폴백) 경로의 출력은 그대로여야 한다.
+  | 'learningAttitude'
+  | 'careerInterest'
+  | 'classRole'
+  | 'characterRelation'
+  | 'changeOverTime'
+  | 'regretPoint';
 
 /** 추가 지시 상한. 넘치면 화면이 자른다 — 요청서 전체가 명령줄 길이 제한에 실려 가기 때문. */
 export const RECORD_STYLE_INSTRUCTION_MAX = 500;
@@ -123,9 +133,11 @@ export const RECORD_STYLE_MIN_PROMPT_VERSION = 3;
  * 카탈로그 판본. 요소 목록·기본 구성이 바뀌면 올린다.
  * - 1: 초판(초점 10종).
  * - 2: 초점 7종으로 줄이고(겹치는 3종을 기존형에 합침) 평가·행특 지시를 보강(2026-09-09).
+ * - 3: 생활 틀 카테고리 6종을 더했다(ADR-103, 2026-09-10). 초점의 기본 구성은 손대지 않았으므로
+ *      작성 방식 경로의 출력은 판본 2 와 같다 — 늘어난 것은 **장면에 고를 수 있는 카테고리**뿐이다.
  * 판(`RecordAiDraft.style`)에 남아 "무엇으로 쓴 초안인가"를 나중에 되짚는 데 쓴다.
  */
-export const RECORD_STYLE_CATALOG_VERSION = 2;
+export const RECORD_STYLE_CATALOG_VERSION = 3;
 
 /** 선생님이 고른 작성 방식. 전부 저장 가능한 값이고 학생 자료는 하나도 들어가지 않는다. */
 export interface RecordWritingStyle {
@@ -171,6 +183,13 @@ export interface RecordDraftStyleStamp {
   readonly hadInstruction: boolean;
   /** 내 작성 방식으로 만들었으면 그 이름. 그 방식을 나중에 지워도 이 값은 남는다. */
   readonly presetName?: string;
+  /**
+   * 서사 그래프로 쓴 초안이면 그 틀(ADR-103). 없으면 작성 방식 경로로 쓴 것이다.
+   * ★자유 글(장면 이름·메모)은 담지 않는다 — 판 파일은 Drive 로 동기화된다.
+   */
+  readonly frame?: 'inquiry' | 'life';
+  /** 장면의 자리 순서. 주제가 지워져도 "어떤 차례로 썼는가" 를 되짚을 수 있다. */
+  readonly sceneRoles?: readonly NarrativeRole[];
 }
 
 /** 두 방식이 실제로 같은가(요소 순서까지 본다). 화면이 "저장된 방식과 같음"을 표시할 때 쓴다. */

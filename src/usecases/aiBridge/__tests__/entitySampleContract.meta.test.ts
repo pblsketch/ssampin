@@ -19,16 +19,37 @@ import { ENTITY_FIELD_CONTRACT, SAMPLES } from '../../../../scripts/emit-entity-
 const ROOT = resolve(__dirname, '../../../..');
 
 /** TS 인터페이스 본문에서 `readonly <field>?:` 필드명 집합을 추출(중첩 brace 없는 평면 인터페이스 전제). */
+/**
+ * 인터페이스 본문에서 `readonly` 필드 이름을 뽑는다.
+ *
+ * ★주석을 **먼저 벗긴다.** 이 저장소의 주석에는 `'tc:{classId}:{studentKey}'` 같은 예시가 흔한데,
+ *   그 닫는 중괄호를 인터페이스의 끝으로 오해하면 필드를 한두 개만 읽고 조용히 통과한다.
+ * ★끝은 **괄호를 맞춰** 찾는다(중첩 타입 리터럴이 있어도 안전).
+ */
 function extractInterfaceFields(src: string, interfaceName: string): Set<string> {
-  const open = src.indexOf(`interface ${interfaceName} {`);
+  const stripped = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\/\/.*/g, ' ');
+  const open = stripped.indexOf(`interface ${interfaceName} {`);
   if (open === -1) throw new Error(`인터페이스 ${interfaceName} 을 찾을 수 없습니다.`);
-  const bodyStart = src.indexOf('{', open) + 1;
-  const bodyEnd = src.indexOf('}', bodyStart);
-  const body = src.slice(bodyStart, bodyEnd);
+  const bodyStart = stripped.indexOf('{', open) + 1;
+  let depth = 1;
+  let i = bodyStart;
+  while (i < stripped.length && depth > 0) {
+    const ch = stripped[i];
+    if (ch === '{') depth += 1;
+    else if (ch === '}') depth -= 1;
+    i += 1;
+  }
+  const body = stripped.slice(bodyStart, i - 1);
   const fields = new Set<string>();
-  const re = /readonly\s+([A-Za-z_]\w*)\s*\??\s*:/g;
+  // 중첩 리터럴 안쪽 필드는 세지 않는다 — 최상위 깊이(0)에서 만난 것만.
+  let level = 0;
+  const re = /([{}])|readonly\s+([A-Za-z_]\w*)\s*\??\s*:/g;
   let m: RegExpExecArray | null;
-  while ((m = re.exec(body)) !== null) fields.add(m[1]!);
+  while ((m = re.exec(body)) !== null) {
+    if (m[1] === '{') level += 1;
+    else if (m[1] === '}') level -= 1;
+    else if (m[2] !== undefined && level === 0) fields.add(m[2]);
+  }
   return fields;
 }
 
@@ -63,6 +84,18 @@ function sampleObjectsFor(interfaceName: string): Record<string, unknown>[] {
       return (
         s['teachingClass'] as { classes: { students: Record<string, unknown>[] }[] }
       ).classes.flatMap((c) => c.students);
+    case 'InquiryThread':
+      return (s['inquiryThread'] as { records: Record<string, unknown>[] }).records;
+    case 'NarrativeScene':
+      return (
+        s['inquiryThread'] as { records: { scenes?: Record<string, unknown>[] }[] }
+      ).records.flatMap((r) => r.scenes ?? []);
+    case 'NarrativeLink':
+      return (s['inquiryThread'] as { records: { link?: Record<string, unknown> }[] }).records
+        .map((r) => r.link)
+        .filter((x): x is Record<string, unknown> => x !== undefined);
+    case 'RecordEvidence':
+      return (s['recordEvidence'] as { records: Record<string, unknown>[] }).records;
     case 'Student':
       return s['student'] as Record<string, unknown>[];
     default:

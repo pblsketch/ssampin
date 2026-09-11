@@ -424,8 +424,9 @@ const presenceChecks = [
   //
   //  #69 조절 대상 = 화면의 현재 글. 한도를 넘겨 저장이 거부된 글은 디스크에 없는데,
   //      정작 조절해야 할 것이 그 글이다. 저장된 글을 읽으면 조절할 길이 사라진다.
-  //  #70 한도를 넘긴 결과는 버리지 않는다. [이 글로 바꾸기]를 그대로 두면 눌러도 저장이
-  //      거부되는 죽은 버튼이 되고, 없애 버리면 CLI 왕복 1~2분이 통째로 버려진다.
+  //  #70 한도를 넘긴 결과도 [이 글로 바꾸기]로 반영한다(ADR-105, 2026-09-11 오너 결정: 한도로 저장을
+  //      막지 않고 색으로만 알린다). 예전 계약([편집칸에 넣기] 우회로)은 저장 거부가 있을 때만 필요했다.
+  //      이제 지킬 것은 "넘은 바이트를 알리되 반영 단추를 없애지 않는다"다.
   // ────────────────────────────────────────────────────────────────────────
   {
     file: 'src/adapters/components/RecordDraft/__tests__/recordDraftLengthAdjust.test.tsx',
@@ -436,8 +437,8 @@ const presenceChecks = [
   {
     file: 'src/adapters/components/RecordDraft/__tests__/recordDraftLengthAdjust.test.tsx',
     pattern:
-      /queryByRole\('button', \{ name: '이 글로 바꾸기' \}\)\)\.toBeNull\(\)[\s\S]*?편집칸에 넣기/,
-    name: 'REGRESSION #70: 한도 초과 결과에서 [이 글로 바꾸기] 대신 [편집칸에 넣기] 가 나오는 테스트가 살아 있다 (죽은 버튼·결과 소실 방지)',
+      /바꾸면 한도보다 60B 많아요[\s\S]*?getByRole\('button', \{ name: '이 글로 바꾸기' \}\)\)\.toBeTruthy\(\)/,
+    name: 'REGRESSION #70: 한도 초과 결과에서도 [이 글로 바꾸기]가 남고 넘은 바이트를 알리는 테스트가 살아 있다 (ADR-105: 저장은 막지 않고 색으로만)',
   },
 
   // ────────────────────────────────────────────────────────────────────────
@@ -578,14 +579,162 @@ const presenceChecks = [
   {
     file: 'src/adapters/components/RecordDraft/RecordDraftAiPanel.tsx',
     pattern:
-      /applyPromptVersionGate\(runStyleRef\.current, promptVersion\);[\s\S]{0,200}?const runStyle = gated\.style;[\s\S]{0,2000}?buildPrompt\(t, runStyle\)/,
-    name: 'REGRESSION #79: 초안 패널은 규정 판본 문지기를 거친 작성 방식으로만 요청서를 만든다 (판본 2 에 새 구성을 보내지 않는다)',
+      /applyPromptVersionGate\(runStyleRef\.current, promptVersion\);[\s\S]{0,200}?const runStyle = gated\.style;[\s\S]{0,4000}?buildPrompt\(t, runStyle, promptVersion\)/,
+    name: 'REGRESSION #79-a: 초안 패널은 규정 판본 문지기를 거친 작성 방식으로만 요청서를 만든다 (판본 2 에 새 구성을 보내지 않는다)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordDraftAiPanel.tsx',
+    pattern:
+      /applyCompositionVersionGate\(t\.narrative\.composition, promptVersion\)\.composition;/,
+    name: 'REGRESSION #79-b: 서사 구성도 판본 문지기를 거친다 (장면은 되돌릴 기존형이 없어 아예 안 보낸다)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordDraftAiPanel.tsx',
+    pattern:
+      /const narrativeDowngraded =[\s\S]{0,300}?RECORD_STYLE_MIN_PROMPT_VERSION &&[\s\S]{0,200}?narrativeFor\(targetForRun\) !== null;/,
+    name: 'REGRESSION #79-c: 서사가 판본 때문에 빠지면 화면이 말한다 (조용히 빼지 않는다)',
   },
   {
     file: 'src/domain/services/recordDraftPack.ts',
     pattern:
       /emitComposition && composition !== null\s*\?\s*narrativeMarkInstruction\(\{\s*followComposition: true,/,
     name: 'REGRESSION #80: 작성 구성을 실으면 표식 지시가 순서를 다시 못 박지 않는다 (두 지시가 싸우지 않는다)',
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #86~#90 (2026-09-10, ADR-103) — 서사 그래프.
+  //
+  //  이 기능의 위험은 "장면을 쓰는 사람"이 아니라 **안 쓰는 사람**에게 있다. 관문 둘이 꺼지면
+  //  요청서가 기준선과 글자 하나까지 같아야 하는데, 그 계약은 코드 한 줄이 끊기면 조용히 깨진다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/domain/rules/narrativeScenes.ts',
+    pattern: /if \(saved === undefined \|\| saved\.length === 0\) return true;/,
+    name: 'REGRESSION #86: 장면 부재·빈 배열은 "기본 뼈대" 다 (기존 사용자 전원의 요청서가 기준선과 같다)',
+  },
+  {
+    file: 'src/domain/services/recordDraftPack.ts',
+    pattern: /if \(ctx\.numbered\) numberOf\.set\(e\.id, n\);/,
+    name: 'REGRESSION #87: 근거 번호는 실제로 실린 줄에만 붙는다 (빠진 근거를 가리키는 지시를 보내지 않는다)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordDraftAiPanel.tsx',
+    pattern: /const snapped = targets\.map\(\(t\) => \{[\s\S]{0,200}?narrativeFor\(t\)/,
+    name: 'REGRESSION #88: 서사는 큐 항목에 실어 고정한다 ([이어 하기] 로 다시 들어와도 시작 시점 값)',
+  },
+  {
+    file: 'src/domain/services/recordDraftPack.ts',
+    pattern: /noteDropped = true;/,
+    name: 'REGRESSION #89: 메모에 금지어가 남으면 메모만 빼고 근거는 싣는다 (근거까지 통째로 버리지 않는다)',
+  },
+  {
+    file: 'src/domain/rules/narrativeScenes.ts',
+    pattern: /return NARRATIVE_ROLE_MARKS\[scene\.role\];/,
+    name: 'REGRESSION #90: 요청서 표식은 언제나 4종이다 (틀 이름은 화면 전용 — 파서가 모르는 낱말을 보내지 않는다)',
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #91~#95 (2026-09-10, ADR-103 P3) — 흐름 보기.
+  //
+  //  이 단계가 없애는 것은 화면 하나가 아니라 **보이지 않는 설정**이다. 작성 방식 고르개 네 축이
+  //  사라졌는데 그 저장값이 요청서에 계속 실리면, 선생님은 초안이 왜 달라졌는지 진단할 길이 없다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/components/RecordDraft/RecordEvidenceBoard.tsx',
+    pattern: /const viewMode: 'map' \| 'board' = savedViewMode === 'board' \? 'board' : 'map';/,
+    name: "REGRESSION #91: 근거 정리의 기본 보기는 근거 지도다 (ADR-106·107. 설정을 못 읽어도, 옛 'flow' 가 남아 있어도 지도로 연다)",
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordEvidenceBoard.tsx',
+    pattern:
+      /if \(narrative\.kind === 'scene'\) \{[\s\S]{0,200}?placeInScene\(narrative\.threadId, narrative\.sceneId, ids\);/,
+    name: 'REGRESSION #92: 장면에 놓기는 한 경로뿐이다 (근거 먼저·장면 나중을 화면이 따로 흉내 내지 않는다)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordDraftAiPanel.tsx',
+    pattern:
+      /const writingStyle: RecordWritingStyle = useMemo\([\s\S]{0,300}?DEFAULT_RECORD_WRITING_STYLE/,
+    name: 'REGRESSION #93: 폴백 작성 방식은 기본값으로 고정된다 (설정에 남은 옛 값이 요청서에 다시 실리지 않는다)',
+  },
+  {
+    file: 'src/domain/rules/scaffoldMigration.ts',
+    pattern: /if \(input\.migratedAt !== undefined\) \{/,
+    name: 'REGRESSION #94: 작성 방식 → 뼈대 옮기기는 한 번뿐이다 (두 번 옮기면 같은 이름이 겹쳐 쌓인다)',
+  },
+  {
+    // #95 는 흐름 보기가 지도에 합쳐지며(ADR-107) 대상이 바뀌었다 — 지도의 오른쪽 상세도 보드와 같은 카드를 쓴다.
+    file: 'src/adapters/components/RecordDraft/RecordEvidenceBoard.tsx',
+    pattern: /card: renderCard\(ev, !isClassified\(ev, threadIdSet\), false\),/,
+    name: 'REGRESSION #95: 지도의 오른쪽 상세도 보드와 같은 카드를 쓴다 (좁다고 상태 배지·경고를 숨기지 않는다)',
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #96~#99 (2026-09-10, ADR-103 P4) — AI 서사 초안.
+  //
+  //  AI 는 **제안만** 한다. 적용 전 저장 0회라는 약속이 깨지면 교사가 보기만 해도 자료가 바뀐다.
+  //  적용 시에도 파일마다 한 번씩만 쓴다 — 세 번 쓰면 중간 실패에 반쪽 서사가 남는다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/stores/placeEvidenceInScenes.ts',
+    pattern:
+      /export async function applyNarrativeSuggestion\([\s\S]{0,3000}?applyNarrativeDraft\(threadId, \{/,
+    name: 'REGRESSION #96: AI 서사 적용도 근거 먼저·장면 나중이다 (주제 파일은 한 번만 쓴다)',
+  },
+  {
+    file: 'src/adapters/stores/useInquiryThreadStore.ts',
+    pattern: /\{ note: note\.slice\(0, NARRATIVE_NOTE_MAX\), noteSource: 'ai' as const \}/,
+    name: 'REGRESSION #97: AI 가 쓴 이유는 장면 메모로 저장하되 출처를 남긴다 (오너 결정 2026-09-10)',
+  },
+  {
+    file: 'src/domain/rules/narrativeSuggestionParser.ts',
+    pattern: /export function roleFromWord\([\s\S]{0,1200}?return null;\s*\}/,
+    name: 'REGRESSION #98: 답의 자리 이름은 저장값 4종으로 되돌린다 (화면 말이 그대로 저장되지 않는다)',
+  },
+  {
+    file: 'src/domain/services/narrativeSuggestPack.ts',
+    pattern: /for \(const e of sortByEvidenceOrder\(input\.evidences\)\) \{/,
+    name: 'REGRESSION #99: 서사 초안 꾸러미도 근거를 날짜순으로 싣는다 (파일 저장 순서로 보내지 않는다)',
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #101~#104 (2026-09-10, ADR-103 적대 검토) — **게이트 4종이 초록인 채 있던 결함**.
+  //
+  //  공통 뿌리: `scenes.map(...)` 은 대상이 없어도 새 배열이라 "바뀐 것이 있나" 판정을 늘 통과했다.
+  //  그래서 선생님이 쓴 메모가 버려진 채 "저장했습니다"가 떴고, 카드는 원래 자리에서 빠진 뒤
+  //  사라졌는데 화면은 "놓았습니다"라고 말했다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/adapters/stores/useInquiryThreadStore.ts',
+    pattern:
+      /const targets = groups\.filter\(\(g\) => pruned\.some\(\(sc\) => sc\.id === g\.sceneId\)\);/,
+    name: 'REGRESSION #101: 넣을 자리를 확인한 뒤에 뗀다 (없는 장면으로 끌면 카드가 사라지던 것)',
+  },
+  {
+    file: 'src/adapters/stores/placeEvidenceInScenes.ts',
+    pattern: /const done = new Set\(inserted\);/,
+    name: 'REGRESSION #102: 놓은 건수는 스토어가 실제로 넣은 id 로 센다 (보낸 것으로 세면 화면이 거짓말한다)',
+  },
+  {
+    file: 'src/adapters/stores/useInquiryThreadStore.ts',
+    pattern: /!scenes\.some\(\(sc\) => sc\.id === sceneId\)\s*\?\s*null/,
+    name: 'REGRESSION #103: 대상 장면이 없으면 저장을 건너뛴다 (버릴 메모를 저장한 척하지 않는다)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordEvidenceBoard.tsx',
+    pattern:
+      /if \(sceneId !== VIRTUAL_EVALUATION_SCENE_ID\) return sceneId;[\s\S]{0,400}?addScene\(/,
+    name: 'REGRESSION #104: 가상 평가 자리에 적으면 진짜 자리를 먼저 세운다 (판단이 갈 곳 없이 버려지지 않게)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordEvidenceBoard.tsx',
+    pattern: /if \(!r\.applied\) \{[\s\S]{0,400}?setNarrativeSuggest\(\{ kind: 'ready'/,
+    name: "REGRESSION #105: AI 서사 적용이 실패하면 '적용했습니다'라고 하지 않고 제안도 지우지 않는다",
+  },
+  {
+    file: 'src/adapters/stores/useInquiryThreadStore.ts',
+    pattern: /return added \? id : null;/,
+    name: 'REGRESSION #106: 장면을 못 넣었으면 id 대신 null 을 돌려준다 (저장된 적 없는 id 로 메모를 쓰지 않게)',
+  },
+  {
+    file: 'src/adapters/stores/placeEvidenceInScenes.ts',
+    pattern: /const done = new Set\(written\.placedIds\);[\s\S]{0,300}?applied: written\.wrote,/,
+    name: "REGRESSION #107: AI 적용의 '적용했다·근거 N건'은 스토어가 실제로 쓴 것으로 센다 (주제 삭제·근거 읽기 실패에서 거짓말하지 않게)",
   },
   // ────────────────────────────────────────────────────────────────────────
   // REGRESSION #83 (2026-09-09) — 상담·설문 명단 조회의 실패는 **빈 목록이 아니다** (ADR-095)
@@ -672,6 +821,61 @@ const presenceChecks = [
       /select=\$\{SCHEDULE_BASE_COLUMNS\},topic_options`[\s\S]{0,400}?if \(!res\.ok\) \{[\s\S]{0,300}?select=\$\{SCHEDULE_BASE_COLUMNS\}`/,
     name: 'REGRESSION #85-4: 예약 화면이 topic_options 없는 서버에서도 일정을 연다 (배포 순서가 어긋나도 예약은 받는다)',
   },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #110~#112 (2026-09-11, ADR-106) — 근거 지도.
+  //
+  //  연결은 근거 파일에 살고, 화면 위치는 기기에만 남으며, 연결이 없으면 요청서는 예전과 같아야 한다.
+  //  세 계약 중 하나가 깨지면 기존 사용자 전원의 요청서가 조용히 달라지거나 카드를 옮길 때마다 저장이 생긴다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/domain/services/recordDraftPack.ts',
+    pattern: /\} else if \(graph\.edges\.length > 0\) \{[\s\S]{0,400}?keepOrder: true,/,
+    name: 'REGRESSION #110: 연결이 있을 때만 새 경로(번호·연결 차례)로 간다 (연결이 없으면 요청서는 기준선과 글자 하나까지 같다)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordEvidenceBoard.tsx',
+    pattern:
+      /if \(overId === null \|\| overId === home\) \{[\s\S]{0,400}?mapPositions\.move\(lead\.id, e\.delta\.x \/ mapZoom, e\.delta\.y \/ mapZoom\);[\s\S]{0,60}?return;/,
+    name: 'REGRESSION #111: 지도에서 같은 묶음 안에 놓으면 자리만 민다 (저장소를 부르지 않는다 — 위치는 기기별 설정이지 자료가 아니다)',
+  },
+  {
+    file: 'src/adapters/stores/useRecordEvidenceStore.ts',
+    pattern:
+      /linkEvidence: async \(fromId, toId, note\) =>[\s\S]{0,120}?const why = linkRejection\(fromId, toId, latest\);[\s\S]{0,60}?if \(why !== null\) return \{ next: latest, result: why \};/,
+    name: 'REGRESSION #112: 잇기의 쓰기 관문은 도메인 판정(linkRejection)을 쓰고 거절이면 저장 0회다 (화면과 같은 사유를 본다)',
+  },
+  // REGRESSION #113 (2026-09-11, ADR-109) — 빈 평가 장면은 건너뛰지 않는다.
+  //  평가 근거는 따로 없는 게 보통이다. 이 분기가 사라지면 장면을 짠 초안 대부분이 평가 문단을 빼라는 지시를 받는다.
+  {
+    file: 'src/domain/services/recordDraftPack.ts',
+    pattern:
+      /return role === 'evaluation' \? EVALUATION_SYNTHESIZE_REF : '근거: \(제외됨 - 이 문단은 건너뜁니다\)';[\s\S]{0,2500}?const role = composition\.modules\[at\]\?\.role;[\s\S]{0,200}?sceneEvidenceRef\(scene, numberOf, role\)/,
+    name: 'REGRESSION #113: 요청서의 빈 평가 장면은 「건너뜁니다」가 아니라 근거 전체를 종합하라고 말한다 (다른 빈 장면만 건너뛴다)',
+  },
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #114~#116 (2026-09-11, ADR-110) — 생기부 초안 분량.
+  //
+  //  1층 규정에는 바이트 한도가 없다. 요청서의 분량 줄이 "목표 ≠ 한도"일 때만 붙던 시절, 기본 1,500B 에서는 모델이
+  //  분량을 모른 채 근거를 다 담아 1,700B 를 넘겼다. 그리고 분량 조절의 2차가 목표를 반대로 밀어 한도 위 목표를 받았다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    file: 'src/domain/services/recordDraftPack.ts',
+    pattern:
+      /if \(input\.targetBytes !== undefined\) \{\s*parts\.push\(''\);\s*parts\.push\(\s*draftLengthInstruction\(input\.targetBytes, input\.limitBytes, \{/,
+    name: 'REGRESSION #114: 초안 요청서는 목표만 있으면 분량 줄을 싣고, 실린 근거 양을 함께 넘긴다 (목표 = 한도여도 — 1층 규정에는 바이트 한도가 없다)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/RecordDraftAiPanel.tsx',
+    pattern:
+      /needsAutoShrink\(firstBytes, runTarget\)[\s\S]{0,1500}?shrinkDraftOnce\(\{[\s\S]{0,3000}?const firstId = await addVersion\(\{ \.\.\.versionBase, paragraphs \}\);/,
+    name: 'REGRESSION #115: 많이 넘친 초안은 앱이 한 번 줄이되 처음 초안도 판으로 남긴다 (줄이기 실패·중단에도 버리지 않는다)',
+  },
+  {
+    file: 'src/adapters/components/RecordDraft/lengthAdjustRun.ts',
+    pattern:
+      /sourceText: plan\.from === 'first' \? markedNarrativeText\(firstOut\.paragraphs\) : pack\.sourceText,/,
+    name: 'REGRESSION #116: 분량 조절의 2차는 목표를 밀지 않고 1차 결과에서 이어 간다 (한도 위 목표가 생기지 않는다)',
+  },
 ];
 
 // ============================================================
@@ -679,6 +883,23 @@ const presenceChecks = [
 // ============================================================
 
 const absenceChecks = [
+  // ────────────────────────────────────────────────────────────────────────
+  // REGRESSION #100 (2026-09-10, ADR-103) — `ring-dashed` 는 **Tailwind 클래스가 아니다**.
+  //
+  //  규칙이 아예 생성되지 않아 점선이 그려진 적이 없다(직접 확인: tailwindcss 로 뽑은 CSS 에 0건).
+  //  ADR-103 은 "제안·아직 안 놓음·빈 자리는 **점선**" 을 저장과 제안의 경계로 삼는다. 그 경계가
+  //  실제로 안 그려지면 교사는 무엇이 저장됐고 무엇이 제안인지 테두리로 구별할 수 없다.
+  //  점선은 `outline-dashed outline-1 outline-<색>` 으로 그린다 — `border` 와 달리 상자 크기를
+  //  바꾸지 않아 `ring` 을 그대로 대체한다.
+  // ────────────────────────────────────────────────────────────────────────
+  {
+    name: 'REGRESSION #100: 화면에 ring-dashed 를 쓰지 않는다 (그려지지 않는 클래스라 점선이 실선이 된다)',
+    roots: ['src/adapters/components'],
+    // 클래스 문자열은 `.ts` 훅·헬퍼에도 있다(예: `useRecordInlineEdit.ts`).
+    extensions: ['.tsx', '.ts'],
+    patterns: [/ring-dashed/],
+    minScanned: 50,
+  },
   // ────────────────────────────────────────────────────────────────────────
   // REGRESSION #68-1 (2026-09-07) — 제출 과제 **목록**은 주체의 신원을 담지 않는다.
   //

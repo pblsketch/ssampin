@@ -11,11 +11,22 @@
 export type RecordFlowContext = 'teaching' | 'homeroom';
 
 /**
- * `board`   저장한 근거를 보드에서 찾아 보여 준다.
+ * `flow`    저장한 근거를 **근거 지도**에서 찾아 보여 준다(옛 이름이 남았다 — 흐름 보기는 ADR-107 에서 지도에 합쳐졌다). 근거 정리의 기본 보기다.
+ * `board`   같은 자료를 **보드 보기**(열)에서 보여 준다. 둘은 단계가 아니라 보기 모드다(ADR-103).
  * `compose` 같은 학생·주제로 **빈 본문** 입력을 연다(기존 글을 복사하지 않는다).
  * `source`  원본 기록 카드/조회 편집으로 이동한다.
  */
-export type RecordFlowMode = 'board' | 'compose' | 'source';
+export type RecordFlowMode = 'flow' | 'board' | 'compose' | 'source';
+
+/**
+ * 근거 정리 화면으로 가는 요청인가 — 지도든 보드 보기든 목적지는 같은 화면이다.
+ *
+ * ★`mode === 'board'` 로 직접 견주면 `'flow'` 요청이 조용히 무시된다. 저장 직후 [근거 정리에서
+ *   보기]를 눌렀는데 아무 일도 안 일어나면 교사는 저장이 안 된 줄 안다.
+ */
+export function goesToEvidenceScreen(mode: RecordFlowMode): boolean {
+  return mode === 'flow' || mode === 'board';
+}
 
 export interface RecordFlowIntent {
   /** 이 요청의 신원. **같은 요청을 두 번 소비하지 않기 위한** 유일한 근거다. */

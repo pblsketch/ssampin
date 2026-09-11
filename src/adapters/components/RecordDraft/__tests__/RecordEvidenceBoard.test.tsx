@@ -301,6 +301,7 @@ vi.mock('@adapters/components/RecordDraft/RecordEvidenceImportDrawer', () => ({
 
 import { RecordEvidenceBoard } from '../RecordEvidenceBoard';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useOwnAiStatusStore } from '@adapters/stores/useOwnAiStatusStore';
 import { THREAD_SUGGEST_FAILURE_LABELS } from '@domain/rules/threadSuggestionParser';
 import type { OwnAiConnection } from '@domain/entities/OwnAiProvider';
@@ -349,6 +350,17 @@ async function finishWith(text: string): Promise<void> {
   });
 }
 
+beforeEach(() => {
+  // ★기본 보기는 흐름 그래프다(ADR-103). 이 파일이 보는 것은 **보드 보기**라 값을 명시한다.
+  //   옮기기(작성 방식 → 뼈대)도 이미 한 것으로 둔다 — 설정 저장이 검사 중에 끼어들지 않게.
+  useSettingsStore.setState((st) => ({
+    settings: {
+      ...st.settings,
+      recordEvidenceViewMode: 'board' as const,
+      recordScaffoldMigratedAt: 1,
+    },
+  }));
+});
 beforeEach(() => {
   moveToThreadSpy.mockClear();
   moveToNewThreadSpy.mockClear();
@@ -473,7 +485,7 @@ describe('★학생이 바뀌면 선택·제안이 비고 하단 바가 사라�
     fireEvent.click(screen.getByRole('button', { name: /미분류 근거 하나/ }));
     expect(screen.getByRole('toolbar', { name: '선택한 근거 보내기' })).toBeTruthy();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /AI 분류 제안/ }));
+      fireEvent.click(screen.getByRole('button', { name: /AI로 주제 묶기/ }));
     });
     await finishWith('할인 문구와 선택 | 1');
     expect(screen.getByLabelText('AI 제안 1건')).toBeTruthy();
@@ -496,20 +508,20 @@ describe('★학생이 바뀌면 선택·제안이 비고 하단 바가 사라�
   });
 });
 
-describe('AI 분류 제안', () => {
+describe('AI로 주제 묶기', () => {
   it('구독 AI 가 연결돼 있지 않으면 단추가 없다', () => {
     board();
-    expect(screen.queryByRole('button', { name: /AI 분류 제안/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /AI로 주제 묶기/ })).toBeNull();
   });
 
   it('★고스트 카드는 적용 전 저장 0회, [이 열 적용] 뒤 moveToThread 1회', async () => {
     connectClaude();
     board();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /AI 분류 제안/ }));
+      fireEvent.click(screen.getByRole('button', { name: /AI로 주제 묶기/ }));
     });
     expect(runCalls).toHaveLength(1);
-    expect(screen.getByRole('status', { name: 'AI 분류 제안 안내' }).textContent).toContain(
+    expect(screen.getByRole('status', { name: 'AI 주제 묶기 안내' }).textContent).toContain(
       '읽고 있습니다',
     );
     await finishWith('할인 문구와 선택 | 1\n새 탐구 | 2');
@@ -536,10 +548,10 @@ describe('AI 분류 제안', () => {
     connectClaude();
     board();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /AI 분류 제안/ }));
+      fireEvent.click(screen.getByRole('button', { name: /AI로 주제 묶기/ }));
     });
     await finishWith('할인 문구와 선택: 1, 2 로 묶으면 좋겠습니다.');
-    expect(screen.getByRole('status', { name: 'AI 분류 제안 안내' }).textContent).toContain(
+    expect(screen.getByRole('status', { name: 'AI 주제 묶기 안내' }).textContent).toContain(
       THREAD_SUGGEST_FAILURE_LABELS['no-format'],
     );
     expect(screen.queryByLabelText(/AI 제안 \d+건/)).toBeNull();
@@ -550,10 +562,10 @@ describe('AI 분류 제안', () => {
     connectClaude();
     board();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /AI 분류 제안/ }));
+      fireEvent.click(screen.getByRole('button', { name: /AI로 주제 묶기/ }));
     });
     await finishWith('없음 | ［이름1］의 기록이 서로 다른 활동이라 한 주제로 묶이지 않습니다');
-    const notice = screen.getByRole('status', { name: 'AI 분류 제안 안내' }).textContent ?? '';
+    const notice = screen.getByRole('status', { name: 'AI 주제 묶기 안내' }).textContent ?? '';
     expect(notice).toContain(
       'AI 판단: 김지훈의 기록이 서로 다른 활동이라 한 주제로 묶이지 않습니다',
     );
@@ -572,7 +584,7 @@ describe('AI 분류 제안', () => {
     connectClaude();
     board();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /AI 분류 제안/ }));
+      fireEvent.click(screen.getByRole('button', { name: /AI로 주제 묶기/ }));
     });
     await finishWith('［이름1］ 학생은 1, 2 를 묶으면 좋겠습니다.');
     expect(screen.queryByLabelText('AI 답 원문')).toBeNull();
@@ -586,7 +598,7 @@ describe('AI 분류 제안', () => {
     connectClaude();
     board();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /AI 분류 제안/ }));
+      fireEvent.click(screen.getByRole('button', { name: /AI로 주제 묶기/ }));
     });
     const prompt = runCalls[0]?.prompt ?? '';
     expect(prompt).toContain('아직 안 넣은 관찰 하나');
@@ -614,7 +626,7 @@ describe('AI 분류 제안', () => {
     connectClaude();
     board();
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /AI 분류 제안/ }));
+      fireEvent.click(screen.getByRole('button', { name: /AI로 주제 묶기/ }));
     });
     const prompt = runCalls[0]?.prompt ?? '';
     expect(prompt.length).toBeGreaterThan(0);
@@ -714,7 +726,8 @@ describe('2차 — 긴 주제 이름 · 영역 1개 · 삭제 되돌리기 (설�
     expect(
       screen.queryAllByRole('button', { name: '교과학습발달상황', pressed: false }),
     ).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: /근거 직접 입력/ }));
+    fireEvent.click(screen.getByRole('button', { name: /add근거/ }));
+    fireEvent.click(screen.getByRole('menuitem', { name: /직접 입력/ }));
     expect(screen.queryByText('유형')).toBeNull();
   });
 
@@ -941,11 +954,12 @@ describe('★거울 카드 — 보기만 해서는 저장 0회, 첫 손댄에 �
     expect(setExcludedSpy).not.toHaveBeenCalled();
   });
 
-  it('가져오기 메뉴는 [엑셀 ▾] 둘(양식 받기·업로드)뿐이다 — 출처 5종 메뉴는 없다', () => {
+  it('[+ 근거 ▾] 메뉴는 직접 입력·엑셀 양식 받기·엑셀 업로드 셋뿐이다 — 출처 5종 메뉴는 없다', () => {
     board();
-    fireEvent.click(screen.getByRole('button', { name: /엑셀/ }));
-    const menu = within(screen.getByRole('menu', { name: '엑셀' }));
+    fireEvent.click(screen.getByRole('button', { name: /^근거$|근거 arrow_drop_down|add근거/ }));
+    const menu = within(screen.getByRole('menu', { name: '근거 더하기' }));
     expect(menu.getAllByRole('menuitem').map((m) => m.textContent)).toEqual([
+      expect.stringContaining('직접 입력'),
       expect.stringContaining('엑셀 양식 받기'),
       expect.stringContaining('엑셀 업로드'),
     ]);

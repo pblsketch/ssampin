@@ -14,10 +14,13 @@
 import { aiDraftText, type RecordAiDraftAdjust } from '@domain/entities/RecordAiDraft';
 import { neisByteLength } from '@domain/entities/RecordDraft';
 import {
+  dropUnmarkedParagraphs,
+  markedNarrativeText,
   parseNarrativeParagraphs,
   type NarrativeParagraph,
 } from '@domain/rules/narrativeParagraphs';
-import { stripInsufficientMark } from '@domain/rules/recordLengthGoal';
+import { stripInsufficientMark, type LengthAdjustKind } from '@domain/rules/recordLengthGoal';
+import type { KeywordGroup } from '@domain/privacy/types';
 import { judgeNonDraftReply } from '@domain/rules/nonDraftReply';
 import {
   buildLengthAdjustPack,
@@ -58,15 +61,34 @@ export interface LengthAdjustRunResult {
   readonly sourceProhibited: readonly string[];
 }
 
-/** 목표를 못 맞춰 다시 물을 때, 얼마나 밀어 줄지. 실제 결과와 목표의 차이를 그대로 반영한다. */
-export function retryTargetBytes(
-  firstBytes: number,
-  targetBytes: number,
-  floorBytes: number,
-): number {
-  // 넘쳤으면 넘친 만큼 더 줄이라고 하고, 모자랐으면 모자란 만큼 더 채우라고 한다.
-  if (firstBytes > targetBytes) return Math.max(1, targetBytes - (firstBytes - targetBytes));
-  return targetBytes + (floorBytes - firstBytes);
+/** 2차 시도의 계획 — 무엇을(1차 글 / 원문) 어느 방향으로 다시 조절할지. */
+export interface RetryPlan {
+  readonly kind: LengthAdjustKind;
+  /** `first` = 1차 결과에서 이어 조절한다. `source` = 원문으로 돌아가 다시 조절한다. */
+  readonly from: 'first' | 'source';
+  /** 원문으로 돌아갈 때 모델에게 알려 줄 직전 결과(최종 본문 바이트). */
+  readonly previousBytes?: number;
+}
+
+/**
+ * 1차가 목표를 빗나갔을 때 2차를 **무엇에서 어느 방향으로** 할지(ADR-110).
+ *
+ * ★예전에는 늘 원문으로 돌아가 목표를 반대로 밀었다(1,610 이면 1,390, 1,300 이면 1,625 를 목표로). 그러면
+ *   모자랐던 채우기와 너무 많이 뺀 줄이기가 **한도 위 목표**(1,625)를 받아 한도를 넘겼고, 넘친 줄이기는
+ *   원문 전체를 다시 줄이느라 또 빗나갔다.
+ * ★이제는 목표를 선생님이 고른 값 그대로 두고 **1차 결과에서 이어 간다** — 넘쳤으면 1차 글을 마저 줄이고,
+ *   채우다 모자랐으면 1차 글을 마저 채운다. 남은 차이만 고치면 되니 맞히기 쉽다.
+ * ★줄이다 너무 많이 뺐으면 원문으로 돌아가 "지난번엔 N바이트였다"를 알린다. 1차 글을 채우려면 근거가 있어야 하는데
+ *   줄이기는 근거를 싣지 않는다.
+ */
+export function planRetry(input: {
+  readonly kind: LengthAdjustKind;
+  readonly firstBytes: number;
+  readonly targetBytes: number;
+}): RetryPlan {
+  if (input.firstBytes > input.targetBytes) return { kind: 'shrink', from: 'first' };
+  if (input.kind === 'expand') return { kind: 'expand', from: 'first' };
+  return { kind: 'shrink', from: 'source', previousBytes: input.firstBytes };
 }
 
 /**
@@ -88,7 +110,9 @@ export function measureAnswer(
 } {
   const restored = restoreModelText(raw, mappings);
   const { text, insufficient } = stripInsufficientMark(restored);
-  const paragraphs = parseNarrativeParagraphs(text);
+  // ★표식 없는 설명 줄("줄인 글입니다" 등)은 버린다 — 초안 쓰기와 같은 규칙(ADR-099 보강 5). 안 버리면 그 줄이
+  //   분량에 섞여 목표를 빗나간 것처럼 보이고 생기부 본문에도 들어간다. 표식이 하나도 없으면 아무것도 안 버린다.
+  const paragraphs = dropUnmarkedParagraphs(parseNarrativeParagraphs(text));
   // 거절·되묻기 설명문은 초안이 아니다 — 저장 후보로 세지 않는다(R-3).
   const verdict = judgeNonDraftReply(text);
   // ★저장될 본문 그대로 센다(`aiDraftText` = 문단을 공백 하나로 이은 것). 프롬프트 길이가 아니다.
@@ -153,9 +177,18 @@ export async function runLengthAdjust(input: LengthAdjustRunInput): Promise<Leng
   }
 
   onAttempt?.(2);
+  const plan = planRetry({
+    kind: pack.kind,
+    firstBytes: firstOut.bytes,
+    targetBytes: pack.targetBytes,
+  });
   const second = buildLengthAdjustPack({
     ...pack,
-    targetBytes: retryTargetBytes(firstOut.bytes, pack.targetBytes, floorBytes),
+    kind: plan.kind,
+    // ★1차 글에서 이어 갈 때도 **실명 본문**을 같은 조립 함수로 다시 가린다 — 가린 문자열을 재사용하지 않는다.
+    //   표식을 붙여 보내 문단 역할(형광펜 색)을 지킨다. 목표는 선생님이 고른 값 그대로다.
+    sourceText: plan.from === 'first' ? markedNarrativeText(firstOut.paragraphs) : pack.sourceText,
+    ...(plan.previousBytes !== undefined ? { previousBytes: plan.previousBytes } : {}),
   });
   const secondRaw = await askOnce(api, provider, second.text, systemPrompt, signal);
   const secondOut = measureAnswer(secondRaw, second.mappings);
@@ -192,4 +225,54 @@ export function adjustRecordOf(input: {
     pickedAttempt: input.picked.attempt,
     ...(input.sourceVersionId !== undefined ? { sourceVersionId: input.sourceVersionId } : {}),
   };
+}
+
+/** 초안을 쓴 직후 자동으로 한 번 줄인 결과. 아직 디스크에 가지 않았다. */
+export interface DraftShrinkResult {
+  readonly paragraphs: readonly NarrativeParagraph[];
+  /** ★앱이 저장될 본문으로 **직접 센** 바이트. */
+  readonly bytes: number;
+}
+
+export interface DraftShrinkInput {
+  readonly api: OwnAiRunApi;
+  readonly provider: 'claude' | 'codex';
+  /** 규정 지시문(1층) — 초안을 쓸 때 받은 것을 그대로 쓴다. */
+  readonly systemPrompt: string;
+  readonly signal?: AbortSignal;
+  /** 학생 **실명**. 조립 함수가 가린다. */
+  readonly studentName: string;
+  readonly roster: readonly KeywordGroup[];
+  readonly areaLabel: string;
+  readonly threadTitle?: string;
+  /** 방금 쓴 초안(실명 복원·표식 분리가 끝난 문단). */
+  readonly paragraphs: readonly NarrativeParagraph[];
+  /** 선생님이 고른 분량 목표(최종 본문 기준). */
+  readonly targetBytes: number;
+}
+
+/**
+ * 초안을 쓴 직후 **한 번만** 줄인다(ADR-110). 분량 조절의 줄이기 꾸러미를 그대로 쓴다 — 가리기·표식 지시·
+ * "몇 문장을 빼라"가 분량 조절과 같아야 한다.
+ *
+ * ★문단 역할(형광펜 색)을 지키려고 표식을 붙여 보낸다. 분량은 꾸러미가 표식을 뗀 본문으로 센다.
+ * ★기재 금지 확인은 묻지 않는다 — 보내는 글은 방금 그 모델이 쓴 초안이라 새로 나가는 선생님 자료가 없다.
+ * ★다시 묻지 않는다. 초안 한 번 + 줄이기 한 번이면 이미 2~4분이다. 더 줄이는 것은 「분량 조절」의 몫이다.
+ * ★설명문이 오거나 줄지 않았으면 `null` — 부르는 쪽은 처음 초안을 그대로 쓴다. 실행 실패는 던진다.
+ */
+export async function shrinkDraftOnce(input: DraftShrinkInput): Promise<DraftShrinkResult | null> {
+  const fromBytes = neisByteLength(aiDraftText({ paragraphs: input.paragraphs }));
+  const pack = buildLengthAdjustPack({
+    kind: 'shrink',
+    studentName: input.studentName,
+    roster: input.roster,
+    areaLabel: input.areaLabel,
+    ...(input.threadTitle !== undefined ? { threadTitle: input.threadTitle } : {}),
+    sourceText: markedNarrativeText(input.paragraphs),
+    targetBytes: input.targetBytes,
+  });
+  const raw = await askOnce(input.api, input.provider, pack.text, input.systemPrompt, input.signal);
+  const out = measureAnswer(raw, pack.mappings);
+  if (out.nonDraft || out.paragraphs.length === 0 || out.bytes >= fromBytes) return null;
+  return { paragraphs: out.paragraphs, bytes: out.bytes };
 }

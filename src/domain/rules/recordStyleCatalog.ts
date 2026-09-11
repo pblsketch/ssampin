@@ -1,5 +1,5 @@
 /**
- * 작성 방식 카탈로그 — 초점 10종과 그 구성 요소(순수).
+ * 작성 방식 카탈로그 — 초점 7종과 그 구성 요소(순수). 판본 3.
  *
  * ★출처: `docs/03-analysis/record-draft-template-library-v2-research-20260909.md` §4~§5.
  *   각 요소의 `purpose`·`needs`·`forbid` 는 그 문서의 "기본 구성 / 필요 근거 / AI 지시 / 생략" 을 옮긴 것이다.
@@ -365,6 +365,64 @@ export const RECORD_MODULES: Readonly<Record<RecordModuleId, RecordModule>> = {
     needs: '실제 생활 장면 기록',
     forbid:
       '장면 개수를 채우려고 없는 장면을 만들지 않습니다. 반대로 근거에 있는 장면을 이유 없이 빠뜨리지도 않습니다. 한 장면을 여러 문단으로 나누어 늘리지 않습니다.',
+  },
+  // ── 생활 틀 신설 6종(ADR-103) ──────────────────────────────────────────
+  //
+  //  ★이름은 담임 슬롯(`observationSlots.ts` HOMEROOM_SLOTS)의 낱말 그대로다. 선생님이 관찰을
+  //    남길 때 고른 갈래와 장면 카테고리가 같은 말이어야 무엇을 어디에 놓을지 헷갈리지 않는다.
+  //  ★어느 초점의 `body`·`extras` 에도 들어가지 않는다 — 작성 방식 경로의 요청서는 그대로여야 한다.
+  learningAttitude: {
+    id: 'learningAttitude',
+    label: '학습 태도',
+    role: 'motive',
+    purpose: '수업과 과제를 대하는 태도가 드러난 장면을 씁니다.',
+    needs: '태도가 드러난 실제 장면 기록',
+    forbid: '성실성·의지 같은 낱말만 쓰고 장면을 대지 않는 서술은 하지 않습니다.',
+  },
+  careerInterest: {
+    id: 'careerInterest',
+    label: '진로',
+    role: 'motive',
+    purpose: '관심이 드러난 모습을 근거가 있는 만큼만 씁니다.',
+    needs: '관심·진로가 드러난 관찰 기록',
+    forbid: '특정 학과·직업·대학을 지목하거나 진로를 단정하지 않습니다.',
+    optional: true,
+  },
+  classRole: {
+    id: 'classRole',
+    label: '학급 역할',
+    role: 'process',
+    purpose: '맡은 역할에서 제안한 것과 **실제로 한 일**을 씁니다.',
+    needs: '역할 수행 장면 기록',
+    forbid: '직책 이름만으로 기여를 추정하지 않습니다.',
+  },
+  characterRelation: {
+    id: 'characterRelation',
+    label: '인성·관계',
+    role: 'process',
+    purpose: '다른 학생·교사와의 사이에서 있었던 구체적 사건을 씁니다.',
+    needs: '구체적 사건 기록',
+    forbid: '다른 학생의 이름·특징을 드러내지 않습니다. 사건 하나로 인성을 단정하지 않습니다.',
+  },
+  changeOverTime: {
+    id: 'changeOverTime',
+    label: '변화',
+    role: 'result',
+    purpose: '앞뒤 시기가 대비되는 근거가 있을 때만 달라진 점을 씁니다.',
+    needs: "'변화' 슬롯이 붙은 근거, 또는 30일 이상 벌어진 두 시점의 기록",
+    forbid:
+      '근거가 한 시점뿐이면 변화 서술을 하지 않습니다. 성장·발전이라는 낱말로 대신하지 않습니다.',
+    optional: true,
+  },
+  regretPoint: {
+    id: 'regretPoint',
+    label: '아쉬운 점',
+    role: 'result',
+    purpose: '있으면 사실만 짧게 적고, 이어서 어떻게 했는지까지 씁니다.',
+    needs: '아쉬운 점이 드러난 관찰 기록',
+    forbid:
+      '단점을 단정하거나 비교로 깎아내리지 않습니다. 근거 없는 조건부 제언을 붙이지 않습니다.',
+    optional: true,
   },
   selfAndRelation: {
     id: 'selfAndRelation',

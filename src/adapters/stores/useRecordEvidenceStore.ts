@@ -1,12 +1,14 @@
 import { create } from 'zustand';
 import type { RecordArea } from '@domain/entities/RecordDraft';
-import type { InquiryThread } from '@domain/entities/InquiryThread';
+import { NARRATIVE_NOTE_MAX, type InquiryThread } from '@domain/entities/InquiryThread';
 import {
   normalizeEvidenceAreas,
   type EvidenceSourceType,
   type RecordEvidence,
+  evidenceInArea,
 } from '@domain/entities/RecordEvidence';
 import { hasProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
+import { linkRejection, normalizeLinkNote, type LinkRejection } from '@domain/rules/evidenceGraph';
 import { inquiryThreadRepository, recordEvidenceRepository } from '@adapters/di/container';
 import {
   useInquiryThreadStore,
@@ -36,6 +38,11 @@ export interface RecordEvidenceAddInput {
   slots?: readonly string[];
   /** 속한 탐구 흐름(InquiryThread.id). 원본 낱장에 있으면 이어받고, 없으면 미분류. */
   threadId?: string;
+  /**
+   * 선생님이 이 근거에서 읽은 것(ADR-103). 거울 카드에서 메모를 달며 처음 저장할 때 쓴다 —
+   * 이 칸이 없으면 "저장하고 다시 열어 메모" 로 두 번 저장하게 된다.
+   */
+  note?: string;
   /**
    * 교사가 저장 순간부터 AI 제외로 두기(거울 카드의 [AI 제외] = 첫 손댄 저장, 설계서 §4-1). `true` 만 의미가 있다 —
    * 기재 금지 자동 판정을 끄는 값이 아니다(그건 저장 뒤 `setExcludedFromAi` 로).
@@ -181,6 +188,22 @@ interface RecordEvidenceState {
    */
   setThread: (ids: readonly string[], threadId: string | null) => Promise<void>;
   /**
+   * 근거 카드의 교사 메모(ADR-103). 빈 글이면 칸을 지운다.
+   * ★원본 기록에는 쓰지 않는다 — 원본은 사실이고 이 메모는 해석이다.
+   */
+  setNote: (id: string, note: string) => Promise<void>;
+  /**
+   * 근거 지도(ADR-106): 앞 근거에서 뒤 근거로 잇는다. 이을 수 없으면 **저장 0회**로 사유를 돌려준다(`null` = 이었다).
+   * ★소유(`threadId`)·본문은 건드리지 않는다. 연결은 앞 근거의 `links` 에만 산다.
+   */
+  linkEvidence: (fromId: string, toId: string, note?: string) => Promise<LinkRejection | null>;
+  /** 연결 끊기 — 근거는 둘 다 그대로 남는다. 없는 연결이면 저장 0회. */
+  unlinkEvidence: (fromId: string, toId: string) => Promise<void>;
+  /** 이음말 고치기. 빈 글이면 칸을 지운다. 손대면 출처는 선생님이 된다. */
+  setEvidenceLinkNote: (fromId: string, toId: string, note: string) => Promise<void>;
+  /** 방향 바꾸기 — A→B 를 B→A 로. 이음말은 따라간다. 반대쪽에 이미 있으면 사유를 돌려준다. */
+  reverseEvidenceLink: (fromId: string, toId: string) => Promise<LinkRejection | null>;
+  /**
    * 보드: 선택한 근거를 기존 주제 열로 보낸다. 한 번의 저장.
    * ★주제가 이 학생 것이 아니거나 없으면 **아무것도 저장하지 않고** 던진다 — A 학생 주제에 B 학생 근거가 묶이는 사고의 마지막 문.
    */
@@ -292,6 +315,9 @@ function buildEvidence(input: RecordEvidenceAddInput, now: number): RecordEviden
     ...(input.classId !== undefined ? { classId: input.classId } : {}),
     ...(input.slots && input.slots.length > 0 ? { slots: [...input.slots] } : {}),
     ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),
+    ...(input.note !== undefined && input.note.trim().length > 0
+      ? { note: input.note.trim().slice(0, NARRATIVE_NOTE_MAX) }
+      : {}),
     // 기재 금지 항목이 섞였으면 저장 시점에 표시한다 — 모델까지 가지 않게(ADR-072 결정 5). 교사가 켜달라고 한 것도 같은 칸.
     ...(input.excludedFromAi === true || hasProhibitedTerms(input.content)
       ? { excludedFromAi: true }
@@ -351,6 +377,45 @@ function partitionMine(
 async function readThreadUnlocked(threadId: string): Promise<InquiryThread | undefined> {
   const data = await inquiryThreadRepository.getInquiryThreads();
   return (data?.records ?? []).find((t) => t.id === threadId);
+}
+
+/**
+ * 소유가 바뀔 근거들을 **지금 속한 주제별로** 묶는다(순수, 변환 안에서 부른다).
+ * 미분류(주제 없음)는 뗄 자리가 없으므로 넣지 않는다.
+ */
+/** 옮김 결과 + 이전 주제 계획 — 변환이 둘 다 돌려줘야 락 밖에서 뗄 수 있다. */
+interface MovePlan {
+  outcome: EvidenceMoveResult;
+  plan: ReadonlyMap<string, string[]> | null;
+}
+
+function groupByCurrentThread(
+  list: readonly RecordEvidence[],
+  ids: readonly string[],
+): ReadonlyMap<string, string[]> {
+  const want = new Set(ids);
+  const out = new Map<string, string[]>();
+  for (const r of list) {
+    if (!want.has(r.id) || r.threadId === undefined) continue;
+    const bucket = out.get(r.threadId);
+    if (bucket === undefined) out.set(r.threadId, [r.id]);
+    else bucket.push(r.id);
+  }
+  return out;
+}
+
+/**
+ * 소유가 바뀐 근거를 **이전 주제의 장면에서 뗀다.**
+ *
+ * ★근거 락 **밖에서** 부른다 — 안에서 부르면 근거→주제 역순 잠금이 된다(교착).
+ * ★던지지 않는다. 실패해도 읽기 가림(`scenesOf`)이 받치고 있어 화면은 이미 맞다.
+ * ★이걸 빠뜨리면 옛 장면에 id 가 남아, 나중에 같은 근거를 그 주제로 되돌렸을 때
+ *   "아직 안 놓음" 이 아니라 **옛 자리에 되살아난다.**
+ */
+async function detachFromPreviousScenes(plan: ReadonlyMap<string, string[]>): Promise<void> {
+  for (const [threadId, ids] of plan) {
+    await useInquiryThreadStore.getState().detachFromScenes(threadId, ids);
+  }
 }
 
 /**
@@ -527,13 +592,153 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
       });
     },
 
+    setNote: async (id, note) => {
+      const trimmed = note.trim().slice(0, NARRATIVE_NOTE_MAX);
+      await write((latest) => {
+        const target = latest.find((r) => r.id === id);
+        if (target === undefined) return { next: latest, result: undefined };
+        if ((target.note ?? '') === trimmed) return { next: latest, result: undefined };
+        const now = Date.now();
+        return {
+          next: latest.map((r) => {
+            if (r.id !== id) return r;
+            if (trimmed.length === 0) {
+              const rest = { ...r };
+              delete (rest as { note?: string }).note;
+              return { ...rest, updatedAt: now };
+            }
+            return { ...r, note: trimmed, updatedAt: now };
+          }),
+          result: undefined,
+        };
+      });
+    },
+
+    linkEvidence: async (fromId, toId, note) =>
+      write((latest) => {
+        const why = linkRejection(fromId, toId, latest);
+        if (why !== null) return { next: latest, result: why };
+        const now = Date.now();
+        const clean = normalizeLinkNote(note, NARRATIVE_NOTE_MAX);
+        return {
+          next: latest.map((r) =>
+            r.id === fromId
+              ? {
+                  ...r,
+                  links: [
+                    ...(r.links ?? []),
+                    { toId, ...(clean === undefined ? {} : { note: clean }) },
+                  ],
+                  updatedAt: now,
+                }
+              : r,
+          ),
+          result: null,
+        };
+      }),
+
+    unlinkEvidence: async (fromId, toId) => {
+      await write((latest) => {
+        const from = latest.find((r) => r.id === fromId);
+        if (from === undefined || !(from.links ?? []).some((l) => l.toId === toId)) {
+          return { next: latest, result: undefined };
+        }
+        const now = Date.now();
+        return {
+          next: latest.map((r) => {
+            if (r.id !== fromId) return r;
+            const links = (r.links ?? []).filter((l) => l.toId !== toId);
+            if (links.length === 0) {
+              const rest = { ...r };
+              delete (rest as { links?: unknown }).links;
+              return { ...rest, updatedAt: now };
+            }
+            return { ...r, links, updatedAt: now };
+          }),
+          result: undefined,
+        };
+      });
+    },
+
+    setEvidenceLinkNote: async (fromId, toId, note) => {
+      const clean = normalizeLinkNote(note, NARRATIVE_NOTE_MAX);
+      await write((latest) => {
+        const from = latest.find((r) => r.id === fromId);
+        const link = (from?.links ?? []).find((l) => l.toId === toId);
+        if (from === undefined || link === undefined) return { next: latest, result: undefined };
+        if ((link.note ?? undefined) === clean && (link.source ?? 'teacher') === 'teacher') {
+          return { next: latest, result: undefined };
+        }
+        const now = Date.now();
+        return {
+          next: latest.map((r) =>
+            r.id === fromId
+              ? {
+                  ...r,
+                  links: (r.links ?? []).map((l) =>
+                    l.toId === toId ? { toId, ...(clean === undefined ? {} : { note: clean }) } : l,
+                  ),
+                  updatedAt: now,
+                }
+              : r,
+          ),
+          result: undefined,
+        };
+      });
+    },
+
+    reverseEvidenceLink: async (fromId, toId) =>
+      write((latest) => {
+        const from = latest.find((r) => r.id === fromId);
+        const link = (from?.links ?? []).find((l) => l.toId === toId);
+        if (from === undefined || link === undefined) return { next: latest, result: 'missing' };
+        // 뒤집은 뒤의 모습으로 검사한다 — 지금 연결을 뺀 자료에서 B→A 를 이을 수 있는가.
+        const without = latest.map((r) =>
+          r.id === fromId ? { ...r, links: (r.links ?? []).filter((l) => l.toId !== toId) } : r,
+        );
+        const why = linkRejection(toId, fromId, without);
+        if (why !== null) return { next: latest, result: why };
+        const now = Date.now();
+        return {
+          next: without.map((r) => {
+            if (r.id === fromId) {
+              const links = r.links ?? [];
+              if (links.length === 0) {
+                const rest = { ...r };
+                delete (rest as { links?: unknown }).links;
+                return { ...rest, updatedAt: now };
+              }
+              return { ...r, updatedAt: now };
+            }
+            if (r.id === toId) {
+              return {
+                ...r,
+                links: [...(r.links ?? []), { ...link, toId: fromId }],
+                updatedAt: now,
+              };
+            }
+            return r;
+          }),
+          result: null,
+        };
+      }),
+
     setThread: async (ids, threadId) => {
       if (ids.length === 0) return;
-      await write((latest) => {
+      const plan = await write<ReadonlyMap<string, string[]> | null>((latest) => {
         const target = new Set(ids);
-        if (!latest.some((r) => target.has(r.id))) return { next: latest, result: undefined };
-        return { next: applyThread(latest, target, threadId, Date.now()), result: undefined };
+        if (!latest.some((r) => target.has(r.id))) return { next: latest, result: null };
+        // 옮기기 **전에** 지금 주제를 적어 둔다 — 옮긴 뒤에는 어디서 왔는지 알 수 없다.
+        const before = groupByCurrentThread(latest, ids);
+        return { next: applyThread(latest, target, threadId, Date.now()), result: before };
       });
+      // ★목표 주제 자신의 장면에서는 떼지 않는다 — 같은 주제 안에서 부르면 이미 놓여 있던 카드가
+      //   조용히 "아직 안 놓음"으로 떨어진다. 형제 경로 `moveToThread` 가 이미 이렇게 거른다.
+      if (plan !== null) {
+        const others =
+          threadId === null ? plan : new Map([...plan].filter(([id]) => id !== threadId));
+        await detachFromPreviousScenes(others);
+      }
     },
 
     moveToThread: async ({ studentRef, evidenceIds, threadId }) => {
@@ -541,29 +746,46 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
       //    보드의 열 끌어놓기는 마친 주제도 대상이라 requireOpen 을 켜지 않는다.
       await useInquiryThreadStore.getState().assertLinkable(threadId, studentRef);
       // 2) 근거 락에서 최신을 다시 읽어 소유권을 판정하고 한 번에 옮긴다.
-      return write((latest) => {
+      const { outcome, plan } = await write<MovePlan>((latest) => {
         const { mine, skipped } = partitionMine(latest, studentRef, evidenceIds);
         if (mine.length === 0) {
-          return { next: latest, result: { movedIds: [], skippedIds: skipped } };
+          return {
+            next: latest,
+            result: { outcome: { movedIds: [], skippedIds: skipped }, plan: null },
+          };
         }
+        const before = groupByCurrentThread(latest, mine);
         return {
           next: applyThread(latest, new Set(mine), threadId, Date.now()),
-          result: { movedIds: mine, skippedIds: skipped },
+          result: { outcome: { movedIds: mine, skippedIds: skipped }, plan: before },
         };
       });
+      // 다른 주제에서 온 근거는 그쪽 장면에서 뗀다(같은 주제 안 이동이면 아무 일도 없다).
+      if (plan !== null) {
+        const others = new Map([...plan].filter(([id]) => id !== threadId));
+        await detachFromPreviousScenes(others);
+      }
+      return outcome;
     },
 
-    unclassify: async ({ studentRef, evidenceIds }) =>
-      write((latest) => {
+    unclassify: async ({ studentRef, evidenceIds }) => {
+      const { outcome, plan } = await write<MovePlan>((latest) => {
         const { mine, skipped } = partitionMine(latest, studentRef, evidenceIds);
         if (mine.length === 0) {
-          return { next: latest, result: { movedIds: [], skippedIds: skipped } };
+          return {
+            next: latest,
+            result: { outcome: { movedIds: [], skippedIds: skipped }, plan: null },
+          };
         }
+        const before = groupByCurrentThread(latest, mine);
         return {
           next: applyThread(latest, new Set(mine), null, Date.now()),
-          result: { movedIds: mine, skippedIds: skipped },
+          result: { outcome: { movedIds: mine, skippedIds: skipped }, plan: before },
         };
-      }),
+      });
+      if (plan !== null) await detachFromPreviousScenes(plan);
+      return outcome;
+    },
 
     moveToNewThread: async ({ studentRef, evidenceIds, title, classId, keywords }) => {
       // 1) 옮길 것이 있는지부터 본다(읽기만) — 빈 주제를 만들지 않기 위해서다.
@@ -593,16 +815,22 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
 
       // 3) 근거를 옮긴다(근거 락). 주제 락은 이미 풀렸다 — 근거 락 안에서 주제 저장을 기다리지 않는다.
       try {
-        const moved = await write((latest) => {
+        const { outcome: moved, plan } = await write<MovePlan>((latest) => {
           const { mine, skipped } = partitionMine(latest, studentRef, evidenceIds);
           if (mine.length === 0) {
-            return { next: latest, result: { movedIds: [], skippedIds: skipped } };
+            return {
+              next: latest,
+              result: { outcome: { movedIds: [], skippedIds: skipped }, plan: null },
+            };
           }
+          const before = groupByCurrentThread(latest, mine);
           return {
             next: applyThread(latest, new Set(mine), threadId, Date.now()),
-            result: { movedIds: mine, skippedIds: skipped },
+            result: { outcome: { movedIds: mine, skippedIds: skipped }, plan: before },
           };
         });
+        // 옛 주제의 장면에서 뗀다 — 방금 만든 주제로 왔으니 남은 자리는 전부 이전 것이다.
+        if (plan !== null) await detachFromPreviousScenes(plan);
         if (moved.movedIds.length === 0) {
           // 2)~3) 사이에 다른 경로가 근거를 지웠거나 옮겼다. 빈 주제를 남기지 않는다.
           const compensation = await useInquiryThreadStore.getState().removeIfUnused(threadId);
@@ -642,99 +870,112 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
           .assertLinkable(threadId, input.studentRef, { requireOpen: true });
       }
 
-      return write<EnsureEvidenceFromSourceResult>(async (latest) => {
-        // 2) 저장 직전 재검사 — 1) 이후 다른 경로에서 닫히거나 지워졌을 수 있다.
-        //    ★여기서 주제 **락**을 잡지 않는다. 근거 락 안에서 주제 락을 잡으면 근거→주제가 되어
-        //      규정한 주제→근거 순서를 뒤집는다. 읽기는 락 없이도 안전하다(통째 읽기).
-        if (threadId !== undefined) {
-          const fresh = await readThreadUnlocked(threadId);
-          if (!fresh) {
+      const outcome = await write<EnsureEvidenceFromSourceResult & { detachFrom?: string }>(
+        async (latest) => {
+          // 2) 저장 직전 재검사 — 1) 이후 다른 경로에서 닫히거나 지워졌을 수 있다.
+          //    ★여기서 주제 **락**을 잡지 않는다. 근거 락 안에서 주제 락을 잡으면 근거→주제가 되어
+          //      규정한 주제→근거 순서를 뒤집는다. 읽기는 락 없이도 안전하다(통째 읽기).
+          if (threadId !== undefined) {
+            const fresh = await readThreadUnlocked(threadId);
+            if (!fresh) {
+              throw new EvidenceLinkError(
+                '연결하려던 주제가 없습니다. 주제를 다시 골라 주세요.',
+                'evidence-link',
+                threadId,
+                null,
+              );
+            }
+            if (fresh.studentRef !== input.studentRef) {
+              throw new EvidenceLinkError(
+                '다른 학생의 주제에는 묶을 수 없습니다.',
+                'evidence-link',
+                threadId,
+                null,
+              );
+            }
+            if (fresh.status !== 'open') {
+              throw new EvidenceLinkError(
+                '마친 주제입니다. 주제를 다시 연 뒤에 연결해 주세요.',
+                'evidence-link',
+                threadId,
+                null,
+              );
+            }
+          }
+
+          const dups = matchesSource(latest, input.studentRef, input.sourceId);
+          if (dups.length > 1) {
+            // 임의로 하나를 고르지 않는다 — 어느 쪽을 고쳐야 할지 모르는 채로 쓰면 사고다(계획 §5.1-5).
             throw new EvidenceLinkError(
-              '연결하려던 주제가 없습니다. 주제를 다시 골라 주세요.',
+              '이 기록에서 온 근거가 이미 여러 개입니다. 근거 보드에서 정리한 뒤 다시 시도해 주세요.',
               'evidence-link',
-              threadId,
+              threadId ?? null,
               null,
             );
           }
-          if (fresh.studentRef !== input.studentRef) {
+
+          const existing = dups[0];
+          const now = Date.now();
+
+          if (!existing) {
+            const rec = buildEvidence(
+              {
+                studentRef: input.studentRef,
+                areas: input.areas,
+                content: input.content,
+                sourceType: input.sourceType,
+                sourceId: input.sourceId,
+                ...(input.date !== undefined ? { date: input.date } : {}),
+                ...(input.classId !== undefined ? { classId: input.classId } : {}),
+                ...(input.slots !== undefined ? { slots: input.slots } : {}),
+                ...(threadId !== undefined ? { threadId } : {}),
+                ...(input.excludedFromAi !== undefined
+                  ? { excludedFromAi: input.excludedFromAi }
+                  : {}),
+              },
+              now,
+            );
+            return {
+              next: [...latest, rec],
+              result: { evidenceId: rec.id, reused: false, threadLinked: threadId !== undefined },
+            };
+          }
+
+          // 같은 키인데 출처 종류·수업반이 다르면 같은 원본이라고 볼 수 없다. 임의로 잇지 않는다.
+          if (existing.sourceType !== input.sourceType || existing.classId !== input.classId) {
             throw new EvidenceLinkError(
-              '다른 학생의 주제에는 묶을 수 없습니다.',
+              '이미 있는 근거와 출처 정보가 맞지 않습니다. 근거 보드에서 확인해 주세요.',
               'evidence-link',
-              threadId,
+              threadId ?? null,
               null,
             );
           }
-          if (fresh.status !== 'open') {
-            throw new EvidenceLinkError(
-              '마친 주제입니다. 주제를 다시 연 뒤에 연결해 주세요.',
-              'evidence-link',
-              threadId,
-              null,
-            );
+
+          // 재사용 — 본문·영역·제외 플래그는 **보존**한다(교사가 다듬어 둔 근거를 원본으로 덮지 않는다).
+          // 이 관문이 바꾸는 것은 주제 연결뿐이다. 본문 반영은 S4 의 명시 비교·반영이 담당한다.
+          if (threadId === undefined || existing.threadId === threadId) {
+            return {
+              next: latest,
+              result: { evidenceId: existing.id, reused: true, threadLinked: false },
+            };
           }
-        }
-
-        const dups = matchesSource(latest, input.studentRef, input.sourceId);
-        if (dups.length > 1) {
-          // 임의로 하나를 고르지 않는다 — 어느 쪽을 고쳐야 할지 모르는 채로 쓰면 사고다(계획 §5.1-5).
-          throw new EvidenceLinkError(
-            '이 기록에서 온 근거가 이미 여러 개입니다. 근거 보드에서 정리한 뒤 다시 시도해 주세요.',
-            'evidence-link',
-            threadId ?? null,
-            null,
-          );
-        }
-
-        const existing = dups[0];
-        const now = Date.now();
-
-        if (!existing) {
-          const rec = buildEvidence(
-            {
-              studentRef: input.studentRef,
-              areas: input.areas,
-              content: input.content,
-              sourceType: input.sourceType,
-              sourceId: input.sourceId,
-              ...(input.date !== undefined ? { date: input.date } : {}),
-              ...(input.classId !== undefined ? { classId: input.classId } : {}),
-              ...(input.slots !== undefined ? { slots: input.slots } : {}),
-              ...(threadId !== undefined ? { threadId } : {}),
-              ...(input.excludedFromAi !== undefined
-                ? { excludedFromAi: input.excludedFromAi }
-                : {}),
+          return {
+            next: applyThread(latest, new Set([existing.id]), threadId, now),
+            result: {
+              evidenceId: existing.id,
+              reused: true,
+              threadLinked: true,
+              // ★가장 놓치기 쉬운 일곱째 경로 — 원본을 다시 열어 다른 주제로 저장하면
+              //   옛 주제의 장면에 id 만 남아 나중에 그 자리로 되살아난다.
+              ...(existing.threadId !== undefined ? { detachFrom: existing.threadId } : {}),
             },
-            now,
-          );
-          return {
-            next: [...latest, rec],
-            result: { evidenceId: rec.id, reused: false, threadLinked: threadId !== undefined },
           };
-        }
-
-        // 같은 키인데 출처 종류·수업반이 다르면 같은 원본이라고 볼 수 없다. 임의로 잇지 않는다.
-        if (existing.sourceType !== input.sourceType || existing.classId !== input.classId) {
-          throw new EvidenceLinkError(
-            '이미 있는 근거와 출처 정보가 맞지 않습니다. 근거 보드에서 확인해 주세요.',
-            'evidence-link',
-            threadId ?? null,
-            null,
-          );
-        }
-
-        // 재사용 — 본문·영역·제외 플래그는 **보존**한다(교사가 다듬어 둔 근거를 원본으로 덮지 않는다).
-        // 이 관문이 바꾸는 것은 주제 연결뿐이다. 본문 반영은 S4 의 명시 비교·반영이 담당한다.
-        if (threadId === undefined || existing.threadId === threadId) {
-          return {
-            next: latest,
-            result: { evidenceId: existing.id, reused: true, threadLinked: false },
-          };
-        }
-        return {
-          next: applyThread(latest, new Set([existing.id]), threadId, now),
-          result: { evidenceId: existing.id, reused: true, threadLinked: true },
-        };
-      });
+        },
+      );
+      if (outcome.detachFrom !== undefined) {
+        await detachFromPreviousScenes(new Map([[outcome.detachFrom, [outcome.evidenceId]]]));
+      }
+      return outcome;
     },
 
     applySourceFields: async ({ evidenceId, studentRef, capture, fields, readLatestSource }) =>
@@ -780,10 +1021,13 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
       }),
 
     remove: async (id) => {
-      await write((latest) => {
+      const plan = await write<ReadonlyMap<string, string[]> | null>((latest) => {
         const next = latest.filter((r) => r.id !== id);
-        return { next: next.length === latest.length ? latest : next, result: undefined };
+        if (next.length === latest.length) return { next: latest, result: null };
+        // 지우기 전에 어느 주제 것이었는지 적어 둔다 — 장면에 id 만 남으면 유령이 된다.
+        return { next, result: groupByCurrentThread(latest, [id]) };
       });
+      if (plan !== null) await detachFromPreviousScenes(plan);
     },
 
     restoreRemoved: async (evidence) =>
@@ -797,6 +1041,8 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
           if (taken) return { next: latest, result: { id: taken.id, restored: false } };
         }
         // 주제·영역·AI 제외·출처·createdAt 까지 **원래 레코드 그대로**. 새로 판정하지 않는다.
+        // ★장면 자리는 되살리지 않는다 — 지울 때 뗐으므로 "아직 안 놓음" 으로 돌아온다.
+        //   옛 자리에 되살아나면 선생님이 지웠다 되돌린 카드가 엉뚱한 문단 지시가 된다.
         const restored: RecordEvidence = { ...evidence, updatedAt: Date.now() };
         return { next: [...latest, restored], result: { id: restored.id, restored: true } };
       }),
@@ -806,7 +1052,7 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
     getByStudentRef: (studentRef) => get().records.filter((r) => r.studentRef === studentRef),
 
     getByArea: (studentRef, area) =>
-      get().records.filter((r) => r.studentRef === studentRef && r.areas.includes(area)),
+      get().records.filter((r) => r.studentRef === studentRef && evidenceInArea(r, area)),
 
     getByThread: (threadId) => get().records.filter((r) => r.threadId === threadId),
   };

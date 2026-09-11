@@ -1,6 +1,9 @@
 import { useCallback, useState } from 'react';
 import { flushAllDrafts } from '@adapters/components/RecordDraft/draftFlushRegistry';
-import type { RecordFlowIntent } from '@adapters/components/RecordDraft/recordFlowIntent';
+import {
+  goesToEvidenceScreen,
+  type RecordFlowIntent,
+} from '@adapters/components/RecordDraft/recordFlowIntent';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { ClassRecordInputView } from './ClassRecordInputView';
 import { ClassRecordStatsView } from './ClassRecordStatsView';
@@ -51,7 +54,7 @@ export function ClassRecordTab({
       return;
     }
     setFlowIntent(intent);
-    if (intent.mode === 'board') setViewMode('draft');
+    if (goesToEvidenceScreen(intent.mode)) setViewMode('draft');
     else if (intent.mode === 'source' || intent.mode === 'compose') setViewMode('input');
   }, []);
 

@@ -160,6 +160,78 @@ export const ENTITY_FIELD_CONTRACT = {
       },
     },
   },
+  // 탐구 흐름 — 서사 그래프(ADR-103). 장면·연결이 브릿지에서 조용히 사라지지 않게 잠근다.
+  inquiryThread: {
+    file: 'src/domain/entities/InquiryThread.ts',
+    interfaces: {
+      InquiryThread: {
+        mirrored: [
+          'id',
+          'studentRef',
+          'classId',
+          'title',
+          'keywords',
+          'standardCodes',
+          'competencyKeywords',
+          'nextNotes',
+          'status',
+          'term',
+          // 서사 장면·앞 주제 연결 — AI 가 흐름 단위로 읽으려면 이 구조가 보존돼야 한다.
+          'scenes',
+          'link',
+          'createdAt',
+          'updatedAt',
+        ],
+        // 화면 차례(↑↓, 2026-09-11) — 흐름 보기에서 주제를 늘어놓는 순서일 뿐 초안·AI 가 읽을 뜻이 없다.
+        // 브릿지는 주제 파일을 **읽기만** 하므로 이 칸을 떨궈 저장할 길도 없다.
+        notMirrored: ['order'],
+      },
+      NarrativeScene: {
+        // leadIn(앞 장면에서 이어지는 이음말, ADR-108) — 요청서에 실리는 자유 글이라 브릿지도 그대로 본다.
+        mirrored: [
+          'id',
+          'role',
+          'moduleId',
+          'label',
+          'note',
+          'noteSource',
+          'leadIn',
+          'evidenceIds',
+        ],
+        notMirrored: [],
+      },
+      NarrativeLink: {
+        mirrored: ['fromThreadId', 'note'],
+        notMirrored: [],
+      },
+    },
+  },
+  // 생기부 작성 근거 — 교사 메모(note)가 브릿지에서 빠지면 AI 가 해석을 못 읽는다.
+  recordEvidence: {
+    file: 'src/domain/entities/RecordEvidence.ts',
+    interfaces: {
+      RecordEvidence: {
+        mirrored: [
+          'id',
+          'studentRef',
+          'areas',
+          'content',
+          'date',
+          'sourceType',
+          'sourceId',
+          'classId',
+          'slots',
+          'excludedFromAi',
+          'threadId',
+          'note',
+          'createdAt',
+          'updatedAt',
+        ],
+        // 근거 지도의 연결(ADR-106) — 브릿지는 아직 관계를 읽지 않는다. 미러에 실을 때 mirrored 로 옮기고 브릿지 파서를 함께 고친다.
+        notMirrored: ['links'],
+      },
+    },
+  },
   student: {
     file: 'src/domain/entities/Student.ts',
     interfaces: {
@@ -293,6 +365,59 @@ export const SAMPLES = {
           },
         ],
         seating: { rows: 1, cols: 1, seats: [['1-2-3']] }, // notMirrored
+      },
+    ],
+  },
+  // inquiry-threads.json: { records }
+  inquiryThread: {
+    records: [
+      {
+        id: 'thr-1',
+        studentRef: 'tc:cls-1:1-2-3',
+        classId: 'cls-1',
+        title: '할인 문구와 선택',
+        keywords: ['기회비용', '프레이밍'],
+        standardCodes: ['[9사04-01]'],
+        competencyKeywords: ['경제 현상에 대한 자료 해석력'],
+        nextNotes: '광고 문구 규제를 다음 학기에 이어 볼 것',
+        status: 'open',
+        term: '2026-2',
+        scenes: [
+          {
+            id: 'scn-1',
+            role: 'evaluation',
+            moduleId: 'teacherJudgement',
+            label: '교사 판단',
+            note: '근거 검증에 엄격함',
+            noteSource: 'teacher',
+            leadIn: '질문에서 검증으로',
+            evidenceIds: ['rev-1'],
+          },
+        ],
+        link: { fromThreadId: 'thr-0', note: '기초에서 확장' },
+        createdAt: 1735689600000,
+        updatedAt: 1735689600000,
+      },
+    ],
+  },
+  // record-evidence.json: { records }
+  recordEvidence: {
+    records: [
+      {
+        id: 'rev-1',
+        studentRef: 'tc:cls-1:1-2-3',
+        areas: ['subject'],
+        content: '쿠폰이 있으면 왜 필요 없는 물건도 사게 되냐고 물음',
+        date: '2026-09-02',
+        sourceType: 'observation',
+        sourceId: 'obs-1',
+        classId: 'cls-1',
+        slots: ['질문'],
+        excludedFromAi: false,
+        threadId: 'thr-1',
+        note: '질문이 출발점이었다',
+        createdAt: 1735689600000,
+        updatedAt: 1735689600000,
       },
     ],
   },

@@ -26,6 +26,12 @@ interface RecordDraftSidePanelProps {
   readonly width?: number;
   /** 이 학생·이 영역의 근거. */
   readonly evidences: readonly RecordEvidence[];
+  /**
+   * 이 학생의 근거 **전부**(영역 무관) — 주제 묶음에만 쓴다. 흐름 보기가 주제의 근거를 영역과 무관하게
+   * 보여 주므로, 여기서 영역으로 거르면 같은 주제가 두 화면에서 다른 건수로 보인다(오너 제보 2026-09-11).
+   * 없으면 `evidences` 를 쓴다.
+   */
+  readonly threadEvidences?: readonly RecordEvidence[];
   /** 거울 카드 — 아직 근거로 안 넣은 원본 기록(영역 무관). 미분류 수에 더한다. 기본 빈 목록. */
   readonly mirrors?: readonly EvidenceCandidate[];
   /** 이 학생의 주제. */
@@ -63,6 +69,7 @@ export function RecordDraftSidePanel({
   placement = 'side',
   width = 380,
   evidences,
+  threadEvidences,
   mirrors = [],
   threads,
   draft,
@@ -79,15 +86,19 @@ export function RecordDraftSidePanel({
     const byThread = ordered.map((t) => ({
       id: t.id,
       title: t.status === 'closed' ? `${t.title} (닫힘)` : t.title,
-      items: evidences.filter((e) => e.threadId === t.id),
+      items: (threadEvidences ?? evidences).filter((e) => e.threadId === t.id),
     }));
     // 미분류 = 저장 미분류 + 거울(보드의 미분류 열과 같은 수). 거울은 보기만 하는 것이라 저장되지 않았다.
     const unclassified: EvidenceLine[] = [
       ...evidences.filter((e) => !isClassified(e, threadIdSet)).map(lineOf),
       ...mirrors.map(mirrorLineOf),
     ];
-    return { byThread: byThread.filter((g) => g.items.length > 0), unclassified };
-  }, [threads, evidences, mirrors, threadIdSet]);
+    const shown = byThread.filter((g) => g.items.length > 0);
+    const total =
+      shown.reduce((n, g) => n + g.items.length, 0) +
+      evidences.filter((e) => !isClassified(e, threadIdSet)).length;
+    return { byThread: shown, unclassified, total };
+  }, [threads, evidences, threadEvidences, mirrors, threadIdSet]);
 
   const tabBtn = (id: SidePanelTab, label: string, title?: string): ReactNode => (
     <button
@@ -176,7 +187,7 @@ export function RecordDraftSidePanel({
           <div className="flex flex-col gap-3 p-3" data-area={area}>
             <div className="flex items-center gap-2">
               <span className="text-xs text-sp-muted">
-                이 영역의 근거 <b className="text-sp-text">{evidences.length}건</b>
+                근거 <b className="text-sp-text">{groups.total}건</b>
               </span>
               <button
                 type="button"
@@ -187,7 +198,7 @@ export function RecordDraftSidePanel({
                 <span className="material-symbols-outlined text-sm">arrow_forward</span>
               </button>
             </div>
-            {evidences.length === 0 && mirrors.length === 0 ? (
+            {groups.total === 0 && mirrors.length === 0 ? (
               <p className="text-xs text-sp-muted">아직 근거가 없습니다. 보드에서 모아 보세요.</p>
             ) : (
               <>

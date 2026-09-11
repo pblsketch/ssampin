@@ -16,7 +16,9 @@ interface ToastState {
    * @param message 본문
    * @param type 아이콘·색 결정 (기본 'success')
    * @param action 우측 CTA — 액션 라벨과 클릭 핸들러
-   * @param durationMs 자동 dismiss 까지 시간 (기본 3000ms). roster-sample-data-removal §3.8
+   * @param durationMs 자동 dismiss 까지 시간 (기본 3000ms, **단추가 있으면 8000ms**). roster-sample-data-removal §3.8
+   *   ★단추가 달린 안내(「근거 정리에서 보기」·「첨부 다시 시도」)는 읽고 누를 시간이 있어야 한다 — 3초는 관찰 3건을
+   *     연달아 저장하는 동안 사라져 눌러 볼 수 없었다(전 과정 검증 2026-09-11).
    *   마이그레이션 안내처럼 사용자가 액션을 결정할 시간이 필요한 경우 5000ms로 사용.
    */
   show: (
@@ -32,7 +34,8 @@ const dismissTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
-  show: (message, type = 'success', action, durationMs = 3000) => {
+  show: (message, type = 'success', action, durationMs) => {
+    const ms = durationMs ?? (action ? 8000 : 3000);
     const id = generateUUID();
     set((state) => ({
       toasts: [...state.toasts, { id, message, type, action }],
@@ -42,7 +45,7 @@ export const useToastStore = create<ToastState>((set) => ({
       set((state) => ({
         toasts: state.toasts.filter((t) => t.id !== id),
       }));
-    }, durationMs);
+    }, ms);
     dismissTimers.set(id, timer);
   },
   dismiss: (id) => {

@@ -1,0 +1,20 @@
+{
+  "records": [
+    {
+      "id": "rev-1",
+      "studentRef": "tc:cls-1:1-2-3",
+      "areas": ["subject"],
+      "content": "쿠폰이 있으면 왜 필요 없는 물건도 사게 되냐고 물음",
+      "date": "2026-09-02",
+      "sourceType": "observation",
+      "sourceId": "obs-1",
+      "classId": "cls-1",
+      "slots": ["질문"],
+      "excludedFromAi": false,
+      "threadId": "thr-1",
+      "note": "질문이 출발점이었다",
+      "createdAt": 1735689600000,
+      "updatedAt": 1735689600000
+    }
+  ]
+}

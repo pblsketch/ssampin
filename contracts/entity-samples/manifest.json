@@ -107,6 +107,71 @@
         }
       }
     },
+    "inquiryThread": {
+      "file": "src/domain/entities/InquiryThread.ts",
+      "interfaces": {
+        "InquiryThread": {
+          "mirrored": [
+            "id",
+            "studentRef",
+            "classId",
+            "title",
+            "keywords",
+            "standardCodes",
+            "competencyKeywords",
+            "nextNotes",
+            "status",
+            "term",
+            "scenes",
+            "link",
+            "createdAt",
+            "updatedAt"
+          ],
+          "notMirrored": ["order"]
+        },
+        "NarrativeScene": {
+          "mirrored": [
+            "id",
+            "role",
+            "moduleId",
+            "label",
+            "note",
+            "noteSource",
+            "leadIn",
+            "evidenceIds"
+          ],
+          "notMirrored": []
+        },
+        "NarrativeLink": {
+          "mirrored": ["fromThreadId", "note"],
+          "notMirrored": []
+        }
+      }
+    },
+    "recordEvidence": {
+      "file": "src/domain/entities/RecordEvidence.ts",
+      "interfaces": {
+        "RecordEvidence": {
+          "mirrored": [
+            "id",
+            "studentRef",
+            "areas",
+            "content",
+            "date",
+            "sourceType",
+            "sourceId",
+            "classId",
+            "slots",
+            "excludedFromAi",
+            "threadId",
+            "note",
+            "createdAt",
+            "updatedAt"
+          ],
+          "notMirrored": ["links"]
+        }
+      }
+    },
     "student": {
       "file": "src/domain/entities/Student.ts",
       "interfaces": {

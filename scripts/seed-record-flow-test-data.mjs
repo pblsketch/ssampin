@@ -132,6 +132,12 @@ const sRef = (s) => `tc:${CLASS_ID}:${sKey(s)}`;
 const THREAD_A = `${PREFIX}thread-a`; // 키워드 있음 — "이것도 이 주제?" 제안이 뜬다
 const THREAD_B = `${PREFIX}thread-b`; // 키워드 없음 — 제안 0건이 정상
 const THREAD_C = `${PREFIX}thread-c`; // 닫힌 주제
+/* 흐름 보기(v2.5.2)용 — 장면·이음말·상한·긴 제목·생활 틀을 각각 하나씩 맡는다. */
+const THREAD_D = `${PREFIX}thread-d`; // A 에서 이어짐(이음말) · 장면 5개 → [초안 순서] 줄
+const THREAD_E = `${PREFIX}thread-e`; // 장면 0개 · 긴 제목 → 뼈대 깔기 전 상태
+const THREAD_F = `${PREFIX}thread-f`; // 장면 20개(상한) → [+ 장면] 잠김 · 가로 스크롤
+const THREAD_G = `${PREFIX}thread-g`; // 장면 4개 전부 채움 → '자리 미정' 띠가 안 보여야 정상
+const THREAD_H = `${PREFIX}thread-h`; // 담임 행동특성(생활 틀) — 평가·특성·장면·성장
 
 /**
  * 기존 파일 읽기.
@@ -166,7 +172,10 @@ function readJson(file, fallback) {
 }
 function backupAndWrite(file, value) {
   const p = path.join(dataDir, file);
-  if (fs.existsSync(p)) fs.copyFileSync(p, `${p}.pre-recseed-${TAG}`);
+  const backup = `${p}.pre-recseed-${TAG}`;
+  // ★백업은 **처음 한 번만**. 한 파일을 두 번 손대면(예: 주제를 심고 뒤에서 장면을 붙일 때)
+  //   두 번째 복사가 이미 심은 상태를 원본 백업 위에 덮어써 되돌릴 것이 사라진다.
+  if (fs.existsSync(p) && !fs.existsSync(backup)) fs.copyFileSync(p, backup);
   fs.writeFileSync(p, JSON.stringify(value, null, 2), 'utf-8');
 }
 /** 심은 것만 걸러 낸다 — 기존 데이터는 그대로 둔다(멱등 + --clean 공용). */
@@ -430,8 +439,17 @@ edit('record-evidence.json', { records: [] }, (ev) => {
   ev.records = arr(ev, 'records').filter(notMine);
   if (clean) return;
   let n = 0;
+  // 관찰에서 끌어온 근거는 그 관찰을 가리켜야 한다(sourceId). 없으면 같은 관찰이 거울 카드로 한 번 더 떠
+  // "근거가 두 번 보인다"가 된다(2026-09-11 실화면에서 나래가 그랬다).
+  const obsSourceOf = (content) => {
+    const i = OBS.findIndex((o) => o[3] === content);
+    return i < 0 ? {} : { sourceId: `${PREFIX}obs-${i + 1}` };
+  };
   const push = (si, areas, content, opt = {}) => {
     n += 1;
+    if (opt.sourceType === 'observation' && opt.sourceId === undefined) {
+      opt = { ...opt, ...obsSourceOf(content) };
+    }
     ev.records.push({
       id: `${PREFIX}ev-${n}`,
       studentRef: sRef(TS[si]),
@@ -782,6 +800,375 @@ edit('record-drafts.json', { records: [] }, (rd) => {
   });
 });
 
+/* ─────────────────── 8. 흐름 보기(v2.5.2) — 장면·이음말·메모 ───────────────────
+ *
+ * 여기서 심는 것은 **화면에서 눈으로 볼 수 있는 상태들**이다. 하나씩 다른 것을 맡는다:
+ *   · 가온 — 주제 4개(개요 지도가 뜨는 최소 조건) · A→D 이음(화살표 + 「이어진 흐름」 묶음) ·
+ *            장면 메모와 **AI 가 쓴 이유** 메모 · 닫힌 주제 · 긴 제목 · 자리 미정 있음/없음
+ *   · 나래 — 장면 20개(상한). [+ 장면]이 잠기고 "20개까지" 문구가 떠야 정상
+ *   · 다솜 — 장면을 전부 채워 **자리 미정 띠가 아예 안 그려지는지** 확인. 근거 메모 4건 중
+ *            하나에 기재 금지 낱말('학원')을 넣어 두었다 → AI 초안 패널의
+ *            「금지어가 들어 빠지는 메모 1」이 떠야 정상이다.
+ *   · 라온 — 근거 0건 그대로(빈 상태 화면)
+ *   · 담임 — 행동특성 주제 하나(생활 틀: 평가·특성·장면·성장) + 주제 미정 근거 2건
+ *
+ * ★장면 id 도 `rec-test-` 로 시작한다 — `--clean` 이 주제째 지우므로 따로 챙길 것은 없다.
+ */
+const SC = (t, n) => `${PREFIX}sc-${t}-${n}`;
+/** 탐구 기본 뼈대 4자리. `defaultScaffoldScenes()` 와 같은 값이다. */
+const INQ = [
+  ['evaluation', 'teacherJudgement'],
+  ['motive', 'legacyMotive'],
+  ['process', 'legacyProcess'],
+  ['result', 'legacyResult'],
+];
+/** 생활 틀 4자리 — 담임 행동특성. */
+const LIFE = [
+  ['evaluation', 'teacherJudgement'],
+  ['motive', 'repeatedTrait'],
+  ['process', 'lifeScenes'],
+  ['result', 'selfAndRelation'],
+];
+
+/* 8-1. 새 주제 — 기존 세 개(A·B·C)는 그대로 두고 넷을 더한다. */
+edit('inquiry-threads.json', { records: [] }, (it) => {
+  if (clean) return;
+  const have = new Set(arr(it, 'records').map((t) => t.id));
+  const add = (t) => {
+    if (!have.has(t.id)) it.records.push(t);
+  };
+  add({
+    id: THREAD_D,
+    studentRef: sRef(TS[0]),
+    classId: CLASS_ID,
+    title: '청년 실업 통계로 지역 정책 제안하기',
+    keywords: ['실업', '정책', '제안'],
+    competencyKeywords: ['자료를 근거로 대안을 세우는 힘'],
+    // ★A 에서 이어진다 — 화면 위 개요 지도에 화살표와 이음말이 뜨고, 두 주제가 한 묶음으로 그려진다.
+    link: { fromThreadId: THREAD_A, note: '기초에서 확장' },
+    status: 'open',
+    term: '2026-1',
+    createdAt: NOW_MS,
+    updatedAt: NOW_MS,
+  });
+  add({
+    id: THREAD_E,
+    studentRef: sRef(TS[0]),
+    classId: CLASS_ID,
+    // 긴 제목 — 개요 지도 칩과 주제 머리에서 어떻게 잘리는지 본다.
+    title: '학급 자치 규칙을 만들고 지키는 과정에서 드러난 조정 능력에 대한 관찰 기록',
+    keywords: [],
+    status: 'open',
+    term: '2026-1',
+    createdAt: NOW_MS,
+    updatedAt: NOW_MS,
+  });
+  add({
+    id: THREAD_F,
+    studentRef: sRef(TS[1]),
+    classId: CLASS_ID,
+    title: '장면을 상한까지 놓아 본 주제',
+    keywords: [],
+    status: 'open',
+    term: '2026-1',
+    createdAt: NOW_MS,
+    updatedAt: NOW_MS,
+  });
+  add({
+    id: THREAD_G,
+    studentRef: sRef(TS[2]),
+    classId: CLASS_ID,
+    title: '모둠 신문 만들기',
+    keywords: ['신문', '모둠'],
+    status: 'open',
+    term: '2026-1',
+    createdAt: NOW_MS,
+    updatedAt: NOW_MS,
+  });
+});
+
+/* 8-2. 새 근거 — 위 주제들에 담을 것. 몇 건에는 **근거 메모**를 달아 둔다. */
+const EV_D = [`${PREFIX}ev-d1`, `${PREFIX}ev-d2`, `${PREFIX}ev-d3`];
+const EV_E = [`${PREFIX}ev-e1`, `${PREFIX}ev-e2`];
+const EV_F = [`${PREFIX}ev-f1`, `${PREFIX}ev-f2`];
+const EV_G = [`${PREFIX}ev-g1`, `${PREFIX}ev-g2`, `${PREFIX}ev-g3`, `${PREFIX}ev-g4`];
+edit('record-evidence.json', { records: [] }, (ev) => {
+  if (clean) return;
+  const have = new Set(arr(ev, 'records').map((e) => e.id));
+  const add = (id, si, areas, content, opt = {}) => {
+    if (have.has(id)) return;
+    ev.records.push({
+      id,
+      studentRef: sRef(TS[si]),
+      areas,
+      content,
+      classId: CLASS_ID,
+      createdAt: NOW_MS,
+      updatedAt: NOW_MS,
+      ...opt,
+    });
+  };
+  add(
+    EV_D[0],
+    0,
+    ['subject'],
+    '통계청 지역별 고용조사에서 우리 지역 청년 실업률을 3년 치 뽑아 표로 정리했다.',
+    { date: '2026-07-02', threadId: THREAD_D },
+  );
+  add(
+    EV_D[1],
+    0,
+    ['subject'],
+    '실업률이 높은 달과 학기 일정이 겹치는 것을 보고 "구직 기간이 아니라 학사 일정 탓 아닐까"라고 되물었다.',
+    { date: '2026-07-09', threadId: THREAD_D, note: '통계를 곧바로 원인으로 읽지 않은 지점.' },
+  );
+  add(
+    EV_D[2],
+    0,
+    ['subject'],
+    '지역 청년 채용 지원금 안내문을 찾아 조건을 정리하고, 우리 학교 졸업생에게 해당하는지 따져 보았다.',
+    { date: '2026-07-16', threadId: THREAD_D },
+  );
+  add(
+    EV_E[0],
+    0,
+    ['subject'],
+    '학급 규칙을 정하는 회의에서 반대 의견을 먼저 정리해 칠판에 적자고 제안했다.',
+    { date: '2026-05-22', threadId: THREAD_E },
+  );
+  add(
+    EV_E[1],
+    0,
+    ['subject'],
+    '규칙을 어긴 상황이 생겼을 때 벌점 대신 회복 방법을 제안해 학급 회의에서 채택되었다.',
+    { date: '2026-06-05', threadId: THREAD_E },
+  );
+  add(EV_F[0], 1, ['subject'], '토론 준비 과정에서 자료를 세 갈래로 나누어 맡자고 제안했다.', {
+    date: '2026-05-08',
+    threadId: THREAD_F,
+  });
+  add(
+    EV_F[1],
+    1,
+    ['subject'],
+    '반론을 받아 원래 주장을 절반만 유지하고 나머지는 조건을 붙여 다시 세웠다.',
+    { date: '2026-06-12', threadId: THREAD_F },
+  );
+  add(
+    EV_G[0],
+    2,
+    ['subject'],
+    '모둠 신문의 편집 방향을 정하는 회의에서 기사 순서를 독자 관심 기준으로 바꾸자고 말했다.',
+    { date: '2026-04-10', threadId: THREAD_G, note: '기준을 말로 세운 첫 장면.' },
+  );
+  add(
+    EV_G[1],
+    2,
+    ['subject'],
+    '취재가 어려운 꼭지를 스스로 맡아 담당 선생님께 직접 여쭤보고 자료를 받아 왔다.',
+    { date: '2026-05-14', threadId: THREAD_G, note: '어려운 쪽을 골랐다.' },
+  );
+  add(
+    EV_G[2],
+    2,
+    ['subject'],
+    '마감 이틀 전 사진이 부족한 것을 발견하고 지면 배치를 글 중심으로 바꾸어 완성했다.',
+    { date: '2026-06-18', threadId: THREAD_G, note: '학원 일정과 겹쳤는데도 마감을 지켰다.' },
+  );
+  add(
+    EV_G[3],
+    2,
+    ['subject'],
+    '완성한 신문을 학급에 배부하고 읽은 친구들의 의견을 다음 호 계획에 적었다.',
+    { date: '2026-07-01', threadId: THREAD_G, note: '다음 호로 이어 붙인 점.' },
+  );
+});
+
+/* 8-3. 장면 붙이기 — 근거는 **파일에서 다시 읽어** 배치한다(앞 블록이 쓴 것까지 보인다). */
+edit('inquiry-threads.json', { records: [] }, (it) => {
+  if (clean) return;
+  const evAll = arr(loaded.get('record-evidence.json'), 'records');
+  const ofThread = (tid) =>
+    evAll
+      .filter((e) => e.threadId === tid && String(e.id).startsWith(PREFIX))
+      .sort((a, b) => String(a.date ?? '').localeCompare(String(b.date ?? '')))
+      .map((e) => e.id);
+  const at = (tid) => it.records.find((t) => t.id === tid);
+  /** 자리 배열 + 자리별 근거 + 메모를 받아 장면을 만든다. */
+  const setScenes = (tid, slots, place = {}, notes = {}) => {
+    const t = at(tid);
+    if (t === undefined) return;
+    // ★같은 자리(예: 과정)가 둘 이상인 주제가 있다. 자리 이름으로 넣으면 **한 근거가 두 칸에 겹쳐**
+    //   들어간다(읽기가 중복을 걸러 주기는 하지만 파일에 잘못된 상태를 심는 것이다).
+    //   그래서 그 자리의 **첫 칸에만** 넣고 나머지는 비운다.
+    const used = new Set();
+    t.scenes = slots.map(([role, moduleId], i) => {
+      const first = !used.has(role);
+      used.add(role);
+      return {
+        id: SC(tid.slice(PREFIX.length), i + 1),
+        role,
+        moduleId,
+        evidenceIds: first ? (place[role] ?? []) : [],
+        ...(first && notes[role] !== undefined
+          ? { note: notes[role][0], noteSource: notes[role][1] }
+          : {}),
+      };
+    });
+    t.updatedAt = NOW_MS;
+  };
+
+  // 가온 A — 장면 4개. 근거 일부만 놓아 **자리 미정 띠**가 보이게 남긴다. 평가엔 교사 메모, 과정엔 AI 메모.
+  const a = ofThread(THREAD_A);
+  setScenes(
+    THREAD_A,
+    INQ,
+    { motive: a.slice(0, 1), process: a.slice(1, 3), result: a.slice(3, 4) },
+    {
+      evaluation: [
+        '근거를 모으는 단계에서 이미 "무엇을 비교할지"를 먼저 정하는 학생이다.',
+        'teacher',
+      ],
+      process: [
+        '설문 문항의 유도성을 스스로 지적하고 중립 문항으로 바꾼 대목이 이 자리에 맞습니다.',
+        'ai',
+      ],
+    },
+  );
+  // 가온 C(닫힌 주제) — 장면 둘만. 닫힌 주제에서 조작이 잠기는지 본다.
+  setScenes(THREAD_C, [INQ[0], INQ[3]], { result: ofThread(THREAD_C).slice(0, 1) });
+  // 가온 D — 장면 5개(과정 둘) → 장면이 넷을 넘어 [초안 순서] 줄이 뜬다.
+  const d = ofThread(THREAD_D);
+  setScenes(
+    THREAD_D,
+    [INQ[0], INQ[1], INQ[2], ['process', 'counterReview'], INQ[3]],
+    { motive: d.slice(0, 1), process: d.slice(1, 2), result: d.slice(2, 3) },
+    { motive: ['앞 주제에서 세운 통계 읽기를 정책으로 밀고 나간 자리.', 'teacher'] },
+  );
+  // 가온 E — 장면을 아예 안 깐다. 근거 2건은 전부 '자리 미정' 으로 남는다.
+  // 나래 F — 상한 20개. [+ 장면]이 잠기고 안내 문구가 떠야 정상.
+  const f = ofThread(THREAD_F);
+  const many = [INQ[0], INQ[1]];
+  for (let i = 0; i < 17; i += 1) many.push(INQ[2]);
+  many.push(INQ[3]);
+  setScenes(THREAD_F, many, { motive: f.slice(0, 1), result: f.slice(1, 2) });
+  // 다솜 G — 근거 4건을 **전부** 자리에 놓는다 → '자리 미정' 띠가 안 그려져야 정상.
+  const g = ofThread(THREAD_G);
+  setScenes(
+    THREAD_G,
+    INQ,
+    { motive: g.slice(0, 1), process: g.slice(1, 3), result: g.slice(3, 4) },
+    { evaluation: ['맡은 자리에서 스스로 기준을 세우고 마감을 지키는 학생이다.', 'teacher'] },
+  );
+});
+
+/* 8-4. 담임(생활 틀) — 행동특성 주제 하나 + 주제 미정 근거 둘.
+ *
+ * ★명단(`students.json`)은 **읽기만** 한다. 학생을 만들거나 고치지 않는다.
+ *   담임 근거의 신원 키는 수업반과 달리 `Student.id` 그대로다.
+ */
+const homeroom = readJson('students.json', { records: [] });
+const hrList = Array.isArray(homeroom?.records)
+  ? homeroom.records
+  : Array.isArray(homeroom)
+    ? homeroom
+    : [];
+const hrStudent = hrList.find((x) => typeof x?.id === 'string');
+if (!clean && hrStudent === undefined) {
+  console.log('[recseed] 담임 명단이 비어 있어 행동특성(생활 틀) 자료는 건너뜁니다.');
+}
+if (hrStudent !== undefined) {
+  const HR = hrStudent.id;
+  const EV_H = [`${PREFIX}ev-h1`, `${PREFIX}ev-h2`, `${PREFIX}ev-h3`, `${PREFIX}ev-h4`];
+  const EV_HX = [`${PREFIX}ev-hx1`, `${PREFIX}ev-hx2`];
+  edit('record-evidence.json', { records: [] }, (ev) => {
+    if (clean) return;
+    const have = new Set(arr(ev, 'records').map((e) => e.id));
+    const add = (id, areas, content, opt = {}) => {
+      if (have.has(id)) return;
+      ev.records.push({
+        id,
+        studentRef: HR,
+        areas,
+        content,
+        createdAt: NOW_MS,
+        updatedAt: NOW_MS,
+        ...opt,
+      });
+    };
+    add(
+      EV_H[0],
+      ['behavior'],
+      '아침에 오면 칠판과 사물함 주변을 먼저 정리하는 모습이 3월부터 7월까지 이어졌다.',
+      { date: '2026-03-04', threadId: THREAD_H },
+    );
+    add(
+      EV_H[1],
+      ['behavior'],
+      '모둠 활동에서 말수가 적은 친구에게 먼저 역할을 물어보고 맡을 만한 일을 제안했다.',
+      { date: '2026-04-22', threadId: THREAD_H, note: '반복해서 보인 장면.' },
+    );
+    add(
+      EV_H[2],
+      ['behavior'],
+      '체육대회 준비에서 의견이 갈리자 두 안을 칠판에 적고 표결하자고 제안해 갈등을 줄였다.',
+      { date: '2026-05-30', threadId: THREAD_H },
+    );
+    add(
+      EV_H[3],
+      ['behavior'],
+      '1학기 말 학급 회의에서 자기 역할을 스스로 점검하고 다음 학기 목표를 한 줄로 적었다.',
+      { date: '2026-07-10', threadId: THREAD_H },
+    );
+    // 주제에 안 묶인 것 둘 — 아래 '주제 미정 근거' 서랍 배지가 2로 떠야 정상.
+    add(EV_HX[0], ['autonomy'], '학급 자치 예산 쓰임을 정리해 게시판에 붙였다.', {
+      date: '2026-06-02',
+    });
+    add(EV_HX[1], ['career'], '진로 시간에 관심 분야를 두 갈래로 좁혀 각각 필요한 공부를 적었다.', {
+      date: '2026-06-20',
+    });
+  });
+  edit('inquiry-threads.json', { records: [] }, (it) => {
+    if (clean) return;
+    if (it.records.some((t) => t.id === THREAD_H)) return;
+    const evAll = arr(loaded.get('record-evidence.json'), 'records');
+    const ids = evAll
+      .filter((e) => e.threadId === THREAD_H)
+      .sort((x, y) => String(x.date ?? '').localeCompare(String(y.date ?? '')))
+      .map((e) => e.id);
+    it.records.push({
+      id: THREAD_H,
+      studentRef: HR,
+      title: '한 해 생활과 관계',
+      keywords: ['정리', '조정', '역할'],
+      status: 'open',
+      term: '2026-1',
+      // 생활 틀 — 평가·특성·장면·성장. 탐구 자리(동기·과정·결과)가 아니어야 정상이다.
+      scenes: LIFE.map(([role, moduleId], i) => ({
+        id: SC('h', i + 1),
+        role,
+        moduleId,
+        evidenceIds:
+          role === 'motive'
+            ? ids.slice(0, 1)
+            : role === 'process'
+              ? ids.slice(1, 3)
+              : role === 'result'
+                ? ids.slice(3, 4)
+                : [],
+        ...(role === 'evaluation'
+          ? {
+              note: '맡은 자리를 먼저 살피고, 갈등이 생기면 방법을 제안하는 학생이다.',
+              noteSource: 'teacher',
+            }
+          : {}),
+      })),
+      createdAt: NOW_MS,
+      updatedAt: NOW_MS,
+    });
+  });
+}
+
 /** NEIS 바이트 길이 — 한글 3B / ASCII 1B. 앱·브릿지와 같은 규칙. */
 function neisByteLength(s) {
   let b = 0;
@@ -800,6 +1187,26 @@ if (!clean) {
   console.log(`   · 초안 ${DRAFTS.length}건 — 점검 6종을 하나씩 건드리는 문장 + 대조군 1건`);
   console.log('   · 나래는 질문 1건뿐이라 "빈 고리 힌트"가 떠야 정상입니다.');
   console.log('   · "차별과 구별" 주제는 키워드가 비어 있어 제안 0건이 정상입니다.');
+  console.log('');
+  console.log('  흐름 보기(v2.5.2)에서 확인하세요:');
+  console.log(
+    '   · 가온 — 주제 4개라 위에 개요 지도가 뜹니다. A→D 화살표와 이음말 "기초에서 확장",',
+  );
+  console.log(
+    '            두 주제가 왼쪽 띠로 한 묶음. 과정 장면에 「AI가 쓴 이유」 배지, 긴 제목 주제는 장면 0개.',
+  );
+  console.log(
+    '   · 나래 — "장면을 상한까지" 주제는 장면 20개라 [+ 장면]이 잠기고 안내가 떠야 정상입니다.',
+  );
+  console.log(
+    '   · 다솜 — "모둠 신문 만들기"는 근거를 전부 놓아 「자리 미정」 띠가 안 보여야 정상입니다.',
+  );
+  console.log(
+    '            근거 메모 4건 중 하나에 금지 낱말이 있어 AI 패널에 "금지어가 들어 빠지는 메모 1"이 떠야 합니다.',
+  );
+  console.log('   · 라온 — 근거 0건. 빈 상태 화면 확인용입니다.');
+  console.log('   · 담임 업무 > 생기부 초안 > 행동특성 — 생활 틀(평가·특성·장면·성장) 주제 하나와');
+  console.log('            주제 미정 근거 2건이 보여야 정상입니다.');
   console.log('');
   console.log('  되돌리기: node scripts/seed-record-flow-test-data.mjs --clean');
   console.log(`  백업:     각 파일 옆 .pre-recseed-${TAG}`);

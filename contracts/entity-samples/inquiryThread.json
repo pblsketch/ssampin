@@ -1,0 +1,34 @@
+{
+  "records": [
+    {
+      "id": "thr-1",
+      "studentRef": "tc:cls-1:1-2-3",
+      "classId": "cls-1",
+      "title": "할인 문구와 선택",
+      "keywords": ["기회비용", "프레이밍"],
+      "standardCodes": ["[9사04-01]"],
+      "competencyKeywords": ["경제 현상에 대한 자료 해석력"],
+      "nextNotes": "광고 문구 규제를 다음 학기에 이어 볼 것",
+      "status": "open",
+      "term": "2026-2",
+      "scenes": [
+        {
+          "id": "scn-1",
+          "role": "evaluation",
+          "moduleId": "teacherJudgement",
+          "label": "교사 판단",
+          "note": "근거 검증에 엄격함",
+          "noteSource": "teacher",
+          "leadIn": "질문에서 검증으로",
+          "evidenceIds": ["rev-1"]
+        }
+      ],
+      "link": {
+        "fromThreadId": "thr-0",
+        "note": "기초에서 확장"
+      },
+      "createdAt": 1735689600000,
+      "updatedAt": 1735689600000
+    }
+  ]
+}

@@ -1,9 +1,6 @@
 import { create } from 'zustand';
 import {
-  coerceSchoolLevel,
-  isAreaLimitVerified,
   neisByteLength,
-  resolveAreaLimit,
   RECORD_AREA_LABELS,
   type RecordArea,
   type RecordDraft,
@@ -11,7 +8,6 @@ import {
   type SchoolLevel,
 } from '@domain/entities/RecordDraft';
 import { recordDraftsRepository } from '@adapters/di/container';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import { detectProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import {
@@ -47,8 +43,8 @@ export interface RecordDraftUpsertInput {
    */
   origin?: 'teacher' | 'bridge' | 'assist';
   /**
-   * 학교급 — 영역별 바이트 한도 판정에 쓴다. **미지정이면 설정의 학교급을 읽는다**
-   * (화면 경로와 같은 판정). 설정이 아직 로드되지 않았으면 한도로 막지 않는다 — 아래 참조.
+   * 학교급. 예전에는 한도로 저장을 거부하는 데 썼다. 이제 한도로 거부하지 않으므로(ADR-105)
+   * 저장에는 쓰지 않지만, 부르는 쪽(화면·브릿지)과의 계약을 깨지 않도록 그대로 받는다.
    */
   level?: SchoolLevel | string;
   /**
@@ -75,12 +71,6 @@ export interface RecordDraftUpsertInput {
   roleMarks?: readonly RoleMark[] | null;
 }
 
-/**
- * 바이트 한도를 넘겨 저장이 거부됐을 때 던진다.
- *
- * ★한도를 프롬프트로 지키게 하지 않는다 — 실측에서 교사 커스텀 지시 한 줄에 모델이 한도의
- * 4배(7,156B)를 창작으로 채웠다. 코드에서 자른다(ADR-072 결정 5).
- */
 /** 확정된 초안을 AI 가 덮으려 할 때. 교사에게는 무슨 일이 막혔는지 한국어로 전한다. */
 export class RecordDraftConfirmedError extends Error {
   constructor(readonly area: RecordArea) {
@@ -89,20 +79,6 @@ export class RecordDraftConfirmedError extends Error {
         `다시 쓰려면 상태를 '작성 중'으로 되돌리세요.`,
     );
     this.name = 'RecordDraftConfirmedError';
-  }
-}
-
-export class RecordDraftLimitError extends Error {
-  constructor(
-    readonly area: RecordArea,
-    readonly byteLength: number,
-    readonly limit: number,
-  ) {
-    super(
-      `${RECORD_AREA_LABELS[area]} 한도를 넘었습니다 — ${byteLength.toLocaleString()}바이트 / ` +
-        `${limit.toLocaleString()}바이트. 내용을 줄인 뒤 저장하세요.`,
-    );
-    this.name = 'RecordDraftLimitError';
   }
 }
 
@@ -158,24 +134,9 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
       await get().load();
       const now = Date.now();
       const byteLength = neisByteLength(input.content);
-      // 한도 초과는 저장 전에 끊는다. 다만 초등처럼 한도 수치가 공식 확인되지 않은 영역은
-      // 거부하지 않는다 — 확인 안 된 숫자로 교사 입력을 막으면 안 된다(isAreaLimitVerified).
-      // ★기본값을 'high' 로 굳히면 안 된다. 브릿지 live-sync 는 level 을 넘기지 않는데,
-      //   초등 자율·진로·행특은 고등 맵에 존재하고 limitVerified=true 라 "확인 안 된 숫자라
-      //   막지 않기로 한" 한도가 확인된 한도로 승격돼 **전에는 되던 쓰기가 거부된다**(회귀).
-      //   설정의 학교급을 읽어 화면 경로(RecordDraftView)와 같은 판정을 쓴다.
-      const settings = useSettingsStore.getState();
-      // 설정이 아직 로드되지 않았으면 기본값('middle')으로 판정하게 된다. 앱 시작 직후 브릿지
-      // 쓰기가 들어오는 짧은 창에서 초등 교사의 정상 초안을 거부할 수 있으므로, level 을
-      // 명시하지 않았고 설정도 미로드면 **막지 않는다**. 잘못 거부하는 쪽이 더 나쁘다.
-      const levelKnown = typeof input.level === 'string' || settings.loaded;
-      const level = coerceSchoolLevel(
-        typeof input.level === 'string' ? input.level : settings.settings.schoolLevel,
-      );
-      if (levelKnown && isAreaLimitVerified(input.area, level)) {
-        const limit = resolveAreaLimit(input.area, level);
-        if (byteLength > limit) throw new RecordDraftLimitError(input.area, byteLength, limit);
-      }
+      // ★한도를 넘어도 저장한다(오너 결정 2026-09-11, ADR-105 — ADR-072 결정 5 의 저장 거부를 대체).
+      //   넘었다는 것은 화면이 색으로 알린다. 예전에는 여기서 거부해 한도를 넘긴 글이 디스크에 없었고,
+      //   그 글을 지키려고 화면 등록부·[편집칸에 넣기] 같은 우회로가 필요했다.
       // 기재 금지 항목 최종 확인 — NEIS 에 실제로 들어가는 것은 초안이므로 **여기가 마지막 문**이다.
       // ★막지 않고 경고만 한다(오너 결정 2026-08-25). 자동 판정은 오탐이 나고, 이 앱은 모든 초안에
       //   교사 최종 검토를 강제하므로(requiresTeacherReview) 판단을 사람에게 남긴다.

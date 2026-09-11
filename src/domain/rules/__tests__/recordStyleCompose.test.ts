@@ -16,6 +16,7 @@ import {
   focusById,
   focusChoicesForArea,
 } from '@domain/rules/recordStyleCatalog';
+import { FRAME_SLOTS, NARRATIVE_FRAME_ROLES } from '@domain/rules/narrativeFrames';
 import {
   applyPromptVersionGate,
   buildStyleInstruction,
@@ -72,9 +73,16 @@ describe('카탈로그 자체의 정합', () => {
     ]);
   });
 
-  it('사전에 있는 요소는 모두 어느 초점엔가 쓰인다 - 죽은 항목을 남기지 않는다', () => {
+  it('사전에 있는 요소는 모두 어딘가에 쓰인다 - 죽은 항목을 남기지 않는다', () => {
+    // 쓰이는 자리는 둘이다: 작성 방식의 초점(폴백 경로)과 서사 그래프의 자리표(장면 경로, ADR-103).
+    // 생활 틀 신설 6종은 초점에는 없고 자리표에만 있다 — 그래도 죽은 항목이 아니다.
     const used = new Set<string>(['teacherJudgement']);
     for (const f of RECORD_FOCUSES) for (const id of [...f.body, ...f.extras]) used.add(id);
+    for (const frame of ['inquiry', 'life'] as const) {
+      for (const role of NARRATIVE_FRAME_ROLES) {
+        for (const id of FRAME_SLOTS[frame][role]) used.add(id);
+      }
+    }
     expect(Object.keys(RECORD_MODULES).filter((id) => !used.has(id))).toEqual([]);
   });
 });
@@ -359,15 +367,24 @@ describe('교사의 해석을 요구한다 (오너 지적 2026-09-09, codex 실�
 describe('수업 맥락과 명료성 (오너 검토 2026-09-09, 예시 7편)', () => {
   const text = () => buildStyleInstruction(resolveComposition(base({ focus: 'compareJudge' })));
 
-  it('어떤 수업·과제에서의 일인지 첫 수행 항목에서 밝히라고 말한다', () => {
-    expect(text()).toContain('어떤 수업·단원·과제·프로젝트에서 있었던 일인지');
+  it('어떤 단원·과제에서의 일인지 첫 수행 항목에서 밝히라고 말한다', () => {
+    expect(text()).toContain('어떤 단원·과제·프로젝트에서 있었던 일인지');
     expect(text()).toContain('첫 수행 항목의 첫 구절');
   });
 
-  it('★수업 이름을 요구하면서 지어내기·수업 소개의 학생화도 함께 막는다 (한쪽으로 쏠리지 않게)', () => {
+  it('★단원 이름을 요구하면서 지어내기·소개의 학생화도 함께 막는다 (한쪽으로 쏠리지 않게)', () => {
     const t = text();
     expect(t).toContain('없으면 지어내지 않고 활동의 종류만 씁니다');
     expect(t).toContain('학생이 한 일처럼 쓰지 않습니다');
+  });
+
+  // 오너 검토(2026-09-12): '독서와 작문 시간 팩트체크 활동에서'처럼 과목 이름이 들어갔다.
+  // 생활기록부에는 어느 과목인지가 항목에 이미 적혀 있다.
+  it('★과목·수업 이름은 쓰지 말라고 ✗/○ 예로 말한다', () => {
+    const t = text();
+    expect(t).toContain('과목·수업 이름은 쓰지 않습니다');
+    expect(t).toContain('독서와 작문 시간 팩트체크 활동에서');
+    expect(t).not.toContain('주제·과목 정보에 그 이름이 있을 때만');
   });
 
   it('뭉뚱그리는 낱말로 사실을 대신하지 말라고 ✗/○ 예로 말한다', () => {

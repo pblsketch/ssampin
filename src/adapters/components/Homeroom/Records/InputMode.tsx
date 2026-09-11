@@ -615,13 +615,14 @@ function InputMode({
         const goRef = singleTopicStudentRef;
         const savedId = recordIds[0]!;
         showToast('기록을 저장했습니다', 'success', {
-          label: '근거 보드에서 보기',
+          label: '근거 정리에서 보기',
           onClick: () => {
             void onRequestFlow(
               createRecordFlowIntent({
                 context: 'homeroom',
                 studentRef: goRef,
-                mode: 'board',
+                // 기본 보기가 흐름 그래프다(ADR-103).
+                mode: 'flow',
                 sourceId: savedId,
               }),
             );

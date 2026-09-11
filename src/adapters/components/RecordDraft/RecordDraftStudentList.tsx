@@ -18,6 +18,8 @@ export interface StudentListItem {
   readonly needsReview: boolean;
   /** 초안 글이 있는가(빈 초안 레코드는 없음으로). */
   readonly written: boolean;
+  /** 확정된 한도를 넘었는가 — 저장은 됐지만 나이스에 붙이기 전에 줄여야 한다(ADR-105). */
+  readonly overLimit?: boolean;
 }
 
 export interface RecordDraftStudentListProps {
@@ -184,7 +186,7 @@ export function RecordDraftStudentList({
               <button
                 type="button"
                 onClick={() => onSelect(s.studentRef)}
-                aria-label={`${s.number}번 ${s.name} 보기`}
+                aria-label={`${s.number}번 ${s.name} 보기${s.overLimit === true ? ' · 한도 초과' : ''}`}
                 className={`flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-0.5 text-left text-sm ${
                   on ? 'font-bold text-sp-text' : 'font-medium text-sp-text'
                 }`}
@@ -193,7 +195,16 @@ export function RecordDraftStudentList({
                   {s.number}
                 </span>
                 <span className="min-w-0 flex-1 truncate">{s.name}</span>
-                <StatusDot item={s} />
+                {/* 한도 초과는 상태 점 오른쪽 위의 작은 빨간 점 — 모양(점의 유무)이 신호라 색 없이도 보인다. */}
+                <span className="relative inline-flex shrink-0">
+                  <StatusDot item={s} />
+                  {s.overLimit === true && (
+                    <span
+                      title="한도 초과"
+                      className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-red-500"
+                    />
+                  )}
+                </span>
               </button>
             </li>
           );

@@ -141,7 +141,7 @@ export function TodoCategoryModal({ onClose }: TodoCategoryModalProps) {
           ))}
 
           {/* 새 카테고리 추가 */}
-          <div className="flex items-center gap-2 bg-sp-surface/50 rounded-lg px-3 py-2 ring-1 ring-dashed ring-sp-border">
+          <div className="flex items-center gap-2 bg-sp-surface/50 rounded-lg px-3 py-2 outline-dashed outline-1 outline-sp-border">
             <select
               value={newIcon}
               onChange={(e) => setNewIcon(e.target.value)}

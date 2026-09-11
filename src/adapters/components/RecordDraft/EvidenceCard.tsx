@@ -18,10 +18,11 @@
  * **끌 수 있다**(`useDraggable`, 설계서 §4-4 · ADR-085 보강 2 R3). 포인터 센서는 보드가 6px 이동 제약으로 달아
  * 클릭(선택)과 끌기(이동)를 가른다. 키보드 끌기 센서는 없다 — Enter/Space 는 선택이고, 키보드 경로는 하단 바다.
  */
-import type { ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { RECORD_AREA_LABELS, type RecordArea } from '@domain/entities/RecordDraft';
 import { EVIDENCE_SOURCE_LABELS, type RecordEvidence } from '@domain/entities/RecordEvidence';
+import { NARRATIVE_NOTE_MAX } from '@domain/entities/InquiryThread';
 import type { ThreadMatch } from '@domain/rules/threadSuggest';
 import { detectProhibitedTerms, summarizeProhibited } from '@domain/rules/prohibitedRecordTerms';
 import {
@@ -59,6 +60,16 @@ export interface EvidenceCardProps {
   readonly differsFromSource?: boolean;
   /** [비교하기] - 비교 대화상자를 연다. 없으면 배지 줄을 그리지 않는다. */
   onCompareSource?: () => void;
+  /**
+   * 좁은 자리용 압축 겉면(ADR-103, 옛 흐름 보기의 장면 칸이 쓰던 것). 본문을 3줄로 줄인다.
+   * ★상태 배지·경고는 **줄이지 않는다** — 좁다고 숨기면 "끌 수 없는 필터"와 같은 사고가 된다.
+   */
+  readonly compact?: boolean;
+  /**
+   * 교사 메모 고치기(ADR-103 D4). 없으면 메모 칸을 아예 그리지 않는다.
+   * ★메모는 **카드를 따라간다** — 주제를 옮기든 장면을 옮기든 같이 간다(근거 파일에 산다).
+   */
+  onChangeNote?: (note: string) => void;
 }
 
 /** 자동 판정 갈래("학원·기관명" 등). 비어 있으면 교사가 직접 켠 것이다. */
@@ -89,8 +100,13 @@ export function EvidenceCard({
   onOpenSource,
   differsFromSource = false,
   onCompareSource,
+  compact = false,
+  onChangeNote,
 }: EvidenceCardProps): ReactElement {
   const excluded = ev.excludedFromAi === true;
+  // null 이면 보기 상태. 빈 문자열은 "메모를 지우는 중"이라 null 과 구별한다.
+  const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const note = ev.note?.trim() ?? '';
   const why = autoExclusionWhy(ev);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: ev.id });
   /** 단추 줄 — 클릭·키·포인터 전부 끊는다(카드 선택·끌기와 겹치지 않게). */
@@ -125,7 +141,30 @@ export function EvidenceCard({
       // 저장 직후 이동이 이 표시로 카드를 찾아 스크롤·포커스한다(계획 §4.3).
       data-evidence-id={ev.id}
     >
-      <p className="whitespace-pre-wrap text-sm leading-relaxed text-sp-text">{ev.content}</p>
+      {/* 좁은 칸에서는 세 줄로 자르되, 카드를 고르면(클릭·Enter) 전문을 펼친다. 고르지 않아도
+          마우스를 올리면 툴팁으로 전문이 보인다. 새 단추를 늘리지 않는다(ADR-093 — 조작은 고를 때만). */}
+      <p
+        title={compact && !on ? ev.content : undefined}
+        className={`whitespace-pre-wrap text-sm leading-relaxed text-sp-text ${
+          compact && !on ? 'line-clamp-3' : ''
+        }`}
+      >
+        {ev.content}
+      </p>
+      {/* 교사 메모 — 겉면에 남는다(골라야 보이면 카드를 따라간다는 뜻이 안 산다). */}
+      {note.length > 0 && noteDraft === null && (
+        <p className="flex items-start gap-1 text-xs leading-relaxed text-sp-muted">
+          <span aria-hidden="true" className="material-symbols-outlined text-sm">
+            sticky_note_2
+          </span>
+          <span
+            title={compact && !on ? note : undefined}
+            className={`whitespace-pre-wrap ${compact && !on ? 'line-clamp-2' : ''}`}
+          >
+            {note}
+          </span>
+        </p>
+      )}
       {/* 겉면 메타 — 날짜 · 출처 · 상태 배지. 제외 상태는 골라야 보이는 것이 아니다. */}
       <div className="flex flex-wrap items-center gap-1.5 text-xs text-sp-muted">
         {ev.date ? <span>{shortDate(ev.date)}</span> : null}
@@ -221,6 +260,16 @@ export function EvidenceCard({
             </span>
             {excluded ? 'AI 제외 해제' : 'AI 제외'}
           </button>
+          {onChangeNote !== undefined && (
+            <button
+              type="button"
+              onClick={() => setNoteDraft(note)}
+              className={`${boardBtn} text-sp-muted hover:text-sp-text`}
+              title="이 근거에 선생님 메모를 답니다. 메모는 카드를 따라가고 초안 요청서에도 실립니다."
+            >
+              {note.length > 0 ? '메모 고치기' : '메모'}
+            </button>
+          )}
           <button
             type="button"
             onClick={onEdit}
@@ -249,6 +298,50 @@ export function EvidenceCard({
               {ev.sourceId !== undefined ? '정리한 근거 삭제' : '삭제'}
             </button>
           )}
+        </div>
+      )}
+      {noteDraft !== null && onChangeNote !== undefined && (
+        <div className="flex flex-col gap-1 border-t border-sp-border pt-2" {...stop}>
+          <textarea
+            autoFocus
+            value={noteDraft}
+            rows={2}
+            maxLength={NARRATIVE_NOTE_MAX}
+            placeholder="이 근거에서 무엇을 읽었는지 한 줄"
+            aria-label="근거 메모"
+            onChange={(e) => setNoteDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setNoteDraft(null);
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                onChangeNote(noteDraft.trim());
+                setNoteDraft(null);
+              }
+            }}
+            className="w-full resize-none rounded-lg border border-sp-border bg-sp-surface px-2 py-1.5 text-xs leading-relaxed text-sp-text focus:border-sp-accent focus:outline-none"
+          />
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-sp-muted">
+              {noteDraft.length}/{NARRATIVE_NOTE_MAX}
+            </span>
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={() => setNoteDraft(null)}
+              className={`${boardBtn} text-sp-muted hover:text-sp-text`}
+            >
+              그만두기
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                onChangeNote(noteDraft.trim());
+                setNoteDraft(null);
+              }}
+              className="rounded-lg bg-sp-accent px-2.5 py-1 text-xs font-semibold text-sp-accent-fg transition-colors hover:opacity-90"
+            >
+              저장
+            </button>
+          </div>
         </div>
       )}
       {alsoHits.length > 0 && (

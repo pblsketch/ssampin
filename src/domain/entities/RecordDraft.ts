@@ -188,6 +188,38 @@ export function isAreaLimitVerified(area: RecordArea, level: SchoolLevel): boole
   return AREAS_BY_LEVEL[level][area]?.limitVerified ?? false;
 }
 
+/** 선생님이 직접 정할 수 있는 한도의 하한(바이트). 그보다 작은 값은 오타로 보고 쓰지 않는다. */
+export const AREA_LIMIT_MIN = 100;
+
+function isValidLimitOverride(v: number | undefined): v is number {
+  return v !== undefined && Number.isFinite(v) && v >= AREA_LIMIT_MIN;
+}
+
+/**
+ * 실제로 쓰는 한도 — 선생님이 이 수업반·영역에 **직접 정한 값**이 있으면 그것, 없으면 기재요령 기본값.
+ * ★오너 결정(2026-09-11): 초등 한도는 원문 미확인이라 학교마다 다를 수 있고, 한 과목을 여러 선생님이
+ *   나눠 쓰는 학교도 있다. 규정 표(`AREAS_BY_LEVEL`)는 브릿지 미러와 같아야 하므로 고치지 않고 **덧씌운다**.
+ */
+export function effectiveAreaLimit(
+  area: RecordArea,
+  level: SchoolLevel,
+  override?: number,
+): number {
+  return isValidLimitOverride(override) ? Math.round(override) : resolveAreaLimit(area, level);
+}
+
+/**
+ * 이 한도를 **확정된 한도**로 보는가 — 넘으면 붉게 알린다. **저장은 막지 않는다**(오너 결정 2026-09-11, ADR-105).
+ * 직접 정한 한도는 초등이어도 확정이다(선생님이 확인하고 적은 숫자다). 확인 안 된 초등 기본값은 주황으로만.
+ */
+export function isAreaLimitConfirmed(
+  area: RecordArea,
+  level: SchoolLevel,
+  override?: number,
+): boolean {
+  return isValidLimitOverride(override) || isAreaLimitVerified(area, level);
+}
+
 /** 작성 주체(담임/교과)가 이 (영역 × 학교급)을 작성할 수 있는지. */
 export function isAuthorAllowedForArea(
   area: RecordArea,

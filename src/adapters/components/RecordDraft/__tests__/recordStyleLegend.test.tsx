@@ -1,22 +1,21 @@
 /**
  * @vitest-environment jsdom
  *
- * 상단 정보 바의 작성 방식 배지(ADR-099 보강).
+ * 상단 정보 바의 **작성 구성** 배지(ADR-099 보강 → ADR-103).
  *
  * 여기서 지키는 것:
- *  - 고른 방식마다 **이름과 요소 순서가 실제로 달라진다**(이 검사가 없으면 다시 고정 범례로 되돌아가도 아무도 모른다).
+ *  - 부르는 쪽이 준 차례가 **그대로** 보인다(이 검사가 없으면 다시 고정 범례로 되돌아가도 아무도 모른다).
  *  - 색은 넷 그대로이고, 색점은 형광펜을 켰을 때만 붙는다. 이름은 껐을 때도 보인다.
  *  - 색만으로 뜻을 전하지 않는다: 순번·이름·역할 이름이 읽히는 문장에 들어간다.
- *  - 없어진 옛 초점 값이 저장돼 있어도 기존형으로 보인다.
+ *  - 누를 곳이 없으면 단추를 만들지 않는다.
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { RecordStyleLegend } from '../RecordStyleLegend';
-import {
-  DEFAULT_RECORD_WRITING_STYLE,
-  type RecordWritingStyle,
-} from '@domain/entities/RecordWritingStyle';
+import { DEFAULT_RECORD_WRITING_STYLE } from '@domain/entities/RecordWritingStyle';
+import { resolveComposition } from '@domain/rules/recordStyleCompose';
+import { RECORD_MODULES } from '@domain/rules/recordStyleCatalog';
 
 afterEach(cleanup);
 
@@ -33,96 +32,79 @@ function inOrder(all: string, parts: readonly string[]): boolean {
   return true;
 }
 
-describe('작성 방식 배지 — 고른 방식이 그대로 보인다', () => {
-  it('기본값이면 기존 순서 그대로: 교사 판단 → 동기·질문 → 탐구 과정 → 결과·적용', () => {
-    render(<RecordStyleLegend style={DEFAULT_RECORD_WRITING_STYLE} highlightOn={true} />);
+const fallbackModules = resolveComposition(DEFAULT_RECORD_WRITING_STYLE).modules;
+
+describe('작성 구성 배지 — 준 차례가 그대로 보인다', () => {
+  it('폴백이면 「전체 근거」와 기존 순서: 교사 판단 → 동기·질문 → 탐구 과정 → 결과·적용', () => {
+    render(<RecordStyleLegend title="전체 근거" modules={fallbackModules} highlightOn={true} />);
     const all = text();
-    expect(all).toContain('질문에서 출발한 탐구 흐름 (기본)');
+    expect(all).toContain('전체 근거');
     expect(inOrder(all, ['교사 판단', '동기·질문', '탐구 과정', '결과·적용'])).toBe(true);
   });
 
-  it('다른 방식을 고르면 이름도 요소도 달라진다', () => {
-    const style: RecordWritingStyle = { ...DEFAULT_RECORD_WRITING_STYLE, focus: 'compareJudge' };
-    render(<RecordStyleLegend style={style} highlightOn={true} />);
+  it('★서사로 쓰면 주제 이름과 그 장면 차례가 보인다 — 고정 범례로 되돌아가지 않는다', () => {
+    const modules = [
+      RECORD_MODULES.teacherJudgement,
+      RECORD_MODULES.firstAttempt,
+      RECORD_MODULES.feedbackReceived,
+      RECORD_MODULES.revisedPerformance,
+    ];
+    render(<RecordStyleLegend title="할인 문구와 선택" modules={modules} highlightOn={true} />);
     const all = text();
-    expect(all).toContain('자료를 견주어 판단한 과정');
+    expect(all).toContain('할인 문구와 선택');
+    expect(all).not.toContain('전체 근거');
     expect(
-      inOrder(all, ['교사 판단', '쟁점·해석 문제', '비교 기준', '사용한 근거', '자신의 결론']),
+      inOrder(all, ['교사 판단', '첫 수행의 특징', '받은 의견·자기 점검', '달라진 수행']),
     ).toBe(true);
-    expect(all).not.toContain('탐구 과정');
   });
 
-  it('행동특성은 과정 색이 잇달아도 번호와 이름으로 갈린다', () => {
-    const style: RecordWritingStyle = { ...DEFAULT_RECORD_WRITING_STYLE, focus: 'lifeRelation' };
-    render(<RecordStyleLegend style={style} highlightOn={true} />);
-    // 색은 넷뿐이라 과정이 셋 잇달아 나온다. 번호가 낱낱의 이름표 노릇을 한다.
-    expect(inOrder(text(), ['2반복 관찰된 특성', '3대표 생활 장면', '4자기관리·관계·책임'])).toBe(
-      true,
-    );
-  });
-
-  it('요소마다 번호가 순서대로 붙는다: 색이 겹쳐도 몇 번째인지 갈린다', () => {
-    const style: RecordWritingStyle = { ...DEFAULT_RECORD_WRITING_STYLE, focus: 'compareJudge' };
-    render(<RecordStyleLegend style={style} highlightOn={true} />);
-    expect(inOrder(text(), ['1교사 판단', '3비교 기준', '4사용한 근거', '6자신의 결론'])).toBe(
-      true,
-    );
-  });
-
-  it('시작 방식을 바꾸면 교사 판단이 맨 뒤로 간다', () => {
-    const style: RecordWritingStyle = { ...DEFAULT_RECORD_WRITING_STYLE, opening: 'performance' };
-    render(<RecordStyleLegend style={style} highlightOn={true} />);
-    expect(inOrder(text(), ['동기·질문', '탐구 과정', '결과·적용', '교사 판단'])).toBe(true);
-  });
-
-  it('없어진 옛 초점 값이 저장돼 있어도 기존형으로 보인다', () => {
-    // 옛 저장값은 지금 타입에 없는 값이다. 실제 설정 파일에는 그대로 남아 있으므로 그 상황을 그대로 만든다.
-    const style = {
-      ...DEFAULT_RECORD_WRITING_STYLE,
-      focus: 'achievement',
-    } as unknown as RecordWritingStyle;
-    render(<RecordStyleLegend style={style} highlightOn={false} />);
-    expect(text()).toContain('질문에서 출발한 탐구 흐름 (기본)');
+  it('구성 요소가 넷이 아니어도 번호가 그 수만큼 붙는다', () => {
+    const modules = [RECORD_MODULES.teacherJudgement, RECORD_MODULES.legacyMotive];
+    render(<RecordStyleLegend title="짧은 흐름" modules={modules} highlightOn={true} />);
+    expect(text()).toContain('2단계');
   });
 });
 
-describe('작성 방식 배지 — 형광펜 스위치와 읽히는 문장', () => {
-  it('스위치를 꺼도 이름과 요소는 보이고, 색점만 사라진다', () => {
-    const { rerender } = render(
-      <RecordStyleLegend style={DEFAULT_RECORD_WRITING_STYLE} highlightOn={false} />,
-    );
-    expect(text()).toContain('질문에서 출발한 탐구 흐름 (기본)');
-    expect(text()).toContain('동기·질문');
+describe('색과 형광펜', () => {
+  it('형광펜을 켜면 색점이 요소 수만큼 붙는다', () => {
+    render(<RecordStyleLegend title="전체 근거" modules={fallbackModules} highlightOn={true} />);
+    expect(screen.getAllByTestId('legend-role-dot')).toHaveLength(fallbackModules.length);
+  });
+
+  it('★형광펜을 끄면 색점이 사라지지만 이름은 남는다 — 방식은 형광펜과 무관하게 적용된다', () => {
+    render(<RecordStyleLegend title="전체 근거" modules={fallbackModules} highlightOn={false} />);
     expect(screen.queryAllByTestId('legend-role-dot')).toHaveLength(0);
-
-    rerender(<RecordStyleLegend style={DEFAULT_RECORD_WRITING_STYLE} highlightOn={true} />);
-    expect(screen.getAllByTestId('legend-role-dot')).toHaveLength(4);
+    expect(text()).toContain('전체 근거');
   });
 
-  it('읽히는 문장에 순번과 역할 이름이 함께 들어간다', () => {
-    render(<RecordStyleLegend style={DEFAULT_RECORD_WRITING_STYLE} highlightOn={true} />);
+  it('색만으로 뜻을 전하지 않는다 — 순번·이름·역할 이름이 읽히는 문장에 있다', () => {
+    render(<RecordStyleLegend title="전체 근거" modules={fallbackModules} highlightOn={true} />);
     const all = text();
-    expect(all).toContain('1번째 교사 판단(교사 평가)');
-    expect(all).toContain('3번째 탐구 과정(과정)');
-    // 요소 이름이 곧 역할 이름이면 같은 말을 두 번 읽지 않는다.
-    expect(all).toContain('2번째 동기·질문,');
+    expect(all).toContain('작성 구성: 전체 근거');
+    expect(all).toContain('1번째');
+    expect(all).toContain('(교사 평가)');
   });
 });
 
-describe('작성 방식 배지 — 누르면 고르는 자리로', () => {
-  it('onOpen 이 있으면 단추이고 누르면 불린다', () => {
+describe('누를 곳', () => {
+  it('onOpen 을 주면 단추가 되고 눌리면 부른다', () => {
     const onOpen = vi.fn();
     render(
-      <RecordStyleLegend style={DEFAULT_RECORD_WRITING_STYLE} highlightOn={true} onOpen={onOpen} />,
+      <RecordStyleLegend
+        title="전체 근거"
+        modules={fallbackModules}
+        highlightOn={true}
+        onOpen={onOpen}
+      />,
     );
-    const el = screen.getByTestId('record-style-legend');
-    expect(el.tagName).toBe('BUTTON');
-    fireEvent.click(el);
+    fireEvent.click(screen.getByTestId('record-style-legend'));
     expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(text()).toContain('눌러서 근거 정리로 갑니다');
   });
 
-  it('onOpen 이 없으면 단추가 아니다: 갈 곳이 없는데 눌리게 두지 않는다', () => {
-    render(<RecordStyleLegend style={DEFAULT_RECORD_WRITING_STYLE} highlightOn={true} />);
+  it('★onOpen 이 없으면 단추를 만들지 않는다 — 누를 곳이 없는 헛클릭을 만들지 않는다', () => {
+    render(<RecordStyleLegend title="전체 근거" modules={fallbackModules} highlightOn={true} />);
     expect(screen.getByTestId('record-style-legend').tagName).not.toBe('BUTTON');
+    expect(text()).not.toContain('눌러서');
   });
 });

@@ -168,6 +168,17 @@ export function roleMarksOf(paragraphs: readonly NarrativeParagraph[]): RoleMark
   return paragraphs.map((p) => ({ role: p.role, text: p.text }));
 }
 
+/**
+ * 문단 목록 → 표식을 붙인 글(문단 사이 빈 줄). **이미 쓴 글을 모델에게 다시 보낼 때**(분량 줄이기·이어 조절) 쓴다 —
+ * 표식을 떼고 보내면 모델이 문단 역할을 다시 짐작해 형광펜 색이 바뀐다. 저장용이 아니다(저장은 `aiDraftText`).
+ * `parseNarrativeParagraphs` 로 되읽으면 같은 문단 목록이 된다.
+ */
+export function markedNarrativeText(paragraphs: readonly NarrativeParagraph[]): string {
+  return paragraphs
+    .map((p) => (p.role === null ? p.text : `[${NARRATIVE_ROLE_MARKS[p.role]}] ${p.text}`))
+    .join('\n\n');
+}
+
 /** 표식이 하나라도 있나 — 없으면 화면이 "표식 없음" 한 줄을 보여 준다. */
 export function hasAnyRole(paragraphs: readonly NarrativeParagraph[]): boolean {
   return paragraphs.some((p) => p.role !== null);

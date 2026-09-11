@@ -23,6 +23,8 @@ interface RecordDraftExportModalProps {
   areas: readonly RecordArea[];
   level?: SchoolLevel;
   className?: string;
+  /** 선생님이 이 수업반에서 직접 정한 영역별 한도(있으면). 붙여넣기 글의 "바이트/한도" 가 화면과 같게. */
+  limitOverrides?: Partial<Record<RecordArea, number>>;
   onClose: () => void;
 }
 
@@ -36,6 +38,7 @@ function buildNeisPasteText(
   areas: readonly RecordArea[],
   confirmedOnly: boolean,
   level: SchoolLevel,
+  limitOverrides?: Partial<Record<RecordArea, number>>,
 ): string {
   const activeDrafts = confirmedOnly ? drafts.filter((d) => d.status === 'confirmed') : drafts;
 
@@ -71,7 +74,7 @@ function buildNeisPasteText(
 
       let limit = 0;
       try {
-        limit = resolveAreaLimit(area, level);
+        limit = limitOverrides?.[area] ?? resolveAreaLimit(area, level);
       } catch {
         // ignore
       }
@@ -94,6 +97,7 @@ export function RecordDraftExportModal({
   areas,
   level = 'high',
   className,
+  limitOverrides,
   onClose,
 }: RecordDraftExportModalProps) {
   const [format, setFormat] = useState<ExportFormat>('excel');
@@ -143,7 +147,14 @@ export function RecordDraftExportModal({
 
     try {
       if (format === 'neis-paste') {
-        const text = buildNeisPasteText(drafts, students, activeAreaList, confirmedOnly, level);
+        const text = buildNeisPasteText(
+          drafts,
+          students,
+          activeAreaList,
+          confirmedOnly,
+          level,
+          limitOverrides,
+        );
         setPasteText(text);
         setIsExporting(false);
         return;
@@ -157,6 +168,7 @@ export function RecordDraftExportModal({
           level,
           includeMeta,
           confirmedOnly,
+          ...(limitOverrides !== undefined ? { limitOverrides } : {}),
         });
         defaultFileName = '생활기록부_초안.xlsx';
       } else {
@@ -165,7 +177,7 @@ export function RecordDraftExportModal({
           students,
           activeAreaList,
           { className },
-          { level, confirmedOnly },
+          { level, confirmedOnly, ...(limitOverrides !== undefined ? { limitOverrides } : {}) },
         );
         defaultFileName = '생활기록부_초안.hwpx';
       }
@@ -217,6 +229,7 @@ export function RecordDraftExportModal({
     drafts,
     students,
     activeAreaList,
+    limitOverrides,
     format,
     level,
     className,

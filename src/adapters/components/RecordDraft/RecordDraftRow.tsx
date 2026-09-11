@@ -1,27 +1,26 @@
 /**
  * 생기부 초안 **학생 한 명의 편집 칸**(ADR-093).
  *
- * 두 보기가 같은 로직을 쓴다 — 자동 저장(700ms)·blur flush·한도 오류·검토 플래그·형광펜 거울 레이어·
- * [편집칸에 넣기] 배달(`deliver`)·부모 등록부 기록(`onLiveText`). 다른 것은 **배치**뿐이다:
+ * 두 보기가 같은 로직을 쓴다 — 자동 저장(700ms)·blur flush·한도 초과 표시(저장은 막지 않는다, ADR-105)·검토 플래그·
+ * 형광펜 거울 레이어·부모 등록부 기록(`onLiveText`). 다른 것은 **배치**뿐이다:
  *  - `overview`: 30명 목록의 한 행(왼쪽 학생·가운데 칸·오른쪽 바이트).
  *  - `focus`: 고른 학생 한 명을 넓게(머리줄·큰 칸·아래줄).
  *
  * ★행이 다시 만들어질 때(학생·영역·보기 전환) 편집 칸은 저장된 글이 아니라 **부모 등록부의 글**(`initialLiveText`)로
- *   시작한다. 한도를 넘겨 저장이 거부된 글이 화면에서 사라지던 것(P8)을 막는다.
+ *   시작한다. 저장에 실패한 글이 화면에서 사라지던 것(P8)을 막는다.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   RECORD_AREA_LABELS,
   neisByteLength,
-  resolveAreaLimit,
-  isAreaLimitVerified,
+  effectiveAreaLimit,
+  isAreaLimitConfirmed,
   type RecordArea,
   type RecordDraft,
   type RecordDraftStatus,
   type SchoolLevel,
 } from '@domain/entities/RecordDraft';
 import {
-  RecordDraftLimitError,
   useRecordDraftsStore,
   type RecordDraftUpsertInput,
 } from '@adapters/stores/useRecordDraftsStore';
@@ -68,6 +67,10 @@ export interface RecordDraftRowProps {
   readonly student: RecordDraftStudentRow;
   readonly area: RecordArea;
   readonly level: SchoolLevel;
+  /** 분량 목표(바이트). 없거나 한도 이상이면 한도. 막대·숫자는 목표 기준, 붉은 경고(저장 거부)는 한도 기준. */
+  readonly targetBytes?: number;
+  /** 선생님이 이 수업반·영역에 직접 정한 한도(없으면 기재요령 기본값). 직접 정했으면 초등이어도 붉게 막는다. */
+  readonly limitOverride?: number;
   readonly subject?: string;
   readonly classId?: string;
   readonly draft?: RecordDraft;
@@ -98,11 +101,6 @@ export interface RecordDraftRowProps {
   readonly initialLiveAt?: number;
   /** 화면의 현재 입력을 부모 등록부에 **기록만** 한다(ADR-088). 부모는 읽기만 한다. */
   readonly onLiveText: (rowKey: string, value: string) => void;
-  /**
-   * [편집칸에 넣기] 배달 — 한 번만 배달되는 상자. `token` 이 바뀔 때만 편집 칸에 넣는다.
-   * ★부모가 행에 값을 쓰는 **유일한 경로**다. 이 자리에는 §E-2 비교 게이트가 이미 걸려 있다.
-   */
-  readonly deliver?: { readonly rowKey: string; readonly text: string; readonly token: number };
   /** 집중 보기에서 부모가 "이 칸에 포커스"를 요청하는 번호. 바뀔 때마다 포커스한다. */
   readonly focusToken?: number;
   readonly onSelect: (studentRef: string) => void;
@@ -123,6 +121,8 @@ export function RecordDraftRow({
   student,
   area,
   level,
+  targetBytes,
+  limitOverride,
   subject,
   classId,
   draft,
@@ -138,7 +138,6 @@ export function RecordDraftRow({
   initialLiveText,
   initialLiveAt,
   onLiveText,
-  deliver,
   focusToken,
   onSelect,
   onToggleChecked,
@@ -210,10 +209,13 @@ export function RecordDraftRow({
     el.setSelectionRange(el.value.length, el.value.length);
   }, [focusToken]);
 
-  const limit = resolveAreaLimit(area, level);
+  const limit = effectiveAreaLimit(area, level, limitOverride);
+  const goal = targetBytes !== undefined && targetBytes < limit ? targetBytes : limit;
   const bytes = neisByteLength(text);
-  const ratio = limit > 0 ? bytes / limit : 0;
-  const verified = isAreaLimitVerified(area, level);
+  const ratio = goal > 0 ? bytes / goal : 0;
+  const verified = isAreaLimitConfirmed(area, level, limitOverride);
+  /** 확정된 한도를 넘은 바이트 — 넘어도 저장은 된다(ADR-105). 색에 더해 글자로도 알린다(색각 이상 대응). */
+  const overBy = verified && bytes > limit ? bytes - limit : 0;
   const byteCls =
     bytes > limit && verified ? 'text-red-500' : ratio > 0.8 ? 'text-amber-500' : 'text-sp-muted';
   const barCls =
@@ -242,8 +244,12 @@ export function RecordDraftRow({
       })
       .catch((err: unknown) => {
         setSaveState('idle');
-        // 조용히 삼키면 선생님은 저장된 줄 안다. 한도 초과는 이유를 그대로 보여 준다.
-        setSaveError(err instanceof RecordDraftLimitError ? err.message : '저장하지 못했습니다.');
+        // 조용히 삼키면 선생님은 저장된 줄 안다. 이유가 있으면 그대로 보여 준다.
+        setSaveError(
+          err instanceof Error && err.message.trim().length > 0
+            ? err.message
+            : '저장하지 못했습니다.',
+        );
         return false;
       });
   };
@@ -257,25 +263,6 @@ export function RecordDraftRow({
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => persist(value), 700);
   };
-
-  /**
-   * [편집칸에 넣기] 배달 — **선생님이 그 글을 방금 친 것과 완전히 같게 취급한다.**
-   *
-   * ★배달은 `onChange` 를 타지 않는데, 등록부 기록도 편집 시각 도장도 **둘 다 타이핑에 걸려 있다.**
-   *   빼먹으면 두 가지가 한꺼번에 무너진다:
-   *   1. 등록부에 조절 전 옛 글이 남아, 넣은 직후 다시 조절하면 옛 글이 대상이 된다.
-   *   2. 도장이 안 찍혀 다음 초점 이동·동기화에 **넣은 글이 그대로 되돌아간다.**
-   *      C0 (ㄴ)을 완벽히 고쳐도 이 경로만 무너진다.
-   */
-  const deliveredTokenRef = useRef(0);
-  useEffect(() => {
-    if (!deliver || deliver.rowKey !== rowKey) return;
-    if (deliver.token === deliveredTokenRef.current) return;
-    deliveredTokenRef.current = deliver.token;
-    setText(deliver.text);
-    lastEditAtRef.current = Date.now();
-    onLiveText(rowKey, deliver.text);
-  }, [deliver, rowKey, onLiveText]);
 
   const flush = (): Promise<boolean> => {
     setFocused(false);
@@ -481,13 +468,17 @@ export function RecordDraftRow({
       {saveState !== 'idle' && (
         <span
           className={`flex w-fit items-center gap-1 text-xs ${
-            saveState === 'saved' ? 'text-emerald-500' : 'text-sp-muted'
+            saveState !== 'saved'
+              ? 'text-sp-muted'
+              : overBy > 0
+                ? 'text-amber-500'
+                : 'text-emerald-500'
           }`}
         >
           <span className="material-symbols-outlined text-xs">
-            {saveState === 'saved' ? 'check_circle' : 'sync'}
+            {saveState !== 'saved' ? 'sync' : overBy > 0 ? 'warning' : 'check_circle'}
           </span>
-          {saveState === 'saved' ? '저장됨' : '저장 중…'}
+          {saveState !== 'saved' ? '저장 중…' : overBy > 0 ? '저장됨 · 한도 초과' : '저장됨'}
         </span>
       )}
       {flags.length > 0 && (
@@ -511,7 +502,10 @@ export function RecordDraftRow({
   const byteMeter = (
     <>
       <span className={`whitespace-nowrap text-xs font-semibold tabular-nums ${byteCls}`}>
-        {bytes.toLocaleString()} / {limit.toLocaleString()} B
+        {bytes.toLocaleString()} / {goal.toLocaleString()} B
+        {goal < limit ? ` · 한도 ${limit.toLocaleString()}` : ''}
+        {limitOverride !== undefined ? '(직접)' : ''}
+        {overBy > 0 ? ` · ${overBy.toLocaleString()}B 초과` : ''}
       </span>
       <span
         className={`h-1 overflow-hidden rounded-full bg-sp-border ${variant === 'focus' ? 'w-24' : 'w-full'}`}

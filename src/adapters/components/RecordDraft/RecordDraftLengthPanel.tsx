@@ -9,7 +9,7 @@
  *   backdrop-filter 가 화면 고정 요소를 가둔다.
  * ★`sp-*` 토큰에 Tailwind 투명도 수식을 붙이지 않는다(규칙이 생성되지 않아 배경이 투명해진다).
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import {
   clampTargetBytes,
@@ -35,6 +35,9 @@ const chip = (on: boolean): string =>
       ? 'bg-blue-500/15 text-sp-accent ring-blue-500/30'
       : 'text-sp-muted ring-sp-border hover:text-sp-text'
   }`;
+/** 구독이 없을 때 쓰는 빈 구독(예전처럼 다시 그려질 때만 읽는다). */
+const noSubscribe = (): (() => void) => () => {};
+
 /** 실행 결과 한 벌 — 부모가 CLI 를 돌려 돌려준다. */
 export interface LengthAdjustOutcome {
   readonly candidates: readonly LengthAdjustCandidate[];
@@ -56,6 +59,15 @@ export interface RecordDraftLengthPanelProps {
   readonly areaLimitVerified: boolean;
   /** ★누르는 시점에 등록부에서 새로 읽는다. 렌더 시점 스냅숏이 아니다. */
   readonly getSourceText: () => string;
+  /**
+   * 편집칸 입력이 바뀔 때마다 알려 주는 구독. 있으면 "지금 분량"이 입력과 함께 바뀐다 — 편집칸 막대와
+   * 같은 숫자여야 한다(오너 요청 2026-09-11). 없으면 다시 그려질 때만 새로 읽는다(예전 동작).
+   */
+  readonly subscribeSourceText?: (notify: () => void) => () => void;
+  /** 목표 초깃값 — 선생님이 AI 패널에서 정한 분량 목표. 없으면 한도. 바뀌면 따라간다. */
+  readonly defaultTarget?: number;
+  /** 선생님이 직접 정한 한도(있으면) — 목표 자르기·판정이 이 한도를 쓴다. */
+  readonly limitOverride?: number;
   /** 보내기 전 확인용 — 지금 글에 기재 금지 항목이 있는지. 화면이 묻고, 지우지는 않는다. */
   readonly detectProhibited: (text: string) => readonly string[];
   readonly evidenceCount: number;
@@ -73,8 +85,6 @@ export interface RecordDraftLengthPanelProps {
     kind: LengthAdjustKind,
     targetBytes: number,
   ) => Promise<void>;
-  /** [편집칸에 넣기(저장 안 함)] — 한도를 넘겨 저장할 수 없는 결과를 회수한다. */
-  readonly onInsertOnly: (text: string) => void;
   /** [중단] — 진행 중 왕복을 멈춘다(R-6). 없으면 단추를 그리지 않는다. */
   readonly onCancel?: () => void;
 }
@@ -93,6 +103,9 @@ export function RecordDraftLengthPanel({
   areaLimit,
   areaLimitVerified,
   getSourceText,
+  subscribeSourceText,
+  defaultTarget,
+  limitOverride,
   detectProhibited,
   evidenceCount,
   threadTitle,
@@ -100,11 +113,16 @@ export function RecordDraftLengthPanel({
   lockedByOther,
   onRun,
   onApply,
-  onInsertOnly,
   onCancel,
 }: RecordDraftLengthPanelProps) {
   const [open, setOpen] = useState(false);
-  const [targetInput, setTargetInput] = useState(String(defaultTargetBytes(area, level)));
+  const [targetInput, setTargetInput] = useState(
+    String(defaultTarget ?? defaultTargetBytes(area, level, limitOverride)),
+  );
+  // AI 패널에서 분량 목표를 바꾸면 조절 목표도 따라간다 — 한 곳에서 정한 값을 두 곳이 다르게 쓰지 않게.
+  useEffect(() => {
+    if (defaultTarget !== undefined) setTargetInput(String(defaultTarget));
+  }, [defaultTarget]);
   const [clampedNotice, setClampedNotice] = useState(false);
   /**
    * 단계는 스토어가 든다(ADR-093 결정 3, ADR-088 결정 7 이행). 이 패널은 학생이 바뀌면 새로 만들어지는데,
@@ -120,14 +138,18 @@ export function RecordDraftLengthPanel({
   const [pickedAttempt, setPickedAttempt] = useState<1 | 2>(1);
   const [compareOn, setCompareOn] = useState(false);
   /** 반영 직전 "그 사이에 고치셨어요" 확인. */
-  const [staleConfirm, setStaleConfirm] = useState<'apply' | 'insert' | null>(null);
+  const [staleConfirm, setStaleConfirm] = useState<'apply' | null>(null);
   /** ★중복 실행 잠금은 참조로 한다. 상태로 하면 빠르게 두 번 눌렀을 때 둘 다 통과한다. */
   const busyRef = useRef(false);
 
-  const sourceText = getSourceText();
+  const sourceText = useSyncExternalStore(
+    subscribeSourceText ?? noSubscribe,
+    getSourceText,
+    getSourceText,
+  );
   const sourceBytes = neisByteLength(sourceText);
   const empty = sourceText.trim().length === 0;
-  const targetBytes = clampTargetBytes(Number(targetInput), area, level);
+  const targetBytes = clampTargetBytes(Number(targetInput), area, level, limitOverride);
   /**
    * 방향은 고르지 않는다(2026-09-08 오너 결정). 대상 글이 목표보다 길면 줄이고, 짧으면 근거로 채운다.
    * 선생님이 정하는 건 목표 바이트 하나다 — "줄이기/보충하기"를 따로 고르게 하면 짧은 학생에게
@@ -147,7 +169,13 @@ export function RecordDraftLengthPanel({
     result?.candidates.find((c) => c.attempt === pickedAttempt) ?? result?.candidates[0] ?? null;
   const resultText = picked ? aiDraftText({ paragraphs: picked.paragraphs }) : '';
   const verdict: LengthVerdict | null = picked
-    ? judgeLength({ bytes: picked.bytes, targetBytes, area, level })
+    ? judgeLength({
+        bytes: picked.bytes,
+        targetBytes,
+        area,
+        level,
+        ...(limitOverride !== undefined ? { limitOverride } : {}),
+      })
     : null;
 
   // 한도를 넘긴 결과가 나오면 접혀 있어도 펼친다 — 조용히 실패하는 화면을 만들지 않는다.
@@ -226,22 +254,20 @@ export function RecordDraftLengthPanel({
   };
 
   /** 반영 직전 게이트 — 조절을 시작한 뒤 글이 바뀌었으면 바로 덮지 않는다. */
-  const guarded = (what: 'apply' | 'insert'): void => {
+  const guarded = (): void => {
     if (!result || !picked) return;
     if (getSourceText().trim() !== result.sourceText.trim()) {
-      setStaleConfirm(what);
+      setStaleConfirm('apply');
       return;
     }
-    void proceed(what);
+    void proceed();
   };
 
-  const proceed = async (what: 'apply' | 'insert'): Promise<void> => {
+  // ★한도를 넘긴 결과도 [이 글로 바꾸기]로 반영한다 — 저장은 막지 않고 색으로만 알린다(ADR-105).
+  //   예전의 [편집칸에 넣기(저장 안 함)] 우회로는 저장 거부가 있을 때만 필요했다.
+  const proceed = async (): Promise<void> => {
     if (!result || !picked) return;
     setStaleConfirm(null);
-    if (what === 'insert') {
-      onInsertOnly(resultText);
-      return;
-    }
     try {
       await onApply(picked, result, kind, targetBytes);
     } catch (err: unknown) {
@@ -440,8 +466,11 @@ export function RecordDraftLengthPanel({
 
               {verdict === 'over-limit' && (
                 <p className="flex items-center gap-1 text-xs text-red-500">
-                  <span className="material-symbols-outlined text-sm">error</span>
-                  저장하려면 {(picked.bytes - areaLimit).toLocaleString()}바이트를 더 줄여야 해요.
+                  <span aria-hidden="true" className="material-symbols-outlined text-sm">
+                    info
+                  </span>
+                  바꾸면 한도보다 {(picked.bytes - areaLimit).toLocaleString()}B 많아요. 그래도 바꿀
+                  수 있어요.
                 </p>
               )}
 
@@ -465,10 +494,10 @@ export function RecordDraftLengthPanel({
                     </button>
                     <button
                       type="button"
-                      onClick={() => void proceed(staleConfirm)}
+                      onClick={() => void proceed()}
                       className={`bg-sp-card text-sp-text ${btn}`}
                     >
-                      {staleConfirm === 'insert' ? '그래도 편집칸에 넣기' : '그래도 이 글로 바꾸기'}
+                      그래도 이 글로 바꾸기
                     </button>
                   </div>
                 </div>
@@ -482,23 +511,13 @@ export function RecordDraftLengthPanel({
                   >
                     {compareOn ? '비교 닫기' : '원문과 비교'}
                   </button>
-                  {verdict === 'over-limit' ? (
-                    <button
-                      type="button"
-                      onClick={() => guarded('insert')}
-                      className={`ml-auto ${primaryBtn}`}
-                    >
-                      편집칸에 넣기(저장 안 함)
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => guarded('apply')}
-                      className={`ml-auto ${primaryBtn}`}
-                    >
-                      이 글로 바꾸기
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={() => guarded()}
+                    className={`ml-auto ${primaryBtn}`}
+                  >
+                    이 글로 바꾸기
+                  </button>
                 </div>
               )}
             </div>
@@ -523,7 +542,12 @@ export function RecordDraftLengthPanel({
                     value={targetInput}
                     onChange={(e) => setTargetInput(e.target.value)}
                     onBlur={() => {
-                      const next = clampTargetBytes(Number(targetInput), area, level);
+                      const next = clampTargetBytes(
+                        Number(targetInput),
+                        area,
+                        level,
+                        limitOverride,
+                      );
                       setClampedNotice(next !== Number(targetInput));
                       setTargetInput(String(next));
                     }}
