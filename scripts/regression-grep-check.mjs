@@ -723,7 +723,7 @@ const presenceChecks = [
   },
   {
     file: 'src/adapters/components/RecordDraft/RecordEvidenceBoard.tsx',
-    pattern: /if \(!r\.applied\) \{[\s\S]{0,400}?setNarrativeSuggest\(\{ kind: 'ready'/,
+    pattern: /if \(!r\.applied\) \{[\s\S]{0,400}?setNarrativeSuggest\(\{\s*kind: 'ready'/,
     name: "REGRESSION #105: AI 서사 적용이 실패하면 '적용했습니다'라고 하지 않고 제안도 지우지 않는다",
   },
   {
@@ -849,7 +849,7 @@ const presenceChecks = [
   {
     file: 'src/domain/services/recordDraftPack.ts',
     pattern:
-      /return role === 'evaluation' \? EVALUATION_SYNTHESIZE_REF : '근거: \(제외됨 - 이 문단은 건너뜁니다\)';[\s\S]{0,2500}?const role = composition\.modules\[at\]\?\.role;[\s\S]{0,200}?sceneEvidenceRef\(scene, numberOf, role\)/,
+      /return role === 'evaluation'\s*\?\s*EVALUATION_SYNTHESIZE_REF\s*:\s*'근거: \(제외됨 - 이 문단은 건너뜁니다\)';[\s\S]{0,2500}?const role = composition\.modules\[at\]\?\.role;[\s\S]{0,200}?sceneEvidenceRef\(scene, numberOf, role\)/,
     name: 'REGRESSION #113: 요청서의 빈 평가 장면은 「건너뜁니다」가 아니라 근거 전체를 종합하라고 말한다 (다른 빈 장면만 건너뛴다)',
   },
   // ────────────────────────────────────────────────────────────────────────
