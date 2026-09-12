@@ -175,30 +175,47 @@ describe('★근거는 핵심/주변으로 나누고, 넘칠 때만 주변 근�
 
   // 마무리(오너 검토 2026-09-12) — 1층 규정에 넣었더니 근거 1건(138B) 학생의 글이 459B → 227B 로
   //  줄고 교사 판단 문장("…태도가 확인됨")이 사라졌다(문구를 세 번 고쳐도 같았다). 근거 양은 앱만
-  //  정확히 아니까 여기서 가른다. 오너 결정: 근거가 부족하면 해석으로 끝나지 않아도 된다.
+  //  정확히 아니까 앱이 가른다. 오너 결정: 근거가 부족하면 해석으로 끝나지 않아도 된다.
+  //  ★자리는 분량 줄 안이 아니라 **요청서 꼬리**(되짚기 backstop 바로 앞)다 — 분량 블록에 뒀을 때는
+  //  근거가 넉넉한 학생에서 마지막 문장이 결과로 닫힌 것이 3회 중 1회뿐이었다(2026-09-12 2차 실측).
+  const THIN = [{ id: 't1', content: '토론에서 반론을 정리했다.' }]; // 36B < 750B
+
   it('★근거가 넉넉하면 마지막 문장을 결과에 두라고 말한다', () => {
-    const text = draftLengthInstruction(1500, 1500, { count: 12, bytes: 1800 });
+    const text = packOf(many(10)); // 970B >= 750B
     expect(text).toContain('마무리: 마지막 문장은 그 활동이 무엇에 이르렀는지');
     expect(text).toContain('곁가지 장면에서 글이 끊기면 마무리가 되지 않습니다');
-    // 바로 위의 "요약하는 마무리 문장을 붙이지 마세요"와 부딪히지 않게 뜻을 못 박는다.
+    // "앞 내용을 요약하는 마무리 문장을 붙이지 마세요"와 부딪히지 않게 뜻을 못 박는다.
     expect(text).toContain('요약 문장을 붙이라는 뜻이 아니라');
   });
 
+  it('★마무리 지시는 되짚기 backstop 바로 앞에 온다 (맨 끝은 지어내기를 막는 지시의 자리)', () => {
+    const text = packOf(many(10)); // 970B >= 750B
+    expect(text.indexOf('마무리: 마지막 문장은')).toBeLessThan(
+      text.indexOf('근거에 없는 내용은 쓰지 마세요'),
+    );
+    // backstop 은 여전히 맨 끝이다(꼬리 200자 계약 — recordDraftPack.test.ts 와 같은 규칙).
+    expect(text.slice(-200)).toContain('근거에 없는 내용은 쓰지 마세요');
+    // 분량 블록 안으로 되돌아가지 않았다 — 분량 우선순위 줄보다 뒤다.
+    expect(text.indexOf('분량 숫자는 이 안내를 따르되')).toBeLessThan(
+      text.indexOf('마무리: 마지막 문장은'),
+    );
+  });
+
   it('★근거가 얇으면 마무리 지시를 아예 붙이지 않는다 (해석으로 끝나지 않아도 된다)', () => {
-    const text = draftLengthInstruction(1500, 1500, { count: 1, bytes: 138 });
+    const text = packOf(THIN);
     expect(text).not.toContain('마무리:');
     // 빈약 신호와 일반 지시는 그대로 나간다.
     expect(text).toContain('절반에 못 미칩니다');
     expect(text).toContain('근거가 빈약하면 목표 분량을 채우지 않아도 됩니다');
   });
 
-  it('가르는 자리는 목표의 절반이다 (경계)', () => {
-    expect(draftLengthInstruction(1500, 1500, { count: 5, bytes: 760 })).toContain('마무리:');
-    expect(draftLengthInstruction(1500, 1500, { count: 5, bytes: 740 })).not.toContain('마무리:');
+  it('가르는 자리는 목표의 절반이다 (경계 — 97B 짜리 8건 776B vs 7건 679B)', () => {
+    expect(packOf(many(8))).toContain('마무리:');
+    expect(packOf(many(7))).not.toContain('마무리:');
   });
 
   it('보낼 근거가 하나도 없으면 마무리 지시도 없다', () => {
-    expect(draftLengthInstruction(1500, 1500, { count: 0, bytes: 0 })).not.toContain('마무리:');
+    expect(packOf([])).not.toContain('마무리:');
   });
 });
 
