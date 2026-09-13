@@ -59,4 +59,21 @@ describe('ManageImportedTranscript', () => {
     const c = await mgr.clear();
     expect(c.students).toHaveLength(0);
   });
+
+  it('확인한 파일로 교체하고 이전 학생을 남기지 않으며 원문 점수를 다시 읽는다', async () => {
+    await mgr.upsertStudent(EMPTY_TRANSCRIPT, student('9', '기존학생'));
+    const imported: StudentTranscript = {
+      ...student('1', '새학생'),
+      subjects: [{ subject: '국어', category: '국어', scoreText: '91.2(91)', achievement: 'A' }],
+    };
+    await mgr.replaceAll([imported]);
+    expect(await mgr.load()).toEqual({ students: [imported] });
+  });
+
+  it('빈 파일과 학생 충돌은 저장 전에 거부해 기존 자료를 보존한다', async () => {
+    const before = await mgr.upsertStudent(EMPTY_TRANSCRIPT, student('9', '기존학생'));
+    await expect(mgr.replaceAll([])).rejects.toThrow();
+    await expect(mgr.replaceAll([student('1', '가'), student('1', '나')])).rejects.toThrow();
+    expect(await mgr.load()).toEqual(before);
+  });
 });

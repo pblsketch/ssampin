@@ -15,6 +15,8 @@ export interface TranscriptSubjectRow {
   readonly subject: string;
   readonly category: SubjectCategory;
   readonly rawScore?: number;
+  /** 원점수로 확정할 수 없는 점수 표기. 계산에는 사용하지 않는다. */
+  readonly scoreText?: string;
   readonly subjectMean?: number;
   readonly stdDev?: number;
   /** 성취도 A~E (기관 산출값) */
