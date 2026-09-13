@@ -105,6 +105,9 @@ export default defineConfig(({ mode, command }) => {
           dir: 'ltr',
         },
         workbox: {
+          // v2.5.2 메인 번들(2,102,171B)이 Workbox 기본 2MiB 상한을 5KB 넘었다.
+          // 오프라인 설치본에 메인 앱을 반드시 포함하되, 3MiB를 넘으면 다시 빌드를 막는다.
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
           navigateFallback: 'mobile.html',
           /**
            * 주소 기반 화면 전환 도입 전에는 화면이 `/` 하나뿐이라 이 목록으로 충분했다.
