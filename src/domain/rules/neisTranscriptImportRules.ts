@@ -192,7 +192,7 @@ export function parseRankCell(value: unknown): { rank?: number; tieCount?: numbe
   return n !== undefined ? { rank: n } : {};
 }
 
-function buildSubjectRow(
+export function buildSubjectRow(
   row: readonly unknown[],
   block: SubjectBlock,
   fallbackSubject: string,

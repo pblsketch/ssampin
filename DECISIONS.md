@@ -110,3 +110,5 @@
 - [ADR-V · 실시간 담벼락 v2 릴리즈 라벨](docs/03-decisions/ADR-V-realtime-wall-v2-release-labels.md) — 번호 없음(예전 파일)
 
 - [ADR-102 · 쌤핀 AI 패널의 답은 평문이다 — 지시하는 쪽과 그리는 쪽 양쪽으로 보장한다 (2026-09-10, 구현·게이트 완료 · 미커밋)](docs/03-decisions/ADR-102.md)
+
+- [ADR-115 · 전과목 성적 다중 행 입력과 확인 후 전체 교체 (2026-09-13)](docs/03-decisions/ADR-115.md)

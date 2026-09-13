@@ -24,6 +24,11 @@ export function HomeroomGradeOverviewTab() {
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
+  const importBusy = useRef(false);
+  const [pending, setPending] = useState<{
+    fileName: string;
+    result: Awaited<ReturnType<typeof parseTranscriptExcel>>;
+  } | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const [importMsg, setImportMsg] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
 
@@ -52,7 +57,10 @@ export function HomeroomGradeOverviewTab() {
   }, [students]);
 
   async function handleFile(file: File) {
+    if (importBusy.current) return;
+    importBusy.current = true;
     setImporting(true);
+    setPending(null);
     setImportMsg(null);
     try {
       const buffer = await file.arrayBuffer();
@@ -60,23 +68,49 @@ export function HomeroomGradeOverviewTab() {
       if (result.students.length === 0) {
         setImportMsg({
           kind: 'error',
-          text: '학생 성적을 인식하지 못했어요. NEIS 전과목 성적 일람표(번호·성명·과목별 원점수/성취도/석차등급)인지 확인해 주세요.',
+          text:
+            result.problem ??
+            (result.layout
+              ? '성적표 구조는 찾았지만 학생 성적이 비어 있어요. 번호·성명과 점수·성취도·석차등급 값이 있는지 확인해 주세요.'
+              : '성적표 구조를 인식하지 못했어요. 번호·성명과 과목별 성적이 있는 일람표인지 확인해 주세요. 학생별 여러 행으로 된 표는 ‘교과목’ 머리글이 필요해요.'),
         });
         return;
       }
-      await importStudents(result.students);
-      setSelectedKey(result.students[0]?.studentKey ?? null);
-      const subjCount = result.students[0]?.subjects.length ?? 0;
-      setImportMsg({
-        kind: 'ok',
-        text: `${result.students.length}명 · 과목 ${subjCount}개를 가져왔어요${result.term ? ` (${result.term})` : ''}.`,
-      });
+      setPending({ fileName: file.name, result });
     } catch {
       setImportMsg({
         kind: 'error',
         text: '파일을 읽지 못했어요. 나이스에서 받은 파일이면 엑셀에서 연 뒤 [다른 이름으로 저장] → ‘Excel 통합 문서(.xlsx)’로 바꿔 다시 가져와 주세요.',
       });
     } finally {
+      importBusy.current = false;
+      setImporting(false);
+    }
+  }
+
+  async function applyImport() {
+    if (!pending || importBusy.current) return;
+    importBusy.current = true;
+    setImporting(true);
+    setImportMsg(null);
+    try {
+      await importStudents(pending.result.students);
+      setSelectedKey(pending.result.students[0]?.studentKey ?? null);
+      const subjects = new Set(
+        pending.result.students.flatMap((student) => student.subjects.map((row) => row.subject)),
+      );
+      setImportMsg({
+        kind: 'ok',
+        text: `${pending.result.students.length}명 · 과목 ${subjects.size}개를 가져왔어요${pending.result.term ? ` (${pending.result.term})` : ''}.`,
+      });
+      setPending(null);
+    } catch {
+      setImportMsg({
+        kind: 'error',
+        text: '성적을 저장하지 못했어요. 기존 화면의 성적은 유지되며, 다시 반영할 수 있어요.',
+      });
+    } finally {
+      importBusy.current = false;
       setImporting(false);
     }
   }
@@ -114,9 +148,20 @@ export function HomeroomGradeOverviewTab() {
   }
 
   async function handleClear() {
-    await clearAll();
-    setSelectedKey(null);
-    setImportMsg(null);
+    if (importBusy.current) return;
+    importBusy.current = true;
+    setImporting(true);
+    try {
+      await clearAll();
+      setSelectedKey(null);
+      setPending(null);
+      setImportMsg(null);
+    } catch {
+      setImportMsg({ kind: 'error', text: '성적을 지우지 못했어요. 다시 시도해 주세요.' });
+    } finally {
+      importBusy.current = false;
+      setImporting(false);
+    }
   }
 
   function gotoOffset(delta: number) {
@@ -150,6 +195,7 @@ export function HomeroomGradeOverviewTab() {
 
   const messageBanner = importMsg && (
     <div
+      role="status"
       className={`rounded-lg px-3 py-2 text-xs border ${
         importMsg.kind === 'ok'
           ? 'bg-green-500/10 border-green-500/30 text-sp-text'
@@ -158,6 +204,62 @@ export function HomeroomGradeOverviewTab() {
     >
       {importMsg.text}
     </div>
+  );
+
+  const importPreview = pending && (
+    <section
+      aria-label="성적 가져오기 확인"
+      className="w-full rounded-xl border border-sp-border bg-sp-card p-4 flex flex-col gap-3 text-sm text-sp-text"
+    >
+      <h3 className="font-semibold">가져올 성적을 확인해 주세요</h3>
+      <p className="break-all">
+        {pending.fileName}
+        {pending.result.sheetName ? ` · ${pending.result.sheetName}` : ''}
+      </p>
+      <p>
+        {pending.result.term || '학기 확인 필요'} · {pending.result.classLabel || '학급 확인 필요'}{' '}
+        · 학생 {pending.result.students.length}명
+      </p>
+      <p className="text-sp-muted">
+        {pending.result.students
+          .slice(0, 3)
+          .map((student) => `${student.studentKey}번 ${student.studentName}`)
+          .join(', ')}
+        {pending.result.students.length > 3 ? ' 외' : ''}
+      </p>
+      <p className="text-sp-muted">
+        한 학급·한 학기 자료인지 확인해 주세요. 반영하면 현재 화면의 성적 전체가 이 파일의 성적으로
+        바뀝니다.
+      </p>
+      {pending.result.students.some((student) =>
+        student.subjects.some((row) => row.scoreText && row.rawScore === undefined),
+      ) && (
+        <p className="text-sp-muted">
+          원점수인지 확정할 수 없는 합계는 계산하지 않고 ‘파일 점수’로 원문을 표시합니다.
+        </p>
+      )}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={importing}
+          onClick={() => void applyImport()}
+          className="rounded-lg bg-sp-accent text-sp-accent-fg px-3 py-2 disabled:opacity-50"
+        >
+          {importing ? '저장 중...' : '확인 후 반영'}
+        </button>
+        <button
+          type="button"
+          disabled={importing}
+          onClick={() => {
+            setPending(null);
+            setImportMsg(null);
+          }}
+          className="rounded-lg border border-sp-border px-3 py-2 disabled:opacity-50"
+        >
+          취소
+        </button>
+      </div>
+    </section>
   );
 
   /** 드래그앤드롭 오버레이 (영역 위로 파일을 끌어올 때) */
@@ -208,12 +310,17 @@ export function HomeroomGradeOverviewTab() {
           </p>
         </div>
         {messageBanner}
+        {importPreview}
       </div>
     );
   }
 
   const summary = studentTranscriptSummary(selected);
   const nearMiss = nearMissSubjects(selected, scale);
+  const hasRankDetails = selected.subjects.some(
+    (row) =>
+      row.rankGrade !== undefined && row.rank !== undefined && row.totalStudents !== undefined,
+  );
   const weak = weakSubjects(selected);
   const distEntries = Object.entries(summary.achievementDistribution).sort(([a], [b]) =>
     a.localeCompare(b),
@@ -241,6 +348,7 @@ export function HomeroomGradeOverviewTab() {
           <button
             type="button"
             onClick={() => void handleClear()}
+            disabled={importing || pending !== null}
             className="flex items-center gap-1 bg-sp-surface border border-sp-border rounded-md px-2.5 py-1.5 text-sp-muted text-sm hover:text-sp-text"
           >
             <span className="material-symbols-outlined text-base">delete</span>지우기
@@ -249,6 +357,7 @@ export function HomeroomGradeOverviewTab() {
       </div>
 
       {messageBanner}
+      {importPreview}
 
       <div className="bg-sp-highlight/10 border border-sp-highlight/30 rounded-lg px-3 py-2 text-xs text-sp-text/90">
         이 화면은 상담 참고용 읽기 전용입니다. 점수 수정·교과 세부 채점은 수업 관리에서 하세요.
@@ -360,7 +469,11 @@ export function HomeroomGradeOverviewTab() {
               {scale === 'rank9' ? '9' : '5'}등급 기준 · 가까운 순).
             </p>
             {nearMiss.length === 0 ? (
-              <p className="text-xs text-sp-muted">경계에 가까운 과목이 없어요.</p>
+              <p className="text-xs text-sp-muted">
+                {hasRankDetails
+                  ? '경계에 가까운 과목이 없어요.'
+                  : '석차·수강자수·석차등급 정보가 부족해 등급 경계를 계산할 수 없어요.'}
+              </p>
             ) : (
               <div className="flex flex-col gap-1.5">
                 {nearMiss.map((m) => (
@@ -398,6 +511,11 @@ export function HomeroomGradeOverviewTab() {
           {/* 과목별 표 */}
           <div className="bg-sp-card border border-sp-border rounded-xl p-4">
             <p className="text-sm font-semibold text-sp-text mb-2">과목별 성적</p>
+            {selected.subjects.some((row) => row.scoreText && row.rawScore === undefined) && (
+              <p className="text-xs text-sp-muted mb-2">
+                ‘파일 점수’는 원점수로 확정하지 않고 파일에 적힌 값을 그대로 표시한 것입니다.
+              </p>
+            )}
             <div className="max-h-80 overflow-y-auto">
               <table className="w-full text-sm">
                 <thead className="sticky top-0 bg-sp-card">
@@ -412,7 +530,17 @@ export function HomeroomGradeOverviewTab() {
                   {selected.subjects.map((row) => (
                     <tr key={row.subject} className="border-b border-sp-border/50">
                       <td className="py-1 text-sp-text">{row.subject}</td>
-                      <td className="py-1 text-right text-sp-text">{row.rawScore ?? '—'}</td>
+                      <td className="py-1 text-right text-sp-text">
+                        {row.rawScore ??
+                          (row.scoreText ? (
+                            <>
+                              <span className="block text-caption text-sp-muted">파일 점수</span>
+                              {row.scoreText}
+                            </>
+                          ) : (
+                            '—'
+                          ))}
+                      </td>
                       <td className="py-1 text-right text-sp-text">{row.achievement ?? '—'}</td>
                       <td className="py-1 text-right text-sp-text">{row.rankGrade ?? '—'}</td>
                     </tr>

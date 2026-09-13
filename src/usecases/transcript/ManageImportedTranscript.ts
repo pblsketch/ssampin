@@ -10,6 +10,7 @@ import type {
   StudentTranscript,
 } from '@domain/entities/ImportedTranscript';
 import type { IImportedTranscriptRepository } from '@domain/repositories/IImportedTranscriptRepository';
+import { mergeTranscriptStudents } from '@domain/rules/neisTranscriptLedgerRules';
 
 /** 빈 전과목 데이터. */
 export const EMPTY_TRANSCRIPT: ImportedTranscriptData = { students: [] };
@@ -20,6 +21,14 @@ export class ManageImportedTranscript {
   /** 저장된 데이터를 불러온다(없으면 빈 데이터). */
   async load(): Promise<ImportedTranscriptData> {
     return (await this.repository.load()) ?? EMPTY_TRANSCRIPT;
+  }
+
+  /** 확인한 한 학급·한 학기 자료로 교체해 이전 파일의 학생이 섞이지 않게 한다. */
+  async replaceAll(students: readonly StudentTranscript[]): Promise<ImportedTranscriptData> {
+    if (students.length === 0) throw new Error('가져올 학생 성적이 없어요.');
+    const next = { students: mergeTranscriptStudents(students) };
+    await this.repository.save(next);
+    return next;
   }
 
   /** 학생 1명 upsert (studentKey 기준). */

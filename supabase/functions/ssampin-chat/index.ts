@@ -9,10 +9,15 @@
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { checkRateLimit, clientIpFrom } from '../_shared/rateLimit.ts';
 import { generateText } from '../_shared/chatLlm.ts';
 import { embedQuery, EmbeddingNotConfiguredError } from '../_shared/embedding.ts';
+import {
+  needsTranscriptSupport,
+  TRANSCRIPT_SUPPORT_ANSWER_PREFIX,
+  TRANSCRIPT_SUPPORT_REQUEST,
+} from '../_shared/transcriptSupport.ts';
 
 // ── 타입 정의 ──────────────────────────────────────────────
 
@@ -232,7 +237,7 @@ async function generateQueryEmbedding(query: string): Promise<number[]> {
  * 분류가 틀려도 ①이 정답을 붙잡고, 맞으면 ②가 정확도를 올린다. 최종 선별은 LLM 리랭킹이 한다.
  */
 async function searchDocuments(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   queryEmbedding: number[],
   queryText: string,
   category: string | null,
@@ -481,7 +486,7 @@ function getEscalationMessage(type: 'bug' | 'feature' | 'other', withAnswer = fa
 
 /** 대화 로그 저장 */
 async function saveConversation(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   sessionId: string,
   userMessage: string,
   assistantMessage: string,
@@ -541,6 +546,23 @@ serve(async (req: Request): Promise<Response> => {
 
     // 3. 쿼리 전처리: 대화 맥락 인식 재구성
     const history = body.history?.slice(-6) ?? [];
+    if (needsTranscriptSupport(body.message, history)) {
+      const message = TRANSCRIPT_SUPPORT_ANSWER_PREFIX + TRANSCRIPT_SUPPORT_REQUEST;
+      await saveConversation(
+        supabase,
+        body.sessionId,
+        body.message,
+        message,
+        [],
+        body.isTest ?? false,
+      );
+      return jsonResponse({
+        type: 'answer',
+        message,
+        sources: [],
+        confidence: 1,
+      } satisfies ChatResponseAnswer);
+    }
     let reformulatedQuery = reformulateQuery(body.message, history);
 
     // 3-1. 플랫폼(OS) 확정: 이번 메시지 → 대화 히스토리 → 앱 컨텍스트 순으로 탐지.

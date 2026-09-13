@@ -5,6 +5,8 @@
  * 사용법: SUPABASE_URL=... EMBED_AUTH_TOKEN=... node scripts/ingest-chatbot-qa.mjs
  */
 
+import { TRANSCRIPT_SUPPORT_DOCUMENT, TRANSCRIPT_SUPPORT_REQUEST } from './chatbot-support-qa.mjs';
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const EMBED_AUTH_TOKEN = process.env.EMBED_AUTH_TOKEN;
 
@@ -16,6 +18,7 @@ if (!SUPABASE_URL || !EMBED_AUTH_TOKEN) {
 // ── Q&A 문서 ─────────────────────────────────────────────────────────────────
 
 const QA_DOCUMENTS = [
+  TRANSCRIPT_SUPPORT_DOCUMENT,
   // ── v2.5.1 (쌤도구 별도 창 · 생기부 작성 방식 · 상담 주제 선택지 · 학급 목록 수업 시간 · 출석번호 무결성 · 명단 조회 신원) ──
   {
     content: `Q: 타이머를 켜 둔 채 다른 화면을 보고 싶어요 / 쌤도구 별도 창 / 도구 팝업 / 타이머 따로 띄우기 / 도구를 항상 위에 (v2.5.1)
@@ -3461,7 +3464,7 @@ A: **v2.4.6에서 해결됐어요.** 둘은 같은 원인이었습니다.
     },
   },
   {
-    content: `Q: NEIS에서 받은 성적 엑셀 파일이 안 열려요. / 전과목 성적 파일 업로드가 실패해요. / 성적 파일을 올렸는데 내용을 못 찾는대요.\nA: v2.2.6에서 크게 개선됐어요. NEIS가 주는 '.xls' 성적 파일 상당수는 사실 진짜 엑셀이 아니라 'HTML 표'를 엑셀처럼 저장한 것이라, 예전엔 '내용을 찾지 못했어요'라며 열리지 않곤 했어요.\n\n· **이제는** — 진짜 엑셀(.xlsx)을 먼저 시도하고, 안 되면 이 HTML 표 형식(한글 인코딩·병합 셀 포함)도 자동으로 알아보고 읽어들여요\n· 그래도 안 읽히는 파일은 '엑셀에서 열어 [다른 이름으로 저장] → Excel 통합 문서(.xlsx)로 바꿔 올려 달라'고 구체적으로 안내해요\n· 담임의 '학급 성적 살펴보기'와 수업 관리의 성적 가져오기 양쪽에 함께 적용돼요.`,
+    content: `Q: NEIS에서 받은 성적 엑셀 파일이 안 열려요. / 전과목 성적 파일 업로드가 실패해요. / 성적 파일을 올렸는데 내용을 못 찾는대요.\nA: v2.2.6에서 크게 개선됐어요. NEIS가 주는 '.xls' 성적 파일 상당수는 사실 진짜 엑셀이 아니라 'HTML 표'를 엑셀처럼 저장한 것이라, 예전엔 '내용을 찾지 못했어요'라며 열리지 않곤 했어요.\n\n· **이제는** — 진짜 엑셀(.xlsx)을 먼저 시도하고, 안 되면 이 HTML 표 형식(한글 인코딩·병합 셀 포함)도 자동으로 알아보고 읽어들여요\n· 그래도 안 읽히는 파일은 '엑셀에서 열어 [다른 이름으로 저장] → Excel 통합 문서(.xlsx)로 바꿔 올려 달라'고 구체적으로 안내해요\n· 담임의 '학급 성적 살펴보기'와 수업 관리의 성적 가져오기 양쪽에 함께 적용돼요.\n\n일람표인데도 인식하지 못하거나 .xlsx로 다시 저장해도 안 되면 파일 형식 안내만 반복하지 않습니다. ${TRANSCRIPT_SUPPORT_REQUEST}`,
     metadata: {
       source: 'system-qa',
       category: 'class-management',
@@ -3938,10 +3941,10 @@ async function ingestDocuments(documents) {
  * 12,191행이 있었는데 서로 다른 문서는 478건뿐이었다(같은 문서가 최대 26벌). 중복 사본이
  * 벡터 검색 상위 10건을 차지해 답변 품질까지 떨어뜨렸다.
  *
- * 아래 두 출처는 이 파일이 유일한 원본이므로 '지우고 다시 넣기'가 안전하다. 문서 파일에서
+ * 아래 출처는 이 스크립트가 관리하므로 '지우고 다시 넣기'가 안전하다. 문서 파일에서
  * 만들어지는 출처(docs/user-guide.md 등, scripts/embed-docs.ts 소관)는 건드리지 않는다.
  */
-const OWNED_SOURCES = ['system-qa', 'feature-summary'];
+const OWNED_SOURCES = ['system-qa', 'feature-summary', TRANSCRIPT_SUPPORT_DOCUMENT.metadata.source];
 
 async function deleteSource(source) {
   const response = await fetch(`${SUPABASE_URL}/functions/v1/ssampin-embed`, {

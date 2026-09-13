@@ -7,7 +7,7 @@ interface TranscriptState {
   loaded: boolean;
 
   load: () => Promise<void>;
-  /** NEIS 파일 등에서 여러 학생 일괄 반영(studentKey 병합). */
+  /** 확인한 한 학급·한 학기 파일로 전체 교체. */
   importStudents: (students: readonly StudentTranscript[]) => Promise<void>;
   removeStudent: (studentKey: string) => Promise<void>;
   clearAll: () => Promise<void>;
@@ -23,7 +23,7 @@ export const useTranscriptStore = create<TranscriptState>((set, get) => ({
   },
 
   importStudents: async (students) => {
-    const next = await manageImportedTranscript.upsertMany({ students: get().students }, students);
+    const next = await manageImportedTranscript.replaceAll(students);
     set({ students: next.students });
   },
 

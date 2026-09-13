@@ -35,25 +35,29 @@ function cellValue(value: unknown): unknown {
  * 빈 워크북이면 rows=[] 를 돌려준다. 두 방식 모두 실패하면 throw(상위 catch에서 안내).
  */
 export async function loadSheetGrid(buffer: ArrayBuffer): Promise<SheetGrid> {
+  return (await loadSheetGrids(buffer, true))[0] ?? { rows: [], sheetName: '' };
+}
+
+/** 전과목 가져오기는 성적 시트를 탐색한다. 기존 단일 과목 경로는 첫 시트만 읽는다. */
+export async function loadSheetGrids(buffer: ArrayBuffer, firstOnly = false): Promise<SheetGrid[]> {
   try {
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
-    const ws = workbook.worksheets[0];
-    if (ws === undefined) return { rows: [], sheetName: '' };
-
-    const rows: unknown[][] = [];
-    ws.eachRow({ includeEmpty: true }, (row) => {
-      const values = Array.isArray(row.values) ? row.values : [];
-      // exceljs의 row.values는 1-based(인덱스 0은 비어 있음) → 0-based로 정규화
-      rows.push(values.slice(1).map((v) => cellValue(v)));
+    const worksheets = firstOnly ? workbook.worksheets.slice(0, 1) : workbook.worksheets;
+    return worksheets.map((ws) => {
+      const rows: unknown[][] = [];
+      ws.eachRow({ includeEmpty: true }, (row) => {
+        const values = Array.isArray(row.values) ? row.values : [];
+        rows.push(values.slice(1).map((v) => cellValue(v)));
+      });
+      return { rows, sheetName: ws.name };
     });
-    return { rows, sheetName: ws.name };
   } catch (err) {
     // .xlsx(zip)가 아니면 나이스가 흔히 주는 'HTML 표를 .xls로 저장'한 파일일 수 있음 → 표 파싱 시도.
     const text = decodeSheetBytes(buffer);
     if (looksLikeHtmlTable(text)) {
       const rows = parseHtmlTableToGrid(text);
-      if (rows.length > 0) return { rows, sheetName: '' };
+      if (rows.length > 0) return [{ rows, sheetName: '' }];
     }
     throw err; // 진짜 못 읽는 형식(바이너리 .xls 등)은 그대로 상위에서 처리
   }
