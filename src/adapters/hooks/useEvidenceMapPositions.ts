@@ -5,7 +5,7 @@
  *   동기화 충돌만 늘린다 — 계획서 §6). `localStorage` 가 없거나 막혀 있으면(사적 모드 등) 조용히 메모리로만 든다.
  * ★값은 자동 자리에 더하는 **차이(dx, dy)** 다. 자료가 바뀌어 자동 자리가 달라져도 손으로 민 만큼은 남는다.
  */
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { MapOffset } from '@adapters/components/RecordDraft/evidenceMapLayout';
 
@@ -58,35 +58,57 @@ export interface EvidenceMapPositions {
   /** [카드 위치 정돈] — 손으로 민 값을 전부 비운다. 내용은 바뀌지 않는다. */
   readonly reset: () => void;
   readonly hasCustom: boolean;
+  readonly getOffsets: () => ReadonlyMap<string, MapOffset>;
+  readonly restore: (offsets: ReadonlyMap<string, MapOffset>) => void;
 }
 
 export function useEvidenceMapPositions(studentRef: string | null): EvidenceMapPositions {
   const key = keyFor(studentRef);
   const [offsets, setOffsets] = useState<ReadonlyMap<string, MapOffset>>(() => read(key));
 
+  const current = useRef({ key, offsets });
+  const getOffsets = useCallback(
+    () => (current.current.key === key ? current.current.offsets : read(key)),
+    [key],
+  );
+  const restore = useCallback(
+    (next: ReadonlyMap<string, MapOffset>): void => {
+      if (current.current.key === key) {
+        current.current = { key, offsets: next };
+        setOffsets(next);
+      }
+      write(key, next);
+    },
+    [key],
+  );
+
   // 학생이 바뀌면 그 학생 것을 읽는다. 앞 학생의 위치가 따라오지 않게.
   useEffect(() => {
-    setOffsets(read(key));
+    current.current = { key, offsets: read(key) };
+    setOffsets(current.current.offsets);
   }, [key]);
 
   const move = useCallback(
     (id: string, dx: number, dy: number): void => {
       if (dx === 0 && dy === 0) return;
-      setOffsets((prev) => {
-        const cur = prev.get(id) ?? { dx: 0, dy: 0 };
-        const next = new Map(prev);
-        next.set(id, { dx: cur.dx + dx, dy: cur.dy + dy });
-        write(key, next);
-        return next;
-      });
+      const cur = getOffsets().get(id) ?? { dx: 0, dy: 0 };
+      const next = new Map(getOffsets());
+      next.set(id, { dx: cur.dx + dx, dy: cur.dy + dy });
+      restore(next);
     },
-    [key],
+    [restore, getOffsets],
   );
 
   const reset = useCallback((): void => {
-    setOffsets(new Map());
-    write(key, new Map());
-  }, [key]);
+    restore(new Map());
+  }, [restore]);
 
-  return { offsets, move, reset, hasCustom: offsets.size > 0 };
+  return {
+    offsets,
+    move,
+    reset,
+    hasCustom: offsets.size > 0,
+    getOffsets,
+    restore,
+  };
 }

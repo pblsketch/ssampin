@@ -16,7 +16,7 @@ import { detectProhibitedTerms, summarizeProhibited } from '../rules/prohibitedR
 import { createMaskSession } from '../privacy/maskEngine';
 import type { KeywordGroup, MaskMapping } from '../privacy/types';
 import { redactQuestion } from '../rules/redactOutbound';
-import { NARRATIVE_NOTE_MAX } from '../entities/InquiryThread';
+import { NARRATIVE_NOTE_MAX, type NarrativeScene } from '../entities/InquiryThread';
 import {
   FRAME_SLOTS,
   NARRATIVE_FRAME_ROLES,
@@ -46,6 +46,7 @@ export interface NarrativeSuggestInput {
   readonly previousThreadTitle?: string;
   /** 선생님의 추가 요청(자유 글, 선택). 가려서 나간다. 비어 있으면 줄 자체를 만들지 않는다. */
   readonly instruction?: string;
+  readonly currentScenes?: readonly NarrativeScene[];
 }
 
 export interface NarrativeSuggestPack {
@@ -136,7 +137,21 @@ export function buildNarrativeSuggestPack(input: NarrativeSuggestInput): Narrati
       '없으면 기록번호 칸을 비워 두세요. 비워 둔 자리는 초안을 쓸 때 기록 전체를 종합해 채웁니다. ' +
       '활동 장면을 적은 기록은 이 자리에 넣지 않습니다.',
   );
-  parts.push('- 기록 하나는 한 자리에만 넣습니다. 넣을 자리가 없는 기록은 빼도 됩니다.');
+  parts.push(
+    '- 한 자료에 과정과 결과가 함께 있으면 같은 기록번호를 여러 장면에 넣을 수 있습니다. 장면별 이유에 이 자료에서 쓸 부분을 구분하세요. 같은 내용을 되풀이하거나 여러 독립 자료처럼 세지 마세요.',
+  );
+  parts.push(
+    '- 날짜나 같은 낱말만으로 묶지 말고 질문의 대상, 활동 목적, 비교 기준, 시도, 피드백, 수정 결과가 실제로 이어지는지 읽으세요. 같은 역할이라도 맥락이 다르면 장면을 나눌 수 있습니다.',
+  );
+  parts.push(
+    '- 관찰 사실과 선생님의 해석 메모를 구별하세요. 메모를 새로운 관찰 사실로 바꾸거나 근거에 없는 성장·인과·의도를 만들지 마세요. 단순한 시간 선후는 인과의 증거가 아닙니다.',
+  );
+  parts.push(
+    '- 각 장면은 앞 장면과의 연결이 근거에서 확인될 때만 이음말을 적습니다. 평가의 종합 판단과 활동의 시간 순서는 구별하고, 불명확하면 이음말 칸을 비워 두세요. 억지로 모든 근거를 하나의 성장 이야기로 잇지 마세요.',
+  );
+  parts.push(
+    '- 배치 이유에는 해당 기록번호와 관찰 내용을 짚고, 연결 근거가 부족하면 그 한계를 적으세요. 기존 교사 메모의 의미를 보존하되 새 사실을 보태지 마세요.',
+  );
   parts.push('- 카테고리는 위 목록에 있는 이름만 씁니다. 없으면 자리 이름만 쓰세요.');
   parts.push(
     `- 이유는 기록에 적힌 것만 근거로 씁니다. 기록에 없는 사실을 지어내지 마세요. ${NARRATIVE_NOTE_MAX}자 안으로.`,
@@ -150,16 +165,42 @@ export function buildNarrativeSuggestPack(input: NarrativeSuggestInput): Narrati
   parts.push('');
   parts.push('기록:');
   parts.push(lines.length > 0 ? lines.join('\n') : '(보낼 수 있는 기록이 없습니다)');
+  if (input.currentScenes?.length) {
+    parts.push(
+      '',
+      '현재 구성(교사가 정리한 맥락입니다. 근거에 맞는 부분과 메모의 의미를 유지하세요):',
+    );
+    for (const scene of input.currentScenes) {
+      const ids = scene.evidenceIds.map((id) => numbered.indexOf(id) + 1).filter((n) => n > 0);
+      // 제외된 기록만의 해석이 우회해서 전송되지 않도록 같은 포함 집합에 속한 장면만 보낸다.
+      if (ids.length !== scene.evidenceIds.length) continue;
+      if (ids.length === 0 && exclusions.length > 0) continue;
+      const fields = [
+        scene.label,
+        scene.note,
+        scene.leadInNeedsCheck ? undefined : scene.leadIn,
+      ].filter((v): v is string => Boolean(v?.trim()));
+      for (const focus of scene.evidenceFocus ?? []) {
+        const n = numbered.indexOf(focus.evidenceId) + 1;
+        if (n > 0 && scene.evidenceIds.includes(focus.evidenceId))
+          fields.push(`기록 ${n}에서 쓸 부분: ${focus.note.slice(0, NARRATIVE_NOTE_MAX)}`);
+      }
+      const safeFields = fields.filter((v) => detectProhibitedTerms(v).length === 0);
+      parts.push(
+        `- ${frameRoleLabel(input.frame, scene.role)} · 기록 ${ids.join(',')}: ${mask(safeFields.join(' / ').slice(0, NARRATIVE_NOTE_MAX * 3))}`,
+      );
+    }
+  }
   parts.push('');
 
   const linkLine =
     input.previousThreadTitle === undefined
       ? ''
-      : `\n앞 주제 「${mask(input.previousThreadTitle)}」와 어떻게 이어지는지도 한 줄 적어 주세요: \`이음 | 문장\``;
+      : `\n앞 주제 제목은 「${mask(input.previousThreadTitle)}」입니다. 제목만으로 인과·성장을 추정하지 마세요. 현재 기록에 앞 주제와의 관계가 명시된 경우에만 \`이음 | 문장\`을 쓰고, 아니면 생략하세요.`;
 
   parts.push(
-    '출력 형식: 줄마다 `자리 | 카테고리 | 기록번호,기록번호 | 이유 한 문장` 만 쓰세요.\n' +
-      `예) ${frameRoleLabel(input.frame, 'motive')} | ${RECORD_MODULES[FRAME_SLOTS[input.frame].motive[0] ?? 'teacherJudgement'].label} | 1,2 | 쿠폰 문구에 대한 물음에서 시작했습니다\n` +
+    '출력 형식: 줄마다 `자리 | 카테고리 | 기록번호,기록번호 | 이유 한 문장 | 앞 장면과의 이음말` 만 쓰세요. 첫 장면의 이음말 칸은 비웁니다. 각 칸 안에는 | 기호를 쓰지 마세요.\n' +
+      `예) ${frameRoleLabel(input.frame, 'motive')} | ${RECORD_MODULES[FRAME_SLOTS[input.frame].motive[0] ?? 'teacherJudgement'].label} | 1,2 | 쿠폰 문구에 대한 물음에서 시작했습니다 | \n` +
       `세울 흐름이 없으면 \`${NARRATIVE_SUGGEST_NONE_WORD} | 이유 한 문장\` 한 줄만 쓰세요.\n` +
       '설명·머리말·다른 말은 쓰지 마세요.' +
       linkLine,

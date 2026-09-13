@@ -1,3 +1,4 @@
+import { publishEvidenceWrite } from './evidenceEditJournal';
 import { create } from 'zustand';
 import {
   normalizeThreadKeywords,
@@ -14,7 +15,12 @@ import {
   type NarrativeFrameId,
   type RecordScaffold,
 } from '@domain/rules/narrativeFrames';
-import { chainOf } from '@domain/rules/narrativeScenes';
+import { chainOf, pruneSceneFocus } from '@domain/rules/narrativeScenes';
+import {
+  placeSceneAfter as placeSceneAfterRule,
+  stepScene,
+  markLeadInRecheck,
+} from '@domain/rules/narrativeSceneOrder';
 import { academicTermForDate } from '@domain/rules/academicCalendar';
 import { inquiryThreadRepository, recordEvidenceRepository } from '@adapters/di/container';
 import { generateUUID } from '@infrastructure/utils/uuid';
@@ -70,6 +76,7 @@ export interface NarrativeDraftScene {
   readonly label?: string;
   /** 모델이 쓴 이유 문장. 저장되면 `noteSource: 'ai'` 가 붙는다. */
   readonly note?: string;
+  readonly leadIn?: string;
   readonly evidenceIds: readonly string[];
 }
 
@@ -127,6 +134,41 @@ interface InquiryThreadState {
     groups: readonly SceneGroup[],
     index?: number,
   ) => Promise<readonly string[]>;
+  /**
+   * 근거를 이 장면에 **더 잇는다** — 기존 연결을 **끊지 않는다**(오너 결정 2026-09-13).
+   *
+   * 하나의 탐구 보고서에 과정과 결과가 함께 들어 있으면, 같은 자료를 두 장면이 각각 참조한다.
+   * ★`insertIntoScenes` 는 **옮기기**(다른 장면에서 빼고 넣기)다. 이쪽은 **더하기**다. 둘을 한 함수로 묶지 않는다 —
+   *   선을 새로 끄는 것과 선 끝을 옮기는 것은 선생님에게도 다른 동작이다.
+   * @returns 실제로 이어진 근거 id. 이미 이어져 있었으면 들어 있지 않다.
+   */
+  changeEvidenceConnection: (
+    threadId: string,
+    fromSceneId: string,
+    toSceneId: string,
+    evidenceId: string,
+  ) => Promise<void>;
+  attachEvidenceToScene: (
+    threadId: string,
+    sceneId: string,
+    evidenceIds: readonly string[],
+  ) => Promise<readonly string[]>;
+  /**
+   * 이 장면과의 연결만 끊는다 — **근거를 지우지 않고**, 다른 장면의 연결도 건드리지 않는다.
+   * 마지막 연결이 끊기면 그 근거는 '자리 미정'으로 돌아간다(주제 소속은 그대로).
+   */
+  detachEvidenceFromScene: (
+    threadId: string,
+    sceneId: string,
+    evidenceIds: readonly string[],
+  ) => Promise<void>;
+  /** 이 장면에서 이 근거의 「쓸 부분」. 빈 글이면 지운다. 연결이 없으면 저장하지 않는다. */
+  setSceneEvidenceFocus: (
+    threadId: string,
+    sceneId: string,
+    evidenceId: string,
+    note: string,
+  ) => Promise<void>;
   /** 장면 안에서 순서 바꾸기. 소유는 이미 확인된 상태라 주제 파일만 쓴다. */
   reorderScene: (
     threadId: string,
@@ -147,8 +189,23 @@ interface InquiryThreadState {
    * 장면 **차례** 바꾸기 — 한 칸 앞으로(-1) 또는 뒤로(+1).
    * ★끌기만 두지 않는다. 끌기만 있으면 키보드로는 차례를 못 바꾼다.
    * ★끝에서 더 밀면 아무 일도 안 한다(저장도 안 한다).
+   *
+   * @returns 앞 장면이 달라져 「이음말 확인」이 붙은 장면 수. **아무것도 안 했으면 `null`.**
+   *   ★0 과 `null` 은 다르다 — 0 은 "옮겼고 확인할 이음말이 없다", `null` 은 "옮기지 않았다"다.
    */
-  moveScene: (threadId: string, sceneId: string, dir: -1 | 1) => Promise<void>;
+  moveScene: (threadId: string, sceneId: string, dir: -1 | 1) => Promise<number | null>;
+  /**
+   * 장면 차례 바꾸기 — `movedSceneId` 를 `anchorSceneId` **바로 뒤**로(지도에서 연결점을 끌어 놓았을 때).
+   *
+   * `A → B → C → D` 에서 A 의 다음점을 D 에 놓으면 `A → D → B → C`. D 만 움직이고 근거·메모는 그대로다.
+   * ★`moveScene` 과 **같은 검토 규칙**을 지난다(`narrativeSceneOrder`) — 화면의 선만 바꾸는 길을 따로 두지 않는다.
+   * @returns 「이음말 확인」이 붙은 장면 수. 아무것도 안 했으면 `null`(같은 장면·없는 장면·이미 바로 다음).
+   */
+  placeSceneAfter: (
+    threadId: string,
+    anchorSceneId: string,
+    movedSceneId: string,
+  ) => Promise<number | null>;
   /** 장면 메모. `noteSource` 를 안 주면 선생님이 쓴 것으로 본다. */
   setSceneNote: (
     threadId: string,
@@ -201,7 +258,11 @@ interface InquiryThreadState {
    * ★`applyNarrativeDraft` 로 되돌리면 선생님 메모에 `noteSource: 'ai'` 가 붙는다. 메모 출처·id 까지 그대로 살려야
    *   하므로 정규화 없이 통째로 쓴다. 읽기 가림(`scenesOf`)이 그 사이 사라진 근거를 걸러 준다.
    */
-  restoreScenes: (threadId: string, scenes: readonly NarrativeScene[]) => Promise<void>;
+  restoreScenes: (
+    threadId: string,
+    scenes: readonly NarrativeScene[],
+    link?: NarrativeLink | null,
+  ) => Promise<void>;
   /**
    * 이 근거들을 그 주제의 장면에서 뗀다 — 소유를 바꾸는 **근거 경로 7개**가 저장 뒤에 부른다.
    * ★실패해도 던지지 않는다. 읽기 가림(`scenesOf`)이 받치고 있어 화면은 이미 맞다.
@@ -279,9 +340,23 @@ function pruneGhosts(
     const kept = sc.evidenceIds.filter((id) => owned.has(id));
     if (kept.length === sc.evidenceIds.length) return sc;
     changed = true;
-    return { ...sc, evidenceIds: kept };
+    return withEvidenceIds(sc, kept);
   });
   return changed ? next : scenes;
+}
+
+/**
+ * 장면의 근거 목록을 갈아 끼운다(순수) — **「쓸 부분」을 함께 정리한다.**
+ * ★연결이 끊긴 근거의 말을 남겨 두면, 나중에 다시 이었을 때 옛 말이 되살아난다.
+ */
+function withEvidenceIds(sc: NarrativeScene, evidenceIds: readonly string[]): NarrativeScene {
+  const focus = pruneSceneFocus(sc.evidenceFocus, evidenceIds);
+  const rest = { ...sc, evidenceIds };
+  if (focus === undefined) {
+    delete (rest as { evidenceFocus?: NarrativeScene['evidenceFocus'] }).evidenceFocus;
+    return rest;
+  }
+  return { ...rest, evidenceFocus: focus };
 }
 /** 새 장면의 기본 자리 — 평가 장면 바로 뒤(없으면 맨 뒤). */
 function defaultInsertAt(scenes: readonly NarrativeScene[]): number {
@@ -306,7 +381,7 @@ function stripFromScenes(
     const kept = sc.evidenceIds.filter((id) => !ids.has(id));
     if (kept.length === sc.evidenceIds.length) return sc;
     changed = true;
-    return { ...sc, evidenceIds: kept };
+    return withEvidenceIds(sc, kept);
   });
   return changed ? next : scenes;
 }
@@ -339,9 +414,44 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
       const { next, result } = await transform(latest);
       if (next !== latest) {
         await inquiryThreadRepository.saveInquiryThreads({ records: next });
+        publishEvidenceWrite({ kind: 'threads', before: latest, after: next });
       }
       set({ records: next, loaded: true, loadError: null });
       return result;
+    });
+
+  /**
+   * 장면 **차례를 바꾸는 길 하나** — 앞/뒤 단추도 연결점 끌기도 여기를 지난다.
+   *
+   * ★규칙은 도메인(`narrativeSceneOrder`)이 정하고 여기서는 락·유령 잘라 내기·저장만 한다.
+   *   길을 둘로 두면 한쪽만 이음말 검토를 잃는다.
+   * ★`change` 가 `null` 이면 **아무것도 쓰지 않는다.** 배열을 복사만 해도 `write` 는 "바뀌었다"로
+   *   보고 파일을 쓴다 — 화면은 그대로인데 `updatedAt` 이 오르고 드라이브 동기화가 매번 나간다.
+   */
+  const reorderWith = (
+    threadId: string,
+    change: (scenes: readonly NarrativeScene[]) => {
+      readonly scenes: readonly NarrativeScene[];
+      readonly recheckedIds: readonly string[];
+    } | null,
+  ): Promise<number | null> =>
+    write(async (latest) => {
+      if (latest.find((t) => t.id === threadId)?.status !== 'open')
+        throw new Error('주제가 없거나 마친 주제입니다.');
+      const owned = await readOwnedEvidenceIds(threadId);
+      const scenes0 = latest.find((t) => t.id === threadId)?.scenes ?? [];
+      const pruned = owned === null ? scenes0 : pruneGhosts(scenes0, owned);
+      const out = change(pruned);
+      if (out === null) {
+        return {
+          next: pruned === scenes0 ? latest : withScenes(latest, threadId, () => pruned),
+          result: null,
+        };
+      }
+      return {
+        next: withScenes(latest, threadId, () => out.scenes),
+        result: out.recheckedIds.length,
+      };
     });
 
   return {
@@ -471,6 +581,7 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
             return 'removed'; // 이미 없다 = 정리된 상태.
           }
           await inquiryThreadRepository.saveInquiryThreads({ records: next });
+          publishEvidenceWrite({ kind: 'threads', before: latest, after: next });
           set({ records: next, loaded: true, loadError: null });
           return 'removed';
         } catch (err) {
@@ -511,7 +622,15 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
         }
         const next = withScenes(latest, threadId, () => {
           // 옮겨 오는 근거는 **다른 장면에서 먼저 뺀다** — 같은 근거가 두 자리에 남지 않게.
-          const stripped = stripFromScenes(pruned, placed);
+          const moved = new Set(
+            [...placed].filter(
+              (id) =>
+                !targets.some((g) =>
+                  pruned.find((sc) => sc.id === g.sceneId)?.evidenceIds.includes(id),
+                ),
+            ),
+          );
+          const stripped = stripFromScenes(pruned, moved);
           return stripped.map((sc) => {
             const add = targets.find((g) => g.sceneId === sc.id);
             if (add === undefined) return sc;
@@ -520,39 +639,151 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
             const base = sc.evidenceIds.filter((id) => !placed.has(id));
             const at = index === undefined ? base.length : index;
             const cut = Math.max(0, Math.min(at, base.length));
-            return { ...sc, evidenceIds: [...base.slice(0, cut), ...incoming, ...base.slice(cut)] };
+            return withEvidenceIds(sc, [...base.slice(0, cut), ...incoming, ...base.slice(cut)]);
           });
         });
         return { next, result: [...placed] as readonly string[] };
       });
     },
-    moveScene: async (threadId, sceneId, dir) => {
+    moveScene: async (threadId, sceneId, dir) =>
+      await reorderWith(threadId, (scenes) => stepScene(scenes, sceneId, dir)),
+
+    placeSceneAfter: async (threadId, anchorSceneId, movedSceneId) =>
+      await reorderWith(threadId, (scenes) =>
+        placeSceneAfterRule(scenes, anchorSceneId, movedSceneId),
+      ),
+
+    changeEvidenceConnection: async (threadId, fromSceneId, toSceneId, evidenceId) => {
       await write(async (latest) => {
+        const thread = latest.find((t) => t.id === threadId);
+        const owned = await readOwnedEvidenceIds(threadId);
+        const from = thread?.scenes?.find((sc) => sc.id === fromSceneId);
+        const to = thread?.scenes?.find((sc) => sc.id === toSceneId);
+        if (
+          thread?.status !== 'open' ||
+          !from?.evidenceIds.includes(evidenceId) ||
+          !to ||
+          !owned?.has(evidenceId)
+        )
+          throw new Error('변경할 연결이 없거나 마친 주제입니다.');
+        if (fromSceneId === toSceneId) return { next: latest, result: undefined };
+        if (to.evidenceIds.includes(evidenceId))
+          throw new Error('이미 연결된 장면입니다. 기존 연결을 유지했습니다.');
+        const focus = from.evidenceFocus?.find((f) => f.evidenceId === evidenceId);
+        return {
+          next: withScenes(latest, threadId, (scenes) =>
+            scenes.map((sc) => {
+              if (sc.id === fromSceneId)
+                return withEvidenceIds(
+                  sc,
+                  sc.evidenceIds.filter((id) => id !== evidenceId),
+                );
+              if (sc.id !== toSceneId) return sc;
+              return {
+                ...sc,
+                evidenceIds: [...sc.evidenceIds, evidenceId],
+                ...(focus ? { evidenceFocus: [...(sc.evidenceFocus ?? []), focus] } : {}),
+              };
+            }),
+          ),
+          result: undefined,
+        };
+      });
+    },
+
+    attachEvidenceToScene: async (threadId, sceneId, evidenceIds) => {
+      const wanted = new Set(evidenceIds);
+      if (wanted.size === 0) return [];
+      return await write(async (latest) => {
+        if (latest.find((t) => t.id === threadId)?.status !== 'open')
+          throw new Error('주제가 없거나 마친 주제입니다.');
         const owned = await readOwnedEvidenceIds(threadId);
         const scenes0 = latest.find((t) => t.id === threadId)?.scenes ?? [];
         const pruned = owned === null ? scenes0 : pruneGhosts(scenes0, owned);
-        const at = pruned.findIndex((sc) => sc.id === sceneId);
-        const to = at + dir;
-        // ★없는 장면이거나 끝에서 더 밀면 **아무것도 쓰지 않는다.** 배열을 복사만 해도
-        //   `write` 는 "바뀌었다"로 보고 파일을 쓴다 — 화면은 그대로인데 `updatedAt` 이 오르고
-        //   드라이브 동기화가 매번 나갔다(인터페이스 주석이 못 박은 계약이었다).
-        if (at < 0 || to < 0 || to >= pruned.length) {
+        const keep = (): { next: readonly InquiryThread[]; result: readonly string[] } => ({
+          next: pruned === scenes0 ? latest : withScenes(latest, threadId, () => pruned),
+          result: [],
+        });
+        // 소유를 못 읽었으면 잇지 않는다 — `insertIntoScenes` 와 같은 태도(유령을 만들지 않는다).
+        if (owned === null) return keep();
+        const target = pruned.find((sc) => sc.id === sceneId);
+        if (target === undefined) return keep();
+        const here = new Set(target.evidenceIds);
+        const adding = [...wanted].filter((id) => owned.has(id) && !here.has(id));
+        if (adding.length === 0) return keep();
+        const next = withScenes(latest, threadId, () =>
+          pruned.map((sc) =>
+            sc.id === sceneId ? withEvidenceIds(sc, [...sc.evidenceIds, ...adding]) : sc,
+          ),
+        );
+        return { next, result: adding as readonly string[] };
+      });
+    },
+
+    detachEvidenceFromScene: async (threadId, sceneId, evidenceIds) => {
+      const drop = new Set(evidenceIds);
+      if (drop.size === 0) return;
+      await write(async (latest) => {
+        if (latest.find((t) => t.id === threadId)?.status !== 'open')
+          throw new Error('주제가 없거나 마친 주제입니다.');
+        const owned = await readOwnedEvidenceIds(threadId);
+        const scenes0 = latest.find((t) => t.id === threadId)?.scenes ?? [];
+        const pruned = owned === null ? scenes0 : pruneGhosts(scenes0, owned);
+        const target = pruned.find((sc) => sc.id === sceneId);
+        const kept = target?.evidenceIds.filter((id) => !drop.has(id));
+        // 끊을 연결이 없으면 저장하지 않는다(`updatedAt` 만 올리고 동기화가 나가지 않게).
+        if (
+          target === undefined ||
+          kept === undefined ||
+          kept.length === target.evidenceIds.length
+        ) {
           return {
             next: pruned === scenes0 ? latest : withScenes(latest, threadId, () => pruned),
             result: undefined,
           };
         }
-        const moved = [...pruned];
-        const [taken] = moved.splice(at, 1);
-        if (taken === undefined) {
-          return {
-            next: pruned === scenes0 ? latest : withScenes(latest, threadId, () => pruned),
-            result: undefined,
-          };
+        return {
+          next: withScenes(latest, threadId, () =>
+            pruned.map((sc) => (sc.id === sceneId ? withEvidenceIds(sc, kept) : sc)),
+          ),
+          result: undefined,
+        };
+      });
+    },
+
+    setSceneEvidenceFocus: async (threadId, sceneId, evidenceId, note) => {
+      const trimmed = note.trim().slice(0, NARRATIVE_NOTE_MAX);
+      await write((latest) => {
+        const target = latest.find((t) => t.id === threadId);
+        const scene = target?.scenes?.find((sc) => sc.id === sceneId);
+        // ★연결이 없으면 던진다 — 조용히 버리면 선생님이 쓴 글이 사라진 채 "저장했습니다"가 뜬다
+        //   (`setSceneNote` 와 같은 규율).
+        if (target?.status !== 'open' || scene === undefined) {
+          throw new Error('쓸 부분을 저장할 장면이 없거나 마친 주제입니다.');
         }
-        moved.splice(to, 0, taken);
-        const next = withScenes(latest, threadId, () => moved);
-        return { next, result: undefined };
+        if (!scene.evidenceIds.includes(evidenceId)) {
+          throw new Error('이 장면에 이어져 있지 않은 근거입니다.');
+        }
+        return {
+          next: withScenes(latest, threadId, (scenes) =>
+            !scenes.some((sc) => sc.id === sceneId)
+              ? null
+              : scenes.map((sc) => {
+                  if (sc.id !== sceneId) return sc;
+                  const rest = (sc.evidenceFocus ?? []).filter((f) => f.evidenceId !== evidenceId);
+                  const focus =
+                    trimmed.length === 0 ? rest : [...rest, { evidenceId, note: trimmed }];
+                  const out = { ...sc };
+                  if (focus.length === 0) {
+                    delete (out as { evidenceFocus?: NarrativeScene['evidenceFocus'] })
+                      .evidenceFocus;
+                    return out;
+                  }
+                  return { ...out, evidenceFocus: focus };
+                }),
+          ),
+          result: undefined,
+        };
       });
     },
 
@@ -603,14 +834,14 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
           // ★평가 자리가 저장 배열에 없으면 **여기서 실제로 세운다.** 없으면 화면이 가상 평가
           //   칸을 끼워 보여 주는데, 그 칸은 저장된 자리가 아니라 메모·배치가 갈 곳이 없다.
           //   자리를 만들어 두면 선생님이 적은 판단이 갈 곳이 생긴다(ADR-094: 교사 판단은 한 번).
-          if (!needsEvaluation) return placedNext;
+          if (!needsEvaluation) return markLeadInRecheck(pruned, placedNext).scenes;
           const evaluation: NarrativeScene = {
             id: generateUUID(),
             role: 'evaluation',
             evidenceIds: [],
             moduleId: 'teacherJudgement',
           };
-          return [evaluation, ...placedNext];
+          return markLeadInRecheck(pruned, [evaluation, ...placedNext]).scenes;
         });
         return { next, result: undefined };
       });
@@ -626,7 +857,10 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
           const target = pruned.find((sc) => sc.id === sceneId);
           // 평가 장면은 뺄 수 없다 — 교사 판단은 어느 구성에서도 반드시 한 번 있다.
           if (target === undefined || target.role === 'evaluation') return null;
-          return pruned.filter((sc) => sc.id !== sceneId);
+          return markLeadInRecheck(
+            pruned,
+            pruned.filter((sc) => sc.id !== sceneId),
+          ).scenes;
         });
         return { next, result: undefined };
       });
@@ -675,12 +909,14 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
               ? null
               : scenes.map((sc) => {
                   if (sc.id !== sceneId) return sc;
+                  // ★선생님이 확인해 저장했으므로 「이음말 확인」을 푼다 — 비우기도 확인이다.
+                  const rest = { ...sc };
+                  delete (rest as { leadInNeedsCheck?: boolean }).leadInNeedsCheck;
                   if (trimmed.length === 0) {
-                    const rest = { ...sc };
                     delete (rest as { leadIn?: string }).leadIn;
                     return rest;
                   }
-                  return { ...sc, leadIn: trimmed };
+                  return { ...rest, leadIn: trimmed };
                 }),
           ),
           result: undefined,
@@ -789,6 +1025,7 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
             evidenceIds: ids,
             ...(sc.moduleId === undefined ? {} : { moduleId: sc.moduleId }),
             ...(sc.label === undefined ? {} : { label: sc.label }),
+            ...(sc.leadIn?.trim() ? { leadIn: sc.leadIn.trim().slice(0, NARRATIVE_NOTE_MAX) } : {}),
             // ★AI 가 쓴 메모라고 적어 둔다. 교사가 손대기 전까지 카드에 배지로 보인다(오너 결정).
             ...(note.length > 0
               ? { note: note.slice(0, NARRATIVE_NOTE_MAX), noteSource: 'ai' as const }
@@ -797,28 +1034,28 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
         };
         // 저장 시점에도 평가를 **정확히 하나로** 맞춘다 — 파서가 놓쳐도 여기서 걸린다(ADR-094).
         const body: NarrativeScene[] = [];
-        let evaluation: NarrativeScene | null = null;
-        let evaluationAtFront = false;
+        let hasEvaluation = false;
         for (const sc of input.scenes) {
           if (sc.role === 'evaluation') {
-            if (evaluation !== null) continue; // 둘째부터는 버린다
-            evaluation = toScene(sc);
-            evaluationAtFront = body.length === 0;
+            if (hasEvaluation) continue;
+            hasEvaluation = true;
+          } else if (body.length >= NARRATIVE_SCENE_MAX - (hasEvaluation ? 0 : 1)) {
             continue;
           }
-          if (body.length >= NARRATIVE_SCENE_MAX - 1) break;
+          if (body.length >= NARRATIVE_SCENE_MAX) break;
           body.push(toScene(sc));
         }
-        if (evaluation === null) {
+        if (!hasEvaluation) {
           // 평가가 없던 제안은 **맨 앞**에 세운다(기본 시작 방식이 "교사 판단 먼저"다).
-          evaluation = toScene({
-            role: 'evaluation',
-            moduleId: defaultModuleFor(input.frame, 'evaluation'),
-            evidenceIds: [],
-          });
-          evaluationAtFront = true;
+          body.unshift(
+            toScene({
+              role: 'evaluation',
+              moduleId: defaultModuleFor(input.frame, 'evaluation'),
+              evidenceIds: [],
+            }),
+          );
         }
-        const scenes = evaluationAtFront ? [evaluation, ...body] : [...body, evaluation];
+        const scenes = body;
         const placedIds = scenes.flatMap((sc) => [...sc.evidenceIds]);
         const next = withScenes(latest, threadId, () => scenes);
         // ★주제를 못 찾으면 `withScenes` 가 원본을 그대로 돌려준다 — 저장도 예외도 없다.
@@ -860,11 +1097,35 @@ export const useInquiryThreadStore = create<InquiryThreadState>((set, get) => {
       }));
     },
 
-    restoreScenes: async (threadId, scenes) => {
-      await write((latest) => ({
-        next: withScenes(latest, threadId, () => scenes.map((sc) => ({ ...sc }))),
-        result: undefined,
-      }));
+    restoreScenes: async (threadId, scenes, link) => {
+      await write((latest) => {
+        if (link) {
+          const target = latest.find((t) => t.id === threadId);
+          const from = latest.find((t) => t.id === link.fromThreadId);
+          if (
+            !target ||
+            !from ||
+            target.studentRef !== from.studentRef ||
+            chainOf(
+              latest.map((t) => (t.id === threadId ? stripLink(t) : t)),
+              from.id,
+              Number.MAX_SAFE_INTEGER,
+            ).some((t) => t.id === threadId)
+          ) {
+            throw new Error('주제 연결이 바뀌어 이전 구성을 복원할 수 없습니다.');
+          }
+        }
+        const next = withScenes(latest, threadId, () => scenes.map((sc) => ({ ...sc })));
+        return {
+          next:
+            link === undefined
+              ? next
+              : next.map((t) =>
+                  t.id !== threadId ? t : link === null ? stripLink(t) : { ...t, link },
+                ),
+          result: undefined,
+        };
+      });
     },
 
     detachFromScenes: async (threadId, evidenceIds) => {

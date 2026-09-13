@@ -1,3 +1,4 @@
+import { publishEvidenceWrite } from './evidenceEditJournal';
 import { create } from 'zustand';
 import type { RecordArea } from '@domain/entities/RecordDraft';
 import { NARRATIVE_NOTE_MAX, type InquiryThread } from '@domain/entities/InquiryThread';
@@ -447,6 +448,7 @@ export const useRecordEvidenceStore = create<RecordEvidenceState>((set, get) => 
       const { next, result } = await transform(latest);
       if (next !== latest) {
         await recordEvidenceRepository.saveRecordEvidence({ records: next });
+        publishEvidenceWrite({ kind: 'evidence', before: latest, after: next });
       }
       set({ records: next, loaded: true, loadError: null });
       return result;

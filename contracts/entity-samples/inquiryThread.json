@@ -20,7 +20,14 @@
           "note": "근거 검증에 엄격함",
           "noteSource": "teacher",
           "leadIn": "질문에서 검증으로",
-          "evidenceIds": ["rev-1"]
+          "leadInNeedsCheck": true,
+          "evidenceIds": ["rev-1"],
+          "evidenceFocus": [
+            {
+              "evidenceId": "rev-1",
+              "note": "비교 기준을 수정한 부분"
+            }
+          ]
         }
       ],
       "link": {

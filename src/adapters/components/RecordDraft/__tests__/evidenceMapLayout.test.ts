@@ -1,164 +1,81 @@
-/**
- * 근거 지도 배치 계산(ADR-106 · 107 · 108) — 순수 함수.
- *
- * 여기서 지키는 것:
- *  - 장면이 없는 묶음은 카드가 **날짜순 흐름**(왼쪽→오른쪽, 줄이 차면 아래)이다. 근거 사이 화살표는 없다.
- *  - 장면 열이 있으면 x 는 열 차례, y 는 열 안 차례다. 손으로 민 값은 쓰지 않는다.
- *  - 묶음은 세로로 쌓이고 전부 같은 너비다. 지도 전체 좌표(`nodeById`)는 묶음 y 를 더한 값이다.
- *  - 손으로 민 값(`offsets`)은 자동 자리에 더해지되 제목 위·왼쪽 밖으로는 못 나간다.
- *  - 빈 묶음은 고정 높이다. 이어진 묶음 앞에는 이음말 자리가 있다.
- */
 import { describe, it, expect } from 'vitest';
-
-import {
-  cardsPerRow,
-  layoutEvidenceMap,
-  MAP_COLUMN_HEAD,
-  MAP_EMPTY_GROUP_H,
-  MAP_GAP_X,
-  MAP_GAP_Y,
-  MAP_GROUP_GAP,
-  MAP_GROUP_HEAD,
-  MAP_GROUP_PAD,
-  MAP_LINK_GAP,
-  MAP_NODE_H,
-  MAP_NODE_W,
-} from '../evidenceMapLayout';
-
-const ev = (id: string, over: Record<string, unknown> = {}) => ({
-  id,
-  studentRef: 's1',
-  createdAt: 1,
-  ...over,
-});
-
-describe('layoutEvidenceMap — 날짜순 흐름', () => {
-  it('카드가 날짜순으로 왼쪽→오른쪽, 한 줄이 차면 다음 줄로 간다', () => {
-    const items = [
-      ev('c', { date: '2026-03-03' }),
-      ev('a', { date: '2026-03-01' }),
-      ev('b', { date: '2026-03-02' }),
-    ];
-    // 600px 이면 두 장이 한 줄(cardsPerRow = 2).
-    expect(cardsPerRow(600)).toBe(2);
-    const layout = layoutEvidenceMap([{ key: 'g', items }], new Map(), 600);
-    expect(layout.nodeById.get('a')).toMatchObject({
-      x: MAP_GROUP_PAD,
-      y: MAP_GROUP_HEAD,
-      layer: 0,
-    });
-    expect(layout.nodeById.get('b')).toMatchObject({
-      x: MAP_GROUP_PAD + MAP_NODE_W + MAP_GAP_X,
-      y: MAP_GROUP_HEAD,
-      layer: 1,
-    });
-    expect(layout.nodeById.get('c')).toMatchObject({
-      x: MAP_GROUP_PAD,
-      y: MAP_GROUP_HEAD + MAP_NODE_H + MAP_GAP_Y,
-      layer: 0,
-    });
-    expect(layout.groups[0]!.h).toBe(MAP_GROUP_HEAD + 2 * MAP_NODE_H + MAP_GAP_Y + MAP_GROUP_PAD);
+import { layoutEvidenceMap, MAP_NOTE_H, MAP_GROUP_GAP, MAP_LINK_GAP } from '../evidenceMapLayout';
+const ev = (id: string, date = '2026-03-01', note = '') => ({ id, createdAt: 1, date, note });
+describe('근거 지도 가지 배치', () => {
+  it('장면이 없으면 날짜순 세로 배치이며 입력을 바꾸지 않는다', () => {
+    const items = [ev('b', '2026-03-02'), ev('a')];
+    const { nodes } = layoutEvidenceMap([{ key: 'g', items }], new Map(), 600).groups[0]!;
+    expect(nodes.map((n) => n.id)).toEqual(['a', 'b']);
+    expect(nodes[0]!.x).toBe(nodes[1]!.x);
+    expect(nodes[1]!.y).toBeGreaterThan(nodes[0]!.y + nodes[0]!.h);
+    expect(items.map((n) => n.id)).toEqual(['b', 'a']);
   });
-
-  it('너무 좁아도 한 줄에 한 장은 놓는다', () => {
-    expect(cardsPerRow(100)).toBe(1);
-  });
-
-  it('묶음은 세로로 쌓이고 전체 좌표는 묶음 y 를 더한 값이다. 빈 묶음은 고정 높이', () => {
-    const layout = layoutEvidenceMap(
-      [
-        { key: 'g1', items: [ev('a')] },
-        { key: 'g2', items: [] },
-        { key: 'g3', items: [ev('b')] },
-      ],
-      new Map(),
-      600,
-    );
-    const [g1, g2, g3] = layout.groups;
-    expect(g1!.y).toBe(0);
-    expect(g2!.y).toBe(g1!.h + MAP_GROUP_GAP);
-    expect(g2!.h).toBe(MAP_EMPTY_GROUP_H);
-    expect(g3!.y).toBe(g2!.y + g2!.h + MAP_GROUP_GAP);
-    expect(layout.nodeById.get('b')!.y).toBe(g3!.y + MAP_GROUP_HEAD);
-    expect(layout.groups.every((g) => g.w === layout.width)).toBe(true);
-  });
-
-  it('손으로 민 값은 더해지되 제목 위·왼쪽 밖으로는 못 나간다', () => {
-    const items = [ev('a')];
-    const pushed = layoutEvidenceMap(
-      [{ key: 'g', items }],
-      new Map([['a', { dx: 100, dy: 30 }]]),
-      600,
-    );
-    expect(pushed.nodeById.get('a')).toMatchObject({
-      x: MAP_GROUP_PAD + 100,
-      y: MAP_GROUP_HEAD + 30,
-    });
-    const clamped = layoutEvidenceMap(
-      [{ key: 'g', items }],
-      new Map([['a', { dx: -500, dy: -500 }]]),
-      600,
-    );
-    expect(clamped.nodeById.get('a')).toMatchObject({ x: MAP_GROUP_PAD, y: MAP_GROUP_HEAD });
-  });
-});
-
-describe('장면 열(ADR-107)', () => {
-  it('열이 있으면 x 는 열 차례, y 는 열 안 차례다 — 손으로 민 값은 자리를 바꾸지 않는다', () => {
-    const a = ev('a', { date: '2026-05-03' });
-    const b = ev('b', { date: '2026-05-01' });
-    const c = ev('c', { date: '2026-05-02' });
+  it('장면과 근거의 저장 순서를 유지하고 메모 아래에 다음 가지를 둔다', () => {
+    const a = ev('a', '2026-03-03', '수정 전후 비교');
+    const b = ev('b');
     const layout = layoutEvidenceMap(
       [
         {
           key: 'g',
-          items: [a, b, c],
+          items: [a, b],
           columns: [
-            { key: 'g:s1', items: [a, b] }, // 첫 열에 두 장 — 적힌 차례(a, b)대로, 날짜순이 아니다
-            { key: 'g:s2', items: [] },
-            { key: 'g:unplaced', items: [c] },
+            { key: 's1', items: [a, b], note: '교사 메모' },
+            { key: 's2', items: [] },
           ],
         },
       ],
       new Map([['a', { dx: 500, dy: 500 }]]),
       600,
     );
-    const top = MAP_GROUP_HEAD + MAP_COLUMN_HEAD;
-    expect(layout.nodeById.get('a')).toMatchObject({ x: MAP_GROUP_PAD, y: top, layer: 0 });
-    expect(layout.nodeById.get('b')).toMatchObject({
-      x: MAP_GROUP_PAD,
-      y: top + MAP_NODE_H + MAP_GAP_Y,
-    });
-    expect(layout.nodeById.get('c')).toMatchObject({
-      x: MAP_GROUP_PAD + 2 * (MAP_NODE_W + MAP_GAP_X),
-      y: top,
-    });
     const g = layout.groups[0]!;
-    expect(g.columns?.map((col) => col.key)).toEqual(['g:s1', 'g:s2', 'g:unplaced']);
-    expect(g.columns?.[1]?.x).toBe(MAP_GROUP_PAD + (MAP_NODE_W + MAP_GAP_X));
-    // 높이는 가장 긴 열(2장)이 정한다.
-    expect(g.h).toBe(top + 2 * (MAP_NODE_H + MAP_GAP_Y) - MAP_GAP_Y + MAP_GROUP_PAD);
-    // 열이 넷 이상이면 보이는 너비보다 넓어진다(가로 스크롤).
-    const wide = layoutEvidenceMap(
-      [{ key: 'g', items: [], columns: [1, 2, 3, 4, 5].map((i) => ({ key: `c${i}`, items: [] })) }],
-      new Map(),
-      600,
-    );
-    expect(wide.width).toBeGreaterThan(600);
+    expect(g.nodes.map((n) => n.id)).toEqual(['a', 'b']);
+    expect(g.nodes[1]!.y).toBeGreaterThanOrEqual(g.nodes[0]!.y + g.nodes[0]!.h + MAP_NOTE_H);
+    expect(g.columns!.map((c) => c.key)).toEqual(['s1', 's2']);
+    expect(g.columns![0]!.x).toBe(g.columns![1]!.x);
+    expect(g.y + g.columns![1]!.y).toBeGreaterThan(g.nodes[1]!.y + g.nodes[1]!.h);
+    expect(g.nodes[0]!.x).toBeGreaterThan(g.columns![0]!.x + g.columns![0]!.w);
   });
-
-  it('앞 주제에서 이어진 묶음은 앞 묶음과 사이를 넓혀 이음말 자리를 둔다', () => {
+  it('장면 20개가 있어도 가로 폭이 늘지 않는다', () => {
+    const render = (count: number) =>
+      layoutEvidenceMap(
+        [
+          {
+            key: 'g',
+            items: [],
+            columns: Array.from({ length: count }, (_, i) => ({ key: `s${i}`, items: [] })),
+          },
+        ],
+        new Map(),
+        1100,
+      );
+    expect(render(20).width).toBe(render(1).width);
+    expect(render(20).height).toBeGreaterThan(render(1).height);
+  });
+  it('접힌 카드가 숨겨지고 이어진 주제 앞에 이음말 공간을 둔다', () => {
     const layout = layoutEvidenceMap(
       [
-        { key: 'p', items: [ev('a')] },
+        { key: 'p', items: [ev('a')], collapsed: true },
         { key: 'q', items: [ev('b')], linkedFrom: true },
-        { key: 'r', items: [ev('c')] },
+        { key: 'r', items: [] },
       ],
       new Map(),
       600,
     );
     const [p, q, r] = layout.groups;
-    expect(q!.y - (p!.y + p!.h)).toBe(MAP_LINK_GAP);
-    expect(r!.y - (q!.y + q!.h)).toBe(MAP_GROUP_GAP);
+    expect(p!.nodes).toEqual([]);
+    expect(layout.nodeById.has('a')).toBe(false);
+    expect(q!.y - p!.y - p!.h).toBe(MAP_LINK_GAP);
+    expect(r!.y - q!.y - q!.h).toBe(MAP_GROUP_GAP);
+  });
+  it('이동 공간을 확보하고 다음 카드와 겹치지 않는다', () => {
+    const groups = [{ key: 'g', items: [ev('a'), ev('b')] }];
+    const base = layoutEvidenceMap(groups, new Map(), 600);
+    const moved = layoutEvidenceMap(groups, new Map([['a', { dx: 500, dy: 300 }]]), 600);
+    expect(moved.nodeById.get('a')!.x).toBe(base.nodeById.get('a')!.x + 500);
+    expect(moved.nodeById.get('a')!.y).toBe(base.nodeById.get('a')!.y + 300);
+    expect(moved.nodeById.get('b')!.y).toBeGreaterThan(
+      moved.nodeById.get('a')!.y + moved.nodeById.get('a')!.h,
+    );
+    expect(moved.width).toBeGreaterThan(base.width);
   });
 });

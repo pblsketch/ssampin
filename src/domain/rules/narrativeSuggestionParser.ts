@@ -31,6 +31,7 @@ export interface NarrativeSceneSuggestion {
   readonly moduleId?: RecordModuleId;
   /** 모델이 쓴 이유 한 문장 — [적용] 때 **장면 메모로 저장한다**(오너 결정, `noteSource: 'ai'`). */
   readonly note?: string;
+  readonly leadIn?: string;
   readonly evidenceIds: readonly string[];
 }
 
@@ -197,12 +198,13 @@ export function parseNarrativeSuggestion(
     for (const n of picked) {
       const id = input.numbered[n - 1];
       // 한 근거는 한 장면에만. 두 번 나오면 앞 장면이 가진다.
-      if (id === undefined || used.has(id)) continue;
+      if (id === undefined || evidenceIds.includes(id)) continue;
       used.add(id);
       evidenceIds.push(id);
     }
 
-    const rawNote = clean(parts.slice(numberedAt + 1).join('|'));
+    const rawNote = clean(parts[numberedAt + 1] ?? '');
+    const rawLeadIn = clean(parts[numberedAt + 2] ?? '');
     // 이유 문장에도 별칭이 섞인다. 되돌린 뒤 상한까지만 남긴다(요청서로 다시 나가는 글이다).
     const note = rawNote.length > 0 ? restore(rawNote).slice(0, NARRATIVE_NOTE_MAX) : '';
 
@@ -210,6 +212,9 @@ export function parseNarrativeSuggestion(
       role,
       ...(moduleId === null ? {} : { moduleId }),
       ...(note.length > 0 ? { note } : {}),
+      ...(scenes.length > 0 && rawLeadIn.length > 0
+        ? { leadIn: restore(rawLeadIn).slice(0, NARRATIVE_NOTE_MAX) }
+        : {}),
       evidenceIds,
     });
   }

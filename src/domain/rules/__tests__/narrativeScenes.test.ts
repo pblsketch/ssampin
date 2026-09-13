@@ -55,7 +55,7 @@ describe('scenesOf — 소유가 어긋난 근거는 없는 것처럼 다룬다'
     expect(r.scenes[1]?.evidences.map((e) => e.id)).toEqual(['e1']);
   });
 
-  it('같은 근거가 두 장면에 있으면 첫 장면에만 그린다', () => {
+  it('★같은 근거를 두 장면에 이을 수 있다 — 카드는 첫 장면에만 그린다', () => {
     const r = scenesOf(
       thread([
         scene('s1', 'evaluation', []),
@@ -65,9 +65,26 @@ describe('scenesOf — 소유가 어긋난 근거는 없는 것처럼 다룬다'
       [ev('e1')],
       'inquiry',
     );
+    // 두 장면 모두 이 자료를 가리킨다(하나의 보고서에 과정과 결과가 함께 있는 경우).
     expect(r.scenes[1]?.evidences.map((e) => e.id)).toEqual(['e1']);
-    expect(r.scenes[2]?.evidences).toEqual([]);
+    expect(r.scenes[2]?.evidences.map((e) => e.id)).toEqual(['e1']);
+    // 카드가 사는 자리는 처음 가리킨 장면 하나뿐이다 — 자료를 복제하지 않는다.
+    expect([...(r.scenes[1]?.ownIds ?? [])]).toEqual(['e1']);
+    expect([...(r.scenes[2]?.ownIds ?? [])]).toEqual([]);
+    expect(r.primarySceneOf.get('e1')).toBe('s2');
+    expect([...r.sharedIds]).toEqual(['e1']);
+    // 관문이 보는 수는 **서로 다른 근거의 수**다 — 겹친 연결이 수를 부풀리지 않는다.
     expect(r.placedCount).toBe(1);
+  });
+
+  it('한 장면 안에 같은 근거가 두 번 적혀 있으면 한 번만 그린다', () => {
+    const r = scenesOf(
+      thread([scene('s1', 'evaluation', []), scene('s2', 'process', ['e1', 'e1'])]),
+      [ev('e1')],
+      'inquiry',
+    );
+    expect(r.scenes[1]?.evidences.map((e) => e.id)).toEqual(['e1']);
+    expect(r.sharedIds.size).toBe(0);
   });
 
   it('장면에 안 놓인 이 주제 근거는 unplaced 로, 날짜순으로 돌려준다', () => {

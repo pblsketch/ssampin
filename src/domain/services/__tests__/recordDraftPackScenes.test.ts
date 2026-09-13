@@ -68,6 +68,8 @@ function withScenes(
       label: s.label ?? s.role,
       ...(s.note === undefined ? {} : { note: s.note }),
       ...(s.leadIn === undefined ? {} : { leadIn: s.leadIn }),
+      ...(s.leadInNeedsCheck === true ? { leadInNeedsCheck: true } : {}),
+      ...(s.evidenceFocus === undefined ? {} : { focus: s.evidenceFocus }),
       evidenceIds: s.evidenceIds,
     })),
     composition,
@@ -79,6 +81,60 @@ const SCENES: NarrativeScene[] = [
   makeScene('sc2', 'motive', { moduleId: 'legacyMotive' }),
   makeScene('sc3', 'process', { moduleId: 'legacyProcess' }),
 ];
+
+describe('장면 차례가 초안 출력 차례의 정본', () => {
+  it.each([
+    ['evaluation', 'motive', 'process', 'result'],
+    ['motive', 'process', 'result', 'evaluation'],
+    ['motive', 'process', 'evaluation', 'result', 'process'],
+  ] as const)('평가의 위치와 반복 장면을 출력 번호로 지정한다: %s', (...roles) => {
+    const saved = roles.map((role, i) => makeScene(`s${i}`, role));
+    const map = Object.fromEntries(saved.map((s) => [s.id, ['e1']]));
+    const pack = buildRecordDraftPack(
+      input({
+        ...withScenes(saved, map),
+        targetBytes: 1500,
+        evidences: [
+          ev({
+            id: 'e1',
+            content: '원문에서 조사 조건을 확인하고 판정 이유를 설명함. '.repeat(45),
+          }),
+        ],
+      }),
+    );
+    expect(pack.sceneOrder).toEqual(roles.map((role, i) => ({ role, sceneIndex: i + 1 })));
+    expect(pack.text).toContain('같은 역할이라도 다른 장면을 합치거나 자리를 바꾸지 마세요');
+    expect(pack.text).not.toContain('교사 평가는 마지막 문단입니다');
+    expect(pack.text).toContain('근거 없는 평가 외 장면은 생략할 수 있지만');
+    expect(pack.text).toContain('평가 장면은 직접 연결된 근거가 없어도 제공된 전체 근거를 종합해');
+    expect(pack.text).not.toContain('마지막 한 문장의 자리를 결과에');
+    expect(pack.text).toContain('PLA, PHA, PBAT');
+  });
+
+  it('선생님이 마지막에 둔 공유회를 앞의 판정 장면으로 바꾸라고 지시하지 않는다', () => {
+    const saved = [
+      makeScene('judgment', 'result', { label: '판정 내리기' }),
+      makeScene('presentation', 'result', { label: '공유회에서 질문에 답하기' }),
+    ];
+    const pack = buildRecordDraftPack(
+      input({
+        ...withScenes(saved, { judgment: ['e1'], presentation: ['e2'] }),
+        targetBytes: 1500,
+        evidences: [
+          ev({ id: 'e1', content: '처리 조건을 근거로 판정함. '.repeat(45) }),
+          ev({
+            id: 'e2',
+            content: '공유회에서 바다의 분해 조건을 묻는 질문에 해수 실험을 인용해 답함.',
+          }),
+        ],
+      }),
+    );
+    expect(pack.text).toContain('2. [결과] 공유회에서 질문에 답하기');
+    expect(pack.text).toContain('[장면 1] [결과] → [장면 2] [결과]');
+    expect(pack.text).not.toContain('마무리: 마지막 문장은');
+    expect(pack.text).not.toContain('발표 소감이나 부수 활동');
+  });
+});
 
 describe('근거 관문 — 배치가 0건이면 예전 경로 그대로', () => {
   it('장면을 안 넘기면 근거 줄이 `- ` 로 시작한다', () => {
@@ -135,6 +191,109 @@ describe('번호는 실린 줄에만 붙는다', () => {
     ).text;
     expect(text).toContain('그 밖의 근거:');
     expect(text).toContain('문단을 새로 만들지 말고');
+  });
+});
+
+/**
+ * 하나의 근거를 여러 장면에 이었을 때(오너 결정 2026-09-13).
+ * 지켜야 할 것: 원본은 **한 번만** 실린다 · 자리마다 「쓸 부분」이 붙는다 · 같은 내용을 되풀이하지 말라고 말한다.
+ */
+describe('여러 장면에 걸친 근거', () => {
+  it('★원본을 두 번 싣지 않는다 — 자료가 여러 건인 것처럼 세지 않게', () => {
+    const { scenes, composition } = withScenes(SCENES, { sc2: ['e1'], sc3: ['e1'] });
+    const text = buildRecordDraftPack(input({ scenes, composition })).text;
+    expect(text.match(/e1 본문/g)).toHaveLength(1);
+    expect(text).toContain('1. e1 본문');
+    expect(text).not.toContain('2. e1 본문');
+    // 두 자리가 같은 번호를 가리킨다.
+    expect(text.match(/근거: 1/g)?.length).toBe(2);
+  });
+
+  it('겹친 연결이 있으면 되풀이하지 말라고 말한다', () => {
+    const { scenes, composition } = withScenes(SCENES, { sc2: ['e1'], sc3: ['e1'] });
+    const text = buildRecordDraftPack(input({ scenes, composition })).text;
+    expect(text).toContain('여러 자리에 함께 적힌 근거(1)는 같은 자료입니다');
+    expect(text).toContain('되풀이하지 마세요');
+  });
+
+  it('겹친 연결이 없으면 그 줄을 만들지 않는다 — 요청서가 예전과 같다', () => {
+    const { scenes, composition } = withScenes(SCENES, { sc2: ['e1'], sc3: ['e2'] });
+    const text = buildRecordDraftPack(
+      input({ evidences: [ev({ id: 'e1' }), ev({ id: 'e2' })], scenes, composition }),
+    ).text;
+    expect(text).not.toContain('여러 자리에 함께 적힌 근거');
+  });
+
+  it('자리마다 「쓸 부분」이 붙고 가림을 거친다', () => {
+    const saved = SCENES.map((sc) =>
+      sc.id === 'sc2'
+        ? { ...sc, evidenceFocus: [{ evidenceId: 'e1', note: '김지훈이 기준을 세운 대목' }] }
+        : sc.id === 'sc3'
+          ? { ...sc, evidenceFocus: [{ evidenceId: 'e1', note: '기준을 고쳐 낸 결론' }] }
+          : sc,
+    );
+    const { scenes, composition } = withScenes(saved, { sc2: ['e1'], sc3: ['e1'] });
+    const text = buildRecordDraftPack(input({ scenes, composition })).text;
+    expect(text).toContain('근거 1에서 쓸 부분:');
+    expect(text).toContain('기준을 고쳐 낸 결론');
+    expect(text).not.toContain('김지훈');
+  });
+
+  it('실리지 않은 근거의 「쓸 부분」은 보내지 않는다 — 가리킬 번호가 없다', () => {
+    const saved = SCENES.map((sc) =>
+      sc.id === 'sc2'
+        ? { ...sc, evidenceFocus: [{ evidenceId: 'bad', note: '빠진 자료의 대목' }] }
+        : sc,
+    );
+    const { scenes, composition } = withScenes(saved, { sc2: ['bad'], sc3: ['ok'] });
+    const text = buildRecordDraftPack(
+      input({
+        evidences: [
+          ev({ id: 'bad', content: '학원에서 미리 배웠다고 말함' }),
+          ev({ id: 'ok', content: '수업에서 질문을 자주 함' }),
+        ],
+        scenes,
+        composition,
+      }),
+    ).text;
+    expect(text).not.toContain('빠진 자료의 대목');
+  });
+});
+
+/**
+ * 차례가 바뀌어 앞 장면이 달라진 이음말 — **확인 전에는 보내지 않는다**(오너 결정 2026-09-13).
+ * 옛 관계 설명을 확정된 연결로 보내면 모델이 없는 인과를 만든다.
+ */
+describe('확인이 필요한 이음말', () => {
+  const withLeadIn = (needsCheck: boolean): string => {
+    const saved = SCENES.map((sc) =>
+      sc.id === 'sc3'
+        ? {
+            ...sc,
+            leadIn: '질문이 실험으로 이어짐',
+            ...(needsCheck ? { leadInNeedsCheck: true } : {}),
+          }
+        : sc,
+    );
+    const { scenes, composition } = withScenes(saved, { sc2: ['e1'], sc3: ['e2'] });
+    return buildRecordDraftPack(
+      input({ evidences: [ev({ id: 'e1' }), ev({ id: 'e2' })], scenes, composition }),
+    ).text;
+  };
+
+  it('확인 전에는 이음말을 싣지 않는다', () => {
+    expect(withLeadIn(true)).not.toContain('질문이 실험으로 이어짐');
+  });
+
+  it('★장면 본문·근거는 그대로 나간다 — 이음말만 빠진다', () => {
+    const text = withLeadIn(true);
+    expect(text).toContain('1. e1 본문');
+    expect(text).toContain('2. e2 본문');
+    expect(text).toContain('근거: 2');
+  });
+
+  it('확인 표시가 없으면 예전처럼 싣는다', () => {
+    expect(withLeadIn(false)).toContain('앞 장면에서 이어짐: 질문이 실험으로 이어짐');
   });
 });
 

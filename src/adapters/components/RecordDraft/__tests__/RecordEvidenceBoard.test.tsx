@@ -619,7 +619,7 @@ describe('AI로 주제 묶기', () => {
     });
     expect(addSpy).toHaveBeenCalledTimes(1);
     expect(addSpy.mock.calls[0]?.[0]).toMatchObject({ sourceId: 'obs-A-1', threadId: 'thr-A' });
-    expect(moveToThreadSpy).not.toHaveBeenCalled();
+    expect(moveToThreadSpy).toHaveBeenCalledTimes(1);
   });
 
   it('★제안 요청문에 학생 실명이 0건이다 — 이 학생도, 근거 안의 다른 학생도', async () => {
@@ -752,57 +752,15 @@ describe('2차 — 긴 주제 이름 · 영역 1개 · 삭제 되돌리기 (설�
     expect(column('미분류').getByText(/미분류 근거 둘/)).toBeTruthy();
   });
 
-  it('카드 [삭제] 뒤 토스트의 [되돌리기]는 add 가 아니라 restoreRemoved 로 원래 레코드를 되돌린다', async () => {
-    board();
-    const card = screen.getByRole('button', { name: /미분류 근거 하나/ });
-    fireEvent.click(card); // 조작 줄은 골랐을 때 나온다(ADR-093)
-    await act(async () => {
-      fireEvent.click(within(card).getByRole('button', { name: '삭제' }));
-    });
-    expect(removeSpy).toHaveBeenCalledWith('e-A2');
-    expect(addSpy).not.toHaveBeenCalled();
-    const toast = screen.getByRole('status', { name: '알림' });
-    expect(toast.textContent).toContain('지웠습니다');
-    await act(async () => {
-      fireEvent.click(within(toast).getByRole('button', { name: '되돌리기' }));
-    });
-    // ★`add` 는 AI 제외를 다시 판정하고 같은 원본이 있으면 조용히 넘어간다. 되돌리기는 복원이지 판정이 아니다.
-    expect(addSpy).not.toHaveBeenCalled();
-    expect(restoreRemovedSpy).toHaveBeenCalledTimes(1);
-    expect(restoreRemovedSpy.mock.calls[0]?.[0]).toMatchObject({
-      id: 'e-A2',
-      studentRef: 'sA',
-      areas: ['subject'],
-      content: 'A학생 미분류 근거 하나 — 박서연과 모둠에서 비교했다',
-      sourceType: 'manual',
-    });
-    expect(screen.getByRole('status', { name: '알림' }).textContent).toContain(
-      '지운 근거를 되돌렸습니다',
-    );
-  });
-
-  it('★되돌리려는데 같은 원본 근거가 이미 새로 저장돼 있으면 되돌렸다고 말하지 않는다(AC-16 (c))', async () => {
-    restoreRemovedSpy.mockResolvedValueOnce({ id: 'e-새것', restored: false });
+  it('미분류 근거는 기록 삭제 없이 그대로 유지한다', () => {
     board();
     const card = screen.getByRole('button', { name: /미분류 근거 하나/ });
     fireEvent.click(card);
-    await act(async () => {
-      fireEvent.click(within(card).getByRole('button', { name: '삭제' }));
-    });
-    await act(async () => {
-      fireEvent.click(
-        within(screen.getByRole('status', { name: '알림' })).getByRole('button', {
-          name: '되돌리기',
-        }),
-      );
-    });
-    expect(screen.getByRole('status', { name: '알림' }).textContent).toContain(
-      '이미 새로 저장된 근거가 있어 되돌리지 않았습니다',
-    );
+    expect(within(card).queryByRole('button', { name: '삭제' })).toBeNull();
+    expect(removeSpy).not.toHaveBeenCalled();
+    expect(restoreRemovedSpy).not.toHaveBeenCalled();
   });
-});
 
-describe('AI 제외 — 상태는 겉면 배지, 토글은 골랐을 때·여러 장은 하단 바 (ADR-093 결정 5, 설계서 §4-5 수정)', () => {
   it('★조작 줄은 고르기 전에는 없고, 고르면 나온다 — 마우스 올리기가 아니라 클릭·키보드로', async () => {
     board();
     const card = screen.getByRole('button', { name: /미분류 근거 하나/ });
@@ -906,7 +864,7 @@ describe('★거울 카드 — 보기만 해서는 저장 0회, 첫 손댄에 �
       classId: 'c1',
     });
     expect(addManySpy).not.toHaveBeenCalled();
-    expect(moveToThreadSpy).not.toHaveBeenCalled();
+    expect(moveToThreadSpy).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('status', { name: '알림' }).textContent).toContain(
       '1건을 ‘할인 문구와 선택’로 보냈습니다',
     );
@@ -924,7 +882,7 @@ describe('★거울 카드 — 보기만 해서는 저장 0회, 첫 손댄에 �
     expect(addSpy.mock.calls[0]?.[0]).toMatchObject({ threadId: 'thr-A', sourceId: 'obs-A-1' });
     expect(moveToThreadSpy).toHaveBeenCalledWith({
       studentRef: 'sA',
-      evidenceIds: ['e-A2'],
+      evidenceIds: ['e-A2', 'x'],
       threadId: 'thr-A',
     });
     expect(screen.getByRole('status', { name: '알림' }).textContent).toContain('2건을');
@@ -994,7 +952,7 @@ describe('★끌어다 놓기 — 하단 바와 같은 관문, 입구만 둘 (�
     await drop('mirror:obs-A-1', 'drop:thread:thr-A');
     expect(addSpy).toHaveBeenCalledTimes(1);
     expect(addSpy.mock.calls[0]?.[0]).toMatchObject({ sourceId: 'obs-A-1', threadId: 'thr-A' });
-    expect(moveToThreadSpy).toHaveBeenCalledTimes(1); // 거울에는 관문을 부르지 않는다
+    expect(moveToThreadSpy).toHaveBeenCalledTimes(2); // 저장한 실제 ID로 배치한다
   });
 
   it('★닫힌 주제 열에 놓으면 저장 0회 — 저장 카드도 거울도', async () => {

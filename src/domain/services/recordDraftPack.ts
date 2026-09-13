@@ -28,8 +28,10 @@ import {
   NARRATIVE_MARK_INSTRUCTION,
   hasAnyRole,
   narrativeMarkInstruction,
+  narrativeSceneOrderOf,
   parseNarrativeParagraphs,
   stripNarrativeMarks,
+  type NarrativeSceneOrderEntry,
 } from '../rules/narrativeParagraphs';
 import type { RecordWritingStyle } from '../entities/RecordWritingStyle';
 import {
@@ -51,6 +53,10 @@ import {
   type LengthAdjustKind,
 } from '../rules/recordLengthGoal';
 import type { EvidenceLink } from '../entities/RecordEvidence';
+import {
+  GROUNDED_RECORD_DETAIL_INSTRUCTION,
+  type RecordDraftDetail,
+} from '../rules/recordDraftDetail';
 import { orderForDraft, resolveEvidenceEdges, type EvidenceEdge } from '../rules/evidenceGraph';
 
 /** 꾸러미에 넣을 근거 한 건(엔티티 전체가 아니라 필요한 것만 받는다). */
@@ -118,6 +124,7 @@ export interface DraftPackInput {
   readonly standardKeywords?: readonly string[];
   /** 선생님이 따로 적어 둔 지시(2층 프롬프트). */
   readonly teacherPrompt?: string;
+  readonly detail?: RecordDraftDetail;
   /**
    * 선생님이 고른 **작성 방식**(ADR-099). 없거나 기본값이면 「작성 구성」 블록을 붙이지 않는다 —
    * 그때 요청서는 이 기능이 생기기 전과 **글자 하나까지 같다.**
@@ -164,7 +171,18 @@ export interface DraftPackScene {
   readonly note?: string;
   /** 앞 장면에서 이 장면으로 넘어가는 이음말(ADR-108). 첫 장면에는 없다. 자유 글이라 가린다. */
   readonly leadIn?: string;
+  /**
+   * 차례가 바뀌어 **앞 장면이 달라진** 이음말인가(오너 결정 2026-09-13).
+   * ★참이면 이음말을 **싣지 않는다.** 옛 관계를 설명하는 글을 확정된 연결로 보내면 모델이 없는 인과를 만든다.
+   *   장면 본문·근거·메모는 그대로 나간다.
+   */
+  readonly leadInNeedsCheck?: boolean;
   readonly evidenceIds: readonly string[];
+  /**
+   * 같은 근거를 여러 장면에 이었을 때 **이 장면에서 쓸 부분**(오너 결정 2026-09-13).
+   * 원본은 요청서에 한 번만 실리고, 장면은 번호로 가리킨 뒤 이 말로 관점을 나눈다. 자유 글이라 가린다.
+   */
+  readonly focus?: readonly { readonly evidenceId: string; readonly note: string }[];
 }
 
 /** 이어진 주제 하나 — 이 주제의 장면·근거와, 앞 주제에서 이어지는 이음말. */
@@ -214,6 +232,7 @@ export interface DraftPackSubstitution {
 }
 
 export interface DraftPack {
+  readonly sceneOrder?: readonly NarrativeSceneOrderEntry[];
   /** 모델에게 보낼 사용자 턴 본문. 실명이 없다. */
   readonly text: string;
   /** 이 학생을 가리키는 별칭(본문 첫 줄과 같다). */
@@ -496,6 +515,7 @@ function buildSceneInstruction(
 ): string {
   const base = buildStyleInstruction(composition);
   const lines = base.split('\n');
+  const shared = sharedEvidenceNumbers(scenes, numberOf);
   const out: string[] = [];
   let at = 0;
   for (const line of lines) {
@@ -508,14 +528,52 @@ function buildSceneInstruction(
     const role = composition.modules[at]?.role;
     at += 1;
     if (scene === undefined) continue;
+    out.push(`   · 출력 장면 번호: [장면 ${at}]`);
     out.push(`   · ${sceneEvidenceRef(scene, numberOf, role)}`);
+    // 여러 장면이 같은 자료를 가리킬 때, **이 자리에서 쓸 부분**만 골라 준다(오너 결정 2026-09-13).
+    for (const id of scene.evidenceIds) {
+      const n = numberOf.get(id);
+      const focus = scene.focus?.find((f) => f.evidenceId === id)?.note.trim() ?? '';
+      if (n === undefined || focus.length === 0 || detectProhibitedTerms(focus).length > 0)
+        continue;
+      out.push(`   · 근거 ${n}에서 쓸 부분: ${mask(focus.slice(0, 600))}`);
+    }
     const note = scene.note?.trim() ?? '';
     if (note.length > 0) out.push(`   · 선생님이 읽은 것: ${mask(note)}`);
     // 첫 장면(at === 1)에는 앞 장면이 없으므로 이음말을 싣지 않는다 — 있어도 뜻이 없다.
+    // ★차례가 바뀌어 앞 장면이 달라진 이음말도 싣지 않는다 — 옛 관계 설명이 새 연결의 근거가 되면
+    //   모델이 없는 인과를 만든다. 선생님이 확인해 저장하면 그때부터 다시 나간다.
     const leadIn = scene.leadIn?.trim() ?? '';
-    if (at > 1 && leadIn.length > 0) out.push(`   · 앞 장면에서 이어짐: ${mask(leadIn)}`);
+    if (at > 1 && leadIn.length > 0 && scene.leadInNeedsCheck !== true) {
+      out.push(`   · 앞 장면에서 이어짐: ${mask(leadIn)}`);
+    }
+    // 번호 목록이 끝나는 자리에 겹친 연결의 주의를 한 줄 붙인다(있을 때만).
+    if (at === scenes.length && shared.length > 0) {
+      out.push(
+        `   · 여러 자리에 함께 적힌 근거(${shared.join(', ')})는 같은 자료입니다. ` +
+          '자료가 여러 건인 것처럼 세지 말고, 같은 내용을 자리마다 되풀이하지 마세요. ' +
+          '그 자리에 적힌 쓸 부분만 씁니다.',
+      );
+    }
   }
   return out.join('\n');
+}
+
+/** 두 장면 이상이 가리키는 근거의 **실린 번호** — 없으면 빈 배열이고 주의 줄도 붙지 않는다. */
+function sharedEvidenceNumbers(
+  scenes: readonly DraftPackScene[],
+  numberOf: ReadonlyMap<string, number>,
+): readonly number[] {
+  const count = new Map<string, number>();
+  for (const sc of scenes) {
+    for (const id of new Set(sc.evidenceIds)) count.set(id, (count.get(id) ?? 0) + 1);
+  }
+  const out: number[] = [];
+  for (const [id, n] of count) {
+    const num = numberOf.get(id);
+    if (n > 1 && num !== undefined) out.push(num);
+  }
+  return out.sort((a, b) => a - b);
 }
 
 /**
@@ -763,10 +821,14 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   // ★장면에서 만든 구성이 있으면 **그것이 우선**이다 — 둘을 함께 보내면 서로 싸우는 두 지시가 된다.
   const composition = input.composition ?? (input.style ? resolveComposition(input.style) : null);
   const emitComposition = composition !== null && composition.shouldEmitComposition;
+  const sceneOrder =
+    emitComposition && composition !== null && scenes.length > 0
+      ? composition.modules.map((m, i) => ({ sceneIndex: i + 1, role: m.role }))
+      : undefined;
   if (composition !== null && emitComposition) {
     parts.push('');
     parts.push(
-      useScenes
+      sceneOrder !== undefined
         ? buildSceneInstruction(composition, scenes, numberOf, mask)
         : buildStyleInstruction(composition),
     );
@@ -787,6 +849,15 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
     );
   }
 
+  if (
+    input.detail === 'grounded' &&
+    evidenceCount > 0 &&
+    (input.targetBytes === undefined || !isThinEvidence(evidenceBytes, input.targetBytes))
+  ) {
+    parts.push('');
+    parts.push(GROUNDED_RECORD_DETAIL_INSTRUCTION);
+  }
+
   if (input.teacherPrompt && input.teacherPrompt.trim().length > 0) {
     parts.push('');
     parts.push('선생님 지시:');
@@ -802,6 +873,7 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
       ? narrativeMarkInstruction({
           followComposition: true,
           firstIsEvaluation: composition.firstIsEvaluation,
+          ...(sceneOrder === undefined ? {} : { sceneOrder }),
         })
       : NARRATIVE_MARK_INSTRUCTION,
   );
@@ -816,7 +888,11 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
   //   학생에서 마지막 문장이 결과로 닫힌 것이 3회 중 1회뿐이었다(1층 규정에 있을 때는 2/2).
   //   되짚기 backstop **바로 앞**이 갈 수 있는 가장 뒤다 — 맨 끝은 지어내기를 막는 지시의 자리라
   //   내주지 않는다(위 798 주석과 같은 규칙).
-  if (input.targetBytes !== undefined && !isThinEvidence(evidenceBytes, input.targetBytes)) {
+  if (
+    input.targetBytes !== undefined &&
+    !isThinEvidence(evidenceBytes, input.targetBytes) &&
+    !emitComposition
+  ) {
     parts.push(
       '마무리: 마지막 문장은 그 활동이 무엇에 이르렀는지(판정·결론·적용·남은 물음)를 말하게 두세요. ' +
         '발표 소감이나 부수 활동 같은 곁가지 장면에서 글이 끊기면 마무리가 되지 않습니다. ' +
@@ -824,6 +900,9 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
     );
     parts.push('');
   }
+  parts.push(
+    '본문의 나열에는 가운데 점 대신 쉼표와 공백을 씁니다(예: PLA, PHA, PBAT). 근거 원문에 가운데 점이 있어도 최종 본문에는 쉼표로 씁니다.',
+  );
   parts.push(
     // ★"하나의 탐구 흐름" 은 기존형의 묶는 방식이다. 구성을 붙였으면 묶는 방식이 이미 거기 적혀 있고,
     //   여기서 또 말하면 「성취별로 나눠 쓰기」를 고른 선생님에게 정반대 지시를 함께 보내게 된다.
@@ -838,6 +917,7 @@ export function buildRecordDraftPack(input: DraftPackInput): DraftPack {
 
   return {
     text: parts.join('\n'),
+    ...(sceneOrder === undefined ? {} : { sceneOrder }),
     studentAlias,
     mappings,
     includedCount: lines.length + unplacedLines.length,
@@ -1131,7 +1211,14 @@ export function buildLengthAdjustPack(input: LengthAdjustPackInput): LengthAdjus
   //   다시 못 박으면, 다른 구성으로 쓴 초안을 줄이라고 했을 때 모델이 글을 통째로 다시 짠다.
   //   「작성 구성」 블록도 싣지 않는다 — 여기는 새로 쓰는 자리가 아니다.
   parts.push('');
-  parts.push(narrativeMarkInstruction({ keepExistingOrder: true }));
+  const sceneOrder = narrativeSceneOrderOf(parseNarrativeParagraphs(input.sourceText));
+  parts.push(
+    narrativeMarkInstruction({
+      keepExistingOrder: true,
+      ...(sceneOrder === undefined ? {} : { sceneOrder }),
+    }),
+  );
+  parts.push('본문의 나열에는 가운데 점 대신 쉼표와 공백을 씁니다(예: PLA, PHA, PBAT).');
   parts.push('');
   if (input.kind === 'shrink') {
     parts.push('위 글에 있는 내용만 쓰세요. 새로운 활동이나 성과를 덧붙이지 마세요.');

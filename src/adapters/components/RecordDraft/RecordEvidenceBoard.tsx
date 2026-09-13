@@ -95,6 +95,7 @@ import {
   type NarrativeSceneSuggestion,
 } from '@domain/rules/narrativeSuggestionParser';
 import { useScaffoldMigration } from '@adapters/hooks/useScaffoldMigration';
+import { UnplacedEvidencePanel } from './UnplacedEvidencePanel';
 import { Notice } from '@adapters/components/common/Notice';
 import { topicMatchKeywords } from '@domain/rules/topicKeywordSources';
 import { rosterFromAll } from '@domain/rules/redactOutbound';
@@ -142,6 +143,7 @@ import {
   EvidenceMapSidePanel,
   type EvidenceMapSideContent,
 } from '@adapters/components/RecordDraft/EvidenceMapSidePanel';
+import { useEvidenceEditHistory } from '@adapters/hooks/useEvidenceEditHistory';
 import { useEvidenceMapPositions } from '@adapters/hooks/useEvidenceMapPositions';
 import {
   EvidenceColumn,
@@ -156,11 +158,8 @@ import {
 import { RecordEvidenceImportDrawer } from '@adapters/components/RecordDraft/RecordEvidenceImportDrawer';
 import { EvidenceSourceComparisonDialog } from '@adapters/components/RecordDraft/EvidenceSourceComparisonDialog';
 import { useEvidenceCandidates } from '@adapters/hooks/useEvidenceCandidates';
-import {
-  useEvidenceSourceState,
-  isComparableSourceType,
-} from '@adapters/hooks/useEvidenceSourceState';
-import { evidenceDeleteGuidance, isSameAsSource } from '@domain/rules/evidenceSourceComparison';
+import { useEvidenceSourceState } from '@adapters/hooks/useEvidenceSourceState';
+import { isSameAsSource } from '@domain/rules/evidenceSourceComparison';
 import type { EvidenceCandidate } from '@usecases/studentRecords/collectEvidenceCandidates';
 import { hasProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
@@ -279,10 +278,6 @@ interface ToastState {
 }
 
 /** 근거가 놓기 직전에 있던 자리 — [되돌리기]의 목적지. */
-type EvidenceOrigin =
-  | { readonly kind: 'scene'; readonly threadId: string; readonly sceneId: string }
-  | { readonly kind: 'unplaced'; readonly threadId: string }
-  | { readonly kind: 'unclassified' };
 
 /** 새 주제 만들기 팽오버 — 어느 단추 위에 띄울지(`anchor`). `forSelection` 이면 만들자마자 고른 근거를 그 주제로 보낸다. */
 interface CreatingState {
@@ -381,40 +376,117 @@ export function RecordEvidenceBoard({
   /** 영역이 하나뿐이면 고를 것이 없다 — 필터 줄·카드 칩·폼 칩을 그리지 않고 값은 그 영역으로 고정한다. */
   const singleArea = areas.length === 1 ? (areas[0] ?? null) : null;
 
+  const student = students.find((s) => s.studentRef === selectedStudentRef) ?? null;
+  const mapPositions = useEvidenceMapPositions(student?.studentRef ?? null);
+  const { history, wrap, importRun } = useEvidenceEditHistory(
+    `${context}:${classId ?? ''}:${selectedStudentRef ?? ''}`,
+    student?.studentRef ?? null,
+    mapPositions,
+  );
   const records = useRecordEvidenceStore((s) => s.records);
   const loadEvidence = useRecordEvidenceStore((s) => s.load);
   const evidenceLoaded = useRecordEvidenceStore((s) => s.loaded);
-  const addEvidence = useRecordEvidenceStore((s) => s.add);
-  const addManyEvidence = useRecordEvidenceStore((s) => s.addMany);
-  const updateEvidence = useRecordEvidenceStore((s) => s.update);
-  const removeEvidence = useRecordEvidenceStore((s) => s.remove);
-  const restoreRemoved = useRecordEvidenceStore((s) => s.restoreRemoved);
-  const applySourceFields = useRecordEvidenceStore((s) => s.applySourceFields);
-  const setExcludedFromAi = useRecordEvidenceStore((s) => s.setExcludedFromAi);
-  const setExcludedFromAiMany = useRecordEvidenceStore((s) => s.setExcludedFromAiMany);
-  const setThread = useRecordEvidenceStore((s) => s.setThread);
-  const moveToThread = useRecordEvidenceStore((s) => s.moveToThread);
-  const moveToNewThread = useRecordEvidenceStore((s) => s.moveToNewThread);
-  const unclassify = useRecordEvidenceStore((s) => s.unclassify);
+  const addEvidence = wrap(
+    useRecordEvidenceStore((s) => s.add),
+    '근거 편집',
+  );
+  const addManyEvidence = wrap(
+    useRecordEvidenceStore((s) => s.addMany),
+    '근거 편집',
+  );
+  const updateEvidence = wrap(
+    useRecordEvidenceStore((s) => s.update),
+    '근거 편집',
+  );
+  const applySourceFields = wrap(
+    useRecordEvidenceStore((s) => s.applySourceFields),
+    '근거 편집',
+  );
+  const setExcludedFromAi = wrap(
+    useRecordEvidenceStore((s) => s.setExcludedFromAi),
+    '근거 편집',
+  );
+  const setExcludedFromAiMany = wrap(
+    useRecordEvidenceStore((s) => s.setExcludedFromAiMany),
+    '근거 편집',
+  );
+  const setThread = wrap(
+    useRecordEvidenceStore((s) => s.setThread),
+    '주제 편집',
+  );
+  const moveToThread = wrap(
+    useRecordEvidenceStore((s) => s.moveToThread),
+    '주제 편집',
+  );
+  const moveToNewThread = wrap(
+    useRecordEvidenceStore((s) => s.moveToNewThread),
+    '주제 편집',
+  );
+  const unclassify = wrap(
+    useRecordEvidenceStore((s) => s.unclassify),
+    '근거 편집',
+  );
 
   const threads = useInquiryThreadStore((s) => s.records);
   const loadThreads = useInquiryThreadStore((s) => s.load);
-  const addThread = useInquiryThreadStore((s) => s.add);
+  const addThread = wrap(
+    useInquiryThreadStore((s) => s.add),
+    '주제 편집',
+  );
   // 장면 다루기(ADR-103). 소유는 근거 파일이 먼저 쓰고, 장면은 그 뒤에 쓴다.
-  const addScene = useInquiryThreadStore((s) => s.addScene);
-  const removeScene = useInquiryThreadStore((s) => s.removeScene);
-  const moveScene = useInquiryThreadStore((s) => s.moveScene);
-  const setSceneNote = useInquiryThreadStore((s) => s.setSceneNote);
-  const setSceneLeadIn = useInquiryThreadStore((s) => s.setSceneLeadIn);
-  const setSceneCategory = useInquiryThreadStore((s) => s.setSceneCategory);
-  const setLink = useInquiryThreadStore((s) => s.setLink);
-  const reorderThreads = useInquiryThreadStore((s) => s.reorderThreads);
-  const applyScaffold = useInquiryThreadStore((s) => s.applyScaffold);
-  const restoreScenes = useInquiryThreadStore((s) => s.restoreScenes);
-  const detachFromScenes = useInquiryThreadStore((s) => s.detachFromScenes);
-  const setEvidenceNote = useRecordEvidenceStore((s) => s.setNote);
-  const updateThread = useInquiryThreadStore((s) => s.update);
-  const removeThread = useInquiryThreadStore((s) => s.remove);
+  const addScene = wrap(
+    useInquiryThreadStore((s) => s.addScene),
+    '장면 편집',
+  );
+  const removeScene = wrap(
+    useInquiryThreadStore((s) => s.removeScene),
+    '장면 편집',
+  );
+  const moveScene = wrap(
+    useInquiryThreadStore((s) => s.moveScene),
+    '장면 편집',
+  );
+  const setSceneNote = wrap(
+    useInquiryThreadStore((s) => s.setSceneNote),
+    '장면 편집',
+  );
+  const setSceneLeadIn = wrap(
+    useInquiryThreadStore((s) => s.setSceneLeadIn),
+    '장면 편집',
+  );
+  const setSceneCategory = wrap(
+    useInquiryThreadStore((s) => s.setSceneCategory),
+    '장면 편집',
+  );
+  const setLink = wrap(
+    useInquiryThreadStore((s) => s.setLink),
+    '근거 편집',
+  );
+  const reorderThreads = wrap(
+    useInquiryThreadStore((s) => s.reorderThreads),
+    '주제 편집',
+  );
+  const applyScaffold = wrap(
+    useInquiryThreadStore((s) => s.applyScaffold),
+    '근거 편집',
+  );
+
+  const detachFromScenes = wrap(
+    useInquiryThreadStore((s) => s.detachFromScenes),
+    '장면 편집',
+  );
+  const setEvidenceNote = wrap(
+    useRecordEvidenceStore((s) => s.setNote),
+    '근거 편집',
+  );
+  const updateThread = wrap(
+    useInquiryThreadStore((s) => s.update),
+    '주제 편집',
+  );
+  const removeThread = wrap(
+    useInquiryThreadStore((s) => s.remove),
+    '주제 편집',
+  );
 
   // 새 주제 이름 후보(수행평가 1순위 — 오너 결정 2026-09-04)와 매칭 키워드의 원천.
   const rubrics = useRubricStore((s) => s.rubrics);
@@ -471,6 +543,9 @@ export function RecordEvidenceBoard({
   const [dragging, setDragging] = useState<DragState | null>(null);
   // ── 근거 지도(ADR-106) ─────────────────────────────────────
   /** 오른쪽 상세가 보고 있는 카드. 선택(`selectedIds`)과 다르다 — 선택은 여럿, 상세는 하나. */
+  const placingRef = useRef(false);
+  const [placing, setPlacing] = useState(false);
+  const [unplacedOpen, setUnplacedOpen] = useState(false);
   const [focusedId, setFocusedId] = useState<string | null>(null);
   /** 오른쪽에 연 장면·장면 이음·주제·주제 이음(ADR-107·108). 카드 상세와 **교대**로 든다(보조 공간은 하나). */
   const [mapPick, setMapPick] = useState<
@@ -501,7 +576,7 @@ export function RecordEvidenceBoard({
   };
   /** 옛 작성 방식 → 뼈대 옮기기(한 번). 결과는 안내 줄로 말한다. */
   const scaffoldMigration = useScaffoldMigration();
-  const [expandedWorkspace, setExpandedWorkspace] = useState(false);
+  const [expandedWorkspace, setExpandedWorkspace] = useState(true);
   /** 접어 둔 줄기. */
   const [collapsedLanes, setCollapsedLanes] = useState<readonly string[]>([]);
   /** [뼈대 고르기] 펼침 — 팝오버가 아니라 도구줄 아래 인라인 칸이다(유리 모드 대응). */
@@ -531,6 +606,12 @@ export function RecordEvidenceBoard({
     | { readonly kind: 'applying'; readonly threadId: string }
   >({ kind: 'idle' });
   const narrativeRequestRef = useRef(0);
+  const narrativeBaselineRef = useRef('');
+  const narrativeFingerprint = (threadId: string): string =>
+    JSON.stringify({
+      thread: useInquiryThreadStore.getState().records.find((t) => t.id === threadId),
+      evidence: useRecordEvidenceStore.getState().records.filter((e) => e.threadId === threadId),
+    });
   /** 어느 장면의 [+ 근거]를 열었나. */
   const [sceneAddFor, setSceneAddFor] = useState<{
     readonly threadId: string;
@@ -604,6 +685,7 @@ export function RecordEvidenceBoard({
     setSuggest({ kind: 'idle' });
     setAnswerOpen(false);
     setComparingId(null);
+    setUnplacedOpen(false);
     setFocusedId(null);
     setMapPick(null);
     setOrganizeOpen(false);
@@ -688,7 +770,6 @@ export function RecordEvidenceBoard({
     return () => window.removeEventListener('mousedown', onDown);
   }, [creating]);
 
-  const student = students.find((s) => s.studentRef === selectedStudentRef) ?? null;
   const studentIndex = student ? students.indexOf(student) : -1;
 
   // ── 파생값 ─────────────────────────────────────────────────
@@ -791,7 +872,6 @@ export function RecordEvidenceBoard({
   );
   // ── 근거 지도 파생값(ADR-106) ───────────────────────────────
   /** 카드 위치(장면이 없는 묶음에서 손으로 민 값) — 기기별. */
-  const mapPositions = useEvidenceMapPositions(student?.studentRef ?? null);
   // ── 장면 열 파생값(ADR-103 · 지도에 통합 ADR-107) ─────────────────
   /**
    * 어느 틀로 볼 것인가 — **영역이 정한다.** 행동특성은 생활 틀(특성·장면·성장·평가), 나머지는 탐구 틀.
@@ -911,7 +991,8 @@ export function RecordEvidenceBoard({
                 ...(rs.scene.note === undefined ? {} : { note: rs.scene.note }),
                 ...(rs.scene.leadIn === undefined ? {} : { leadIn: rs.scene.leadIn }),
                 dropId: sceneDropId(t.id, rs.scene.id),
-                items: rs.evidences,
+                items: rs.evidences.filter((e) => rs.ownIds.has(e.id)),
+                linkedEvidenceCount: rs.evidences.length,
               };
             }),
             {
@@ -929,7 +1010,12 @@ export function RecordEvidenceBoard({
         thread: t,
         title: t.title,
         items: hasScenes
-          ? [...lane.resolved.scenes.flatMap((rs) => rs.evidences), ...lane.resolved.unplaced]
+          ? [
+              ...lane.resolved.scenes.flatMap((rs) =>
+                rs.evidences.filter((e) => rs.ownIds.has(e.id)),
+              ),
+              ...lane.resolved.unplaced,
+            ]
           : (byThread.get(t.id) ?? []),
         dropId: threadDropId(t.id),
         ...(t.status === 'closed' ? { closed: true } : {}),
@@ -951,12 +1037,21 @@ export function RecordEvidenceBoard({
       ...threadGroups,
       {
         key: 'unclassified',
-        title: '주제 미정 근거',
+        title: '미분류 근거',
         items: unclassified,
         dropId: UNCLASSIFIED_DROP_ID,
       },
     ];
   }, [lanes, byThread, unclassified, frame]);
+  const unplacedItems = [
+    ...unclassified.map((evidence) => ({ evidence, group: '미분류' })),
+    ...lanes.flatMap((lane) =>
+      lane.resolved.unplaced.map((evidence) => ({
+        evidence,
+        group: `${lane.thread.title} · 자리 미정`,
+      })),
+    ),
+  ];
   const openLanes = lanes.filter((lane) => lane.thread.status === 'open');
   const scaffoldLane =
     openLanes.find((lane) => lane.thread.id === scaffoldThreadId) ?? openLanes[0];
@@ -1148,6 +1243,84 @@ export function RecordEvidenceBoard({
   // ── 학생 이동 ───────────────────────────────────────────────
   /** 지금 열려 있는 장면 메모 입력칸(장면 id). 학생을 바꾸면 칸이 통째로 사라지므로, 비어 있지 않으면 먼저 묻는다. */
   const editingScenesRef = useRef<Set<string>>(new Set());
+  const canLeaveMapEditor = (): boolean => {
+    if (editingScenesRef.current.size === 0) return true;
+    if (!window.confirm('저장하지 않은 메모가 있습니다. 수정한 내용을 버리고 이동할까요?'))
+      return false;
+    editingScenesRef.current.clear();
+    return true;
+  };
+  const travelHistory = async (direction: 'undo' | 'redo'): Promise<void> => {
+    if (!canLeaveMapEditor()) return;
+    try {
+      if (!(await history.travel(direction))) return;
+      setSelectedIds([]);
+      setFocusedId(null);
+      setMapPick(null);
+      setSceneAddFor(null);
+      setSceneEditFor(null);
+      flash(
+        direction === 'undo'
+          ? '마지막 작업을 실행 취소했습니다'
+          : '취소한 작업을 다시 실행했습니다',
+      );
+    } catch (error) {
+      fail(error);
+    }
+  };
+  const historyActiveRef = useRef(false);
+  const historyKeyRef = useRef(travelHistory);
+  historyKeyRef.current = travelHistory;
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent): void => {
+      if (
+        event.defaultPrevented ||
+        event.isComposing ||
+        event.repeat ||
+        !event.ctrlKey ||
+        event.altKey ||
+        event.shiftKey ||
+        event.metaKey
+      )
+        return;
+      const key =
+        event.code === 'KeyZ' ? 'z' : event.code === 'KeyX' ? 'x' : event.key.toLowerCase();
+      if (key !== 'z' && key !== 'x') return;
+      const target = event.target;
+      if (
+        target instanceof Element &&
+        target.closest(
+          'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]',
+        )
+      )
+        return;
+      if (
+        !(target instanceof Node) ||
+        (!rootRef.current?.contains(target) &&
+          !(target === document.body && historyActiveRef.current))
+      )
+        return;
+      if (
+        target === document.body &&
+        document.querySelector('[role="dialog"], [role="alertdialog"]')
+      )
+        return;
+      if (target instanceof Element && target.closest('[role="dialog"], [role="alertdialog"]'))
+        return;
+      event.preventDefault();
+      void historyKeyRef.current(key === 'z' ? 'undo' : 'redo');
+    };
+    const onPointer = (event: PointerEvent): void => {
+      historyActiveRef.current =
+        event.target instanceof Node && !!rootRef.current?.contains(event.target);
+    };
+    window.addEventListener('pointerdown', onPointer, true);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('pointerdown', onPointer, true);
+    };
+  }, []);
   const selectStudentSafely = (studentRef: string): void => {
     if (
       editingScenesRef.current.size > 0 &&
@@ -1229,30 +1402,36 @@ export function RecordEvidenceBoard({
   };
 
   /**
-   * 주제로 보내기. 거울은 `add(threadId)`/`addMany` 로 **주제에 바로 저장**(한 번의 쓰기)하고,
-   * 저장 카드는 관문 `moveToThread` 를 지난다. 새 저장 경로는 없다.
+   * 원본의 저장 결과 ID를 사용하므로 중복 방지로 기존 근거를 돌려받아도 요청한 주제로 보낸다.
    */
-  const sendTo = async (threadId: string, ids: readonly string[] = selectedIds): Promise<void> => {
-    if (!student || ids.length === 0) return;
-    const { savedIds, mirrorCands } = splitSelection(ids);
-    const title = studentThreads.find((t) => t.id === threadId)?.title ?? '주제';
-    try {
-      let added = 0;
-      if (mirrorCands.length === 1) {
-        await addEvidence(mirrorAddInput(mirrorCands[0]!, { threadId }));
-        added = 1;
-      } else if (mirrorCands.length > 1) {
-        added = await addManyEvidence(mirrorCands.map((c) => mirrorAddInput(c, { threadId })));
+  const sendTo = async (
+    threadId: string,
+    ids: readonly string[] = selectedIds,
+  ): Promise<boolean> => {
+    return history.run('주제로 보내기', async () => {
+      if (!student || ids.length === 0) return false;
+      const { savedIds, mirrorCands } = splitSelection(ids);
+      try {
+        const resolvedIds = [...savedIds];
+        for (const candidate of mirrorCands)
+          resolvedIds.push(await addEvidence(mirrorAddInput(candidate, { threadId })));
+        if (resolvedIds.length === 0) return false;
+        const r = await moveToThread({
+          studentRef: student.studentRef,
+          evidenceIds: [...new Set(resolvedIds)],
+          threadId,
+        });
+        setSelectedIds((prev) => prev.filter((x) => !ids.includes(x)));
+        report(
+          r,
+          `‘${studentThreads.find((t) => t.id === threadId)?.title ?? '주제'}’로 보냈습니다`,
+        );
+        return r.skippedIds.length === 0 && r.movedIds.length > 0;
+      } catch (err) {
+        fail(err);
+        return false;
       }
-      const r =
-        savedIds.length > 0
-          ? await moveToThread({ studentRef: student.studentRef, evidenceIds: savedIds, threadId })
-          : { movedIds: [], skippedIds: [] };
-      setSelectedIds((prev) => prev.filter((x) => !ids.includes(x)));
-      report(r, `‘${title}’로 보냈습니다`, added);
-    } catch (err) {
-      fail(err);
-    }
+    });
   };
 
   /**
@@ -1260,75 +1439,85 @@ export function RecordEvidenceBoard({
    * 선택은 이 학생의 카드에서만 나오고(학생이 바뀌면 비운다) 보드는 다른 학생 카드를 그리지 않으므로, 여기에 남의 학생 근거가 섞일 길은 없다.
    */
   const setSelectedExcluded = async (excluded: boolean): Promise<void> => {
-    const ids = selectedIds;
-    if (!student || ids.length === 0) return;
-    const { savedIds, mirrorCands } = splitSelection(ids);
-    try {
-      let touched = savedIds.length;
-      if (excluded) {
-        // 거울은 "AI 제외"로 저장하는 것이 곷 첫 손댄 — 한 번의 쓰기.
-        if (mirrorCands.length > 0) {
-          touched += await addManyEvidence(
-            mirrorCands.map((c) => mirrorAddInput(c, { excludedFromAi: true })),
-          );
+    return history.run('AI 제외 변경', async () => {
+      const ids = selectedIds;
+      if (!student || ids.length === 0) return;
+      const { savedIds, mirrorCands } = splitSelection(ids);
+      try {
+        let touched = savedIds.length;
+        if (excluded) {
+          // 거울은 "AI 제외"로 저장하는 것이 곷 첫 손댄 — 한 번의 쓰기.
+          if (mirrorCands.length > 0) {
+            touched += await addManyEvidence(
+              mirrorCands.map((c) => mirrorAddInput(c, { excludedFromAi: true })),
+            );
+          }
+          if (savedIds.length > 0) await setExcludedFromAiMany(savedIds, true);
+        } else {
+          // 해제: 거울 가운데 자동 판정으로 켜져 보이던 것만 저장해 실제 id 를 받고 함께 푸는다.
+          const flagged = mirrorCands.filter((c) => hasProhibitedTerms(c.content));
+          const newIds: string[] = [];
+          for (const c of flagged) newIds.push(await addEvidence(mirrorAddInput(c)));
+          const all = [...savedIds, ...newIds];
+          if (all.length > 0) await setExcludedFromAiMany(all, false);
+          touched = all.length;
         }
-        if (savedIds.length > 0) await setExcludedFromAiMany(savedIds, true);
-      } else {
-        // 해제: 거울 가운데 자동 판정으로 켜져 보이던 것만 저장해 실제 id 를 받고 함께 푸는다.
-        const flagged = mirrorCands.filter((c) => hasProhibitedTerms(c.content));
-        const newIds: string[] = [];
-        for (const c of flagged) newIds.push(await addEvidence(mirrorAddInput(c)));
-        const all = [...savedIds, ...newIds];
-        if (all.length > 0) await setExcludedFromAiMany(all, false);
-        touched = all.length;
+        setSelectedIds((prev) => prev.filter((x) => !isMirrorId(x)));
+        flash(`${touched}건을 ${excluded ? 'AI 제외로 바꿨습니다' : 'AI 제외에서 풀었습니다'}`);
+      } catch (err) {
+        fail(err);
       }
-      setSelectedIds((prev) => prev.filter((x) => !isMirrorId(x)));
-      flash(`${touched}건을 ${excluded ? 'AI 제외로 바꿨습니다' : 'AI 제외에서 풀었습니다'}`);
-    } catch (err) {
-      fail(err);
-    }
+    });
   };
 
   /** 카드 [AI 제외] 토글 — 거울이면 그 순간 저장한다(켜기 = `add(excludedFromAi)` 한 번). */
   const setCardExcluded = async (ev: RecordEvidence, excluded: boolean): Promise<void> => {
-    if (!isMirrorId(ev.id)) {
-      await setExcludedFromAi(ev.id, excluded);
-      return;
-    }
-    const c = mirrorBySourceId.get(ev.id.slice(MIRROR_PREFIX.length));
-    if (!c) return;
-    try {
-      if (excluded) {
-        await addEvidence(mirrorAddInput(c, { excludedFromAi: true }));
-      } else {
-        // 자동 판정으로 켜져 보이던 거울을 푸는 것 — 저장하면 스토어가 다시 켜므로 저장 뒤 풀어야 한다.
-        const id = await addEvidence(mirrorAddInput(c));
-        await setExcludedFromAi(id, false);
+    return history.run('AI 제외 변경', async () => {
+      if (!isMirrorId(ev.id)) {
+        await setExcludedFromAi(ev.id, excluded);
+        return;
       }
-      setSelectedIds((prev) => prev.filter((x) => x !== ev.id));
-    } catch (err) {
-      fail(err);
-    }
+      const c = mirrorBySourceId.get(ev.id.slice(MIRROR_PREFIX.length));
+      if (!c) return;
+      try {
+        if (excluded) {
+          await addEvidence(mirrorAddInput(c, { excludedFromAi: true }));
+        } else {
+          // 자동 판정으로 켜져 보이던 거울을 푸는 것 — 저장하면 스토어가 다시 켜므로 저장 뒤 풀어야 한다.
+          const id = await addEvidence(mirrorAddInput(c));
+          await setExcludedFromAi(id, false);
+        }
+        setSelectedIds((prev) => prev.filter((x) => x !== ev.id));
+      } catch (err) {
+        fail(err);
+      }
+    });
   };
 
   /** [미분류로] — 저장 카드는 관문 `unclassify`, 거울은 미분류 그대로 저장(처음 손대는 것). */
-  const sendToUnclassified = async (ids: readonly string[] = selectedIds): Promise<void> => {
-    if (!student || ids.length === 0) return;
-    const { savedIds, mirrorCands } = splitSelection(ids);
-    try {
-      const added =
-        mirrorCands.length > 0
-          ? await addManyEvidence(mirrorCands.map((c) => mirrorAddInput(c)))
-          : 0;
-      const r =
-        savedIds.length > 0
-          ? await unclassify({ studentRef: student.studentRef, evidenceIds: savedIds })
-          : { movedIds: [], skippedIds: [] };
-      setSelectedIds((prev) => prev.filter((x) => !ids.includes(x)));
-      report(r, '미분류로 되돌렸습니다', added);
-    } catch (err) {
-      fail(err);
-    }
+  const sendToUnclassified = async (ids: readonly string[] = selectedIds): Promise<boolean> => {
+    return history.run('미분류로 돌리기', async () => {
+      if (!student || ids.length === 0) return false;
+      const { savedIds, mirrorCands } = splitSelection(ids);
+      try {
+        const added =
+          mirrorCands.length > 0
+            ? await addManyEvidence(mirrorCands.map((c) => mirrorAddInput(c)))
+            : 0;
+        const r =
+          savedIds.length > 0
+            ? await unclassify({ studentRef: student.studentRef, evidenceIds: savedIds })
+            : { movedIds: [], skippedIds: [] };
+        setSelectedIds((prev) => prev.filter((x) => !ids.includes(x)));
+        report(r, '미분류로 되돌렸습니다. 근거 내용과 원본 기록은 보존됩니다', added);
+        const ok = r.skippedIds.length === 0 && r.movedIds.length + added > 0;
+        if (ok) setUnplacedOpen(true);
+        return ok;
+      } catch (err) {
+        fail(err);
+        return false;
+      }
+    });
   };
 
   /** 매칭 키워드 초기값 — 루브릭 **요소** 이름이 주제 이름과 겹칠 때 자동으로 실어 준다(이름이 아니라 매칭용). */
@@ -1341,21 +1530,23 @@ export function RecordEvidenceBoard({
 
   /** 새 주제를 만들며 보낸다(한 동작). 반환 = 만든 주제 id(옮길 게 없으면 null). */
   const sendToNew = async (title: string, ids: readonly string[]): Promise<string | null> => {
-    if (!student) return null;
-    // 거울은 먼저 저장해 실제 id 를 받고, 저장 카드 id 와 합쳤 관문(주제 생성 + 이동이 한 동작)을 부른다.
-    const { savedIds, mirrorCands } = splitSelection(ids);
-    const newIds: string[] = [];
-    for (const c of mirrorCands) newIds.push(await addEvidence(mirrorAddInput(c)));
-    const r = await moveToNewThread({
-      studentRef: student.studentRef,
-      evidenceIds: [...savedIds, ...newIds],
-      title,
-      keywords: keywordsForTitle(title),
-      ...(classId !== undefined ? { classId } : {}),
+    return history.run('새 주제로 보내기', async () => {
+      if (!student) return null;
+      // 거울은 먼저 저장해 실제 id 를 받고, 저장 카드 id 와 합쳤 관문(주제 생성 + 이동이 한 동작)을 부른다.
+      const { savedIds, mirrorCands } = splitSelection(ids);
+      const newIds: string[] = [];
+      for (const c of mirrorCands) newIds.push(await addEvidence(mirrorAddInput(c)));
+      const r = await moveToNewThread({
+        studentRef: student.studentRef,
+        evidenceIds: [...savedIds, ...newIds],
+        title,
+        keywords: keywordsForTitle(title),
+        ...(classId !== undefined ? { classId } : {}),
+      });
+      setSelectedIds((prev) => prev.filter((x) => !ids.includes(x)));
+      report(r, `새 주제 ‘${title}’로 보냈습니다`);
+      return r.threadId;
     });
-    setSelectedIds((prev) => prev.filter((x) => !ids.includes(x)));
-    report(r, `새 주제 ‘${title}’로 보냈습니다`);
-    return r.threadId;
   };
 
   /** 새 주제 팽오버를 연다 — 누른 단추(또는 놓은 칸) 위에 띄운다. `ids` 는 끌어다 놓았을 때만. */
@@ -1374,25 +1565,27 @@ export function RecordEvidenceBoard({
 
   /** [+ 새 주제] — 고른(또는 끌어 놓은) 근거가 있으면 만들며 보내고, 없으면 빈 주제만 만든다. */
   const createThread = async (title: string): Promise<void> => {
-    if (!student) return;
-    const ids = creating?.ids ?? selectedIds;
-    const forSelection = creating?.forSelection === true && ids.length > 0;
-    setCreating(null);
-    try {
-      if (forSelection) {
-        await sendToNew(title, ids);
-      } else {
-        await addThread({
-          studentRef: student.studentRef,
-          title,
-          keywords: keywordsForTitle(title),
-          ...(classId !== undefined ? { classId } : {}),
-        });
-        flash(`주제 ‘${title}’를 만들었습니다`);
+    return history.run('주제 추가', async () => {
+      if (!student) return;
+      const ids = creating?.ids ?? selectedIds;
+      const forSelection = creating?.forSelection === true && ids.length > 0;
+      setCreating(null);
+      try {
+        if (forSelection) {
+          await sendToNew(title, ids);
+        } else {
+          await addThread({
+            studentRef: student.studentRef,
+            title,
+            keywords: keywordsForTitle(title),
+            ...(classId !== undefined ? { classId } : {}),
+          });
+          flash(`주제 ‘${title}’를 만들었습니다`);
+        }
+      } catch (err) {
+        fail(err);
       }
-    } catch (err) {
-      fail(err);
-    }
+    });
   };
 
   // ── 끌어다 놓기 — 하단 바와 같은 함수를 부른다(저장 경로 하나) ────────────────
@@ -1416,6 +1609,30 @@ export function RecordEvidenceBoard({
     const overId = e.over ? String(e.over.id) : null;
     if (!student) return;
     const ids = draggedIds(String(e.active.id));
+    if (overId?.startsWith('drop:before:')) {
+      const beforeId = overId.slice('drop:before:'.length);
+      if (ids.includes(beforeId)) return;
+      const lane = lanes.find((l) =>
+        l.resolved.scenes.some((s) => s.evidences.some((ev) => ev.id === beforeId)),
+      );
+      const scene = lane?.resolved.scenes.find((s) => s.evidences.some((ev) => ev.id === beforeId));
+      if (lane && scene && lane.thread.status === 'open') {
+        const index = scene.scene.evidenceIds.filter((id) => !ids.includes(id)).indexOf(beforeId);
+        void placeInScene(lane.thread.id, scene.scene.id, ids, Math.max(0, index));
+      } else if (!scene) {
+        const target = studentEvidence.find((ev) => ev.id === beforeId);
+        const owner = studentThreads.find((t) => t.id === target?.threadId);
+        if (owner?.status === 'closed') return;
+        if (owner && owner.scenes?.length) {
+          void detachToUnplaced(owner.id, ids);
+        } else if (owner) {
+          void sendTo(owner.id, ids);
+        } else if (target) {
+          void sendToUnclassified(ids);
+        }
+      }
+      return;
+    }
     // 지도: 같은 묶음 안(또는 빈 자리)에 놓으면 옮기기가 아니라 **자리 밀기**다(저장 0회, 기기별 위치만).
     //   다른 묶음에 놓으면 아래 옮기기(주제 소유 변경)로 간다 — 이름표가 보드와 같아 같은 길을 탄다.
     if (viewMode === 'map') {
@@ -1428,7 +1645,9 @@ export function RecordEvidenceBoard({
         // 장면 열이 있는 묶음은 열이 자리를 정하므로 밀지 않는다 — 열 사이에 놓으면 아무 일도 없다.
         const homeGroup = mapGroups.find((g) => g.dropId === home);
         if (lead !== undefined && homeGroup?.columns === undefined) {
-          mapPositions.move(lead.id, e.delta.x / mapZoom, e.delta.y / mapZoom);
+          void history.run('카드 위치 이동', async () => {
+            mapPositions.move(lead.id, e.delta.x / mapZoom, e.delta.y / mapZoom);
+          });
         }
         return;
       }
@@ -1466,19 +1685,21 @@ export function RecordEvidenceBoard({
    * 부르는 곳은 주제 서랍(`InquiryThreadPanel.onRemove`, 두 번 누르기)뿐이다 — 열 머리에는 없다(설계서 §5-c).
    */
   const deleteThread = async (threadId: string): Promise<void> => {
-    const linked = studentEvidence.filter((e) => e.threadId === threadId).map((e) => e.id);
-    try {
-      if (linked.length > 0) await setThread(linked, null);
-      await removeThread(threadId);
-      if (openThreadId === threadId) setOpenThreadId(null);
-      flash(
-        linked.length > 0
-          ? `주제를 지우고 근거 ${linked.length}건을 미분류로 되돌렸습니다`
-          : '주제를 지웠습니다',
-      );
-    } catch (err) {
-      fail(err);
-    }
+    return history.run('주제 삭제', async () => {
+      const linked = studentEvidence.filter((e) => e.threadId === threadId).map((e) => e.id);
+      try {
+        if (linked.length > 0) await setThread(linked, null);
+        await removeThread(threadId);
+        if (openThreadId === threadId) setOpenThreadId(null);
+        flash(
+          linked.length > 0
+            ? `주제를 지우고 근거 ${linked.length}건을 미분류로 되돌렸습니다`
+            : '주제를 지웠습니다',
+        );
+      } catch (err) {
+        fail(err);
+      }
+    });
   };
 
   // ── 장면 동작(ADR-103 · 지도에 통합 ADR-107) ───────────────────
@@ -1524,133 +1745,79 @@ export function RecordEvidenceBoard({
     threadId: string,
     rawSceneId: string,
     ids: readonly string[],
-  ): Promise<void> => {
-    if (!student) return;
-    const sceneId = await materializeScene(threadId, rawSceneId);
-    if (sceneId === null) return;
-    const mirrors = ids.filter((id) => isMirrorId(id));
-    if (mirrors.length > 0) {
-      // 거울은 저장부터. 저장이 끝나면 새 id 를 모르므로 장면까지 한 번에 넣지 않는다.
-      await sendTo(threadId, ids);
-      flash('원본을 근거로 저장해 주제에 넣었습니다. 카드를 장면으로 끌어 놓아 주세요');
-      return;
-    }
-    // ★놓기 전에 어디 있었는지 적어 둔다 — [되돌리기]는 이 표로 제자리에 돌려놓는다.
-    const origins = new Map<string, EvidenceOrigin>(ids.map((id) => [id, originOf(id)]));
-    try {
-      const r = await placeEvidenceInScene({
-        threadId,
-        studentRef: student.studentRef,
-        sceneId,
-        evidenceIds: ids,
-      });
-      setSelectedIds([]);
-      if (r.skippedIds.length > 0) {
-        flash(`근거 ${r.skippedIds.length}건은 옮기지 못했습니다. 새로 고친 뒤 다시 해 주세요`);
-        return;
+    index?: number,
+  ): Promise<boolean> => {
+    return history.run('장면에 근거 놓기', async () => {
+      if (!student || placingRef.current) return false;
+      placingRef.current = true;
+      setPlacing(true);
+      try {
+        const sceneId = await materializeScene(threadId, rawSceneId);
+        if (sceneId === null) return false;
+        const { savedIds, mirrorCands } = splitSelection(ids);
+        const resolvedIds = [...savedIds];
+        for (const candidate of mirrorCands)
+          resolvedIds.push(await addEvidence(mirrorAddInput(candidate)));
+        ids = [...new Set(resolvedIds)];
+        if (ids.length === 0) return false;
+
+        const r = await placeEvidenceInScene({
+          threadId,
+          studentRef: student.studentRef,
+          sceneId,
+          evidenceIds: ids,
+          ...(index === undefined ? {} : { index }),
+        });
+        setSelectedIds([]);
+        if (r.skippedIds.length > 0) {
+          flash(`근거 ${r.skippedIds.length}건은 옮기지 못했습니다. 새로 고친 뒤 다시 해 주세요`);
+          return false;
+        }
+        const placedIds = r.placedIds;
+        flash(`근거 ${placedIds.length}건을 장면에 놓았습니다`);
+        return placedIds.length > 0;
+      } catch (err) {
+        fail(err);
+        return false;
+      } finally {
+        placingRef.current = false;
+        setPlacing(false);
       }
-      const placedIds = r.placedIds;
-      flash(`근거 ${placedIds.length}건을 장면에 놓았습니다`, {
-        label: '되돌리기',
-        onClick: () => {
-          void restoreOrigins(placedIds, origins, threadId)
-            .then(() => flash(`근거 ${placedIds.length}건을 제자리로 되돌렸습니다`))
-            .catch(fail);
-        },
-      });
-    } catch (err) {
-      fail(err);
-    }
+    });
   };
 
   /** 근거 하나가 놓기 직전에 있던 자리. `lanes` 는 이 학생의 주제 전부를 들고 있다. */
-  const originOf = (id: string): EvidenceOrigin => {
-    for (const lane of lanes) {
-      for (const rs of lane.resolved.scenes) {
-        if (rs.virtual !== true && rs.evidences.some((e) => e.id === id)) {
-          return { kind: 'scene', threadId: lane.thread.id, sceneId: rs.scene.id };
-        }
-      }
-      if (lane.resolved.unplaced.some((e) => e.id === id)) {
-        return { kind: 'unplaced', threadId: lane.thread.id };
-      }
-    }
-    return { kind: 'unclassified' };
-  };
 
   /** 놓은 근거를 원래 자리로 — 같은 자리끼리 묶어 저장 횟수를 줄인다. */
-  const restoreOrigins = async (
-    ids: readonly string[],
-    origins: ReadonlyMap<string, EvidenceOrigin>,
-    placedThreadId: string,
-  ): Promise<void> => {
-    if (!student) return;
-    const groups = new Map<string, { origin: EvidenceOrigin; ids: string[] }>();
-    for (const id of ids) {
-      const origin = origins.get(id) ?? { kind: 'unclassified' };
-      const key =
-        origin.kind === 'scene'
-          ? `scene:${origin.threadId}:${origin.sceneId}`
-          : origin.kind === 'unplaced'
-            ? `unplaced:${origin.threadId}`
-            : 'unclassified';
-      const g = groups.get(key);
-      if (g) g.ids.push(id);
-      else groups.set(key, { origin, ids: [id] });
-    }
-    for (const { origin, ids: group } of groups.values()) {
-      if (origin.kind === 'scene') {
-        // 소유가 다른 주제였어도 `placeEvidenceInScene` 이 소유부터 맞춘다(근거 먼저, 장면 나중).
-        await placeEvidenceInScene({
-          threadId: origin.threadId,
-          studentRef: student.studentRef,
-          sceneId: origin.sceneId,
-          evidenceIds: group,
-        });
-      } else if (origin.kind === 'unplaced') {
-        if (origin.threadId === placedThreadId) await detachFromScenes(origin.threadId, group);
-        else
-          await moveToThread({
-            studentRef: student.studentRef,
-            evidenceIds: group,
-            threadId: origin.threadId,
-          });
-      } else {
-        await unclassify({ studentRef: student.studentRef, evidenceIds: group });
-      }
-    }
-  };
 
   /** 장면에서만 빼기 — 주제 소속은 그대로 둔다("아직 안 놓음"으로). */
   const detachToUnplaced = async (threadId: string, ids: readonly string[]): Promise<void> => {
-    const real = ids.filter((id) => !isMirrorId(id));
-    if (real.length === 0) return;
-    await detachFromScenes(threadId, real);
-    setSelectedIds([]);
-    flash(`근거 ${real.length}건을 장면에서 뺐습니다. 주제에는 그대로 있습니다`);
+    return history.run('장면 배치 해제', async () => {
+      const real = ids.filter((id) => !isMirrorId(id));
+      if (real.length === 0) return;
+      await detachFromScenes(threadId, real);
+      setUnplacedOpen(true);
+      setSelectedIds([]);
+      flash(`근거 ${real.length}건을 장면에서 뺐습니다. 주제에는 그대로 있습니다`);
+    });
   };
 
   /** 뼈대 깔기 — 놓여 있던 근거는 "아직 안 놓음"으로 돌아간다(지워지지 않는다). */
   const layScaffold = async (threadId: string, scaffold: RecordScaffold): Promise<void> => {
-    // ★깔기 직전 장면 배열을 찍어 둔다 — 메모·배치·id 그대로. [되돌리기]가 이것을 통째로 돌려놓는다.
-    const before = studentThreads.find((t) => t.id === threadId)?.scenes ?? [];
-    try {
-      await applyScaffold(threadId, scaffold);
-      await updateSettings({
-        recordAreaScaffolds: { ...(savedAreaScaffolds ?? {}), [scaffoldAreaKey]: scaffold.id },
-      });
-      setScaffoldOpen(false);
-      flash(`「${scaffold.name}」 뼈대를 깔았습니다. 놓여 있던 근거는 '자리 미정'에 있습니다`, {
-        label: '되돌리기',
-        onClick: () => {
-          restoreScenes(threadId, before)
-            .then(() => flash('뼈대를 깔기 전으로 되돌렸습니다. 메모와 자리가 그대로입니다'))
-            .catch(fail);
-        },
-      });
-    } catch (err) {
-      fail(err);
-    }
+    return history.run('뼈대 적용', async () => {
+      // ★깔기 직전 장면 배열을 찍어 둔다 — 메모·배치·id 그대로. [되돌리기]가 이것을 통째로 돌려놓는다.
+
+      try {
+        await applyScaffold(threadId, scaffold);
+        await updateSettings({
+          recordAreaScaffolds: { ...(savedAreaScaffolds ?? {}), [scaffoldAreaKey]: scaffold.id },
+        });
+        setScaffoldOpen(false);
+        flash(`「${scaffold.name}」 뼈대를 깔았습니다. 놓여 있던 근거는 '자리 미정'에 있습니다`);
+      } catch (err) {
+        fail(err);
+      }
+    });
   };
 
   /**
@@ -1658,40 +1825,42 @@ export function RecordEvidenceBoard({
    * ★요청서와의 차이는 주제 줄·주제 정보 줄뿐이다(§5-2). 자리를 손으로 하나도 안 옮겨도 초안이 나온다.
    */
   const createThreadFromDates = async (): Promise<void> => {
-    if (!student) return;
-    const ids = unclassified.filter((e) => !isMirrorId(e.id)).map((e) => e.id);
-    if (ids.length === 0) {
-      flash('주제 미정 근거가 없습니다');
-      return;
-    }
-    try {
-      const title = `${student.name} 학생의 흐름`;
-      const threadId = await addThread({
-        studentRef: student.studentRef,
-        title,
-        keywords: [],
-        ...(classId !== undefined ? { classId } : {}),
-      });
-      // 뼈대는 이 영역에서 **마지막으로 고른 것** — 학생마다 다시 깔지 않게(100명 × 3클릭). 고른 적이 없으면 기본.
-      const remembered = scaffoldChoices(builtInScaffolds(), savedScaffolds ?? [], frame).find(
-        (sc) => sc.id === selectedScaffoldId,
-      );
-      await applyScaffold(
-        threadId,
-        remembered ?? {
-          id: 'builtin:legacyInquiry',
-          name: '기본',
-          frame,
-          scenes: defaultScaffoldScenes(),
-          builtIn: true,
-        },
-      );
-      // 근거는 주제로만 보낸다 — 어느 장면에 놓을지는 선생님이 정한다("아직 안 놓음"에서 시작).
-      await sendTo(threadId, ids);
-      flash(`주제를 만들고 근거 ${ids.length}건을 날짜순으로 담았습니다`);
-    } catch (err) {
-      fail(err);
-    }
+    return history.run('날짜순 정리', async () => {
+      if (!student) return;
+      const ids = unclassified.filter((e) => !isMirrorId(e.id)).map((e) => e.id);
+      if (ids.length === 0) {
+        flash('주제 미정 근거가 없습니다');
+        return;
+      }
+      try {
+        const title = `${student.name} 학생의 흐름`;
+        const threadId = await addThread({
+          studentRef: student.studentRef,
+          title,
+          keywords: [],
+          ...(classId !== undefined ? { classId } : {}),
+        });
+        // 뼈대는 이 영역에서 **마지막으로 고른 것** — 학생마다 다시 깔지 않게(100명 × 3클릭). 고른 적이 없으면 기본.
+        const remembered = scaffoldChoices(builtInScaffolds(), savedScaffolds ?? [], frame).find(
+          (sc) => sc.id === selectedScaffoldId,
+        );
+        await applyScaffold(
+          threadId,
+          remembered ?? {
+            id: 'builtin:legacyInquiry',
+            name: '기본',
+            frame,
+            scenes: defaultScaffoldScenes(),
+            builtIn: true,
+          },
+        );
+        // 근거는 주제로만 보낸다 — 어느 장면에 놓을지는 선생님이 정한다("아직 안 놓음"에서 시작).
+        await sendTo(threadId, ids);
+        flash(`주제를 만들고 근거 ${ids.length}건을 날짜순으로 담았습니다`);
+      } catch (err) {
+        fail(err);
+      }
+    });
   };
 
   /** 줄기 하나가 쓰는 동작 묶음. 줄기마다 새로 만든다(부모가 id 를 알고 있어야 하므로). */
@@ -1736,12 +1905,15 @@ export function RecordEvidenceBoard({
   // ── 근거 지도 동작(ADR-106) ────────────────────────────────
   /** 카드를 눌렀다 — 선택을 토글하고 오른쪽 상세를 이 카드로. 장면·주제 편집은 닫힌다(보조 공간은 하나). */
   const selectMapNode = (id: string): void => {
-    toggleSelect(id);
+    if (focusedId !== id && !canLeaveMapEditor()) return;
+    setUnplacedOpen(false);
     setFocusedId(id);
     setMapPick(null);
   };
   /** 장면 열 머리·장면 이음 라벨·주제 제목·주제 이음 라벨을 눌렀다 — 같은 것을 다시 누르면 닫힌다(토글). */
   const pickOnMap = (next: NonNullable<typeof mapPick>): void => {
+    if (!canLeaveMapEditor()) return;
+    setUnplacedOpen(false);
     setMapPick((prev) =>
       prev !== null &&
       prev.kind === next.kind &&
@@ -1918,7 +2090,7 @@ export function RecordEvidenceBoard({
           </p>
         )}
       </div>,
-      document.body,
+      rootRef.current ?? document.body,
     );
   };
 
@@ -1950,7 +2122,19 @@ export function RecordEvidenceBoard({
     onAddScene: (at?: number) => {
       // 새 장면의 기본 자리는 과정이다 — 가장 많이 쓰는 자리이고, 바로 [바꾸기]로 고칠 수 있다.
       addScene(threadId, { role: 'process', moduleId: FRAME_SLOTS[frame].process[0] }, at)
-        .then(() => flash(at === undefined ? '장면을 더했습니다' : '장면을 사이에 끼웠습니다'))
+        .then((sceneId) => {
+          if (sceneId === null) {
+            flash(`장면을 추가하지 못했습니다. 최대 ${NARRATIVE_SCENE_MAX}개까지 만들 수 있습니다`);
+            return;
+          }
+          pickOnMap({ kind: 'scene', threadId, sceneId });
+          setSceneEditFor({ threadId, sceneId });
+          flash(
+            at === undefined
+              ? '장면을 더했습니다. 이름과 카테고리를 정해 주세요'
+              : '장면을 사이에 끼웠습니다. 이름과 카테고리를 정해 주세요',
+          );
+        })
         .catch(fail);
     },
     onEditScene: (sceneId: string) => {
@@ -1965,22 +2149,15 @@ export function RecordEvidenceBoard({
     },
     onMoveScene: (sceneId: string, dir: -1 | 1) => {
       moveScene(threadId, sceneId, dir)
-        .then(() =>
-          flash('장면을 옮겼습니다', {
-            label: '되돌리기',
-            onClick: () => {
-              moveScene(threadId, sceneId, dir === 1 ? -1 : 1)
-                .then(() => flash('장면 순서를 되돌렸습니다'))
-                .catch(fail);
-            },
-          }),
-        )
+        .then(() => flash('장면을 옮겼습니다'))
         .catch(fail);
     },
     onChangeSceneNote: async (sceneId: string, note: string): Promise<void> => {
-      const real = await materializeScene(threadId, sceneId);
-      if (real === null) throw new Error('메모를 저장할 장면을 만들지 못했습니다');
-      await setSceneNote(threadId, real, note);
+      return history.run('장면 메모 저장', async () => {
+        const real = await materializeScene(threadId, sceneId);
+        if (real === null) throw new Error('메모를 저장할 장면을 만들지 못했습니다');
+        await setSceneNote(threadId, real, note);
+      });
     },
     onAddEvidenceToScene: (sceneId: string) => {
       void materializeScene(threadId, sceneId).then((real) => {
@@ -2018,6 +2195,7 @@ export function RecordEvidenceBoard({
       roster,
       frame,
       threadTitle: target.title,
+      ...(target.scenes ? { currentScenes: target.scenes } : {}),
       evidences: mine.map((e) => ({
         id: e.id,
         content: e.content,
@@ -2037,6 +2215,7 @@ export function RecordEvidenceBoard({
       return;
     }
     setNarrativeSuggest({ kind: 'running', threadId });
+    narrativeBaselineRef.current = narrativeFingerprint(threadId);
     try {
       const answer = await askOnce(api, runProvider, pack.text);
       if (request !== narrativeRequestRef.current) return;
@@ -2069,54 +2248,68 @@ export function RecordEvidenceBoard({
    * ★이음말은 **앞 주제가 있을 때만** 저장한다. 없는 연결에 말만 붙일 수는 없다.
    */
   const applyNarrativeSuggest = async (): Promise<void> => {
-    if (narrativeSuggest.kind !== 'ready' || !student) return;
-    const { threadId, scenes, linkNote } = narrativeSuggest;
-    const target = studentThreads.find((t) => t.id === threadId);
-    if (target === undefined || target.status === 'closed') return;
-    const request = ++narrativeRequestRef.current;
-    const from = target?.link?.fromThreadId;
-    setNarrativeSuggest({ kind: 'applying', threadId });
-    try {
-      const r = await applyNarrativeSuggestion({
-        threadId,
-        studentRef: student.studentRef,
-        frame,
-        scenes: scenes.map((sc) => ({
-          role: sc.role,
-          ...(sc.moduleId === undefined ? {} : { moduleId: sc.moduleId }),
-          ...(sc.note === undefined ? {} : { note: sc.note }),
-          evidenceIds: sc.evidenceIds,
-        })),
-        ...(linkNote !== undefined && from !== undefined
-          ? { link: { fromThreadId: from, note: linkNote } }
-          : {}),
-      });
-      if (request !== narrativeRequestRef.current) return;
-      if (!r.applied) {
-        // ★아무것도 저장되지 않았다. **제안을 지우지 않는다** — 지우면 CLI 를 한 번 더 돌려야 한다.
+    return history.run('AI 장면 적용', async () => {
+      if (narrativeSuggest.kind !== 'ready' || !student) return;
+      const { threadId, scenes, linkNote } = narrativeSuggest;
+      const target = studentThreads.find((t) => t.id === threadId);
+      if (target === undefined || target.status === 'closed') return;
+      if (narrativeBaselineRef.current !== narrativeFingerprint(threadId)) {
+        setNarrativeSuggest({
+          kind: 'notice',
+          message:
+            '제안을 만든 뒤 근거나 장면이 바뀌었습니다. 현재 내용을 기준으로 다시 제안받아 주세요.',
+        });
+        return;
+      }
+      const request = ++narrativeRequestRef.current;
+      const from = target?.link?.fromThreadId;
+
+      setNarrativeSuggest({ kind: 'applying', threadId });
+      try {
+        const r = await applyNarrativeSuggestion({
+          threadId,
+          studentRef: student.studentRef,
+          frame,
+          scenes: scenes.map((sc) => ({
+            role: sc.role,
+            ...(sc.moduleId === undefined ? {} : { moduleId: sc.moduleId }),
+            ...(sc.note === undefined ? {} : { note: sc.note }),
+            ...(sc.leadIn === undefined ? {} : { leadIn: sc.leadIn }),
+            evidenceIds: sc.evidenceIds,
+          })),
+          ...(linkNote !== undefined && from !== undefined
+            ? { link: { fromThreadId: from, note: linkNote } }
+            : {}),
+        });
+        if (request !== narrativeRequestRef.current) return;
+        if (!r.applied) {
+          // ★아무것도 저장되지 않았다. **제안을 지우지 않는다** — 지우면 CLI 를 한 번 더 돌려야 한다.
+          setNarrativeSuggest({
+            kind: 'ready',
+            threadId,
+            scenes,
+            ...(linkNote === undefined ? {} : { linkNote }),
+          });
+          flash(
+            '근거를 하나도 옮기지 못해 배치를 적용하지 않았습니다. 새로 고친 뒤 다시 해 주세요',
+          );
+          return;
+        }
+        setNarrativeSuggest({ kind: 'idle' });
+        const skipped =
+          r.skippedIds.length > 0 ? ` · ${r.skippedIds.length}건은 놓지 못했습니다` : '';
+        flash(`장면을 이 배치대로 정리했습니다. 근거 ${r.placedIds.length}건${skipped}`);
+      } catch (err) {
+        if (request !== narrativeRequestRef.current) return;
         setNarrativeSuggest({
           kind: 'ready',
           threadId,
           scenes,
           ...(linkNote === undefined ? {} : { linkNote }),
         });
-        flash('근거를 하나도 옮기지 못해 배치를 적용하지 않았습니다. 새로 고친 뒤 다시 해 주세요');
-        return;
+        fail(err);
       }
-      setNarrativeSuggest({ kind: 'idle' });
-      const skipped =
-        r.skippedIds.length > 0 ? ` · ${r.skippedIds.length}건은 놓지 못했습니다` : '';
-      flash(`장면을 이 배치대로 정리했습니다. 근거 ${r.placedIds.length}건${skipped}`);
-    } catch (err) {
-      if (request !== narrativeRequestRef.current) return;
-      setNarrativeSuggest({
-        kind: 'ready',
-        threadId,
-        scenes,
-        ...(linkNote === undefined ? {} : { linkNote }),
-      });
-      fail(err);
-    }
+    });
   };
 
   // ── AI 분류 제안 ─────────────────────────────────────────────
@@ -2201,24 +2394,28 @@ export function RecordEvidenceBoard({
 
   /** 제안 한 열 적용 — 곧 저장 관문 호출. 적용한 제안은 목록에서 뺀다. */
   const applyGhost = async (key: string): Promise<void> => {
-    const g = ghosts.get(key);
-    if (!g) return;
-    const ids = g.items.map((e) => e.id);
-    try {
-      if (g.suggestion.threadId !== null) await sendTo(g.suggestion.threadId, ids);
-      else await sendToNew(g.suggestion.title, ids);
-      setSuggest((s) =>
-        s.kind === 'ready'
-          ? { ...s, suggestions: s.suggestions.filter((x) => x !== g.suggestion) }
-          : s,
-      );
-    } catch (err) {
-      fail(err);
-    }
+    return history.run('AI 주제 적용', async () => {
+      const g = ghosts.get(key);
+      if (!g) return;
+      const ids = g.items.map((e) => e.id);
+      try {
+        if (g.suggestion.threadId !== null) await sendTo(g.suggestion.threadId, ids);
+        else await sendToNew(g.suggestion.title, ids);
+        setSuggest((s) =>
+          s.kind === 'ready'
+            ? { ...s, suggestions: s.suggestions.filter((x) => x !== g.suggestion) }
+            : s,
+        );
+      } catch (err) {
+        fail(err);
+      }
+    });
   };
   const applyAllGhosts = async (): Promise<void> => {
-    for (const key of [...ghosts.keys()]) await applyGhost(key);
-    setSuggest({ kind: 'idle' });
+    return history.run('AI 주제 전체 적용', async () => {
+      for (const key of [...ghosts.keys()]) await applyGhost(key);
+      setSuggest({ kind: 'idle' });
+    });
   };
 
   // ── 카드 등록 · 수정 ────────────────────────────────────────
@@ -2244,37 +2441,39 @@ export function RecordEvidenceBoard({
     );
   };
   const saveForm = async (): Promise<void> => {
-    if (!form || !student) return;
-    const content = form.content.trim();
-    if (content.length === 0 || form.areas.length === 0) return;
-    try {
-      if (form.id === null) {
-        await addEvidence({
-          studentRef: student.studentRef,
-          areas: form.areas,
-          content,
-          sourceType: 'manual',
-          ...(form.date ? { date: form.date } : {}),
-          ...(classId !== undefined ? { classId } : {}),
-        });
-      } else if (isMirrorId(form.id)) {
-        // 거울 수정 저장 = 첫 손댄 — 고친 내용으로 그 순간 근거가 된다(`add` 한 번).
-        const c = mirrorBySourceId.get(form.id.slice(MIRROR_PREFIX.length));
-        if (!c) return;
-        await addEvidence({
-          ...mirrorAddInput(c),
-          areas: form.areas,
-          content,
-          ...(form.date ? { date: form.date } : {}),
-        });
-        setSelectedIds((prev) => prev.filter((x) => x !== form.id));
-      } else {
-        await updateEvidence(form.id, { areas: form.areas, content, date: form.date });
+    return history.run('근거 저장', async () => {
+      if (!form || !student) return;
+      const content = form.content.trim();
+      if (content.length === 0 || form.areas.length === 0) return;
+      try {
+        if (form.id === null) {
+          await addEvidence({
+            studentRef: student.studentRef,
+            areas: form.areas,
+            content,
+            sourceType: 'manual',
+            ...(form.date ? { date: form.date } : {}),
+            ...(classId !== undefined ? { classId } : {}),
+          });
+        } else if (isMirrorId(form.id)) {
+          // 거울 수정 저장 = 첫 손댄 — 고친 내용으로 그 순간 근거가 된다(`add` 한 번).
+          const c = mirrorBySourceId.get(form.id.slice(MIRROR_PREFIX.length));
+          if (!c) return;
+          await addEvidence({
+            ...mirrorAddInput(c),
+            areas: form.areas,
+            content,
+            ...(form.date ? { date: form.date } : {}),
+          });
+          setSelectedIds((prev) => prev.filter((x) => x !== form.id));
+        } else {
+          await updateEvidence(form.id, { areas: form.areas, content, date: form.date });
+        }
+        setForm(null);
+      } catch (err) {
+        fail(err);
       }
-      setForm(null);
-    } catch (err) {
-      fail(err);
-    }
+    });
   };
   /** 카드의 유형 토글 — 수정 모드 없이 즉시 반영. 마지막 하나는 뻔 수 없다(근거는 영역이 1개 이상). */
   const toggleEvidenceArea = (ev: RecordEvidence, area: RecordArea): void => {
@@ -2283,65 +2482,14 @@ export function RecordEvidenceBoard({
     void updateEvidence(ev.id, { areas: next });
   };
 
-  /**
-   * 삭제 뒤 문구 — **확인한 것만 약속한다**(계획 §5.3 "출처 있는 저장 근거 삭제", AC-16 (b)).
-   *
-   * "원본은 미분류에 다시 표시됩니다"는 원본이 실제로 있고 자동 거울 적격일 때만 참이다.
-   * 조회에 실패했으면 확인한 것이 없고, 출결·공백 본문이면 지워도 돌아오지 않는다.
-   * 그 상태에서 재노출을 약속하면 교사는 "지웠다가 다시 담으면 되겠지"로 판단한다.
-   */
-  const deleteToastText = (ev: RecordEvidence): string => {
-    const got = sourceState.lookup(ev.sourceId, ev.sourceType);
-    switch (
-      evidenceDeleteGuidance({
-        hasSource: ev.sourceId !== undefined,
-        inScope: isComparableSourceType(ev.sourceType),
-        sourceState: got.state === 'out-of-scope' ? 'missing' : got.state,
-        mirrorEligible: got.state === 'found' && got.source.mirrorEligible,
-      })
-    ) {
-      case 'reappears':
-        return '정리한 근거를 지웠습니다 · 원본은 미분류에 다시 표시됩니다';
-      case 'source-missing':
-        return '정리한 근거만 지웠습니다';
-      case 'evidence-only':
-        return '정리한 근거만 지웠습니다 · 원본은 이 동작으로 지우지 않았습니다';
-      case 'manual':
-        return '근거 1건을 지웠습니다';
-    }
-  };
-
-  /**
-   * 카드 [삭제] — 바로 지우되, 5초 동안 토스트의 [되돌리기]로 복구할 수 있다(설계서 §5-a).
-   *
-   * ★되돌리기는 `add` 가 아니라 `restoreRemoved` 다. `add` 는 새 근거를 조립하며 AI 제외를 다시
-   *   판정하고, 같은 원본이 이미 있으면 조용히 그 id 만 돌려준다 - 화면은 "되돌렸다"고 하는데
-   *   실제로는 아무 일도 안 일어난다(AC-16 (c)).
-   */
+  /** 원문과 편집한 근거를 보존하고 주제·장면 배치만 해제한다. */
   const removeCard = async (ev: RecordEvidence): Promise<void> => {
-    // 문구 판정은 **지우기 전에** 한다. 지운 뒤에는 거울 후보가 되살아나 상태가 달라진다.
-    const text = deleteToastText(ev);
-    try {
-      await removeEvidence(ev.id);
-      setSelectedIds((prev) => prev.filter((x) => x !== ev.id));
-      flash(text, {
-        label: '되돌리기',
-        onClick: () => {
-          closeToast();
-          void restoreRemoved(ev)
-            .then((r) =>
-              flash(
-                r.restored
-                  ? '지운 근거를 되돌렸습니다'
-                  : '이미 새로 저장된 근거가 있어 되돌리지 않았습니다 · 그 근거를 확인해 주세요',
-              ),
-            )
-            .catch(fail);
-        },
-      });
-    } catch (err) {
-      fail(err);
-    }
+    if (!canLeaveMapEditor()) return;
+    if (!(await sendToUnclassified([ev.id]))) return;
+    setComparingId(null);
+    setFocusedId(null);
+    setMapPick(null);
+    setUnplacedOpen(true);
   };
 
   // ── 렌더 ───────────────────────────────────────────────────
@@ -2422,16 +2570,21 @@ export function RecordEvidenceBoard({
       key={ev.id}
       evidence={ev}
       selected={selectedIds.includes(ev.id)}
+      showActions={viewMode === 'map' && focusedId === ev.id}
+      onNoteEditingChange={(editing) => {
+        const key = `evidence:${ev.id}`;
+        if (editing) editingScenesRef.current.add(key);
+        else editingScenesRef.current.delete(key);
+      }}
       areas={areas}
       compact={compact}
       // 거울 카드는 아직 저장된 근거가 아니라 메모를 붙일 자리가 없다(붙일 곳은 원본이 아니다).
       {...(isMirrorId(ev.id)
         ? {}
         : {
-            onChangeNote: (note: string) => {
-              setEvidenceNote(ev.id, note)
-                .then(() => flash(note.length > 0 ? '메모를 남겼습니다' : '메모를 지웠습니다'))
-                .catch(fail);
+            onChangeNote: async (note: string) => {
+              await setEvidenceNote(ev.id, note);
+              flash(note.length > 0 ? '메모를 남겼습니다' : '메모를 지웠습니다');
             },
           })}
       // "이것도 이 주제?" — 미분류 카드에만, 주제 키워드가 본문에 있을 때만(문자열 검사, AI 없음). 칩 1~2개.
@@ -2680,7 +2833,7 @@ export function RecordEvidenceBoard({
           </div>
         )}
       </div>,
-      document.body,
+      rootRef.current ?? document.body,
     );
   };
 
@@ -2693,7 +2846,7 @@ export function RecordEvidenceBoard({
         role="status"
         aria-live="polite"
         aria-label="알림"
-        className="fixed bottom-6 left-1/2 z-sp-dropdown flex -translate-x-1/2 items-center gap-3 rounded-xl border border-sp-border bg-sp-card px-4 py-2 text-xs font-medium text-sp-text shadow-xl"
+        className="fixed bottom-6 left-1/2 z-sp-toast flex -translate-x-1/2 items-center gap-3 rounded-xl border border-sp-border bg-sp-card px-4 py-2 text-xs font-medium text-sp-text shadow-xl"
       >
         <span>{toast.text}</span>
         {toast.action && (
@@ -2714,7 +2867,7 @@ export function RecordEvidenceBoard({
           <span className="material-symbols-outlined text-sm">close</span>
         </button>
       </div>,
-      document.body,
+      rootRef.current ?? document.body,
     );
   };
 
@@ -2772,7 +2925,7 @@ export function RecordEvidenceBoard({
           업로드
         </button>
       </div>,
-      document.body,
+      rootRef.current ?? document.body,
     );
   };
 
@@ -2810,7 +2963,7 @@ export function RecordEvidenceBoard({
             <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
           </div>
         </div>,
-        document.body,
+        rootRef.current ?? document.body,
       );
 
     if (linkPickerFor !== null) {
@@ -2937,26 +3090,28 @@ export function RecordEvidenceBoard({
     if (sceneAddFor !== null) {
       const lane = lanes.find((l) => l.thread.id === sceneAddFor.threadId);
       const close = (): void => setSceneAddFor(null);
-      const pool = [
-        ...(lane?.resolved.unplaced ?? []),
-        ...unclassified.filter((e) => !isMirrorId(e.id)),
-      ];
+      const pool = [...(lane?.resolved.unplaced ?? []), ...unclassified];
       return shell(
         '이 장면에 넣을 근거',
         close,
         <div className="flex flex-col gap-1.5">
           {pool.length === 0 ? (
             <p className="py-4 text-center text-xs text-sp-muted">
-              넣을 수 있는 근거가 없습니다. 아래 서랍에서 카드를 끌어 놓아도 됩니다.
+              미분류와 이 주제의 자리 미정에 넣을 근거가 없습니다. 지도 위 [미분류·자리 미정]에서
+              전체 목록을 확인하거나 [+ 근거]로 추가하세요.
             </p>
           ) : (
             pool.map((e) => (
               <button
                 key={e.id}
+                disabled={placing}
                 type="button"
                 onClick={() => {
-                  void placeInScene(sceneAddFor.threadId, sceneAddFor.sceneId, [e.id]);
-                  close();
+                  void placeInScene(sceneAddFor.threadId, sceneAddFor.sceneId, [e.id]).then(
+                    (ok) => {
+                      if (ok) close();
+                    },
+                  );
                 }}
                 className="rounded-lg px-3 py-2 text-left text-sm text-sp-text ring-1 ring-sp-border transition-colors hover:bg-sp-surface"
               >
@@ -2993,6 +3148,31 @@ export function RecordEvidenceBoard({
       >
         <div
           ref={rootRef}
+          aria-busy={history.busy}
+          onFocusCapture={() => {
+            historyActiveRef.current = true;
+          }}
+          onKeyDownCapture={(event) => {
+            if (history.busy && event.key === 'Enter') {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          onClickCapture={(event) => {
+            if (history.busy) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
+          onChangeCapture={(event) => {
+            if (history.busy) event.stopPropagation();
+          }}
+          onPointerDownCapture={(event) => {
+            if (history.busy) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }}
           tabIndex={-1}
           data-sp-overlay-surface={expandedWorkspace ? '' : undefined}
           data-sp-workspace-expanded={expandedWorkspace ? '' : undefined}
@@ -3003,6 +3183,20 @@ export function RecordEvidenceBoard({
           }
         >
           {/* 상단 — 학생 선택 · 영역 필터 · [+ 근거 ▾](직접 입력·엑셀) · AI 분류 제안 */}
+          {expandedWorkspace && viewMode === 'map' && (
+            <div className="flex items-center justify-between border-b border-sp-border px-4 py-1.5 text-xs text-sp-muted">
+              <span>
+                {context === 'teaching' ? '수업 관리' : '학급 운영'} · 생기부 초안 · 근거 정리
+              </span>
+              <button
+                type="button"
+                onClick={() => setExpandedWorkspace(false)}
+                className="rounded px-2 py-1 hover:bg-sp-surface hover:text-sp-text"
+              >
+                원래 화면으로
+              </button>
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-2 border-b border-sp-border px-4 py-2">
             <button
               type="button"
@@ -3106,6 +3300,38 @@ export function RecordEvidenceBoard({
                 {expandedWorkspace ? '원래 크기로' : '넓게 보기'}
               </button>
             )}
+            {viewMode === 'map' && (
+              <button
+                type="button"
+                aria-expanded={unplacedOpen}
+                onClick={() => {
+                  if (canLeaveMapEditor()) setUnplacedOpen((value) => !value);
+                }}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium text-sp-text ring-1 ring-sp-border hover:bg-sp-surface"
+              >
+                미분류·자리 미정 {unplacedItems.length}건
+              </button>
+            )}
+            <div role="group" aria-label="편집 되돌리기" className="flex gap-1">
+              <button
+                type="button"
+                disabled={!history.canUndo}
+                title={`실행 취소 (Ctrl+Z)${history.undoLabel ? `: ${history.undoLabel}` : ''}`}
+                onClick={() => void travelHistory('undo')}
+                className="rounded-lg px-2 py-1.5 text-xs text-sp-text ring-1 ring-sp-border disabled:opacity-40"
+              >
+                실행 취소
+              </button>
+              <button
+                type="button"
+                disabled={!history.canRedo}
+                title={`다시 실행 (Ctrl+X)${history.redoLabel ? `: ${history.redoLabel}` : ''}`}
+                onClick={() => void travelHistory('redo')}
+                className="rounded-lg px-2 py-1.5 text-xs text-sp-text ring-1 ring-sp-border disabled:opacity-40"
+              >
+                다시 실행
+              </button>
+            </div>
             <button
               ref={importBtnRef}
               type="button"
@@ -3131,12 +3357,12 @@ export function RecordEvidenceBoard({
               </button>
             )}
             {/* 지도의 작업 단추는 셋뿐이다(ADR-106): [+ 근거 ▾] · [AI로 정리 제안 ▾] · [… 초안 쓰기]. 강조는 마지막 하나. */}
-            {viewMode === 'map' && runProvider !== null && (
+            {viewMode === 'map' && (
               <button
                 ref={organizeBtnRef}
                 type="button"
                 onClick={() => setOrganizeOpen((v) => !v)}
-                disabled={!student || suggest.kind === 'running'}
+                disabled={!student || runProvider === null || suggest.kind === 'running'}
                 aria-haspopup="menu"
                 aria-expanded={organizeOpen}
                 title="고른 범위의 근거를 AI 에게 보내 주제 묶기·장면 배치를 제안받습니다. 적용하기 전에는 바뀌지 않아요."
@@ -3195,7 +3421,27 @@ export function RecordEvidenceBoard({
 
           {/* 뼈대 고르기 — 팝오버가 아니라 인라인 칸이다(유리 모드가 화면 고정 요소를 가둔다). */}
           {viewMode === 'map' && scaffoldOpen && student && (
-            <div className="max-h-80 shrink-0 overflow-y-auto border-b border-sp-border bg-sp-surface px-4 py-3">
+            <section
+              aria-label="뼈대 고르기"
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  event.stopPropagation();
+                  setScaffoldOpen(false);
+                }
+              }}
+              className="max-h-80 shrink-0 overflow-y-auto border-b border-sp-border bg-sp-surface px-4 pb-3"
+            >
+              <div className="sticky top-0 z-10 flex items-center justify-between bg-sp-surface py-2">
+                <h3 className="text-sm font-semibold text-sp-text">뼈대 고르기</h3>
+                <button
+                  type="button"
+                  aria-label="뼈대 고르기 닫기"
+                  onClick={() => setScaffoldOpen(false)}
+                  className={`${btn} text-sp-muted hover:text-sp-text`}
+                >
+                  닫기 ×
+                </button>
+              </div>
               {/* 열린 주제가 둘 이상일 때만 고른다. 하나뿐이면 고를 것이 없으니 어디에 깔리는지만 적는다. */}
               {openLanes.length > 1 ? (
                 <label className="mb-3 flex items-center gap-2 text-xs text-sp-text">
@@ -3226,8 +3472,19 @@ export function RecordEvidenceBoard({
                 disabled={scaffoldLane === undefined}
                 frame={frame}
                 scaffolds={savedScaffolds ?? []}
-                onScaffoldsChange={(next) => {
-                  void updateSettings({ recordScaffolds: next });
+                onScaffoldsChange={async (next) => {
+                  const previous = useSettingsStore.getState().settings.recordScaffolds;
+                  try {
+                    await updateSettings({ recordScaffolds: next });
+                  } catch (error) {
+                    const current = useSettingsStore.getState().settings;
+                    if (current.recordScaffolds === next) {
+                      useSettingsStore.setState({
+                        settings: { ...current, recordScaffolds: previous ?? [] },
+                      });
+                    }
+                    throw error;
+                  }
                 }}
                 {...(selectedScaffoldId === undefined ? {} : { selectedId: selectedScaffoldId })}
                 {...(scaffoldLane === undefined
@@ -3248,7 +3505,7 @@ export function RecordEvidenceBoard({
                   void layScaffold(target, sc);
                 }}
               />
-            </div>
+            </section>
           )}
 
           {/* AI 서사 초안 안내 — 못 읽었거나 보낼 근거가 없을 때만. 성공하면 점선이 말한다. */}
@@ -3443,7 +3700,66 @@ export function RecordEvidenceBoard({
               {viewMode === 'map' ? (
                 <div className="flex min-h-0 min-w-0 flex-1">
                   <EvidenceMapView
+                    studentName={student.name}
+                    scopeKey={`${context}:${classId ?? 'homeroom'}:${student.studentRef}:${areaFilter ?? 'all'}`}
+                    onToggleNodeSelected={toggleSelect}
                     groups={mapGroups}
+                    onConnectionEditingChange={(editing) => {
+                      if (editing) editingScenesRef.current.add('connection');
+                      else editingScenesRef.current.delete('connection');
+                    }}
+                    onConnectionChange={async (change) => {
+                      return history.run('연결 변경', async () => {
+                        if (change.kind !== 'focus' && !canLeaveMapEditor())
+                          throw new Error('메모 편집을 유지했습니다.');
+                        const store = useInquiryThreadStore.getState();
+                        const target = store.records.find((t) => t.id === change.threadId);
+                        if (
+                          !target ||
+                          target.status !== 'open' ||
+                          target.studentRef !== selectedStudentRef
+                        )
+                          throw new Error('현재 학생의 열린 주제에서만 연결할 수 있습니다.');
+
+                        if (
+                          change.kind === 'order' &&
+                          (await store.placeSceneAfter(
+                            change.threadId,
+                            change.anchorId,
+                            change.sceneId,
+                          )) === null
+                        )
+                          throw new Error('이미 바로 다음 장면입니다. 순서를 유지했습니다.');
+                        if (change.kind === 'attach') {
+                          const added = await store.attachEvidenceToScene(
+                            change.threadId,
+                            change.sceneId,
+                            [change.evidenceId],
+                          );
+                          if (!added.length)
+                            throw new Error('이미 연결되어 있거나 이 주제의 근거가 아닙니다.');
+                        }
+                        if (change.kind === 'move')
+                          await store.changeEvidenceConnection(
+                            change.threadId,
+                            change.fromSceneId,
+                            change.sceneId,
+                            change.evidenceId,
+                          );
+                        if (change.kind === 'detach')
+                          await store.detachEvidenceFromScene(change.threadId, change.sceneId, [
+                            change.evidenceId,
+                          ]);
+                        if (change.kind === 'focus')
+                          await store.setSceneEvidenceFocus(
+                            change.threadId,
+                            change.sceneId,
+                            change.evidenceId,
+                            change.note,
+                          );
+                        flash('연결을 저장했습니다. 바뀐 이음말은 확인해 주세요.');
+                      });
+                    }}
                     selectedIds={selectedIds}
                     focusedId={focusedId}
                     offsets={mapPositions.offsets}
@@ -3472,6 +3788,7 @@ export function RecordEvidenceBoard({
                     onSelectThread={(threadId) => pickOnMap({ kind: 'thread', threadId })}
                     onSelectThreadLink={(threadId) => pickOnMap({ kind: 'threadLink', threadId })}
                     onLayScaffold={openScaffoldFor}
+                    onAddScene={(threadId) => laneHandlers(threadId).onAddScene()}
                     onOpenThread={(threadId) => setOpenThreadId(threadId)}
                     onMoveGroup={moveLane}
                     onToggleGroupCollapsed={(threadId) =>
@@ -3483,7 +3800,7 @@ export function RecordEvidenceBoard({
                     }
                     onZoom={setMapZoom}
                     onResetPositions={() => {
-                      mapPositions.reset();
+                      void history.run('카드 위치 정돈', async () => mapPositions.reset());
                       flash('카드 위치를 자동 배치로 되돌렸습니다');
                     }}
                     onToggleExpanded={() => setExpandedWorkspace((value) => !value)}
@@ -3529,22 +3846,54 @@ export function RecordEvidenceBoard({
                       </NewThreadDropZone>
                     }
                   />
-                  {mapSide !== null && (
+                  {unplacedOpen && (
+                    <UnplacedEvidencePanel
+                      key={`${student.studentRef}:${areaFilter}`}
+                      items={unplacedItems}
+                      targets={openLanes.map((lane) => ({
+                        id: lane.thread.id,
+                        title: lane.thread.title,
+                        scenes: lane.resolved.scenes.map((rs, index) => ({
+                          id: rs.scene.id,
+                          label: `${index + 1}. ${rs.scene.label || { evaluation: '평가', motive: '동기', process: '과정', result: '결과' }[rs.scene.role]}`,
+                        })),
+                      }))}
+                      onPlace={(id, threadId, sceneId) =>
+                        sceneId ? placeInScene(threadId, sceneId, [id]) : sendTo(threadId, [id])
+                      }
+                      onSelect={selectMapNode}
+                      onClose={() => setUnplacedOpen(false)}
+                    />
+                  )}
+                  {!unplacedOpen && mapSide !== null && (
                     <EvidenceMapSidePanel
                       content={mapSide}
                       onClose={() => {
+                        if (!canLeaveMapEditor()) return;
                         setFocusedId(null);
                         setMapPick(null);
                       }}
-                      onSelectNode={(id) => {
-                        setFocusedId(id);
-                        setMapPick(null);
+                      onSelectNode={selectMapNode}
+                      onReorderEvidence={(threadId, sceneId, evidenceId, dir) => {
+                        const scene = studentThreads
+                          .find((t) => t.id === threadId)
+                          ?.scenes?.find((s) => s.id === sceneId);
+                        const index = scene?.evidenceIds.indexOf(evidenceId) ?? -1;
+                        if (index >= 0)
+                          void placeInScene(
+                            threadId,
+                            sceneId,
+                            [evidenceId],
+                            Math.max(0, index + dir),
+                          );
                       }}
                       recentLinkNotes={recentLinkNotes}
                       recentSceneLeadIns={recentSceneLeadIns}
                       onSaveSceneLeadIn={async (threadId, sceneId, leadIn) => {
-                        await setSceneLeadIn(threadId, sceneId, leadIn);
-                        flash(leadIn.length > 0 ? '이음말을 남겼습니다' : '이음말을 지웠습니다');
+                        return history.run('장면 메모 저장', async () => {
+                          await setSceneLeadIn(threadId, sceneId, leadIn);
+                          flash(leadIn.length > 0 ? '이음말을 남겼습니다' : '이음말을 지웠습니다');
+                        });
                       }}
                       onSceneNoteEditingChange={(threadId, sceneId, editing) =>
                         laneHandlers(threadId).onSceneEditingChange(sceneId, editing)
@@ -3559,13 +3908,28 @@ export function RecordEvidenceBoard({
                         laneHandlers(threadId).onMoveScene(sceneId, dir)
                       }
                       onRemoveScene={(threadId, sceneId) => {
-                        setMapPick({ kind: 'thread', threadId });
+                        if (!canLeaveMapEditor()) return;
                         laneHandlers(threadId).onRemoveScene(sceneId);
                       }}
                       onAddSceneAfter={(threadId, at) => laneHandlers(threadId).onAddScene(at)}
                       onPlaceInScene={(threadId, sceneId, ids) =>
                         void placeInScene(threadId, sceneId, ids)
                       }
+                      onDetachConnection={(threadId, sceneId, evidenceId) => {
+                        const store = useInquiryThreadStore.getState();
+
+                        void history
+                          .run('연결 해제', () =>
+                            store.detachEvidenceFromScene(threadId, sceneId, [evidenceId]),
+                          )
+                          .then(() => {
+                            setUnplacedOpen(true);
+                            flash(
+                              '이 장면의 연결을 해제했습니다. 다른 연결은 유지되며, 마지막 연결이면 자리 미정에서 찾을 수 있습니다',
+                            );
+                          })
+                          .catch(fail);
+                      }}
                       onDetachFromScene={(threadId, ids) => void detachToUnplaced(threadId, ids)}
                       onPickEvidenceForScene={(threadId, sceneId) =>
                         laneHandlers(threadId).onAddEvidenceToScene(sceneId)
@@ -3605,18 +3969,15 @@ export function RecordEvidenceBoard({
                               onWriteDraft({ kind: 'thread', threadId, chain }),
                           })}
                       onOpenThread={(threadId) => setOpenThreadId(threadId)}
-                      onSaveThreadLinkNote={(threadId, note) => {
+                      onSaveThreadLinkNote={async (threadId, note) => {
                         const from = studentThreads.find((t) => t.id === threadId)?.link
                           ?.fromThreadId;
                         if (from === undefined) return;
-                        setLink(threadId, {
+                        await setLink(threadId, {
                           fromThreadId: from,
                           ...(note.length > 0 ? { note } : {}),
-                        })
-                          .then(() =>
-                            flash(note.length > 0 ? '이음말을 남겼습니다' : '이음말을 지웠습니다'),
-                          )
-                          .catch(fail);
+                        });
+                        flash(note.length > 0 ? '이음말을 남겼습니다' : '이음말을 지웠습니다');
                       }}
                       onUnlinkThread={(threadId) => {
                         setLink(threadId, null)
@@ -3707,7 +4068,7 @@ export function RecordEvidenceBoard({
                     </div>
                   )}
                 </DragOverlay>,
-                document.body,
+                rootRef.current ?? document.body,
               )}
             </DndContext>
           )}
@@ -3835,7 +4196,6 @@ export function RecordEvidenceBoard({
                 })
               }
               onDeleteEvidence={() => {
-                setComparingId(null);
                 void removeCard(comparing);
               }}
               onClose={() => setComparingId(null)}
@@ -3845,6 +4205,12 @@ export function RecordEvidenceBoard({
           {/* 엑셀 서랍 */}
           {importing && student && (
             <RecordEvidenceImportDrawer
+              onImport={(inputs) =>
+                importRun(
+                  inputs.map((input) => input.studentRef),
+                  () => addManyEvidence(inputs),
+                )
+              }
               students={students}
               student={student}
               downloadOnOpen={importing.downloadOnOpen}

@@ -80,7 +80,9 @@ export function NarrativeSuggestGhost({
 
       <p className="text-xs leading-relaxed text-sp-muted">
         적용하면 지금 놓인 장면이 이 차례로 바뀝니다. 근거는 지워지지 않고 자리만 옮겨집니다. AI 가
-        쓴 이유는 장면 메모로 함께 저장되며, 카드에 표시가 붙습니다.
+        쓴 이유는 장면 메모로 함께 저장되며, 카드에 표시가 붙습니다. 기존 장면 메모도 제안으로
+        바뀌므로 먼저 확인해 주세요. 적용 직후 ‘되돌리기’로 이전 장면·메모·이음말을 복원할 수
+        있습니다.
       </p>
 
       <ol className="flex flex-col gap-1.5">
@@ -108,6 +110,7 @@ export function NarrativeSuggestGhost({
                   {sc.note}
                 </p>
               )}
+              {sc.leadIn && <p className="text-xs text-sp-accent">앞 장면과의 이음: {sc.leadIn}</p>}
               {/* 평가 자리에 놓을 기록이 없으면 비워 두고, 초안에서 어떻게 채워지는지 말한다(ADR-109). */}
               {sc.role === 'evaluation' && sc.evidenceIds.length === 0 && (
                 <p data-suggest-eval-empty="" className="text-xs leading-relaxed text-sp-muted">

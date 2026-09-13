@@ -31,6 +31,7 @@ import { chainOf, placedCount, scenesOf, sceneMarkOf } from '@domain/rules/narra
 import { edgesWithin, orderForDraft, resolveEvidenceEdges } from '@domain/rules/evidenceGraph';
 import { frameForArea, sceneDisplayLabel } from '@domain/rules/narrativeFrames';
 import { fetchRecordPromptL1 } from '@adapters/di/container';
+import { recordDraftDetailForModel } from '@domain/rules/recordDraftDetail';
 import {
   useConnectedOwnAiProviders,
   useOwnAiStatusStore,
@@ -58,7 +59,11 @@ import {
 } from '@domain/entities/RecordAiDraft';
 import type { InquiryThread } from '@domain/entities/InquiryThread';
 import {
-  dropUnmarkedParagraphs,
+  parseGeneratedNarrativeParagraphs,
+  narrativeSceneOrderError,
+  narrativeSceneOrderOf,
+  markedNarrativeText,
+  renumberNarrativeScenes,
   hasAnyRole,
   parseNarrativeParagraphs,
   roleMarksOf,
@@ -561,6 +566,10 @@ export function RecordDraftAiPanel({
       const extra = (style.instruction ?? '').trim();
       const base = (teacherPrompt ?? '').trim();
       const merged = [base, extra].filter((x) => x.length > 0).join('\n');
+      const detail = recordDraftDetailForModel(
+        runProvider,
+        runProvider ? ownAiModels[runProvider] : undefined,
+      );
       // 구성용 판본 문지기 — 작성 방식용(`applyPromptVersionGate`)의 형제다.
       const gatedComposition =
         t.narrative === undefined
@@ -591,6 +600,7 @@ export function RecordDraftAiPanel({
         evidences: t.evidences,
         ...(t.standardKeywords === undefined ? {} : { standardKeywords: t.standardKeywords }),
         ...(merged.length > 0 ? { teacherPrompt: merged } : {}),
+        ...(detail === undefined ? {} : { detail }),
         style,
         // ★장면이 있으면 구성이 style 보다 우선한다. 판본이 모자라면 **아예 안 보낸다** —
         //   장면에는 되돌릴 기존형이 없기 때문이다. 그 사실은 화면 경고로 따로 올린다.
@@ -607,7 +617,18 @@ export function RecordDraftAiPanel({
           : {}),
       });
     },
-    [areaLabel, subject, roster, pickedThread, target.studentRef, teacherPrompt, area, level],
+    [
+      areaLabel,
+      subject,
+      roster,
+      pickedThread,
+      target.studentRef,
+      teacherPrompt,
+      area,
+      level,
+      runProvider,
+      ownAiModels,
+    ],
   );
 
   /** 판에 남길 발자국. ★추가 지시 **본문은 담지 않는다**(판 파일은 Drive 로 동기화된다). */
@@ -678,7 +699,12 @@ export function RecordDraftAiPanel({
             const restored = restoreAliases(raw, pack.mappings);
             // ★표식 없는 줄은 버린다 — 모델이 "다시 씁니다" 같은 설명을 본문 사이에 끼워 넣은
             //   실측 사례가 있다(ADR-099 보강 5). 표식이 하나도 없으면 아무것도 버리지 않는다.
-            const paragraphs = dropUnmarkedParagraphs(parseNarrativeParagraphs(restored));
+            const paragraphs = parseGeneratedNarrativeParagraphs(restored);
+            const orderError = narrativeSceneOrderError(paragraphs, pack.sceneOrder);
+            if (orderError !== null) {
+              setPhase({ kind: 'stopped', message: orderError, queue: queue.slice(i) });
+              return;
+            }
             // ★초안이 아니라 설명(거절·되묻기)이 왔으면 판으로 남기지 않는다(R-3). 설명문이 판이 되면
             //   [반영]으로 생기부 칸에 들어간다. 사유와 그 글을 보여 주고 멈춘다.
             const nonDraft = judgeNonDraftReply(aiDraftText({ paragraphs }));
@@ -868,6 +894,8 @@ export function RecordDraftAiPanel({
           label: sceneDisplayLabel(frame, x.scene),
           ...(x.scene.note === undefined ? {} : { note: x.scene.note }),
           ...(x.scene.leadIn === undefined ? {} : { leadIn: x.scene.leadIn }),
+          ...(x.scene.leadInNeedsCheck === true ? { leadInNeedsCheck: true } : {}),
+          ...(x.scene.evidenceFocus === undefined ? {} : { focus: x.scene.evidenceFocus }),
           evidenceIds: x.evidences.map((e) => e.id),
         })),
         stampScenes: r.scenes.map((x) => x.scene),
@@ -885,6 +913,10 @@ export function RecordDraftAiPanel({
                     label: sceneDisplayLabel(frame, x.scene),
                     ...(x.scene.note === undefined ? {} : { note: x.scene.note }),
                     ...(x.scene.leadIn === undefined ? {} : { leadIn: x.scene.leadIn }),
+                    ...(x.scene.leadInNeedsCheck === true ? { leadInNeedsCheck: true } : {}),
+                    ...(x.scene.evidenceFocus === undefined
+                      ? {}
+                      : { focus: x.scene.evidenceFocus }),
                     evidenceIds: x.evidences.map((e) => e.id),
                   })),
                   evidences: evidences.filter((e) => e.threadId === th.id),
@@ -967,6 +999,7 @@ export function RecordDraftAiPanel({
    */
   const sceneRoundTrip = useMemo((): string | null => {
     if (selected === null) return null;
+    if (selected.adjust !== undefined) return null;
     const n = narrativeFor(target);
     if (n === null) return null;
     // 표식 낱말을 되짚지 않는다 — 장면 원본이 역할을 그대로 들고 있다(낱말 대조는 한 곳에만 둔다).
@@ -1073,7 +1106,12 @@ export function RecordDraftAiPanel({
     try {
       // ★판이 어느 주제로 쓰였는지를 초안 칸에도 남긴다 — 그래야 "이 주제로 쓴 초안" 조회가 성립한다.
       //   주제 없이 쓴 판이면 넘기지 않는다(기존 값을 지키기 위해 undefined 여야 한다).
-      await onApply(ref, mergedText, mergedMarks, selected.threadId);
+      await onApply(
+        ref,
+        mergedText,
+        mode === 'append' ? renumberNarrativeScenes(mergedMarks) : mergedMarks,
+        selected.threadId,
+      );
     } catch (err: unknown) {
       setNotice(
         err instanceof Error && err.message.trim().length > 0
@@ -1113,6 +1151,15 @@ export function RecordDraftAiPanel({
     setRemarking(true);
     setNotice(null);
     try {
+      if (
+        existingRoleMarks &&
+        narrativeSceneOrderOf(existingRoleMarks) &&
+        sameNarrativeBody(content, existingRoleMarks)
+      ) {
+        await onRemark(target.studentRef, existingRoleMarks);
+        setNotice('저장된 장면 차례를 유지해 형광펜을 다시 표시했습니다.');
+        return;
+      }
       const pack = buildNarrativeRemarkPack({ content, roster });
       const raw = await askOnce(api, runProvider, pack.text);
       const paragraphs = parseNarrativeParagraphs(restoreAliases(raw, pack.mappings));
@@ -1857,14 +1904,22 @@ export function RecordDraftAiPanel({
                 }
               : {})}
             lockedByOther={phase.kind === 'running' || remarking}
-            onRun={(kind, targetBytes) =>
-              onLengthRun(
+            onRun={async (kind, targetBytes) => {
+              const sourceText =
+                adjustTargetVersion !== null ? aiDraftText(adjustTargetVersion) : getSourceText();
+              const markedSource =
+                adjustTargetVersion !== null &&
+                narrativeSceneOrderOf(adjustTargetVersion.paragraphs)
+                  ? markedNarrativeText(adjustTargetVersion.paragraphs)
+                  : sourceText;
+              const outcome = await onLengthRun(
                 kind,
                 targetBytes,
-                adjustTargetVersion !== null ? aiDraftText(adjustTargetVersion) : getSourceText(),
+                markedSource,
                 adjustTargetVersion?.id,
-              )
-            }
+              );
+              return { ...outcome, sourceText };
+            }}
             onApply={(picked, outcome, kind, targetBytes) =>
               onLengthApply(
                 picked,

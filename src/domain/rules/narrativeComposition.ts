@@ -156,7 +156,7 @@ export const NARRATIVE_STAMP_CATALOG_VERSION = RECORD_STYLE_CATALOG_VERSION;
  * ★돌려주는 것은 **문단마다 장면 인덱스**다. 표식이 없는 문단(`role: null`)도 `null` 이다.
  */
 export function alignParagraphsToScenes(
-  marks: readonly { readonly role: NarrativeRole | null }[],
+  marks: readonly { readonly role: NarrativeRole | null; readonly sceneIndex?: number }[],
   sceneRoles: readonly NarrativeRole[],
 ): readonly (number | null)[] {
   const out: (number | null)[] = [];
@@ -167,6 +167,14 @@ export function alignParagraphsToScenes(
       continue;
     }
     let at = -1;
+    if (m.sceneIndex !== undefined) {
+      const index = m.sceneIndex - 1;
+      if (index >= cursor && sceneRoles[index] === m.role) {
+        out.push(index);
+        cursor = index + 1;
+      } else out.push(null);
+      continue;
+    }
     for (let i = cursor; i < sceneRoles.length; i += 1) {
       if (sceneRoles[i] === m.role) {
         at = i;
@@ -186,7 +194,7 @@ export function alignParagraphsToScenes(
 
 /** 문단으로 나오지 못한 장면의 인덱스들 — 화면이 "이 자리는 빠졌습니다"라고 말하는 데 쓴다. */
 export function scenesMissingFromDraft(
-  marks: readonly { readonly role: NarrativeRole | null }[],
+  marks: readonly { readonly role: NarrativeRole | null; readonly sceneIndex?: number }[],
   sceneRoles: readonly NarrativeRole[],
 ): readonly number[] {
   const used = new Set(alignParagraphsToScenes(marks, sceneRoles).filter((x) => x !== null));

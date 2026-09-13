@@ -180,7 +180,7 @@ describe('근거 지도 보기', () => {
   it('지도 조작에 한국어 이름이 있고, [카드 위치 정돈]은 손으로 민 것이 있을 때만 나타난다', () => {
     const p = view();
     const bar = screen.getByRole('toolbar', { name: '지도 조작' });
-    expect(within(bar).getByRole('button', { name: '화면에 맞추기' })).toBeTruthy();
+    expect(within(bar).getByRole('button', { name: '전체 구조' })).toBeTruthy();
     expect(within(bar).queryByRole('button', { name: '카드 위치 정돈' })).toBeNull();
     fireEvent.click(within(bar).getByRole('button', { name: '확대' }));
     expect(p.onZoom).toHaveBeenCalledWith(1.1);

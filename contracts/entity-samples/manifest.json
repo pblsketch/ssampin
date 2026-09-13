@@ -138,7 +138,9 @@
             "note",
             "noteSource",
             "leadIn",
-            "evidenceIds"
+            "leadInNeedsCheck",
+            "evidenceIds",
+            "evidenceFocus"
           ],
           "notMirrored": []
         },

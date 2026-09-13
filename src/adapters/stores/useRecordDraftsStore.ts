@@ -230,7 +230,7 @@ export const useRecordDraftsStore = create<RecordDraftsState>((set, get) => {
             : {}
           : input.roleMarks === null
             ? {}
-            : { roleMarks: input.roleMarks.map((m) => ({ role: m.role, text: m.text })) }),
+            : { roleMarks: input.roleMarks.map((m) => ({ ...m })) }),
         // 학기 표식 — 기존 초안의 term 은 유지하고, 없을 때만 저장 시각의 학기를 붙인다.
         // (구 데이터에 소급해 추측 부착하지 않는다는 원칙과, "처음 만든 학기"를 남기려는 뜻이 같다.)
         ...(existing?.term !== undefined

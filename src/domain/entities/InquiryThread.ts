@@ -60,12 +60,41 @@ export interface NarrativeScene {
    */
   readonly leadIn?: string;
   /**
+   * **이음말 확인 필요** — 장면 차례가 바뀌어 이 장면의 앞 장면이 달라졌다는 표시(오너 결정 2026-09-13).
+   *
+   * 이음말은 "앞 장면에서 이 장면으로"를 설명하는 글이다. 앞 장면이 바뀌면 그 설명은 더 이상
+   * 맞는다고 볼 수 없다. 그렇다고 **지우지 않는다** — 선생님이 쓴 글이고, 새 관계에도 맞는 경우가 있다.
+   * ★참인 동안 요청서는 이 이음말을 **확정된 연결 설명으로 보내지 않는다**(`recordDraftPack`).
+   *   틀린 관계 설명을 보내면 모델이 없는 인과를 만든다.
+   * ★선생님이 이음말을 저장하면 풀린다(`setSceneLeadIn`).
+   */
+  readonly leadInNeedsCheck?: boolean;
+  /**
    * 이 장면에 놓인 근거들, 순서대로.
    * ★**소유 판정은 여기서 하지 않는다.** 이 목록이 가리키는 근거가 정말 이 주제 것인지는
    *   읽는 자리(`narrativeScenes.scenesOf`)가 한 곳에서 가린다 — 근거 파일과 주제 파일이
    *   다른 시점에 내려올 수 있고, 소유를 바꾸는 쓰기는 근거 파일 쪽에 있기 때문이다.
+   * ★**같은 근거가 여러 장면에 있어도 된다**(오너 결정 2026-09-13). 하나의 탐구 보고서에 과정과
+   *   결과가 함께 들어 있으면 두 장면이 같은 자료를 각각 다른 관점에서 참조한다. 자료를 복제하지
+   *   않는다 — 요청서에는 원본이 **한 번만** 실리고 장면은 번호로 가리킨다(`recordDraftPack`).
+   *   장면마다 "이 자료에서 쓸 부분"은 `evidenceFocus` 가 적는다.
    */
   readonly evidenceIds: readonly string[];
+  /**
+   * 장면별 **이 자료에서 쓸 부분** — 같은 근거를 여러 장면에 이었을 때 "여기서는 무엇을 쓰는가"(오너 결정 2026-09-13).
+   *
+   * 없어도 된다. 필수로 만들면 연결 하나 만들 때마다 글쓰기를 요구하게 된다.
+   * ★근거 자체의 메모(`RecordEvidence.note`)와 다르다 — 그쪽은 자료 하나에 공통이고, 이쪽은 **연결마다**다.
+   * ★자유 글이라 요청서에 실을 때 가린다. 상한 `NARRATIVE_NOTE_MAX`.
+   * ★`evidenceIds` 에 없는 id 의 항목은 뜻이 없다 — 쓰는 자리가 함께 정리한다.
+   */
+  readonly evidenceFocus?: readonly SceneEvidenceFocus[];
+}
+
+/** 장면 ↔ 근거 연결 하나에 붙는 말. 「이 자료에서 쓸 부분」. */
+export interface SceneEvidenceFocus {
+  readonly evidenceId: string;
+  readonly note: string;
 }
 
 /**

@@ -28,6 +28,24 @@ const base = {
 };
 
 describe('buildNarrativeSuggestPack', () => {
+  it('교사 메모 맥락은 익명화하고 제외 근거를 함께 해석한 메모는 보내지 않는다', () => {
+    const pack = buildNarrativeSuggestPack({
+      ...base,
+      evidences: [
+        { id: 'a', content: '자료의 차이를 비교함', createdAt: 1 },
+        { id: 'b', content: '비공개 관찰', createdAt: 2, excludedFromAi: true },
+      ],
+      currentScenes: [
+        { id: 's1', role: 'process', evidenceIds: ['a'], note: '김지훈이 비교 기준을 설명함' },
+        { id: 's2', role: 'result', evidenceIds: ['a', 'b'], note: '제외 자료까지 종합한 해석' },
+      ],
+    });
+    expect(pack.text).toContain('비교 기준을 설명함');
+    expect(pack.text).not.toContain('김지훈');
+    expect(pack.text).not.toContain('제외 자료까지 종합한 해석');
+    expect(pack.text).not.toContain('비공개 관찰');
+    expect(pack.text).toContain('앞 장면과의 이음말');
+  });
   it('★근거를 날짜순으로 싣는다 — 파일 저장 순서가 아니다', () => {
     const pack = buildNarrativeSuggestPack({
       ...base,

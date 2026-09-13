@@ -23,6 +23,16 @@ const NUMBERED = ['e1', 'e2', 'e3'];
 const parse = (answer: string, frame: 'inquiry' | 'life' = 'inquiry') =>
   parseNarrativeSuggestion(answer, { frame, numbered: NUMBERED });
 
+it('장면 이유와 관계 이음말을 분리하고 첫 장면에는 이음말을 붙이지 않는다', () => {
+  const result = parse(
+    '동기 | 동기·질문 | 1 | 질문 기록 | 앞이 없음\n과정 | 자료 비교 | 2 | 기준을 비교한 기록 | 질문을 비교로 확인함',
+  );
+  expect(result.scenes).toHaveLength(2);
+  expect(result.scenes[0]?.leadIn).toBeUndefined();
+  expect(result.scenes[1]?.note).toBe('기준을 비교한 기록');
+  expect(result.scenes[1]?.leadIn).toBe('질문을 비교로 확인함');
+});
+
 describe('roleFromWord', () => {
   it('탐구 틀 이름을 저장값으로 읽는다', () => {
     expect(roleFromWord('inquiry', '동기·질문')).toBe('motive');
@@ -95,10 +105,10 @@ describe('parseNarrativeSuggestion', () => {
     expect(r.scenes.filter((sc) => sc.role === 'evaluation')).toHaveLength(1);
   });
 
-  it('★한 근거는 한 장면에만 — 두 번 나오면 앞 장면이 가진다', () => {
+  it('하나의 자료를 여러 장면이 참조하되 같은 장면 안에서만 중복을 제거한다', () => {
     const r = parse(['동기 | | 1 | 앞', '과정 | | 1,2 | 뒤'].join('\n'));
     expect(r.scenes[0]?.evidenceIds).toEqual(['e1']);
-    expect(r.scenes[1]?.evidenceIds).toEqual(['e2']);
+    expect(r.scenes[1]?.evidenceIds).toEqual(['e1', 'e2']);
   });
 
   it('★범위 밖 번호는 조용히 버린다', () => {

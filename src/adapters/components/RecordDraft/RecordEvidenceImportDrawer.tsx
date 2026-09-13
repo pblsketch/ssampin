@@ -30,6 +30,7 @@ interface RecordEvidenceImportDrawerProps {
   /** 「양식 받기」로 열렸으면 열자마자 양식을 내려받는다. */
   readonly downloadOnOpen?: boolean;
   onClose: () => void;
+  onImport?: (inputs: readonly RecordEvidenceAddInput[]) => Promise<number>;
 }
 
 export function RecordEvidenceImportDrawer({
@@ -39,6 +40,7 @@ export function RecordEvidenceImportDrawer({
   className,
   downloadOnOpen,
   onClose,
+  onImport,
 }: RecordEvidenceImportDrawerProps) {
   const addMany = useRecordEvidenceStore((s) => s.addMany);
 
@@ -120,7 +122,7 @@ export function RecordEvidenceImportDrawer({
         ...(it.date ? { date: it.date } : {}),
         ...(classId !== undefined ? { classId } : {}),
       }));
-      const n = await addMany(inputs);
+      const n = await (onImport ?? addMany)(inputs);
       setExcelMsg(
         `${n}건을 등록했습니다${errors.length > 0 ? ` · 오류 ${errors.length}건` : ''}. 미분류 열에서 유형을 지정하세요.`,
       );

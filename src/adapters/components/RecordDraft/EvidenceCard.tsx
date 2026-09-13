@@ -18,7 +18,7 @@
  * **끌 수 있다**(`useDraggable`, 설계서 §4-4 · ADR-085 보강 2 R3). 포인터 센서는 보드가 6px 이동 제약으로 달아
  * 클릭(선택)과 끌기(이동)를 가른다. 키보드 끌기 센서는 없다 — Enter/Space 는 선택이고, 키보드 경로는 하단 바다.
  */
-import { useState, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useDraggable } from '@dnd-kit/core';
 import { RECORD_AREA_LABELS, type RecordArea } from '@domain/entities/RecordDraft';
 import { EVIDENCE_SOURCE_LABELS, type RecordEvidence } from '@domain/entities/RecordEvidence';
@@ -34,6 +34,8 @@ import {
 export interface EvidenceCardProps {
   readonly evidence: RecordEvidence;
   readonly selected: boolean;
+  readonly showActions?: boolean;
+  onNoteEditingChange?: (editing: boolean) => void;
   /** 이 컨텍스트의 영역 목록 — 유형 칩. 하나뿐이면 칩을 그리지 않는다(뺄 수도 없는 칩, 설계서 §5-b). */
   readonly areas: readonly RecordArea[];
   /** "이것도 이 주제?" 칩(미분류 카드에만 부모가 넣어 준다). */
@@ -69,7 +71,7 @@ export interface EvidenceCardProps {
    * 교사 메모 고치기(ADR-103 D4). 없으면 메모 칸을 아예 그리지 않는다.
    * ★메모는 **카드를 따라간다** — 주제를 옮기든 장면을 옮기든 같이 간다(근거 파일에 산다).
    */
-  onChangeNote?: (note: string) => void;
+  onChangeNote?: (note: string) => void | Promise<void>;
 }
 
 /** 자동 판정 갈래("학원·기관명" 등). 비어 있으면 교사가 직접 켠 것이다. */
@@ -88,6 +90,8 @@ function exclusionTitle(evidence: RecordEvidence, why: readonly string[]): strin
 export function EvidenceCard({
   evidence: ev,
   selected: on,
+  showActions = false,
+  onNoteEditingChange,
   areas,
   alsoHits,
   mirror = false,
@@ -106,7 +110,29 @@ export function EvidenceCard({
   const excluded = ev.excludedFromAi === true;
   // null 이면 보기 상태. 빈 문자열은 "메모를 지우는 중"이라 null 과 구별한다.
   const [noteDraft, setNoteDraft] = useState<string | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState(false);
+  const saveNote = async (): Promise<void> => {
+    if (noteDraft === null || !onChangeNote || noteSaving) return;
+    setNoteSaving(true);
+    setNoteError(false);
+    try {
+      await onChangeNote(noteDraft.trim());
+      setNoteDraft(null);
+    } catch {
+      setNoteError(true);
+    } finally {
+      setNoteSaving(false);
+    }
+  };
   const note = ev.note?.trim() ?? '';
+  const editingCallback = useRef(onNoteEditingChange);
+  editingCallback.current = onNoteEditingChange;
+  const noteDirty = noteDraft !== null && noteDraft.trim() !== note;
+  useEffect(() => {
+    editingCallback.current?.(noteDirty);
+    return () => editingCallback.current?.(false);
+  }, [noteDirty]);
   const why = autoExclusionWhy(ev);
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: ev.id });
   /** 단추 줄 — 클릭·키·포인터 전부 끊는다(카드 선택·끌기와 겹치지 않게). */
@@ -220,7 +246,7 @@ export function EvidenceCard({
         </p>
       )}
       {/* 조작 줄 — 골랐을 때만. 유형 토글 · AI 제외 · 수정 · 원본 · 삭제. 전파를 끊어 선택·끌기와 겹치지 않게. */}
-      {on && (
+      {(on || showActions) && (
         <div
           className="flex flex-wrap items-center gap-1.5 border-t border-sp-border pt-2"
           data-testid="evidence-card-actions"
@@ -288,14 +314,15 @@ export function EvidenceCard({
               원본 보기·수정
             </button>
           )}
-          {!mirror && (
+          {!mirror && ev.threadId !== undefined && (
             <button
               type="button"
               onClick={onRemove}
-              className="rounded-lg px-2.5 py-1 text-xs font-medium text-red-500 ring-1 ring-red-500/20 hover:bg-red-500/10"
+              title="주제와 장면 배치만 해제합니다. 근거 내용·메모·원본 기록은 그대로 보존합니다."
+              className={`${boardBtn} text-sp-muted hover:text-sp-text`}
             >
               {/* 원본에서 온 근거는 "지우는 것이 원본이 아니다"를 라벨에서 먼저 말한다(계획 §5.3). */}
-              {ev.sourceId !== undefined ? '정리한 근거 삭제' : '삭제'}
+              미분류로 돌리기
             </button>
           )}
         </div>
@@ -305,6 +332,7 @@ export function EvidenceCard({
           <textarea
             autoFocus
             value={noteDraft}
+            disabled={noteSaving}
             rows={2}
             maxLength={NARRATIVE_NOTE_MAX}
             placeholder="이 근거에서 무엇을 읽었는지 한 줄"
@@ -313,12 +341,16 @@ export function EvidenceCard({
             onKeyDown={(e) => {
               if (e.key === 'Escape') setNoteDraft(null);
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                onChangeNote(noteDraft.trim());
-                setNoteDraft(null);
+                void saveNote();
               }
             }}
             className="w-full resize-none rounded-lg border border-sp-border bg-sp-surface px-2 py-1.5 text-xs leading-relaxed text-sp-text focus:border-sp-accent focus:outline-none"
           />
+          {noteError && (
+            <p role="alert" className="text-xs text-sp-text">
+              메모를 저장하지 못했습니다. 입력한 내용을 확인하고 다시 저장해 주세요.
+            </p>
+          )}
           <div className="flex items-center gap-1.5">
             <span className="text-xs text-sp-muted">
               {noteDraft.length}/{NARRATIVE_NOTE_MAX}
@@ -327,16 +359,15 @@ export function EvidenceCard({
             <button
               type="button"
               onClick={() => setNoteDraft(null)}
+              disabled={noteSaving}
               className={`${boardBtn} text-sp-muted hover:text-sp-text`}
             >
               그만두기
             </button>
             <button
               type="button"
-              onClick={() => {
-                onChangeNote(noteDraft.trim());
-                setNoteDraft(null);
-              }}
+              onClick={() => void saveNote()}
+              disabled={noteSaving}
               className="rounded-lg bg-sp-accent px-2.5 py-1 text-xs font-semibold text-sp-accent-fg transition-colors hover:opacity-90"
             >
               저장

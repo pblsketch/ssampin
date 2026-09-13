@@ -172,6 +172,40 @@ describe('연결되면 단위를 고를 수 있다 (D8)', () => {
   });
 });
 
+describe('테라·루나 구체적인 서술 기본 지시', () => {
+  it.each(['gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.6-sol'])(
+    '%s 선택이 실제 전송 요청서에 반영된다',
+    async (model) => {
+      useAssistStore.setState({
+        ownAiEnabled: true,
+        provider: 'codex',
+        ownAiModels: { claude: '', codex: model },
+      });
+      useOwnAiStatusStore.setState({
+        connections: {
+          claude: null,
+          codex: { provider: 'codex', state: 'connected', model, version: 'test' },
+        },
+      });
+      panel({
+        target: target({
+          evidences: [
+            {
+              id: 'rich',
+              content: '자료에 쓰인 처리 조건을 확인해 근거를 바꾸고 판정함. '.repeat(30),
+            },
+          ],
+        }),
+      });
+      await startWith('이 학생 초안 쓰기');
+      expect(runCalls).toHaveLength(1);
+      expect(runCalls[0]?.prompt.includes('구체적으로 쓰기:')).toBe(model !== 'gpt-5.6-sol');
+      await finishWith('[평가] 자료의 조건을 확인하는 학생임.');
+      useAssistStore.setState({ ownAiModels: { claude: '', codex: '' } });
+    },
+  );
+});
+
 describe('★서사(장면)로 쓰기 — 관문과 큐 (ADR-103)', () => {
   beforeEach(() => {
     connectClaude();
@@ -232,6 +266,28 @@ describe('★서사(장면)로 쓰기 — 관문과 큐 (ADR-103)', () => {
     expect(prompt).toContain('근거: 1');
   });
 
+  it('지도 차례를 어긴 답은 판으로 저장하지 않고 사유를 보여 준다', async () => {
+    narrativePanel();
+    await startWith('이 학생 초안 쓰기');
+    await finishWith('[장면 2] [동기] 질문함.\n\n[장면 1] [평가] 근거를 확인하는 학생임.');
+    expect(useRecordAiDraftStore.getState().records).toHaveLength(0);
+    expect(screen.getByText(/장면 순서나 장면 표식을 지키지 않아/)).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '반영' })).toBeNull();
+  });
+
+  it('지도 순서와 번호는 보관하고 생성 본문의 가운데 점만 쉼표로 바꾼다', async () => {
+    narrativePanel();
+    await startWith('이 학생 초안 쓰기');
+    await finishWith(
+      '[장면 1] [평가] 조건을 확인하는 학생임.\n\n[장면 2] [동기] PLA·PHA·PBAT의 분해 조건을 질문함.',
+    );
+    const saved = useRecordAiDraftStore.getState().records[0];
+    expect(saved?.paragraphs.map((p) => p.sceneIndex)).toEqual([1, 2]);
+    expect(saved?.paragraphs[1]?.text).toContain('PLA, PHA, PBAT');
+    expect(saved?.paragraphs[1]?.text).not.toContain('[장면');
+    expect(screen.getByRole('button', { name: '반영' })).toBeTruthy();
+  });
+
   it('★규정 판본이 모자라면 서사를 아예 안 보내고 화면이 말한다', async () => {
     fetchRecordPromptL1.mockResolvedValue({
       ok: true,
@@ -279,7 +335,7 @@ describe('★서사(장면)로 쓰기 — 관문과 큐 (ADR-103)', () => {
     await startWith(/남은 학생 모두/);
     expect(runCalls[0]?.prompt ?? '').toContain('오직 이 학생의 메모');
     // 다음 학생으로 넘어가도 그 메모가 따라가지 않는다.
-    await finishWith('[평가] 성실한 학생임. ');
+    await finishWith('[장면 1] [평가] 성실한 학생임. ');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '반영' }));
     });
@@ -627,6 +683,40 @@ describe('★별칭을 실제 이름으로 되돌린 뒤 저장한다', () => {
 
 describe('★형광펜 표식 — 저장되는 글에는 표식이 없고 역할만 따로 남는다 (ADR-085)', () => {
   beforeEach(connectClaude);
+
+  it('장면 번호가 있는 미수정 본문은 다시 표시해도 번호를 잃지 않는다', async () => {
+    const remarked: RoleMark[][] = [];
+    const marks: RoleMark[] = [{ role: 'process', sceneIndex: 3, text: '자료를 비교함.' }];
+    panel({
+      highlightOn: true,
+      target: target({ existingText: '자료를 비교함.' }),
+      existingRoleMarks: marks,
+      onRemark: (_ref, next) => {
+        remarked.push([...next]);
+      },
+    });
+    await startWith('다시 표시');
+    expect(remarked).toEqual([marks]);
+    expect(runCalls).toHaveLength(0);
+  });
+
+  it('뒤에 붙일 때 판별 중복 장면 번호를 본문 전체 차례로 바꾼다', async () => {
+    const applied: Applied[] = [];
+    panel(
+      {
+        target: target({ existingText: '앞의 조사.' }),
+        existingRoleMarks: [{ role: 'process', sceneIndex: 1, text: '앞의 조사.' }],
+      },
+      applied,
+    );
+    await startWith('이 학생 초안 쓰기');
+    await finishWith('[장면 1] [과정] 뒤의 발표.');
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '뒤에 붙이기' }));
+    });
+    expect(applied[0]?.marks?.map((p) => p.sceneIndex)).toEqual([1, 2]);
+    expect(applied[0]?.text).toBe('앞의 조사. 뒤의 발표.');
+  });
 
   it('[동기] 류 표식은 본문에서 빠지고 roleMarks 로 간다', async () => {
     const applied: Applied[] = [];

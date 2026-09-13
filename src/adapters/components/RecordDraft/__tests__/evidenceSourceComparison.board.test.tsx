@@ -158,7 +158,10 @@ const { obsRepo, fakeStore, evidenceState, applySpy, removeSpy, updateSpy, addSp
         setThread: async () => {},
         moveToThread: async () => ({ movedIds: [], skippedIds: [] }),
         moveToNewThread: async () => ({ movedIds: [], skippedIds: [], threadId: 'x' }),
-        unclassify: async () => ({ movedIds: [], skippedIds: [] }),
+        unclassify: async (): Promise<{ movedIds: string[]; skippedIds: string[] }> => ({
+          movedIds: [],
+          skippedIds: [],
+        }),
       },
     };
   });
@@ -437,50 +440,12 @@ describe('AC-15 로딩 실패와 원본 없음을 구별한다', () => {
   });
 });
 
-describe('AC-16 삭제 안내 4갈래 - 확인한 것만 약속한다', () => {
-  const del = async (content: string, label: string): Promise<string> => {
-    ensureSelected(cardOf(content));
-    await act(async () => {
-      fireEvent.click(within(cardOf(content)).getByRole('button', { name: label }));
-    });
-    return screen.getByRole('status', { name: '알림' }).textContent ?? '';
-  };
-
-  it('(a) 확인된 적격 원본이면 미분류 재노출을 약속한다', async () => {
-    await board();
-    expect(await del('근거로 다듬은 글', '정리한 근거 삭제')).toContain(
-      '원본은 미분류에 다시 표시됩니다',
-    );
-  });
-
-  it('(b) 원본이 없으면 근거만 지웠다고 말한다', async () => {
-    await board();
-    expect(await del('원본이 사라진 근거', '정리한 근거 삭제')).toContain(
-      '정리한 근거만 지웠습니다',
-    );
-  });
-
-  it('★(b) 원본이 비어 거울 적격이 아니면 재노출을 약속하지 않는다', async () => {
-    await board();
-    expect(await del('원본이 비어 버린 근거', '정리한 근거 삭제')).toContain(
-      '원본은 이 동작으로 지우지 않았습니다',
-    );
-  });
-
-  it('★(b) 평가 출처도 재노출을 약속하지 않는다', async () => {
-    await board();
-    expect(await del('평가에서 온 근거', '정리한 근거 삭제')).toContain(
-      '원본은 이 동작으로 지우지 않았습니다',
-    );
-  });
-
-  it('(d) 직접 입력 근거는 라벨도 문구도 원본 이야기를 꺼내지 않는다', async () => {
+describe('미분류 근거 보존', () => {
+  it('이미 미분류인 직접 입력 근거에는 영구 삭제 버튼을 표시하지 않는다', async () => {
     await board();
     ensureSelected(cardOf('직접 입력한 근거'));
-    expect(within(cardOf('직접 입력한 근거')).getByRole('button', { name: '삭제' })).toBeTruthy();
-    const text = await del('직접 입력한 근거', '삭제');
-    expect(text).toContain('근거 1건을 지웠습니다');
-    expect(text).not.toContain('원본');
+    expect(within(cardOf('직접 입력한 근거')).queryByRole('button', { name: '삭제' })).toBeNull();
+    expect(removeSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -554,5 +519,31 @@ describe('AC-10 저장 직후 이동 - 보드가 대상까지 찾아 준다', ()
       ),
     );
     expect(handled).toHaveBeenCalled();
+  });
+});
+
+describe('비교창에서 미분류로 돌리기', () => {
+  it('저장 실패 때 비교창과 내용을 유지하고 성공한 뒤에만 닫는다', async () => {
+    const unclassify = vi
+      .spyOn(evidenceState, 'unclassify')
+      .mockRejectedValueOnce(new Error('저장 실패'))
+      .mockResolvedValueOnce({ movedIds: ['e-diff'], skippedIds: [] });
+    try {
+      await board();
+      await openCompare('근거로 다듬은 글');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '미분류로 돌리기' }));
+      });
+      expect(screen.getByRole('button', { name: '현재 근거 유지' })).toBeTruthy();
+      expect(removeSpy).not.toHaveBeenCalled();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: '미분류로 돌리기' }));
+      });
+      expect(screen.queryByRole('button', { name: '현재 근거 유지' })).toBeNull();
+      expect(unclassify).toHaveBeenCalledWith({ studentRef: 'sA', evidenceIds: ['e-diff'] });
+      expect(removeSpy).not.toHaveBeenCalled();
+    } finally {
+      unclassify.mockRestore();
+    }
   });
 });

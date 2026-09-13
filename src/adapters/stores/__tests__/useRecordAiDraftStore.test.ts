@@ -52,6 +52,17 @@ beforeEach(() => {
 });
 
 describe('add — 판을 남기고 파일에 쓴다', () => {
+  it('다시 불러와 분량을 고칠 때도 장면 번호를 보존한다', async () => {
+    await useRecordAiDraftStore.getState().add({
+      draftKey: KEY,
+      provider: 'codex',
+      paragraphs: [{ role: 'process', sceneIndex: 3, text: '발표 질문에 답함.' }],
+      excluded: '',
+    });
+    useRecordAiDraftStore.setState({ records: [], loaded: false });
+    await useRecordAiDraftStore.getState().load();
+    expect(useRecordAiDraftStore.getState().records[0]?.paragraphs[0]?.sceneIndex).toBe(3);
+  });
   it('실명 복원·표식 분리가 끝난 문단을 그대로 저장한다', async () => {
     const id = await useRecordAiDraftStore.getState().add({
       draftKey: KEY,

@@ -81,7 +81,7 @@ export const useRecordAiDraftStore = create<RecordAiDraftState>((set, get) => {
           ...(input.draftKey.classId !== undefined ? { classId: input.draftKey.classId } : {}),
         },
         provider: input.provider,
-        paragraphs: input.paragraphs.map((p) => ({ role: p.role, text: p.text })),
+        paragraphs: input.paragraphs.map((p) => ({ ...p })),
         excluded: input.excluded,
         createdAt: Date.now(),
         ...(input.threadId !== undefined ? { threadId: input.threadId } : {}),

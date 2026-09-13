@@ -242,6 +242,7 @@ beforeEach(() => {
   // ★주제를 통째로 되돌린다 — 장면까지 손대는 검사가 있어 상태만 되돌리면 다음 검사로 샌다.
   H.threads[0] = {
     ...(H.threads[0] as InquiryThread),
+    title: '할인 문구와 선택',
     status: 'open',
     scenes: [
       { id: 'sc-eval', role: 'evaluation', moduleId: 'teacherJudgement', evidenceIds: [] },
@@ -326,6 +327,27 @@ it('서사 적용 중 저장 예외가 나도 제안을 남긴다', async () => 
 });
 
 describe('보기 모드', () => {
+  it('같은 장면을 다시 눌러 닫을 때도 미저장 메모를 확인하고 취소하면 유지한다', () => {
+    board();
+    const panel = openScene(/^동기: 동기·질문 장면/);
+    fireEvent.change(within(panel).getByLabelText('장면 메모'), {
+      target: { value: '저장 전 메모' },
+    });
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    fireEvent.click(screen.getByRole('button', { name: /^동기: 동기·질문 장면/ }));
+    expect(confirm).toHaveBeenCalled();
+    expect(screen.getByLabelText('장면 메모')).toHaveProperty('value', '저장 전 메모');
+    confirm.mockRestore();
+  });
+  it('제안 후 근거가 바뀌면 이전 AI 제안을 적용하지 않는다', async () => {
+    board();
+    await askScenes();
+    H.threads[0] = { ...(H.threads[0] as InquiryThread), title: '교사가 수정한 주제' };
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '이 배치 적용' }));
+    });
+    expect(screen.getByText(/제안을 만든 뒤 근거나 장면이 바뀌었습니다/)).toBeTruthy();
+  });
   it('★설정이 비어 있으면 근거 지도로 연다(ADR-106) — 흐름 보기 단추는 더 없다', () => {
     board();
     expect(screen.getByTestId('evidence-map-view')).toBeTruthy();
@@ -356,6 +378,13 @@ describe('보기 모드', () => {
 });
 
 describe('놓기', () => {
+  it('다른 근거 앞에 놓으면 해당 장면의 삽입 순서를 저장 경로에 전달한다', async () => {
+    board();
+    await drop('e2', 'drop:before:e1');
+    expect(H.place).toHaveBeenCalledWith(
+      expect.objectContaining({ sceneId: 'sc-motive', evidenceIds: ['e2'], index: 0 }),
+    );
+  });
   it('★장면 열에 놓으면 근거 먼저·장면 나중의 한 경로로만 간다', async () => {
     board();
     await drop('e2', sceneDropId('thr-1', 'sc-motive'));

@@ -106,7 +106,9 @@ export interface EvidenceMapSidePanelProps {
   /** 이 장면 **뒤에** 새 장면을 끼운다(`at` = index + 1). */
   onAddSceneAfter?: (threadId: string, at: number) => void;
   onPlaceInScene?: (threadId: string, sceneId: string, ids: readonly string[]) => void;
+  onDetachConnection?: (threadId: string, sceneId: string, evidenceId: string) => void;
   onDetachFromScene?: (threadId: string, ids: readonly string[]) => void;
+  onReorderEvidence?: (threadId: string, sceneId: string, evidenceId: string, dir: -1 | 1) => void;
   /** 자리 미정 밖(주제 미정 근거)에서도 고르는 큰 고르기 창. */
   onPickEvidenceForScene?: (threadId: string, sceneId: string) => void;
   // ── 장면 이음 ──
@@ -119,7 +121,7 @@ export interface EvidenceMapSidePanelProps {
   onDraftFromThread?: (threadId: string, chain: boolean) => void;
   onOpenThread?: (threadId: string) => void;
   // ── 주제 이음 ──
-  onSaveThreadLinkNote?: (threadId: string, note: string) => void;
+  onSaveThreadLinkNote?: (threadId: string, note: string) => void | Promise<void>;
   onUnlinkThread?: (threadId: string) => void;
 }
 
@@ -229,6 +231,7 @@ function EvidenceRow({
   evidence,
   action,
   onSelect,
+  controls,
 }: {
   readonly evidence: RecordEvidence;
   readonly action?: {
@@ -237,6 +240,7 @@ function EvidenceRow({
     readonly title?: string;
   };
   onSelect?: () => void;
+  readonly controls?: ReactNode;
 }): ReactElement {
   const head = evidenceHead(evidence.content, 28);
   return (
@@ -253,6 +257,7 @@ function EvidenceRow({
       ) : (
         <span className="min-w-0 flex-1 truncate text-sp-text">{head}</span>
       )}
+      {controls}
       {action !== undefined && (
         <button
           type="button"
@@ -388,20 +393,48 @@ function SceneEditor({
           </p>
         ) : (
           <ul className="flex flex-col gap-1">
-            {items.map((e) => (
+            {items.map((e, position) => (
               <EvidenceRow
                 key={e.id}
                 evidence={e}
+                controls={
+                  !locked && props.onReorderEvidence ? (
+                    <span className="flex shrink-0">
+                      <button
+                        type="button"
+                        aria-label={`${evidenceHead(e.content, 20)} 위로`}
+                        disabled={position === 0}
+                        onClick={() => props.onReorderEvidence?.(threadId, scene.id, e.id, -1)}
+                        className="px-1 text-sp-muted disabled:opacity-30"
+                      >
+                        ↑
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={`${evidenceHead(e.content, 20)} 아래로`}
+                        disabled={position === items.length - 1}
+                        onClick={() => props.onReorderEvidence?.(threadId, scene.id, e.id, 1)}
+                        className="px-1 text-sp-muted disabled:opacity-30"
+                      >
+                        ↓
+                      </button>
+                    </span>
+                  ) : null
+                }
                 {...(props.onSelectNode === undefined
                   ? {}
                   : { onSelect: () => props.onSelectNode?.(e.id) })}
-                {...(locked || props.onDetachFromScene === undefined
+                {...(locked ||
+                (props.onDetachFromScene === undefined && props.onDetachConnection === undefined)
                   ? {}
                   : {
                       action: {
-                        label: '빼기',
+                        label: '이 장면 연결 해제',
                         title: "장면에서만 뺍니다. 주제에는 그대로 있습니다('자리 미정').",
-                        onClick: () => props.onDetachFromScene?.(threadId, [e.id]),
+                        onClick: () =>
+                          props.onDetachConnection
+                            ? props.onDetachConnection(threadId, scene.id, e.id)
+                            : props.onDetachFromScene?.(threadId, [e.id]),
                       },
                     })}
               />
@@ -497,6 +530,11 @@ function SceneLinkEditor({
         실마리가 됩니다.
       </p>
       {locked && <p className="text-xs text-sp-muted">마친 주제라 바꿀 수 없습니다.</p>}
+      {scene.leadInNeedsCheck && (
+        <p role="status" className="text-sm text-sp-highlight">
+          앞 장면이 바뀌었습니다. 이음말을 확인하고 저장하면 초안에 다시 반영합니다.
+        </p>
+      )}
       <NoteField
         key={`${threadId}:${scene.id}:lead`}
         label="이음말 (선택)"
@@ -507,6 +545,9 @@ function SceneLinkEditor({
         saveLabel="이음말 저장"
         disabled={locked}
         onSave={(next) => props.onSaveSceneLeadIn?.(threadId, scene.id, next) ?? Promise.resolve()}
+        onEditingChange={(editing) =>
+          props.onSceneNoteEditingChange?.(threadId, `${scene.id}:link`, editing)
+        }
       />
     </div>
   );
@@ -576,6 +617,16 @@ function ThreadEditor({
             </span>
             {sceneCount === 0 ? '뼈대 깔기' : '뼈대 고르기'}
           </button>
+          {props.onAddSceneAfter && (
+            <button
+              type="button"
+              disabled={locked}
+              onClick={() => props.onAddSceneAfter?.(thread.id, sceneCount)}
+              className={`${boardBtn} text-sp-text`}
+            >
+              + 장면 추가
+            </button>
+          )}
           {props.onSuggestScenes !== undefined && (
             <button
               type="button"
@@ -710,6 +761,9 @@ function ThreadLinkEditor({
         placeholder="예: 실험 결과가 새 질문으로 이어짐"
         saveLabel="이음말 저장"
         onSave={(next) => props.onSaveThreadLinkNote?.(thread.id, next)}
+        onEditingChange={(editing) =>
+          props.onSceneNoteEditingChange?.(thread.id, `${thread.id}:link`, editing)
+        }
       />
       <div className="flex items-center">
         <span className="flex-1" />

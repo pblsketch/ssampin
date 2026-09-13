@@ -11,7 +11,7 @@
  *
  * ★이 파일은 도메인이다. 외부 의존성 import 금지, 순수 함수만 둔다.
  */
-import type { InquiryThread, NarrativeScene } from '../entities/InquiryThread';
+import type { InquiryThread, NarrativeScene, SceneEvidenceFocus } from '../entities/InquiryThread';
 import { NARRATIVE_ROLE_MARKS, type NarrativeRole } from './narrativeParagraphs';
 import { sortByEvidenceOrder, type EvidenceOrderLike } from './evidenceOrder';
 import {
@@ -31,8 +31,13 @@ export const VIRTUAL_EVALUATION_SCENE_ID = 'virtual:evaluation';
 
 export interface ResolvedScene<T extends SceneEvidenceLike> {
   readonly scene: NarrativeScene;
-  /** 이 장면에 실제로 놓인 근거들(소유가 확인된 것만, 장면에 적힌 순서대로). */
+  /** 이 장면이 가리키는 근거들(소유가 확인된 것만, 장면에 적힌 순서대로). 다른 장면과 겹칠 수 있다. */
   readonly evidences: readonly T[];
+  /**
+   * 이 중 **카드가 여기 사는** 근거 id — 여러 장면에 이어진 근거의 카드는 **처음 가리킨 장면**에만 그린다.
+   * ★자료를 복제하지 않기 위한 것이다(오너 결정 2026-09-13). 나머지 장면은 그 카드로 선만 더 긋는다.
+   */
+  readonly ownIds: ReadonlySet<string>;
   /** 저장된 장면이 아니라 화면용으로 끼워 넣은 것인가(평가 자리 채움). */
   readonly virtual?: boolean;
 }
@@ -41,8 +46,12 @@ export interface ResolvedScenes<T extends SceneEvidenceLike> {
   readonly scenes: readonly ResolvedScene<T>[];
   /** 이 주제 소속인데 어느 장면에도 놓이지 않은 근거 — 화면의 "아직 안 놓음". */
   readonly unplaced: readonly T[];
-  /** 실제로 장면에 놓인 근거 수. 관문 판정(`§4` 근거 관문)이 이 수를 본다. */
+  /** 실제로 장면에 놓인 근거 수 — **서로 다른 근거의 수**다. 관문 판정(`§4` 근거 관문)이 이 수를 본다. */
   readonly placedCount: number;
+  /** 두 장면 이상에 이어진 근거 id — 화면이 "장면 2곳에 연결됨"이라고 알린다. */
+  readonly sharedIds: ReadonlySet<string>;
+  /** 근거 id → 카드가 사는 장면 id(처음 가리킨 장면). */
+  readonly primarySceneOf: ReadonlyMap<string, string>;
 }
 
 /**
@@ -50,7 +59,9 @@ export interface ResolvedScenes<T extends SceneEvidenceLike> {
  *
  * 하는 일 넷:
  *  (a) 이 주제 소유가 아닌 근거 id 는 없는 것처럼 다룬다(유령 가리기)
- *  (b) 같은 근거가 두 장면에 있으면 **첫 등장만** 남긴다
+ *  (b) **한 장면 안**의 중복만 지운다. 장면과 장면 사이의 겹침은 남긴다 — 하나의 자료에 과정과
+ *      결과가 함께 들어 있으면 두 장면이 같은 자료를 각각 참조한다(오너 결정 2026-09-13).
+ *      카드는 **처음 가리킨 장면**에만 그린다(`ownIds`) — 자료를 복제하지 않기 위해서다.
  *  (c) 평가 장면이 없으면 맨 앞에 가상 평가 장면을 **보여만** 준다(저장하지 않는다).
  *      둘 이상이면 첫 것만 남긴다 — 교사 판단은 어느 구성에서도 한 번뿐이다(ADR-094 §4)
  *  (d) 남은 근거를 `unplaced` 로 돌려준다(요청서의 "그 밖의 근거"와 같은 순서)
@@ -66,6 +77,8 @@ export function scenesOf<T extends SceneEvidenceLike>(
   }
 
   const used = new Set<string>();
+  const sharedIds = new Set<string>();
+  const primarySceneOf = new Map<string, string>();
   const out: ResolvedScene<T>[] = [];
   let sawEvaluation = false;
 
@@ -75,14 +88,23 @@ export function scenesOf<T extends SceneEvidenceLike>(
       sawEvaluation = true;
     }
     const picked: T[] = [];
+    const ownIds = new Set<string>();
+    const here = new Set<string>();
     for (const id of scene.evidenceIds) {
-      if (used.has(id)) continue; // (b)
+      if (here.has(id)) continue; // (b) 같은 장면 안의 중복만 지운다
       const ev = owned.get(id);
       if (ev === undefined) continue; // (a)
-      used.add(id);
+      here.add(id);
       picked.push(ev);
+      if (used.has(id)) {
+        sharedIds.add(id); // 앞 장면이 이미 가리켰다 — 겹친 연결이다
+      } else {
+        used.add(id);
+        ownIds.add(id);
+        primarySceneOf.set(id, scene.id);
+      }
     }
-    out.push({ scene, evidences: picked });
+    out.push({ scene, evidences: picked, ownIds });
   }
 
   if (!sawEvaluation && out.length > 0) {
@@ -95,12 +117,35 @@ export function scenesOf<T extends SceneEvidenceLike>(
         evidenceIds: [],
       },
       evidences: [],
+      ownIds: new Set<string>(),
       virtual: true,
     });
   }
 
   const unplaced = sortByEvidenceOrder([...owned.values()].filter((e) => !used.has(e.id)));
-  return { scenes: out, unplaced, placedCount: used.size };
+  return { scenes: out, unplaced, placedCount: used.size, sharedIds, primarySceneOf };
+}
+
+/** 이 장면에서 이 근거의 「쓸 부분」. 안 적었으면 빈 글. */
+export function sceneFocusOf(
+  scene: Pick<NarrativeScene, 'evidenceFocus'>,
+  evidenceId: string,
+): string {
+  return scene.evidenceFocus?.find((f) => f.evidenceId === evidenceId)?.note.trim() ?? '';
+}
+
+/**
+ * 「쓸 부분」 목록 정리(순수) — 빈 글과 **연결이 없는 id** 를 뺀다.
+ * ★장면에서 근거를 떼면 그 말도 함께 사라져야 한다. 남겨 두면 다시 이었을 때 옛 말이 되살아난다.
+ */
+export function pruneSceneFocus(
+  focus: readonly SceneEvidenceFocus[] | undefined,
+  evidenceIds: readonly string[],
+): readonly SceneEvidenceFocus[] | undefined {
+  if (focus === undefined || focus.length === 0) return undefined;
+  const live = new Set(evidenceIds);
+  const kept = focus.filter((f) => live.has(f.evidenceId) && f.note.trim().length > 0);
+  return kept.length === 0 ? undefined : kept;
 }
 
 /**
@@ -111,6 +156,7 @@ export function placedCount<T extends SceneEvidenceLike>(
   thread: Pick<InquiryThread, 'id' | 'scenes'>,
   evidences: readonly T[],
 ): number {
+  // ★같은 근거가 여러 장면에 있어도 **한 건**으로 센다(집합) — 겹친 연결이 관문 수를 부풀리지 않는다.
   const owned = new Set(evidences.filter((e) => e.threadId === thread.id).map((e) => e.id));
   const used = new Set<string>();
   for (const scene of thread.scenes ?? []) {

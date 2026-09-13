@@ -14,10 +14,13 @@
 import { aiDraftText, type RecordAiDraftAdjust } from '@domain/entities/RecordAiDraft';
 import { neisByteLength } from '@domain/entities/RecordDraft';
 import {
-  dropUnmarkedParagraphs,
+  parseGeneratedNarrativeParagraphs,
+  narrativeSceneOrderError,
+  narrativeSceneOrderOf,
   markedNarrativeText,
   parseNarrativeParagraphs,
   type NarrativeParagraph,
+  type NarrativeSceneOrderEntry,
 } from '@domain/rules/narrativeParagraphs';
 import { stripInsufficientMark, type LengthAdjustKind } from '@domain/rules/recordLengthGoal';
 import type { KeywordGroup } from '@domain/privacy/types';
@@ -101,6 +104,7 @@ export function planRetry(input: {
 export function measureAnswer(
   raw: string,
   mappings: Parameters<typeof restoreModelText>[1],
+  sceneOrder?: readonly NarrativeSceneOrderEntry[],
 ): {
   paragraphs: readonly NarrativeParagraph[];
   bytes: number;
@@ -112,7 +116,8 @@ export function measureAnswer(
   const { text, insufficient } = stripInsufficientMark(restored);
   // ★표식 없는 설명 줄("줄인 글입니다" 등)은 버린다 — 초안 쓰기와 같은 규칙(ADR-099 보강 5). 안 버리면 그 줄이
   //   분량에 섞여 목표를 빗나간 것처럼 보이고 생기부 본문에도 들어간다. 표식이 하나도 없으면 아무것도 안 버린다.
-  const paragraphs = dropUnmarkedParagraphs(parseNarrativeParagraphs(text));
+  const paragraphs = parseGeneratedNarrativeParagraphs(text);
+  const orderError = narrativeSceneOrderError(paragraphs, sceneOrder);
   // 거절·되묻기 설명문은 초안이 아니다 — 저장 후보로 세지 않는다(R-3).
   const verdict = judgeNonDraftReply(text);
   // ★저장될 본문 그대로 센다(`aiDraftText` = 문단을 공백 하나로 이은 것). 프롬프트 길이가 아니다.
@@ -120,8 +125,8 @@ export function measureAnswer(
     paragraphs,
     bytes: neisByteLength(aiDraftText({ paragraphs })),
     insufficient,
-    nonDraft: verdict.nonDraft,
-    nonDraftReason: verdict.reason,
+    nonDraft: verdict.nonDraft || orderError !== null,
+    nonDraftReason: orderError ?? verdict.reason,
   };
 }
 
@@ -149,11 +154,12 @@ export interface LengthAdjustRunInput {
 export async function runLengthAdjust(input: LengthAdjustRunInput): Promise<LengthAdjustRunResult> {
   const { api, provider, systemPrompt, pack, floorBytes, onAttempt, signal } = input;
   const candidates: LengthAdjustCandidate[] = [];
+  const sceneOrder = narrativeSceneOrderOf(parseNarrativeParagraphs(pack.sourceText));
 
   onAttempt?.(1);
   const first = buildLengthAdjustPack(pack);
   const firstRaw = await askOnce(api, provider, first.text, systemPrompt, signal);
-  const firstOut = measureAnswer(firstRaw, first.mappings);
+  const firstOut = measureAnswer(firstRaw, first.mappings, sceneOrder);
   candidates.push({
     attempt: 1,
     paragraphs: firstOut.paragraphs,
@@ -191,7 +197,7 @@ export async function runLengthAdjust(input: LengthAdjustRunInput): Promise<Leng
     ...(plan.previousBytes !== undefined ? { previousBytes: plan.previousBytes } : {}),
   });
   const secondRaw = await askOnce(api, provider, second.text, systemPrompt, signal);
-  const secondOut = measureAnswer(secondRaw, second.mappings);
+  const secondOut = measureAnswer(secondRaw, second.mappings, sceneOrder);
   candidates.push({
     attempt: 2,
     paragraphs: secondOut.paragraphs,
@@ -272,7 +278,7 @@ export async function shrinkDraftOnce(input: DraftShrinkInput): Promise<DraftShr
     targetBytes: input.targetBytes,
   });
   const raw = await askOnce(input.api, input.provider, pack.text, input.systemPrompt, input.signal);
-  const out = measureAnswer(raw, pack.mappings);
+  const out = measureAnswer(raw, pack.mappings, narrativeSceneOrderOf(input.paragraphs));
   if (out.nonDraft || out.paragraphs.length === 0 || out.bytes >= fromBytes) return null;
   return { paragraphs: out.paragraphs, bytes: out.bytes };
 }

@@ -25,6 +25,50 @@ import type { OwnAiRunApi } from '../ownAiRun';
 
 const ROSTER = rosterFromAll([{ name: '김지훈', studentNumber: 1 }], []);
 
+describe('생성 후 문장 형식과 장면 차례', () => {
+  it('가운데 점을 쉼표로 바꾼 최종 본문으로 분량을 잰다', () => {
+    const out = measureAnswer('[장면 2] [과정] PLA·PHA·PBAT를 58.5도에서 비교함.', []);
+    const finalText = 'PLA, PHA, PBAT를 58.5도에서 비교함.';
+    expect(out.paragraphs[0]?.text).toBe(finalText);
+    expect(out.bytes).toBe(neisByteLength(finalText));
+    expect(out.paragraphs[0]?.sceneIndex).toBe(2);
+  });
+
+  it('분량을 줄이며 같은 역할의 장면을 뒤집으면 저장 후보가 되지 않는다', async () => {
+    const { api, calls } = fakeApi(['[장면 3] [과정] 발표함.\n\n[장면 1] [과정] 조사함.']);
+    const out = await runLengthAdjust({
+      api,
+      provider: 'codex',
+      systemPrompt: '규정',
+      floorBytes: 30,
+      pack: packInput({
+        sourceText:
+          '[장면 1] [과정] 조사 자료를 찾음.\n\n[장면 2] [결과] 판정함.\n\n[장면 3] [과정] 질문에 답함.',
+      }),
+    });
+    expect(out.candidates[0]?.nonDraft).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain('[장면 1] [과정] → [장면 2] [결과] → [장면 3] [과정]');
+  });
+
+  it('자동 줄이기도 장면 번호가 사라지면 처음 초안을 유지한다', async () => {
+    const { api } = fakeApi(['[과정] 조사함.']);
+    const out = await shrinkDraftOnce({
+      api,
+      provider: 'codex',
+      systemPrompt: '규정',
+      studentName: '김지훈',
+      roster: ROSTER,
+      areaLabel: '교과 세부능력 및 특기사항',
+      targetBytes: 30,
+      paragraphs: [
+        { sceneIndex: 1, role: 'process', text: '조사 자료의 시점과 대상을 원문에서 확인함.' },
+      ],
+    });
+    expect(out).toBeNull();
+  });
+});
+
 /** 준비된 답을 순서대로 돌려주는 가짜 CLI. 몇 번 불렸는지도 센다. */
 function fakeApi(answers: readonly string[]): { api: OwnAiRunApi; calls: string[] } {
   const calls: string[] = [];

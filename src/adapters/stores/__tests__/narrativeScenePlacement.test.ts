@@ -10,7 +10,7 @@
  *  - 근거 파일을 못 읽으면 **자르지 않는다**(읽기 실패를 "없음"으로 치지 않는다)
  */
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import type { InquiryThread } from '@domain/entities/InquiryThread';
+import type { InquiryThread, NarrativeScene } from '@domain/entities/InquiryThread';
 import type { RecordEvidence } from '@domain/entities/RecordEvidence';
 
 const { threadRepo, evidenceRepo } = vi.hoisted(() => {
@@ -60,6 +60,66 @@ import { VIRTUAL_EVALUATION_SCENE_ID } from '@domain/rules/narrativeScenes';
 import { NARRATIVE_SCENE_MAX } from '@domain/entities/InquiryThread';
 
 const STUDENT = 'tc:c1:1-2-3';
+
+describe('같은 근거의 여러 장면 연결', () => {
+  it('같은 장면 안에서 재정렬하면 다른 장면의 연결과 메모를 보존한다', async () => {
+    const store = useInquiryThreadStore.getState();
+    await store.attachEvidenceToScene('t1', 'sc-motive', ['e2']);
+    await store.attachEvidenceToScene('t1', 'sc-process', ['e2']);
+    await store.setSceneEvidenceFocus('t1', 'sc-motive', 'e2', '과정에서 쓰는 대목');
+    await store.insertIntoScenes('t1', [{ sceneId: 'sc-motive', evidenceIds: ['e2'] }], 0);
+    expect(savedScenes('t1').filter((s) => s.evidenceIds.includes('e2'))).toHaveLength(2);
+    expect(
+      threadRepo.stored?.records[0]?.scenes?.find((s) => s.id === 'sc-motive')?.evidenceFocus?.[0]
+        ?.note,
+    ).toBe('과정에서 쓰는 대목');
+  });
+  it('중간 장면 삭제와 추가도 달라진 앞 장면의 이음말을 검토 대상으로 표시한다', async () => {
+    const store = useInquiryThreadStore.getState();
+    await store.setSceneLeadIn('t1', 'sc-process', '물음이 비교로 이어짐');
+    await store.removeScene('t1', 'sc-motive');
+    expect(
+      threadRepo.stored?.records[0]?.scenes?.find((s) => s.id === 'sc-process')?.leadInNeedsCheck,
+    ).toBe(true);
+    await store.setSceneLeadIn('t1', 'sc-process', '관찰이 비교로 이어짐');
+    await store.addScene('t1', { role: 'motive' }, 1);
+    expect(
+      threadRepo.stored?.records[0]?.scenes?.find((s) => s.id === 'sc-process')?.leadInNeedsCheck,
+    ).toBe(true);
+  });
+  it('더 잇기, 연결별 메모, 한 선 이동, 해제는 원본과 다른 선을 보존한다', async () => {
+    const store = useInquiryThreadStore.getState();
+    await store.attachEvidenceToScene('t1', 'sc-motive', ['e2']);
+    await store.attachEvidenceToScene('t1', 'sc-process', ['e2']);
+    await store.setSceneEvidenceFocus('t1', 'sc-motive', 'e2', '질문을 만든 부분');
+    await store.changeEvidenceConnection('t1', 'sc-motive', 'sc-eval', 'e2');
+    const scenes = threadRepo.stored?.records.find((t) => t.id === 't1')?.scenes ?? [];
+    expect(scenes.find((s) => s.id === 'sc-motive')?.evidenceIds).toEqual([]);
+    expect(scenes.find((s) => s.id === 'sc-process')?.evidenceIds).toEqual(['e2']);
+    expect(scenes.find((s) => s.id === 'sc-eval')?.evidenceFocus).toEqual([
+      { evidenceId: 'e2', note: '질문을 만든 부분' },
+    ]);
+    await store.detachEvidenceFromScene('t1', 'sc-eval', ['e2']);
+    expect(savedScenes('t1').find((s) => s.id === 'sc-process')?.evidenceIds).toEqual(['e2']);
+    expect(evidenceRepo.stored?.records.find((e) => e.id === 'e2')?.threadId).toBe('t1');
+  });
+  it('이미 연결된 곳으로 선을 옮기거나 다른 주제의 근거를 더 잇지 않는다', async () => {
+    const store = useInquiryThreadStore.getState();
+    await store.attachEvidenceToScene('t1', 'sc-motive', ['e2']);
+    await store.attachEvidenceToScene('t1', 'sc-process', ['e2']);
+    await expect(
+      store.changeEvidenceConnection('t1', 'sc-motive', 'sc-process', 'e2'),
+    ).rejects.toThrow();
+    expect(await store.attachEvidenceToScene('t2', 'sc-motive', ['e2'])).toEqual([]);
+    expect(savedScenes('t1').filter((s) => s.evidenceIds.includes('e2'))).toHaveLength(2);
+  });
+  it('마친 주제는 기존 연결을 그대로 둔다', async () => {
+    threadRepo.stored!.records[0] = { ...threadRepo.stored!.records[0]!, status: 'closed' };
+    const store = useInquiryThreadStore.getState();
+    await expect(store.attachEvidenceToScene('t1', 'sc-motive', ['e2'])).rejects.toThrow();
+    await expect(store.detachEvidenceFromScene('t1', 'sc-motive', ['e2'])).rejects.toThrow();
+  });
+});
 
 function thread(id: string, scenes: InquiryThread['scenes']): InquiryThread {
   return {
@@ -373,6 +433,28 @@ describe('AI 서사 초안 [적용] (ADR-103 §5-5)', () => {
     expect(motive?.noteSource).toBe('ai');
   });
 
+  it('AI가 제안한 평가 위치와 앞 장면 이음말을 보존하고 원래 메모로 되돌린다', async () => {
+    const before = useInquiryThreadStore.getState().records.find((t) => t.id === 't1')!;
+    const originalScenes = before.scenes ?? [];
+    const originalLink = before.link ?? null;
+    await applyNarrativeSuggestion({
+      threadId: 't1',
+      studentRef: STUDENT,
+      frame: 'inquiry',
+      scenes: [
+        { role: 'motive', evidenceIds: ['e2'], note: '질문' },
+        { role: 'evaluation', evidenceIds: [], note: '종합', leadIn: '질문을 종합해 판단함' },
+      ],
+    });
+    const saved = useInquiryThreadStore.getState().records.find((t) => t.id === 't1')!;
+    expect(saved.scenes?.map((s) => s.role)).toEqual(['motive', 'evaluation']);
+    expect(saved.scenes?.[1]?.leadIn).toBe('질문을 종합해 판단함');
+    await useInquiryThreadStore.getState().restoreScenes('t1', originalScenes, originalLink);
+    const restored = useInquiryThreadStore.getState().records.find((t) => t.id === 't1')!;
+    expect(restored.scenes).toEqual(originalScenes);
+    expect(restored.link ?? null).toEqual(originalLink);
+  });
+
   it('미분류 근거가 섞이면 근거 파일 1회 + 주제 파일 1회다', async () => {
     const r = await applyNarrativeSuggestion({
       threadId: 't1',
@@ -470,6 +552,159 @@ describe('★대상 장면이 없으면 아무것도 쓰지 않는다', () => {
     await useInquiryThreadStore.getState().moveScene('t1', 'sc-motive', -1);
     expect(saves).toBe(1);
     expect(savedScenes('t1').map((x) => x.id)).toEqual(['sc-motive', 'sc-eval', 'sc-process']);
+  });
+});
+
+/**
+ * 연결점으로 차례 바꾸기(오너 결정 2026-09-13) — 지도에서 A 의 ‘다음’을 D 의 ‘시작’에 놓았을 때.
+ * ★앞/뒤 단추와 **같은 길**을 지난다. 길이 둘이면 한쪽만 이음말 검토를 잃는다.
+ */
+describe('장면 연결점으로 차례 바꾸기', () => {
+  let saves = 0;
+  beforeEach(async () => {
+    threadRepo.stored = {
+      records: [
+        thread('t1', [
+          { id: 'A', role: 'evaluation', evidenceIds: [] },
+          { id: 'B', role: 'motive', evidenceIds: [], leadIn: 'A에서 B로' },
+          { id: 'C', role: 'process', evidenceIds: [], leadIn: 'B에서 C로' },
+          { id: 'D', role: 'result', evidenceIds: [], leadIn: 'C에서 D로' },
+        ]),
+      ],
+    };
+    evidenceRepo.stored = { records: [] };
+    useInquiryThreadStore.setState({ records: [], loaded: false });
+    await useInquiryThreadStore.getState().forceReload();
+    saves = 0;
+    const real = threadRepo.saveInquiryThreads.bind(threadRepo);
+    threadRepo.saveInquiryThreads = async (d) => {
+      saves += 1;
+      await real(d);
+    };
+  });
+
+  it('A 다음에 D 를 놓으면 A → D → B → C 로 저장된다', async () => {
+    const rechecked = await useInquiryThreadStore.getState().placeSceneAfter('t1', 'A', 'D');
+    expect(savedScenes('t1').map((x) => x.id)).toEqual(['A', 'D', 'B', 'C']);
+    // 앞 장면이 달라진 이음말 둘(D·B)만 확인 대상이다. C 의 앞은 B 그대로다.
+    expect(rechecked).toBe(2);
+  });
+
+  it('앞 장면이 달라진 이음말은 지우지 않고 확인 표시만 붙인다', async () => {
+    await useInquiryThreadStore.getState().placeSceneAfter('t1', 'A', 'D');
+    const saved = threadRepo.stored?.records.find((t) => t.id === 't1')?.scenes ?? [];
+    const byId = new Map(saved.map((sc) => [sc.id, sc]));
+    expect(byId.get('D')?.leadIn).toBe('C에서 D로');
+    expect(byId.get('D')?.leadInNeedsCheck).toBe(true);
+    expect(byId.get('C')?.leadInNeedsCheck).toBeUndefined();
+  });
+
+  it('이음말을 저장하면 확인 표시가 풀린다', async () => {
+    await useInquiryThreadStore.getState().placeSceneAfter('t1', 'A', 'D');
+    await useInquiryThreadStore.getState().setSceneLeadIn('t1', 'D', '판단을 결과로 확인함');
+    const saved = threadRepo.stored?.records.find((t) => t.id === 't1')?.scenes ?? [];
+    const d = saved.find((sc) => sc.id === 'D');
+    expect(d?.leadIn).toBe('판단을 결과로 확인함');
+    expect(d?.leadInNeedsCheck).toBeUndefined();
+  });
+
+  it('★같은 장면·없는 장면·이미 바로 다음이면 저장하지 않는다', async () => {
+    expect(await useInquiryThreadStore.getState().placeSceneAfter('t1', 'A', 'A')).toBeNull();
+    expect(await useInquiryThreadStore.getState().placeSceneAfter('t1', 'A', '없음')).toBeNull();
+    expect(await useInquiryThreadStore.getState().placeSceneAfter('t1', 'A', 'B')).toBeNull();
+    expect(saves).toBe(0);
+  });
+
+  it('앞/뒤 단추도 같은 검토 규칙을 지난다', async () => {
+    const rechecked = await useInquiryThreadStore.getState().moveScene('t1', 'B', 1);
+    expect(savedScenes('t1').map((x) => x.id)).toEqual(['A', 'C', 'B', 'D']);
+    expect(rechecked).toBe(3);
+  });
+});
+
+/**
+ * 하나의 근거를 여러 장면에 잇기(오너 결정 2026-09-13) — 자료를 복제하지 않고 관점만 나눈다.
+ */
+describe('근거를 여러 장면에 잇기', () => {
+  beforeEach(async () => {
+    threadRepo.stored = { records: [thread('t1', SCENES)] };
+    evidenceRepo.stored = { records: [evidence('e1', 't1'), evidence('e2', 't1')] };
+    useInquiryThreadStore.setState({ records: [], loaded: false });
+    useRecordEvidenceStore.setState({ records: [], loaded: false });
+    await reload();
+  });
+
+  it('더 이으면 기존 연결이 끊기지 않는다', async () => {
+    await useInquiryThreadStore.getState().attachEvidenceToScene('t1', 'sc-motive', ['e1']);
+    const added = await useInquiryThreadStore
+      .getState()
+      .attachEvidenceToScene('t1', 'sc-process', ['e1']);
+    expect(added).toEqual(['e1']);
+    expect(savedScenes('t1').find((s) => s.id === 'sc-motive')?.evidenceIds).toEqual(['e1']);
+    expect(savedScenes('t1').find((s) => s.id === 'sc-process')?.evidenceIds).toEqual(['e1']);
+  });
+
+  it('★옮기기는 기존 연결을 끊는다 — 더하기와 다른 동작이다', async () => {
+    await useInquiryThreadStore.getState().attachEvidenceToScene('t1', 'sc-motive', ['e1']);
+    await useInquiryThreadStore
+      .getState()
+      .insertIntoScenes('t1', [{ sceneId: 'sc-process', evidenceIds: ['e1'] }]);
+    expect(savedScenes('t1').find((s) => s.id === 'sc-motive')?.evidenceIds).toEqual([]);
+    expect(savedScenes('t1').find((s) => s.id === 'sc-process')?.evidenceIds).toEqual(['e1']);
+  });
+
+  it('이미 이어져 있으면 두 번 넣지 않는다', async () => {
+    await useInquiryThreadStore.getState().attachEvidenceToScene('t1', 'sc-motive', ['e1']);
+    const again = await useInquiryThreadStore
+      .getState()
+      .attachEvidenceToScene('t1', 'sc-motive', ['e1']);
+    expect(again).toEqual([]);
+    expect(savedScenes('t1').find((s) => s.id === 'sc-motive')?.evidenceIds).toEqual(['e1']);
+  });
+
+  it('이 주제 소유가 아닌 근거는 잇지 않는다', async () => {
+    evidenceRepo.stored = { records: [evidence('e9')] };
+    const added = await useInquiryThreadStore
+      .getState()
+      .attachEvidenceToScene('t1', 'sc-motive', ['e9']);
+    expect(added).toEqual([]);
+  });
+
+  it('연결 하나만 끊으면 다른 장면의 연결과 근거는 그대로다', async () => {
+    await useInquiryThreadStore.getState().attachEvidenceToScene('t1', 'sc-motive', ['e1']);
+    await useInquiryThreadStore.getState().attachEvidenceToScene('t1', 'sc-process', ['e1']);
+    await useInquiryThreadStore.getState().detachEvidenceFromScene('t1', 'sc-motive', ['e1']);
+    expect(savedScenes('t1').find((s) => s.id === 'sc-motive')?.evidenceIds).toEqual([]);
+    expect(savedScenes('t1').find((s) => s.id === 'sc-process')?.evidenceIds).toEqual(['e1']);
+    // 근거 자체는 지워지지 않고 주제 소속도 그대로다.
+    expect(evidenceRepo.stored?.records.find((e) => e.id === 'e1')?.threadId).toBe('t1');
+  });
+
+  it('「쓸 부분」은 장면마다 따로 저장되고, 연결을 끊으면 함께 사라진다', async () => {
+    await useInquiryThreadStore.getState().attachEvidenceToScene('t1', 'sc-motive', ['e1']);
+    await useInquiryThreadStore.getState().attachEvidenceToScene('t1', 'sc-process', ['e1']);
+    await useInquiryThreadStore
+      .getState()
+      .setSceneEvidenceFocus('t1', 'sc-motive', 'e1', '기준을 세운 대목');
+    await useInquiryThreadStore
+      .getState()
+      .setSceneEvidenceFocus('t1', 'sc-process', 'e1', '기준을 고친 대목');
+    const scenesOfT1 = (): readonly NarrativeScene[] =>
+      threadRepo.stored?.records.find((t) => t.id === 't1')?.scenes ?? [];
+    expect(scenesOfT1().find((s) => s.id === 'sc-motive')?.evidenceFocus).toEqual([
+      { evidenceId: 'e1', note: '기준을 세운 대목' },
+    ]);
+    await useInquiryThreadStore.getState().detachEvidenceFromScene('t1', 'sc-motive', ['e1']);
+    expect(scenesOfT1().find((s) => s.id === 'sc-motive')?.evidenceFocus).toBeUndefined();
+    expect(scenesOfT1().find((s) => s.id === 'sc-process')?.evidenceFocus).toEqual([
+      { evidenceId: 'e1', note: '기준을 고친 대목' },
+    ]);
+  });
+
+  it('★이어져 있지 않은 근거의 「쓸 부분」은 조용히 버리지 않고 알린다', async () => {
+    await expect(
+      useInquiryThreadStore.getState().setSceneEvidenceFocus('t1', 'sc-motive', 'e2', '없는 연결'),
+    ).rejects.toThrow();
   });
 });
 
@@ -660,4 +895,35 @@ describe('★AI 적용은 소유를 하나도 못 얻으면 장면을 갈아엎�
     expect(r.applied).toBe(true);
     expect(savedScenes('t1').length).toBeGreaterThan(0);
   });
+});
+
+describe('미분류로 돌릴 때 근거 자체 보존', () => {
+  it.each(['manual', 'observation'] as const)(
+    '%s 근거의 내용과 메모를 보존하며 모든 장면 배치를 해제한다',
+    async (sourceType) => {
+      const original = {
+        ...evidence('preserve', 't1'),
+        sourceType,
+        sourceId: 'source-original',
+        content: '교사가 다듬은 구체적인 비교 내용',
+        note: '다음 시간 확인',
+        excludedFromAi: true,
+      };
+      evidenceRepo.stored = { records: [original] };
+      await reload();
+      await useInquiryThreadStore.getState().attachEvidenceToScene('t1', 'sc-motive', ['preserve']);
+      const result = await useRecordEvidenceStore
+        .getState()
+        .unclassify({ studentRef: STUDENT, evidenceIds: ['preserve'] });
+      expect(result.movedIds).toEqual(['preserve']);
+      const { threadId: _thread, updatedAt: _updated, ...preserved } = original;
+      expect(evidenceRepo.stored?.records.find((e) => e.id === 'preserve')).toMatchObject(
+        preserved,
+      );
+      expect(
+        evidenceRepo.stored?.records.find((e) => e.id === 'preserve')?.threadId,
+      ).toBeUndefined();
+      expect(savedScenes('t1').flatMap((s) => s.evidenceIds)).not.toContain('preserve');
+    },
+  );
 });

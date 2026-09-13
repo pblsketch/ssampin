@@ -54,7 +54,7 @@ export interface EvidenceSourceComparisonDialogProps {
     capture: ComparisonCapture,
     fields: EvidenceSourceFieldsPatch,
   ) => Promise<ComparisonRecheck>;
-  /** [정리한 근거 삭제] - 원본은 건드리지 않는다. 뒷정리는 부모(보드)가 한다. */
+  /** [미분류로 돌리기] - 근거와 원본은 보존한다. 뒷정리는 부모(보드)가 한다. */
   readonly onDeleteEvidence: () => void;
   readonly onClose: () => void;
 }
@@ -106,7 +106,7 @@ const HINT = 'text-sm italic text-sp-muted';
 const DIFF_BADGE =
   'rounded-full bg-amber-500/15 px-1.5 py-0.5 text-xs font-semibold text-amber-600 ring-1 ring-amber-500/30';
 const BTN_DELETE =
-  'rounded-lg px-3 py-1.5 text-sm font-medium text-red-500 ring-1 ring-red-500/20 transition-colors hover:bg-red-500/10';
+  'rounded-lg px-3 py-1.5 text-sm font-medium text-sp-muted ring-1 ring-sp-border transition-colors hover:bg-sp-surface';
 const BTN_APPLY =
   'rounded-lg px-3 py-1.5 text-sm font-medium text-sp-accent ring-1 ring-blue-500/30 transition-colors hover:bg-blue-500/10 disabled:opacity-40 disabled:hover:bg-transparent';
 const BTN_KEEP = 'rounded-lg px-3 py-1.5 text-sm text-sp-muted hover:text-sp-text';
@@ -431,8 +431,13 @@ export function EvidenceSourceComparisonDialog({
         ) : (
           <div className={FOOTER}>
             {showDelete && (
-              <button type="button" onClick={onDeleteEvidence} className={BTN_DELETE}>
-                정리한 근거 삭제
+              <button
+                type="button"
+                onClick={onDeleteEvidence}
+                title="내용과 메모, 원본 기록을 보존하고 주제와 장면 배치만 해제합니다"
+                className={BTN_DELETE}
+              >
+                미분류로 돌리기
               </button>
             )}
             <div className={SPACER} />

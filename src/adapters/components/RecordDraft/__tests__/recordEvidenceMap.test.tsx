@@ -114,6 +114,7 @@ const H = vi.hoisted(() => {
       skippedIds: [] as string[],
     })),
     detachFromScenes: vi.fn(async () => {}),
+    detachEvidenceFromScene: vi.fn(async () => {}),
     setLink: vi.fn(async () => {}),
     setSceneNote: vi.fn(async () => {}),
     setSceneLeadIn: vi.fn(async () => {}),
@@ -196,6 +197,7 @@ vi.mock('@adapters/stores/useInquiryThreadStore', () => ({
     applyScaffold: async () => {},
     restoreScenes: async () => {},
     detachFromScenes: H.detachFromScenes,
+    detachEvidenceFromScene: H.detachEvidenceFromScene,
   }),
 }));
 vi.mock('@adapters/stores/useSettingsStore', () => ({
@@ -311,6 +313,7 @@ beforeEach(() => {
   H.threads = [...BASE_THREADS];
   H.placeEvidenceInScene.mockClear();
   H.detachFromScenes.mockClear();
+  H.detachEvidenceFromScene.mockClear();
   H.setLink.mockClear();
   H.setSceneNote.mockClear();
   H.setSceneLeadIn.mockClear();
@@ -372,7 +375,7 @@ describe('선택과 상세', () => {
     expect(card('쿠폰 질문을 했다').getAttribute('aria-pressed')).toBe('true');
     expect(card('보고서를 썼다').getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: /고른 2건으로 초안 쓰기/ })).toBeTruthy();
-    fireEvent.click(card('할인 표를 만들었다'));
+    fireEvent.click(screen.getByRole('checkbox', { name: '할인 표를 만들었다 초안 근거 선택' }));
     expect(onSelectionChange).toHaveBeenLastCalledWith(['e1', 'e3', 'e2']);
   });
 
@@ -405,14 +408,21 @@ describe('초안 쓰기', () => {
     board({ onWriteDraft });
     fireEvent.click(screen.getByRole('button', { name: /근거 4건으로 초안 쓰기/ }));
     expect(onWriteDraft).toHaveBeenLastCalledWith({ kind: 'all' });
-    fireEvent.click(card('쿠폰 질문을 했다'));
-    fireEvent.click(card('보고서를 썼다'));
+    fireEvent.click(screen.getByRole('checkbox', { name: '쿠폰 질문을 했다 초안 근거 선택' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: '보고서를 썼다 초안 근거 선택' }));
     fireEvent.click(screen.getByRole('button', { name: /고른 2건으로 초안 쓰기/ }));
     expect(onWriteDraft).toHaveBeenLastCalledWith({ kind: 'selection', evidenceIds: ['e1', 'e3'] });
   });
 });
 
 describe('끌어 놓기', () => {
+  it('장면 없는 주제의 카드 위에 놓아도 그 주제로 옮긴다', async () => {
+    board();
+    await drop('e4', 'drop:before:e1');
+    expect(H.moveToThread).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 'thr-1', evidenceIds: ['e4'] }),
+    );
+  });
   it('★같은 묶음 안(또는 빈 자리)에 놓으면 저장 0회 — 자리만 이 기기에 남는다', async () => {
     board();
     await drop('e1', threadDropId('thr-1'));
@@ -479,15 +489,18 @@ describe('장면 열(ADR-107)', () => {
     // 놓인 근거 [빼기] — 장면에서만 뺀다(주제는 그대로).
     const placed = within(side).getByRole('region', { name: '이 장면에 놓인 근거' });
     await act(async () => {
-      fireEvent.click(within(placed).getAllByRole('button', { name: '빼기' })[0]!);
+      fireEvent.click(within(placed).getAllByRole('button', { name: '이 장면 연결 해제' })[0]!);
     });
-    expect(H.detachFromScenes).toHaveBeenCalledWith('thr-1', ['e1']);
+    expect(H.detachEvidenceFromScene).toHaveBeenCalledWith('thr-1', 'sc-proc', ['e1']);
+    expect(H.detachFromScenes).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: '미분류 근거 목록 닫기' }));
+    const reopenedSide = screen.getByTestId('evidence-map-side');
     // 메모 저장은 같은 관문(setSceneNote).
-    fireEvent.change(within(side).getByLabelText('장면 메모'), {
+    fireEvent.change(within(reopenedSide).getByLabelText('장면 메모'), {
       target: { value: '끝까지 붙들었다' },
     });
     await act(async () => {
-      fireEvent.click(within(side).getByRole('button', { name: '메모 저장' }));
+      fireEvent.click(within(reopenedSide).getByRole('button', { name: '메모 저장' }));
     });
     expect(H.setSceneNote).toHaveBeenCalledWith('thr-1', 'sc-proc', '끝까지 붙들었다');
   });
@@ -502,7 +515,7 @@ describe('장면 열(ADR-107)', () => {
     expect(H.detachFromScenes).toHaveBeenCalledWith('thr-1', ['e1']);
     // 같은 묶음 빈 자리에 놓기 — 열이 자리를 정하므로 위치를 저장하지 않는다.
     await drop('e2', threadDropId('thr-1'), { x: 80, y: 0 });
-    expect(Object.keys(window.localStorage).some((k) => k.includes('map'))).toBe(false);
+    expect(window.localStorage.getItem('ssampin.evidence-map.v1:sA')).toBeNull();
   });
 
   it('주제 제목을 누르면 오른쪽에 주제가 열린다 — 앞 주제 고르기·초안 쓰기·뼈대 고르기가 한 곳에', async () => {
@@ -523,6 +536,17 @@ describe('장면 열(ADR-107)', () => {
     // 장면이 없는 주제의 [뼈대 깔기] → 인라인 뼈대 칸이 그 주제로 열린다.
     fireEvent.click(within(side).getByRole('button', { name: /뼈대 깔기/ }));
     expect(screen.getByLabelText('뼈대를 적용할 주제')).toHaveProperty('value', 'thr-2');
+  });
+
+  it('뼈대 선택창을 닫고 같은 주제로 다시 열 수 있고 Escape로도 닫힌다', () => {
+    sceneBoard();
+    fireEvent.click(screen.getByRole('button', { name: '뼈대 깔기' }));
+    fireEvent.click(screen.getByRole('button', { name: '뼈대 고르기 닫기' }));
+    expect(screen.queryByTestId('scaffold-picker')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '뼈대 깔기' }));
+    expect(screen.getByLabelText('뼈대를 적용할 주제')).toHaveProperty('value', 'thr-2');
+    fireEvent.keyDown(screen.getByRole('region', { name: '뼈대 고르기' }), { key: 'Escape' });
+    expect(screen.queryByTestId('scaffold-picker')).toBeNull();
   });
 
   it('★주제 사이 화살표의 이음말 라벨을 누르면 오른쪽에 주제 이음이 열리고, 저장은 setLink 로 간다', async () => {
@@ -550,6 +574,18 @@ describe('장면 열(ADR-107)', () => {
   });
 
   it('★장면 사이 화살표의 이음말 라벨을 누르면 오른쪽에 장면 이음이 열리고, 저장은 setSceneLeadIn 으로 간다', async () => {
+    H.setSceneLeadIn.mockImplementationOnce(async () => {
+      H.threads = H.threads.map((t) =>
+        t.id === 'thr-1'
+          ? {
+              ...t,
+              scenes: t.scenes?.map((s) =>
+                s.id === 'sc-proc' ? { ...s, leadIn: '판단의 근거를 찾아' } : s,
+              ),
+            }
+          : t,
+      );
+    });
     sceneBoard();
     // 평가 → 과정 (평가는 저장된 장면이라 화살표가 있다). 자리 미정으로 가는 화살표는 없다.
     const label = screen.getByRole('button', { name: '평가에서 과정로 이어짐, 이음말 없음' });

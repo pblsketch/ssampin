@@ -51,6 +51,8 @@ export const NARRATIVE_ROLE_MARKS: Readonly<Record<NarrativeRole, string>> = {
 export interface NarrativeParagraph {
   readonly role: NarrativeRole | null;
   readonly text: string;
+  /** 생성 요청의 장면 차례. 같은 역할의 여러 장면도 구별하며 저장 본문에는 넣지 않는다. */
+  readonly sceneIndex?: number;
 }
 
 /**
@@ -60,6 +62,7 @@ export interface NarrativeParagraph {
 export interface RoleMark {
   readonly role: NarrativeRole | null;
   readonly text: string;
+  readonly sceneIndex?: number;
 }
 
 /**
@@ -121,18 +124,81 @@ export function parseNarrativeParagraphs(text: string): NarrativeParagraph[] {
   return splitParagraphs(text).map((raw) => {
     let body = raw;
     let role: NarrativeRole | null = null;
+    const sceneMark = /^\s*\[장면\s+(\d+)\]\s*/.exec(body);
+    const sceneIndex = sceneMark ? Number(sceneMark[1]) : undefined;
+    if (sceneMark) body = body.slice(sceneMark[0].length);
     // 첫머리에 연달아 붙은 표식을 전부 뗀다(첫 것이 역할).
     for (let guard = 0; guard < 3; guard += 1) {
       const m = MARK_HEAD.exec(body);
       if (!m) break;
       const word = m[1] ?? m[2] ?? m[3] ?? m[4] ?? m[5] ?? '';
+      if (sceneIndex !== undefined && word.trim() === '본문') {
+        body = body.slice(m[0].length);
+        break;
+      }
       const r = roleOfWord(word);
       if (r === null) break; // 모르는 낱말 — 표식이 아니다.
       if (role === null) role = r;
       body = body.slice(m[0].length);
     }
-    return { role, text: body.trim() };
+    return { role, text: body.trim(), ...(sceneIndex === undefined ? {} : { sceneIndex }) };
   });
+}
+
+/** 생성 결과에만 적용한다. 근거 원문이나 선생님이 쓴 글은 바꾸지 않는다. */
+export function normalizeGeneratedRecordText(text: string): string {
+  return text.replace(/[ \t]*[·ㆍ・‧][ \t]*/g, ', ');
+}
+
+export function parseGeneratedNarrativeParagraphs(text: string): NarrativeParagraph[] {
+  const parsed = parseNarrativeParagraphs(text);
+  const paragraphs = parsed.some((p) => p.sceneIndex !== undefined)
+    ? parsed.filter((p) => p.sceneIndex !== undefined || p.role !== null)
+    : dropUnmarkedParagraphs(parsed);
+  return paragraphs.map((p) => ({
+    ...p,
+    text: normalizeGeneratedRecordText(p.text),
+  }));
+}
+
+export interface NarrativeSceneOrderEntry {
+  readonly sceneIndex: number;
+  readonly role: NarrativeRole | null;
+}
+
+/** 근거 없는 장면 생략은 허용하지만, 역할만 보고 반복 장면의 순서를 추측하지 않는다. */
+export function narrativeSceneOrderError(
+  paragraphs: readonly NarrativeParagraph[],
+  expected: readonly NarrativeSceneOrderEntry[] | undefined,
+): string | null {
+  if (!expected || expected.length === 0) return null;
+  let last = -1;
+  for (const p of paragraphs) {
+    const at = expected.findIndex((s) => s.sceneIndex === p.sceneIndex && s.role === p.role);
+    if (at < 0 || at <= last) {
+      return 'AI가 근거 지도에 정한 장면 순서나 장면 표식을 지키지 않아 초안을 저장하지 않았습니다. 다시 작성해 주세요.';
+    }
+    last = at;
+  }
+  return paragraphs.length === 0 ? 'AI가 작성한 장면이 없어 초안을 저장하지 않았습니다.' : null;
+}
+
+/** 분량을 고쳐도 원래 장면 차례를 유지한다. 옛 초안에는 번호가 없어 순서를 추측하지 않는다. */
+export function narrativeSceneOrderOf(
+  paragraphs: readonly NarrativeParagraph[],
+): readonly NarrativeSceneOrderEntry[] | undefined {
+  if (!paragraphs.some((p) => p.sceneIndex !== undefined)) return undefined;
+  return paragraphs.flatMap((p) =>
+    p.sceneIndex !== undefined ? [{ sceneIndex: p.sceneIndex, role: p.role }] : [],
+  );
+}
+
+/** 여러 판을 잇는 순간에는 합친 본문의 차례로 번호를 새로 매긴다. 역할 없는 원문도 한 자리로 보존한다. */
+export function renumberNarrativeScenes(
+  paragraphs: readonly NarrativeParagraph[],
+): NarrativeParagraph[] {
+  if (!paragraphs.some((p) => p.sceneIndex !== undefined)) return [...paragraphs];
+  return paragraphs.map((p, i) => ({ ...p, sceneIndex: i + 1 }));
 }
 
 /**
@@ -165,7 +231,7 @@ export function dropUnmarkedParagraphs(
 
 /** 문단 목록 → 저장용 표식(순서 보존, 역할 없는 문단은 null). */
 export function roleMarksOf(paragraphs: readonly NarrativeParagraph[]): RoleMark[] {
-  return paragraphs.map((p) => ({ role: p.role, text: p.text }));
+  return paragraphs.map((p) => ({ ...p }));
 }
 
 /**
@@ -175,7 +241,14 @@ export function roleMarksOf(paragraphs: readonly NarrativeParagraph[]): RoleMark
  */
 export function markedNarrativeText(paragraphs: readonly NarrativeParagraph[]): string {
   return paragraphs
-    .map((p) => (p.role === null ? p.text : `[${NARRATIVE_ROLE_MARKS[p.role]}] ${p.text}`))
+    .map((p) => {
+      const scene = p.sceneIndex === undefined ? '' : `[장면 ${p.sceneIndex}] `;
+      return p.role === null
+        ? p.sceneIndex === undefined
+          ? p.text
+          : `${scene}[본문] ${p.text}`
+        : `${scene}[${NARRATIVE_ROLE_MARKS[p.role]}] ${p.text}`;
+    })
     .join('\n\n');
 }
 
@@ -290,12 +363,27 @@ export interface NarrativeMarkOptions {
   readonly firstIsEvaluation?: boolean;
   /** 참이면 순서를 아예 말하지 않는다 — 이미 쓰인 글에 표식만 붙일 때([다시 표시]). */
   readonly keepExistingOrder?: boolean;
+  readonly sceneOrder?: readonly NarrativeSceneOrderEntry[];
 }
 
 export function narrativeMarkInstruction(options: NarrativeMarkOptions = {}): string {
   const head =
     '문단마다 줄 첫머리에 그 문단의 역할을 [평가] [동기] [과정] [결과] 중 하나로 표시하세요. ' +
     '표식은 문단 첫머리에만, 한 문단에 하나만 씁니다. 문단 사이는 빈 줄로 나눕니다. ';
+  if (options.sceneOrder && options.sceneOrder.length > 0) {
+    const order = options.sceneOrder
+      .map(
+        (s) =>
+          `[장면 ${s.sceneIndex}] [${s.role === null ? '본문' : NARRATIVE_ROLE_MARKS[s.role]}]`,
+      )
+      .join(' → ');
+    return (
+      `장면마다 한 문단으로 쓰고 첫머리에 장면 번호와 역할을 함께 붙입니다. ${order} 차례를 지킵니다. ` +
+      '같은 역할이라도 다른 장면을 합치거나 자리를 바꾸지 마세요. 근거 없는 평가 외 장면은 생략할 수 있지만 번호는 다시 매기지 않습니다. ' +
+      '평가 장면은 직접 연결된 근거가 없어도 제공된 전체 근거를 종합해 정한 자리에 씁니다. 전체 근거에도 없는 평가는 지어내지 않습니다. ' +
+      '문단 사이는 빈 줄로 나눕니다. 교사 평가도 지도에 놓인 자리에서 쓰고 앞이나 뒤로 옮기지 않습니다.'
+    );
+  }
   if (options.keepExistingOrder === true) {
     return `${head}이미 쓰인 글의 차례를 그대로 두고 표식만 붙입니다.`;
   }

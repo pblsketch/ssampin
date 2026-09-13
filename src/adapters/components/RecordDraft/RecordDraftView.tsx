@@ -33,7 +33,12 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useCurriculumStandards } from '@adapters/hooks/useCurriculumStandards';
 import { standardKeywords, standardsForCodes } from '@domain/rules/curriculumStandardRules';
 import type { ObservationRecord } from '@domain/entities/Observation';
-import type { RoleMark } from '@domain/rules/narrativeParagraphs';
+import {
+  markedNarrativeText,
+  narrativeSceneOrderOf,
+  sameNarrativeBody,
+  type RoleMark,
+} from '@domain/rules/narrativeParagraphs';
 import { RecordDraftExportModal } from '@adapters/components/Homeroom/Records/RecordDraftExportModal';
 import { RecordEvidenceBoard } from '@adapters/components/RecordDraft/RecordEvidenceBoard';
 import {
@@ -767,6 +772,12 @@ export function RecordDraftView({
         aiBusyRef.current = false;
       }, LENGTH_ADJUST_TIMEOUT_MS);
       try {
+        const liveSource = sourceText ?? readLiveText(studentRef);
+        const marks = getDraft(activeArea, studentRef, subject)?.roleMarks;
+        const markedSource =
+          marks && narrativeSceneOrderOf(marks) && sameNarrativeBody(liveSource, marks)
+            ? markedNarrativeText(marks)
+            : liveSource;
         const outcome = await runLengthAdjust({
           api,
           provider: runProviderForLength,
@@ -776,7 +787,7 @@ export function RecordDraftView({
             studentName: displayName,
             roster,
             areaLabel: RECORD_AREA_LABELS[activeArea],
-            sourceText: sourceText ?? readLiveText(studentRef),
+            sourceText: markedSource,
             targetBytes,
             ...(threadTitle !== undefined ? { threadTitle } : {}),
             ...(kind === 'expand' ? { evidences } : {}),
@@ -787,13 +798,13 @@ export function RecordDraftView({
         // 늦게 온 결과는 버린다 — 그 사이 다른 실행이 시작됐다면 이 결과는 화면의 것이 아니다.
         if (token !== aiRunTokenRef.current)
           throw new Error('다른 작업이 시작되어 결과를 버렸어요.');
-        return outcome;
+        return { ...outcome, sourceText: liveSource };
       } finally {
         clearTimeout(timeout);
         aiBusyRef.current = false;
       }
     },
-    [runProviderForLength, installId, roster, activeArea, readLiveText],
+    [runProviderForLength, installId, roster, activeArea, readLiveText, getDraft, subject],
   );
 
   /**
@@ -843,7 +854,7 @@ export function RecordDraftView({
         picked.paragraphs.some((p) => p.role !== null)
           ? picked.paragraphs
               .filter((p) => p.text.trim().length > 0)
-              .map((p) => ({ role: p.role, text: p.text.trim() }))
+              .map((p) => ({ ...p, text: p.text.trim() }))
           : null,
         // 조절 대상 판이 딛고 있던 주제를 초안 칸에도 그대로 물려준다.
         threadId,

@@ -883,8 +883,8 @@ const presenceChecks = [
   {
     file: 'src/domain/services/recordDraftPack.ts',
     pattern:
-      /if \(input\.targetBytes !== undefined && !isThinEvidence\(evidenceBytes, input\.targetBytes\)\) \{[\s\S]{0,400}?'마무리: 마지막 문장은[\s\S]{0,900}?근거에 없는 내용은 쓰지 마세요/,
-    name: 'REGRESSION #117: 마무리 지시는 근거가 얇으면 붙지 않고, 붙으면 되짚기 backstop 바로 앞에 온다',
+      /if\s*\(\s*input\.targetBytes !== undefined &&\s*!isThinEvidence\(evidenceBytes, input\.targetBytes\) &&\s*!emitComposition\s*\) \{[\s\S]{0,400}?'마무리: 마지막 문장은[\s\S]{0,1100}?근거에 없는 내용은 쓰지 마세요/,
+    name: 'REGRESSION #117: 결과 마무리는 근거가 충분한 기본 경로에만 붙이고 명시한 구성을 우선하며, 뒤에 근거 되짚기 backstop을 둔다',
   },
 ];
 

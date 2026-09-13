@@ -10,7 +10,7 @@
  *
  * ★전문은 여기 없다. 고르면 오른쪽에서 기존 근거 카드(전문·메모·원본 비교·AI 제외)를 그대로 본다.
  */
-import { useDraggable } from '@dnd-kit/core';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import type { CSSProperties, ReactElement } from 'react';
 
 import { EVIDENCE_SOURCE_LABELS, type RecordEvidence } from '@domain/entities/RecordEvidence';
@@ -26,6 +26,8 @@ export interface EvidenceMapNodeProps {
   readonly differsFromSource: boolean;
   readonly style: CSSProperties;
   onSelect: () => void;
+  onToggleSelected?: () => void;
+  readonly locked?: boolean;
 }
 
 export function evidenceHead(content: string, n = 16): string {
@@ -41,8 +43,18 @@ export function EvidenceMapNode({
   differsFromSource,
   style,
   onSelect,
+  onToggleSelected,
+  locked = false,
 }: EvidenceMapNodeProps): ReactElement {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: ev.id });
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: ev.id,
+    disabled: locked,
+  });
+  const drop = useDroppable({
+    id: `drop:before:${ev.id}`,
+    disabled: locked || isDragging,
+    data: { label: '이 근거 앞에 놓기' },
+  });
   const excluded = ev.excludedFromAi === true;
   const note = ev.note?.trim() ?? '';
   const states: string[] = [];
@@ -53,7 +65,10 @@ export function EvidenceMapNode({
 
   return (
     <div
-      ref={setNodeRef}
+      ref={(node) => {
+        setNodeRef(node);
+        drop.setNodeRef(node);
+      }}
       {...attributes}
       {...listeners}
       role="button"
@@ -68,6 +83,7 @@ export function EvidenceMapNode({
       style={style}
       onClick={onSelect}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           onSelect();
@@ -75,11 +91,28 @@ export function EvidenceMapNode({
       }}
       className={`group/node absolute flex cursor-pointer flex-col gap-1 rounded-xl px-3 py-2 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sp-accent ${
         selected
-          ? 'bg-blue-500/10 ring-2 ring-sp-accent'
+          ? 'bg-sp-card ring-2 ring-sp-accent'
           : `${mirror ? 'bg-sp-surface' : 'bg-sp-card'} ring-1 ring-sp-border hover:ring-sp-muted`
-      } ${focused && !selected ? 'ring-2 ring-sp-muted' : ''} ${isDragging ? 'opacity-40' : ''}`}
+      } ${focused && !selected ? 'ring-2 ring-sp-accent' : ''} ${isDragging ? 'opacity-40' : ''}`}
     >
-      <p className="line-clamp-2 text-sm leading-snug text-sp-text" title={ev.content}>
+      {onToggleSelected && (
+        <input
+          type="checkbox"
+          checked={selected}
+          aria-label={`${evidenceHead(ev.content, 20)} 초안 근거 선택`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onChange={onToggleSelected}
+          className="absolute right-2 top-2 h-4 w-4 accent-sp-accent"
+        />
+      )}
+      {drop.isOver && (
+        <span className="absolute -top-2 inset-x-0 border-t-2 border-sp-accent text-xs text-sp-accent">
+          이 근거 앞에 놓기
+        </span>
+      )}
+      <p className="line-clamp-2 pr-5 text-sm leading-snug text-sp-text" title={ev.content}>
         {ev.content}
       </p>
       <div className="mt-auto flex items-center gap-1.5 text-xs text-sp-muted">

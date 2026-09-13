@@ -12,6 +12,7 @@
  * ★[이 뼈대 깔기]는 **되묻는다.** 이미 놓아 둔 근거의 자리가 바뀌는 일이라 한 번에 지나가면 안 된다.
  */
 import { useState } from 'react';
+import { CustomScaffoldEditor } from './CustomScaffoldEditor';
 
 import {
   builtInScaffolds,
@@ -37,7 +38,7 @@ export interface ScaffoldPickerProps {
   readonly frame: NarrativeFrameId;
   /** 선생님이 저장해 둔 뼈대. 내장 7종은 이 목록에 없다(앱이 들고 있다). */
   readonly scaffolds: readonly RecordScaffold[];
-  readonly onScaffoldsChange: (next: readonly RecordScaffold[]) => void;
+  readonly onScaffoldsChange: (next: readonly RecordScaffold[]) => void | Promise<void>;
   /** 고른 뼈대를 깐다. 실제 저장은 부르는 쪽이 한다. */
   readonly onApply: (scaffold: RecordScaffold) => void;
   /** 지금 이 주제에 놓여 있는 장면 배열. 있으면 「지금 배열을 뼈대로 저장」이 열린다. */
@@ -63,7 +64,7 @@ function SceneRow({
     <ol className="flex flex-wrap items-center gap-x-2 gap-y-1">
       {scenes.map((s, i) => (
         <li
-          key={`${s.role}-${s.moduleId ?? s.label ?? i}`}
+          key={`${i}-${s.role}-${s.moduleId ?? s.label ?? ''}`}
           className="inline-flex items-center gap-1 whitespace-nowrap text-xs text-sp-muted"
         >
           <span className="font-semibold text-sp-text">{i + 1}</span>
@@ -92,8 +93,12 @@ export function ScaffoldPicker({
   const [error, setError] = useState<string | null>(null);
   /** 예시 초안을 펼쳐 둔 내장 뼈대. 선생님은 이름이 아니라 **결과물**을 보고 고른다. */
   const [sampleFor, setSampleFor] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [createdId, setCreatedId] = useState<string | null>(null);
 
-  const choices = scaffoldChoices(builtInScaffolds(), scaffolds, frame);
+  const choices = [...scaffoldChoices(builtInScaffolds(), scaffolds, frame)].sort(
+    (a, b) => Number(b.id === createdId) - Number(a.id === createdId),
+  );
 
   const spoken = (s: RecordScaffold): string =>
     `${s.name}. 장면 ${s.scenes.length}개. ${s.scenes
@@ -149,6 +154,34 @@ export function ScaffoldPicker({
         자유롭게 옮기고 지울 수 있습니다.
       </p>
 
+      {creating ? (
+        <CustomScaffoldEditor
+          frame={frame}
+          scaffolds={scaffolds}
+          onSave={onScaffoldsChange}
+          onCancel={() => setCreating(false)}
+          onDone={(id) => {
+            setCreatedId(id);
+            setCreating(false);
+          }}
+        />
+      ) : (
+        <div>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => setCreating(true)}
+            className={`${btn} bg-sp-card text-sp-text ring-1 ring-sp-border`}
+          >
+            + 새 뼈대 만들기
+          </button>
+        </div>
+      )}
+      {createdId && !creating && (
+        <p role="status" className="text-xs text-sp-muted">
+          새 뼈대를 저장했습니다. [이 뼈대 깔기]로 이 주제에 적용할 수 있습니다.
+        </p>
+      )}
       <ul className="flex flex-col gap-1.5">
         {choices.map((s) => {
           const isSelected = s.id === selectedId;
