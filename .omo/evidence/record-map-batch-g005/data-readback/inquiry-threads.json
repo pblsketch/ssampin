@@ -1,0 +1,318 @@
+{
+  "records": [
+    {
+      "id": "rec-test-thread-b",
+      "studentRef": "tc:rec-test-class:3-8-2",
+      "classId": "rec-test-class",
+      "title": "차별과 구별",
+      "keywords": [],
+      "status": "open",
+      "term": "2026-1",
+      "createdAt": 1789289704175,
+      "updatedAt": 1789289704175
+    },
+    {
+      "id": "rec-test-thread-f",
+      "studentRef": "tc:rec-test-class:3-8-2",
+      "classId": "rec-test-class",
+      "title": "장면을 상한까지 놓아 본 주제",
+      "keywords": [],
+      "status": "open",
+      "term": "2026-1",
+      "createdAt": 1789289704175,
+      "updatedAt": 1789289704175,
+      "scenes": [
+        {
+          "id": "rec-test-sc-thread-f-1",
+          "role": "evaluation",
+          "moduleId": "teacherJudgement",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-2",
+          "role": "motive",
+          "moduleId": "legacyMotive",
+          "evidenceIds": ["rec-test-ev-f1"]
+        },
+        {
+          "id": "rec-test-sc-thread-f-3",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-4",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-5",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-6",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-7",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-8",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-9",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-10",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-11",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-12",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-13",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-14",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-15",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-16",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-17",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-18",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-19",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-f-20",
+          "role": "result",
+          "moduleId": "legacyResult",
+          "evidenceIds": ["rec-test-ev-f2"]
+        }
+      ]
+    },
+    {
+      "id": "rec-test-thread-g",
+      "studentRef": "tc:rec-test-class:3-8-3",
+      "classId": "rec-test-class",
+      "title": "모둠 신문 만들기",
+      "keywords": ["신문", "모둠"],
+      "status": "open",
+      "term": "2026-1",
+      "createdAt": 1789289704175,
+      "updatedAt": 1789289704175,
+      "scenes": [
+        {
+          "id": "rec-test-sc-thread-g-1",
+          "role": "evaluation",
+          "moduleId": "teacherJudgement",
+          "evidenceIds": [],
+          "note": "맡은 자리에서 스스로 기준을 세우고 마감을 지키는 학생이다.",
+          "noteSource": "teacher"
+        },
+        {
+          "id": "rec-test-sc-thread-g-2",
+          "role": "motive",
+          "moduleId": "legacyMotive",
+          "evidenceIds": ["rec-test-ev-g1"]
+        },
+        {
+          "id": "rec-test-sc-thread-g-3",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": ["rec-test-ev-g2", "rec-test-ev-g3"]
+        },
+        {
+          "id": "rec-test-sc-thread-g-4",
+          "role": "result",
+          "moduleId": "legacyResult",
+          "evidenceIds": ["rec-test-ev-g4"]
+        }
+      ]
+    },
+    {
+      "id": "rec-test-thread-a",
+      "studentRef": "tc:rec-test-class:3-8-1",
+      "classId": "rec-test-class",
+      "title": "소비 선택과 준거점 — 사회문제 탐구 보고서",
+      "keywords": ["설문", "준거점", "할인", "표본", "소비"],
+      "standardCodes": ["[10통사2-02-01]"],
+      "competencyKeywords": ["경제 현상에 대한 자료 해석력"],
+      "nextNotes": "다음 학기에 표본을 다른 학년까지 넓혀 볼 것.",
+      "status": "open",
+      "term": "2026-1",
+      "createdAt": 1789289704175,
+      "updatedAt": 1789289704175,
+      "scenes": [
+        {
+          "id": "rec-test-sc-thread-a-1",
+          "role": "evaluation",
+          "moduleId": "teacherJudgement",
+          "evidenceIds": [],
+          "note": "근거를 모으는 단계에서 이미 \"무엇을 비교할지\"를 먼저 정하는 학생이다.",
+          "noteSource": "teacher"
+        },
+        {
+          "id": "rec-test-sc-thread-a-2",
+          "role": "motive",
+          "moduleId": "legacyMotive",
+          "evidenceIds": ["rec-test-ev-1"]
+        },
+        {
+          "id": "rec-test-sc-thread-a-3",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": ["rec-test-ev-2", "rec-test-ev-3"],
+          "note": "설문 문항의 유도성을 스스로 지적하고 중립 문항으로 바꾼 대목이 이 자리에 맞습니다.",
+          "noteSource": "ai"
+        },
+        {
+          "id": "rec-test-sc-thread-a-4",
+          "role": "result",
+          "moduleId": "legacyResult",
+          "evidenceIds": ["rec-test-ev-4"]
+        }
+      ]
+    },
+    {
+      "id": "rec-test-thread-c",
+      "studentRef": "tc:rec-test-class:3-8-1",
+      "classId": "rec-test-class",
+      "title": "지역 청년 실업 통계 읽기",
+      "keywords": ["실업", "통계", "경제활동인구"],
+      "nextNotes": "통계 정의를 따지는 습관이 자리 잡았다. 마무리함.",
+      "status": "closed",
+      "term": "2026-1",
+      "createdAt": 1789289704175,
+      "updatedAt": 1789289704175,
+      "scenes": [
+        {
+          "id": "rec-test-sc-thread-c-1",
+          "role": "evaluation",
+          "moduleId": "teacherJudgement",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-c-2",
+          "role": "result",
+          "moduleId": "legacyResult",
+          "evidenceIds": ["rec-test-ev-9"]
+        }
+      ]
+    },
+    {
+      "id": "rec-test-thread-d",
+      "studentRef": "tc:rec-test-class:3-8-1",
+      "classId": "rec-test-class",
+      "title": "청년 실업 통계로 지역 정책 제안하기",
+      "keywords": ["실업", "정책", "제안"],
+      "competencyKeywords": ["자료를 근거로 대안을 세우는 힘"],
+      "link": {
+        "fromThreadId": "rec-test-thread-a",
+        "note": "기초에서 확장"
+      },
+      "status": "open",
+      "term": "2026-1",
+      "createdAt": 1789289704175,
+      "updatedAt": 1789289704175,
+      "scenes": [
+        {
+          "id": "rec-test-sc-thread-d-1",
+          "role": "evaluation",
+          "moduleId": "teacherJudgement",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-d-2",
+          "role": "motive",
+          "moduleId": "legacyMotive",
+          "evidenceIds": ["rec-test-ev-d1"],
+          "note": "앞 주제에서 세운 통계 읽기를 정책으로 밀고 나간 자리.",
+          "noteSource": "teacher"
+        },
+        {
+          "id": "rec-test-sc-thread-d-3",
+          "role": "process",
+          "moduleId": "legacyProcess",
+          "evidenceIds": ["rec-test-ev-d2"]
+        },
+        {
+          "id": "rec-test-sc-thread-d-4",
+          "role": "process",
+          "moduleId": "counterReview",
+          "evidenceIds": []
+        },
+        {
+          "id": "rec-test-sc-thread-d-5",
+          "role": "result",
+          "moduleId": "legacyResult",
+          "evidenceIds": ["rec-test-ev-d3"]
+        }
+      ]
+    },
+    {
+      "id": "rec-test-thread-e",
+      "studentRef": "tc:rec-test-class:3-8-1",
+      "classId": "rec-test-class",
+      "title": "학급 자치 규칙을 만들고 지키는 과정에서 드러난 조정 능력에 대한 관찰 기록",
+      "keywords": [],
+      "status": "open",
+      "term": "2026-1",
+      "createdAt": 1789289704175,
+      "updatedAt": 1789289704175
+    }
+  ]
+}

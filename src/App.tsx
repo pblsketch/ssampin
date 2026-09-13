@@ -159,6 +159,7 @@ import { ToolPopupApp } from '@adapters/components/Tools/popup/ToolPopupApp';
 import { MainToolPopupHost } from '@adapters/components/Tools/popup/MainToolPopupHost';
 import { useToolPopupStore } from '@adapters/stores/useToolPopupStore';
 import { getToolPopupBridge } from '@adapters/components/Tools/popup/toolPopupBridge';
+import { recoverRecordMapApplicationsAtStartup } from '@adapters/di/container';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -816,6 +817,11 @@ function WidgetApp() {
 }
 
 function MainApp() {
+  useEffect(() => {
+    void recoverRecordMapApplicationsAtStartup().catch((error: unknown) => {
+      console.error('[RecordMapRecovery] startup recovery failed', error);
+    });
+  }, []);
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);

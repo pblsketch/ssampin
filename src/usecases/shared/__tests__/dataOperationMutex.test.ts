@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { withDataOperationLock } from '../dataOperationMutex';
+import { setDataOperationRecoveryBarrier, withDataOperationLock } from '../dataOperationMutex';
 import { SyncToCloud } from '@usecases/sync/SyncToCloud';
 import type { IStoragePort } from '@domain/ports/IStoragePort';
 import type { IDriveSyncPort } from '@domain/ports/IDriveSyncPort';
@@ -104,5 +104,31 @@ describe('withDataOperationLock', () => {
     releaseFirst();
     await Promise.all([first, second]);
     expect(secondGetFolder).toHaveBeenCalledOnce();
+  });
+
+  it('blocks cloud sync while record-map recovery is unresolved', async () => {
+    const getFolder = vi.fn(async () => ({ id: 'folder', name: 'sync' }));
+    const sync = new SyncToCloud(
+      {
+        read: vi.fn(),
+        write: vi.fn(),
+        remove: vi.fn(),
+        readBinary: vi.fn(),
+        writeBinary: vi.fn(),
+        removeBinary: vi.fn(),
+        listBinary: vi.fn(),
+      } as unknown as IStoragePort,
+      { getOrCreateSyncFolder: getFolder } as unknown as IDriveSyncPort,
+      {} as IDriveSyncRepository,
+      'device',
+      'device',
+    );
+    setDataOperationRecoveryBarrier(true);
+    try {
+      await expect(sync.execute()).rejects.toThrow('근거 지도 저장 복구');
+      expect(getFolder).not.toHaveBeenCalled();
+    } finally {
+      setDataOperationRecoveryBarrier(false);
+    }
   });
 });

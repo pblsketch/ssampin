@@ -22,7 +22,7 @@ import type {
   OwnAiProviderId,
   OwnAiRunEvent,
 } from '@domain/entities/OwnAiProvider';
-import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
+import { isOwnAiErrorKind, OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 
 /** 실행 실패를 그대로 던진다 — 합성 포트가 이걸 보고 폴백할지 정한다. */
 export class OwnAiRunError extends Error {
@@ -44,7 +44,7 @@ interface OwnAiBridgeApi {
     prompt: string;
     appendSystemPrompt?: string;
     attachments?: readonly AssistAttachmentPayload[];
-  }): Promise<{ ok: boolean; reason?: string }>;
+  }): Promise<{ ok: boolean; reason?: OwnAiErrorKind }>;
   cancel(runId: string): void;
   onEvent(handler: (event: unknown) => void): () => void;
 }
@@ -154,7 +154,8 @@ export class OwnAiAssistPort implements AssistPort, CancelableAssistPort {
           if (!r.ok && !settled) {
             settled = true;
             off();
-            const kind = r.reason === 'write-server-unavailable' ? r.reason : 'crashed';
+            if (this.activeRunId === runId) this.activeRunId = null;
+            const kind = isOwnAiErrorKind(r.reason) ? r.reason : 'crashed';
             reject(new OwnAiRunError(kind, OWN_AI_ERROR_MESSAGES[kind].panel));
           }
         })
@@ -162,6 +163,7 @@ export class OwnAiAssistPort implements AssistPort, CancelableAssistPort {
           if (settled) return;
           settled = true;
           off();
+          if (this.activeRunId === runId) this.activeRunId = null;
           reject(
             e instanceof Error
               ? e

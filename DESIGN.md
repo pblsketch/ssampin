@@ -7,7 +7,7 @@
 - Primary product surfaces: 학급 운영·수업 관리 > 생기부 초안 > 근거 정리 > 지도.
 - Evidence reviewed: `docs/design-system.md`, `.impeccable.md`, `docs/architecture-rules.md`, `docs/coding-conventions.md`, ADR-103·106~109의 관련 결정 및 현재 지도 소스, 기존 실행 기록과 `tmp/e2e/map-scenelinks-1.png`·`map-scenelinks-2.png`, `design examples/ssampin_memo_and_notes_screen/screen.png`, 사용자 제공 Manyfast 이미지 3장, https://manyfast.io/ko/.
 - 상세 계약: [근거 지도 비교·개선 설계](docs/02-design/features/record-evidence-map-manyfast.design.md). 근거·미검증 범위는 그 문서 §1을 따른다.
-- Draft extension (2026-09-13): [여러 학생의 AI 지도 제안](docs/02-design/features/record-evidence-map-batch-ai.design.md). 대상 학생·확인 간격·뼈대 정책을 분리하고 학생별 검토 후 적용한다. 구현·실제 AI·사용성은 미검증이며 기존 Active 계약을 대체하지 않는다.
+- Implemented extension (2026-09-13, 미배포): [여러 학생의 AI 지도 제안](docs/02-design/features/record-evidence-map-batch-ai.design.md). 대상 학생·확인 간격·뼈대 정책을 분리하고 학생별 검토 후 적용한다. Electron에서 실제 Codex 1명 제안, 적용·되돌리기, 반 전체 중단·복원·이어 하기, 1279×801·1439×901 화면을 확인했다. 고정 뼈대 실제 화면 완주, AI 주제별 뼈대 선택, 담임 실제 화면은 미검증이며 기존 Active 계약을 대체하지 않는다.
 
 ## Brand
 

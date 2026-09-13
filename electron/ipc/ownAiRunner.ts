@@ -206,7 +206,12 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
     return activeUntil;
   }
 
-  /** 패널 실행은 동시에 하나만. 두 개가 겹치면 활성값이 서로를 덮어쓴다. */
+  /** 앱 전체에서 실행은 동시에 하나만. 패널과 초안이 겹치면 상태와 안내가 꼬인다. */
+  function hasActiveRun(): boolean {
+    return runs.size > 0;
+  }
+
+  /** 패널 실행이 진행 중인지. 기존 쓰기 게이트 상태 점검용으로 유지한다. */
   function hasActivePanelRun(): boolean {
     for (const r of runs.values()) if (r.kind === 'panel') return true;
     return false;
@@ -246,7 +251,7 @@ export function createOwnAiRunner(deps: OwnAiRunnerDeps) {
   }
 
   function start(req: OwnAiRunRequest): { ok: boolean; kind?: 'not-installed' | 'busy' } {
-    if (req.kind === 'panel' && hasActivePanelRun()) return { ok: false, kind: 'busy' };
+    if (hasActiveRun()) return { ok: false, kind: 'busy' };
 
     const launch = deps.launch(req.provider);
     if (!launch) {

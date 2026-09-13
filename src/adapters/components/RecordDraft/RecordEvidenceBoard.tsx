@@ -59,6 +59,7 @@ import {
 import type { InquiryThread } from '@domain/entities/InquiryThread';
 import { NARRATIVE_SCENE_MAX, sortThreadsForDisplay } from '@domain/entities/InquiryThread';
 import type { OwnAiErrorKind } from '@domain/entities/OwnAiProvider';
+import type { RecordMapScaffoldSnapshot } from '@domain/entities/RecordMapProposal';
 import {
   buildThreadTimeline,
   emptyLinkHints,
@@ -164,6 +165,8 @@ import type { EvidenceCandidate } from '@usecases/studentRecords/collectEvidence
 import { hasProhibitedTerms } from '@domain/rules/prohibitedRecordTerms';
 import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { DND_KO_ACCESSIBILITY } from '@adapters/components/common/dndAccessibility';
+import { RecordMapBatchPanel } from '@adapters/components/RecordDraft/RecordMapBatchPanel';
+import { useRecordMapRunStore } from '@adapters/stores/useRecordMapRunStore';
 
 /** 작성주체(담임/교과) — 노출 영역 집합을 결정. */
 type RecordContext = 'homeroom' | 'teaching';
@@ -557,6 +560,9 @@ export function RecordEvidenceBoard({
   >(null);
   /** [AI로 정리 제안 ▾] 메뉴. */
   const [organizeOpen, setOrganizeOpen] = useState(false);
+  const batchPanelOpen = useRecordMapRunStore((state) => state.open);
+  const openBatchPanel = useRecordMapRunStore((state) => state.openFor);
+  const closeBatchPanel = useRecordMapRunStore((state) => state.close);
   const organizeBtnRef = useRef<HTMLButtonElement | null>(null);
   const [mapZoom, setMapZoom] = useState(1);
 
@@ -1083,7 +1089,31 @@ export function RecordEvidenceBoard({
   //   바꾸면 생활 뼈대 id 가 교과 자리에 저장돼 표시가 엉뚱한 곳을 가리켰다.
   const scaffoldAreaKey = singleArea ?? initialArea ?? 'subject';
   const selectedScaffoldId = savedAreaScaffolds?.[scaffoldAreaKey];
-
+  const mapScaffoldConfigurationForArea = useCallback(
+    (
+      area: RecordArea,
+    ): {
+      readonly candidates: readonly RecordMapScaffoldSnapshot[];
+      readonly defaultScaffold: RecordMapScaffoldSnapshot;
+    } => {
+      const areaFrame = frameForArea(area);
+      const candidates = scaffoldChoices(builtInScaffolds(), savedScaffolds ?? [], areaFrame).map(
+        (scaffold) => ({
+          id: scaffold.id,
+          name: scaffold.name,
+          frame: scaffold.frame,
+          scenes: scaffold.scenes,
+          ...(scaffold.builtIn === undefined ? {} : { builtIn: scaffold.builtIn }),
+        }),
+      );
+      const defaultScaffold =
+        candidates.find((scaffold) => scaffold.id === savedAreaScaffolds?.[area]) ?? candidates[0];
+      if (defaultScaffold === undefined)
+        throw new Error('현재 영역에서 사용할 뼈대를 찾을 수 없습니다.');
+      return { candidates, defaultScaffold };
+    },
+    [savedAreaScaffolds, savedScaffolds],
+  );
   /** 서랍의 줄기 — 영역 필터와 무관하게 그 주제 전부. */
   const openThreadEvidence = useMemo(
     () => (openThread ? studentEvidence.filter((e) => e.threadId === openThread.id) : []),
@@ -2088,6 +2118,29 @@ export function RecordEvidenceBoard({
           <p className="px-3 py-2 text-xs text-sp-muted">
             장면 배치 제안은 설정 &gt; AI 연결에서 내 AI 를 연결하면 쓸 수 있습니다.
           </p>
+        )}
+        {runProvider !== null && (
+          <>
+            <div role="separator" className="my-1 border-t border-sp-border" />
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOrganizeOpen(false);
+                openBatchPanel(
+                  `${context}:${classId ?? 'homeroom'}:${singleArea ?? areaFilter ?? 'all'}`,
+                  student?.studentRef ?? null,
+                  singleArea ?? areaFilter,
+                );
+              }}
+              className={item}
+            >
+              <span className="font-medium">여러 학생의 지도 제안…</span>
+              <span className="text-sp-muted">
+                대상 학생, 확인 간격, 뼈대를 고르고 차례대로 제안받습니다.
+              </span>
+            </button>
+          </>
         )}
       </div>,
       rootRef.current ?? document.body,
@@ -4217,6 +4270,21 @@ export function RecordEvidenceBoard({
               {...(classId !== undefined ? { classId } : {})}
               {...(className !== undefined ? { className } : {})}
               onClose={() => setImporting(null)}
+            />
+          )}
+          {batchPanelOpen && runProvider !== null && (
+            <RecordMapBatchPanel
+              students={students}
+              currentStudentRef={student?.studentRef ?? null}
+              {...(classId === undefined ? {} : { classId })}
+              {...(className === undefined ? {} : { className })}
+              {...(classSubject === undefined ? {} : { classSubject })}
+              areas={areas}
+              initialArea={singleArea ?? areaFilter}
+              provider={runProvider}
+              roster={roster}
+              scaffoldConfigurationForArea={mapScaffoldConfigurationForArea}
+              onClose={closeBatchPanel}
             />
           )}
         </div>

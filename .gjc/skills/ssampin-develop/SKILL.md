@@ -11,10 +11,12 @@ Claude Code용 `.claude/skills/ssampin-develop` 을 GJC로 옮긴 것이다. 차
    Claude Code의 `ssampin-planner/domain/ui/infra/guard` 는 존재하지 않는다. 대신 **`roles/` 폴더의 역할 지침을 읽어
    `task` 의 `context`/`assignment` 에 그대로 붙여** 같은 전문성을 준다. 하위 에이전트는 대화 기록을 못 보므로 붙이지 않으면 아무것도 모른다.
 2. **구현은 순차가 기본이다.** AGENTS.md 는 병렬 구현을 지양한다. domain → infra → UI 순서로 한 번에 하나만 돌린다.
-   파일 집합이 완전히 겹치지 않는다고 확인한 경우에만 infra·UI 를 병렬로 돌릴 수 있고, 그때는 그 사실을 사용자 보고에 적는다.
+   분석·리뷰만 병렬로 수행한다. 구현은 파일 범위가 달라도 순차로 처리한다.
 3. **검증은 오케스트레이터(나)가 마지막에 한 번 한다.** 하위 에이전트에게 tsc·lint·test·포매터를 돌리게 하지 않는다(중복·충돌 방지).
 
 역할 지침 파일: `.gjc/skills/ssampin-develop/roles/{planner,domain,infra,ui,guard}.md` — 각 Phase 에서 `read` 로 읽어 붙인다.
+
+공용 규칙은 `docs/agent-workflow.md`, 릴리즈는 `docs/release-workflow.md`를 먼저 읽는다.
 
 ## 0. 시작 전 (AGENTS.md 세션 시작 규칙)
 

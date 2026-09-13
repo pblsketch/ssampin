@@ -6,6 +6,7 @@
  * `error/cancelled` 를 흘리므로 약속은 그 이벤트로 거절된다 — 여기서 따로 거절하지 않는다.
  */
 import type { OwnAiErrorKind, OwnAiRunEvent } from '@domain/entities/OwnAiProvider';
+import { isOwnAiErrorKind } from '@domain/rules/ownAiCliRules';
 
 export interface OwnAiRunApi {
   run(payload: {
@@ -90,7 +91,7 @@ export async function askOnce(
           settled = true;
           off();
           signal?.removeEventListener('abort', onAbort);
-          reject('crashed' satisfies OwnAiErrorKind);
+          reject(isOwnAiErrorKind(r.reason) ? r.reason : ('crashed' satisfies OwnAiErrorKind));
         }
       })
       .catch(() => {

@@ -109,4 +109,22 @@ describe('ElectronStorageAdapter.read — 오류는 null로 위장하지 않는�
       JSON.stringify({ value: 'remote' }, null, 2),
     );
   });
+
+  it('조건부 JSON 교체 IPC 오류를 성공으로 숨기지 않는다', async () => {
+    vi.stubGlobal('window', {
+      electronAPI: {
+        writeDataIfUnchanged: async () => {
+          throw new Error('두 번째 파일 저장 실패');
+        },
+      },
+    });
+
+    await expect(
+      new ElectronStorageAdapter().replaceIfUnchanged(
+        'inquiry-threads',
+        { records: [] },
+        { records: [{ id: 'thread-1' }] },
+      ),
+    ).rejects.toThrow('두 번째 파일 저장 실패');
+  });
 });

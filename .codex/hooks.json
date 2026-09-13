@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node -e \"const fs=require('fs'),path=require('path');let p=process.cwd();while(!fs.existsSync(path.join(p,'scripts/agent-git-guard.cjs'))){const next=path.dirname(p);if(next===p)throw Error('Project git guard not found');p=next;}require(path.join(p,'scripts/agent-git-guard.cjs'));\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

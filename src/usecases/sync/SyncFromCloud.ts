@@ -33,7 +33,10 @@ import {
   type GetBinaryDynamicSyncFiles,
 } from './SyncToCloud';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
-import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
+import {
+  assertDataOperationRecoveryClear,
+  withDataOperationLock,
+} from '@usecases/shared/dataOperationMutex';
 import { SYNC_FILE_KEYS } from './syncRegistry';
 import { base64ToUint8, uint8ToBase64 } from './binaryBase64';
 import { classifySyncThreeWay } from './syncThreeWay';
@@ -874,7 +877,10 @@ export class SyncFromCloud {
   }
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncFromCloudResult> {
-    return withDataOperationLock(() => this.executeUnlocked(onProgress));
+    return withDataOperationLock(() => {
+      assertDataOperationRecoveryClear();
+      return this.executeUnlocked(onProgress);
+    });
   }
 
   private async executeUnlocked(

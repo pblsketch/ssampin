@@ -252,6 +252,7 @@ interface VoiceTypingElectronAPI {
 /** "내 AI로 실행" 공급자·상태 — 정본은 `src/domain/entities/OwnAiProvider.ts`. */
 type OwnAiElectronProviderId = import('./domain/entities/OwnAiProvider').OwnAiProviderId;
 type OwnAiElectronConnection = import('./domain/entities/OwnAiProvider').OwnAiConnection;
+type OwnAiElectronErrorKind = import('./domain/entities/OwnAiProvider').OwnAiErrorKind;
 /**
  * "내 AI로 실행" — 선생님 본인 구독 CLI(Claude Code·Codex)를 쌤핀이 대신 띄운다.
  *
@@ -276,7 +277,7 @@ interface OwnAiElectronAPI {
     appendSystemPrompt?: string;
     /** 이미지 첨부(base64). 패널에서만, "내 AI" 로 답할 때만(ADR-090). */
     attachments?: readonly { name: string; mediaType: string; dataBase64: string }[];
-  }) => Promise<{ ok: boolean; reason?: string }>;
+  }) => Promise<{ ok: boolean; reason?: OwnAiElectronErrorKind }>;
   cancel: (runId: string) => void;
   /** 실행 중 이벤트 구독. 반환 함수를 부르면 구독을 끊는다. */
   onEvent: (handler: (event: unknown) => void) => () => void;

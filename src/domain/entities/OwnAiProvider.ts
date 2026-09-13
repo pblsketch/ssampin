@@ -90,6 +90,8 @@ export type OwnAiErrorKind =
   | 'prompt-rate-limited-minute'
   /** 규정 배급이 일간 한도에 걸렸다 — 오늘은 안 풀린다. 위와 안내가 달라야 한다 */
   | 'prompt-rate-limited-day'
+  /** 앱 안에서 다른 내 AI 실행이 진행 중이다 */
+  | 'busy'
   | 'cancelled'
   | 'crashed';
 

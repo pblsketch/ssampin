@@ -1,0 +1,9 @@
+{
+  "id": 1,
+  "result": {
+    "result": {
+      "type": "string",
+      "value": "[{\"text\":\"menu_open\",\"expanded\":\"true\",\"label\":\"사이드바 접기\"},{\"text\":\"미분류·자리 미정 9건\",\"expanded\":\"false\",\"label\":null},{\"text\":\"add근거arrow_drop_down\",\"expanded\":\"false\",\"label\":null},{\"text\":\"auto_awesomeAI로 정리 제안arrow_drop_down\",\"expanded\":\"false\",\"label\":null},{\"text\":\"expand_more\",\"expanded\":\"true\",\"label\":\"소비 선택과 준거점 — 사회문제 탐구 보고서 접기\"},{\"text\":\"+\",\"expanded\":\"false\",\"label\":\"동기 근거 펼치기\"},{\"text\":\"−\",\"expanded\":\"true\",\"label\":\"과정 근거 접기\"},{\"text\":\"−\",\"expanded\":\"true\",\"label\":\"결과 근거 접기\"},{\"text\":\"−\",\"expanded\":\"true\",\"label\":\"자리 미정 근거 접기\"},{\"text\":\"expand_more\",\"expanded\":\"true\",\"label\":\"청년 실업 통계로 지역 정책 제안하기 접기\"},{\"text\":\"−\",\"expanded\":\"true\",\"label\":\"동기 근거 접기\"},{\"text\":\"−\",\"expanded\":\"true\",\"label\":\"과정 근거 접기\"},{\"text\":\"−\",\"expanded\":\"true\",\"label\":\"결과 근거 접기\"},{\"text\":\"expand_more\",\"expanded\":\"true\",\"label\":\"학급 자치 규칙을 만들고 지키는 과정에서 드러난 조정 능력에 대한 관찰 기록 접기\"},{\"text\":\"expand_more\",\"expanded\":\"true\",\"label\":\"지역 청년 실업 통계 읽기 접기\"},{\"text\":\"−\",\"expanded\":\"true\",\"label\":\"결과 근거 접기\"},{\"text\":\"add주제\",\"expanded\":\"false\",\"label\":null}]"
+    }
+  }
+}

@@ -9,7 +9,10 @@ import type {
 } from '@domain/entities/DriveSyncState';
 import { driveSyncDeletionIdentity } from '@domain/entities/DriveSyncState';
 import { uint8ToBase64 } from './binaryBase64';
-import { withDataOperationLock } from '@usecases/shared/dataOperationMutex';
+import {
+  assertDataOperationRecoveryClear,
+  withDataOperationLock,
+} from '@usecases/shared/dataOperationMutex';
 import { toBinaryDriveFilename } from './binaryDriveFilename';
 import { SyncIntegrityError } from './SyncIntegrityError';
 import {
@@ -145,7 +148,10 @@ export class SyncToCloud {
   ) {}
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncToCloudResult> {
-    return withDataOperationLock(() => this.executeUnlocked(onProgress));
+    return withDataOperationLock(() => {
+      assertDataOperationRecoveryClear();
+      return this.executeUnlocked(onProgress);
+    });
   }
 
   private async executeUnlocked(

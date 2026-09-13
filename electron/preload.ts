@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { installDropGuard } from './security-guards';
+import type { OwnAiErrorKind } from '../src/domain/entities/OwnAiProvider';
 
 /** 저장 공간 상태 뷰 — main의 StorageStatePayload와 형태를 맞춘다. */
 interface StorageStateView {
@@ -75,7 +76,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       appendSystemPrompt?: string;
       /** 이미지 첨부(base64). 패널에서만, "내 AI" 로 답할 때만 온다(ADR-090). */
       attachments?: readonly { name: string; mediaType: string; dataBase64: string }[];
-    }): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke('ownAi:run', payload),
+    }): Promise<{ ok: boolean; reason?: OwnAiErrorKind }> =>
+      ipcRenderer.invoke('ownAi:run', payload),
     cancel: (runId: string): void => {
       ipcRenderer.send('ownAi:cancel', runId);
     },

@@ -51,7 +51,9 @@
     "check-flag-usage": "node scripts/check-flag-usage.mjs",
     "check-hex-hardcoding": "node scripts/check-hex-hardcoding.mjs",
     "check-sp-coverage": "node scripts/check-sp-coverage.mjs",
-    "icons:generate": "node scripts/generate-mascot-icons.mjs"
+    "icons:generate": "node scripts/generate-mascot-icons.mjs",
+    "test:harness": "node --test scripts/agent-harness.test.mjs",
+    "check:release-prep": "node scripts/check-release-prep.mjs"
   },
   "dependencies": {
     "@blocknote/ariakit": "~0.47.3",

@@ -185,12 +185,21 @@ export const OWN_AI_ERROR_MESSAGES: Readonly<
     panel: '오늘 받을 수 있는 횟수를 다 썼어요. 내일 다시 시도해 주세요.',
     draft: '오늘은 작성 규정을 받아올 수 있는 횟수를 다 썼어요. 내일 다시 눌러 주세요.',
   },
+  busy: {
+    panel: '다른 내 AI 작업이 실행 중이에요. 끝날 때까지 기다리거나 먼저 중단해 주세요.',
+    draft: '다른 내 AI 작업이 실행 중이에요. 끝날 때까지 기다리거나 먼저 중단해 주세요.',
+  },
   cancelled: { panel: '중단했어요.', draft: '중단했어요.' },
   crashed: {
     panel: '내 AI 실행이 도중에 멈췄어요.',
     draft: '내 AI 실행이 도중에 멈췄어요. 다시 시도해 주세요.',
   },
 };
+
+/** IPC 결과처럼 외부에서 들어온 문자열이 화면에 안내할 수 있는 오류 갈래인지 확인한다. */
+export function isOwnAiErrorKind(value: string | undefined): value is OwnAiErrorKind {
+  return value !== undefined && Object.prototype.hasOwnProperty.call(OWN_AI_ERROR_MESSAGES, value);
+}
 
 /**
  * 실패했을 때 쌤핀 AI 가 대신 답해도 되는가.

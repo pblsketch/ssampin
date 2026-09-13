@@ -203,6 +203,12 @@ describe('오류 분류 — 실제로 받은 문자열로 검증', () => {
 });
 
 describe('문구와 모델 목록', () => {
+  it('busy 오류는 다른 실행을 기다리거나 중단하라는 안내를 준다', () => {
+    expect(OWN_AI_ERROR_MESSAGES.busy.panel).toContain('다른 내 AI 작업');
+    expect(OWN_AI_ERROR_MESSAGES.busy.panel).toContain('중단');
+    expect(OWN_AI_ERROR_MESSAGES.busy.draft).toContain('다른 내 AI 작업');
+  });
+
   it('모든 오류 갈래에 패널·생기부 문구가 한국어로 있다', () => {
     for (const [kind, msg] of Object.entries(OWN_AI_ERROR_MESSAGES)) {
       expect(msg.panel.length, kind).toBeGreaterThan(0);

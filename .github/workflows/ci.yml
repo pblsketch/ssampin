@@ -48,6 +48,9 @@ jobs:
       - name: Regression check
         run: npm run regression-check
 
+      - name: Agent harness
+        run: npm run test:harness
+
       # === 비차단 가시화 (실패해도 CI 통과 — 안정화 후 별도 PR 에서 게이트로 승격) ===
 
       # 5. 의존성 취약점 스캔 — npm audit (high 이상). security-hardening P1-3.

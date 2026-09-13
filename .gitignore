@@ -243,3 +243,30 @@ tests/fixtures/student-bundle-baseline.json
 
 # UI 실화면 검증 임시 스크린샷 (릴리즈 산출물 아님)
 verify-*.png
+
+# 근거 지도 Electron QA용 격리 사용자 데이터(실데이터 아님, 대용량 캐시 포함)
+.qa-data-record-map*/
+
+# 공유 AI 실행 지침과 보호 훅
+!.codex/
+.codex/*
+!.codex/hooks.json
+!.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+.claude/hooks/*
+!.claude/hooks/git-guard.cjs
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/ssampin-develop/
+.claude/skills/ssampin-develop/*
+!.claude/skills/ssampin-develop/SKILL.md
+
+!.agents/
+.agents/*
+!.agents/skills/
+.agents/skills/*
+!.agents/skills/ssampin-develop/
+.agents/skills/ssampin-develop/*
+!.agents/skills/ssampin-develop/SKILL.md

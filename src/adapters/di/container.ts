@@ -57,6 +57,8 @@ import type { IPhotoRosterParserPort } from '@domain/ports/IPhotoRosterParserPor
 import type { IRecordDraftsRepository } from '@domain/repositories/IRecordDraftsRepository';
 import type { IRecordEvidenceRepository } from '@domain/repositories/IRecordEvidenceRepository';
 import type { IInquiryThreadRepository } from '@domain/repositories/IInquiryThreadRepository';
+import type { IRecordMapProposalRepository } from '@domain/repositories/IRecordMapProposalRepository';
+import type { IRecordMapApplicationPort } from '@domain/ports/IRecordMapApplicationPort';
 import type { IRecordAiDraftRepository } from '@domain/repositories/IRecordAiDraftRepository';
 import type { IReminderFireRepository } from '@domain/repositories/IReminderFireRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
@@ -140,6 +142,10 @@ import { PhotoRosterParserAdapter } from '@infrastructure/parse/PhotoRosterParse
 import { JsonRecordDraftsRepository } from '@adapters/repositories/JsonRecordDraftsRepository';
 import { JsonRecordEvidenceRepository } from '@adapters/repositories/JsonRecordEvidenceRepository';
 import { JsonInquiryThreadRepository } from '@adapters/repositories/JsonInquiryThreadRepository';
+import { JsonRecordMapProposalRepository } from '@adapters/repositories/JsonRecordMapProposalRepository';
+import { JsonRecordMapApplicationPort } from '@adapters/repositories/JsonRecordMapApplicationPort';
+import { RecoverRecordMapApplications } from '@usecases/recordMap/RecoverRecordMapApplications';
+import { setDataOperationRecoveryBarrier } from '@usecases/shared/dataOperationMutex';
 import { JsonRecordAiDraftRepository } from '@adapters/repositories/JsonRecordAiDraftRepository';
 import { JsonReminderFireRepository } from '@adapters/repositories/JsonReminderFireRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
@@ -307,6 +313,32 @@ export const recordAiDraftRepository: IRecordAiDraftRepository = new JsonRecordA
 export const inquiryThreadRepository: IInquiryThreadRepository = new JsonInquiryThreadRepository(
   storage,
 );
+
+// === 여러 학생의 AI 근거 지도 작업 — 실제 지도와 분리된 검토 전 제안 ===
+export const recordMapProposalRepository: IRecordMapProposalRepository =
+  new JsonRecordMapProposalRepository(storage);
+export const recordMapApplicationPort: IRecordMapApplicationPort = new JsonRecordMapApplicationPort(
+  storage,
+);
+
+let recordMapStartupRecoveryComplete = false;
+
+export async function recoverRecordMapApplicationsAtStartup(): Promise<void> {
+  if (recordMapStartupRecoveryComplete) return;
+  try {
+    await new RecoverRecordMapApplications(recordMapApplicationPort, Date.now).execute();
+    const current = await recordMapApplicationPort.loadApplications();
+    const unresolved = current.applications.some(
+      (item) => item.phase !== 'committed' && item.phase !== 'rolled-back',
+    );
+    setDataOperationRecoveryBarrier(unresolved);
+    if (unresolved) throw new Error('근거 지도 저장 복구가 끝나지 않았습니다.');
+    recordMapStartupRecoveryComplete = true;
+  } catch (error) {
+    setDataOperationRecoveryBarrier(true);
+    throw error;
+  }
+}
 
 // === 학생 관찰 기록 알림 발화 장부 (로컬 전용, syncRegistry 제외 — 크로스기기 중복은 유계 허용) ===
 export const reminderFireRepository: IReminderFireRepository = new JsonReminderFireRepository(

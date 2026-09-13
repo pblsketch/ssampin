@@ -46,6 +46,14 @@ npm run regression-check  # 회귀 체크
 
 검증 게이트를 모두 통과해야 완료로 간주한다. 에이전트가 자체 판단으로 완료를 선언하지 않는다.
 
+## 공용 작업 절차
+
+- 기능 개발·수정은 `docs/agent-workflow.md`를 먼저 읽고 순차 구현·검증 규칙을 따른다.
+- 릴리즈·핫픽스·버전 공개는 `docs/release-workflow.md`를 반드시 읽는다.
+- 새 버전 출시는 오너 실기기 확인 후 명시 지시가 있어야 한다. “남은 작업 진행해”는 출시·챗봇 KB ingest 허가가 아니다.
+- Claude 개인 메모리의 옛 절차보다 공용 문서와 현재 코드가 우선한다.
+- Git 보호: `scripts/agent-git-guard.cjs`를 Claude의 `.claude/settings.json`, Codex의 `.codex/hooks.json`에서 연결한다.
+
 ## 릴리즈 문서 규칙
 
 - 새 버전, 핫픽스, 기능 공개 릴리즈 작업 시 Notion 사용자 가이드는 갱신 대상이 아니다.

@@ -34,6 +34,7 @@ import {
 import {
   OWN_AI_INSTALL_COMMANDS,
   OWN_AI_PROVIDERS,
+  type OwnAiErrorKind,
   type OwnAiConnection,
   type OwnAiProviderId,
   type OwnAiRunEvent,
@@ -321,7 +322,7 @@ export function registerOwnAiHandlers(deps: OwnAiHandlerDeps): void {
         appendSystemPrompt?: string;
         attachments?: unknown;
       },
-    ): Promise<{ ok: boolean; reason?: string }> => {
+    ): Promise<{ ok: boolean; reason?: OwnAiErrorKind }> => {
       // ★첨부는 렌더러가 이미 걸렀지만 IPC 경계에서 한 번 더 본다 — 패널에서만, 이미지만, 한도 안.
       const attachments = readAttachments(payload.attachments);
       if (attachments === null || (attachments.length > 0 && payload.kind !== 'panel')) {

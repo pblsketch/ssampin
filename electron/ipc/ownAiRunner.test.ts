@@ -124,6 +124,16 @@ function panelReq(over: Partial<OwnAiRunRequest> = {}): OwnAiRunRequest {
   };
 }
 
+function draftReq(over: Partial<OwnAiRunRequest> = {}): OwnAiRunRequest {
+  return {
+    runId: 'd1',
+    provider: 'claude',
+    kind: 'draft',
+    prompt: '초안',
+    ...over,
+  };
+}
+
 describe('claude stream-json 파싱 — 실제로 받은 모양', () => {
   it('텍스트 델타만 글자로 흘린다', () => {
     const line = JSON.stringify({
@@ -271,6 +281,47 @@ describe('실행 — stdin 과 프로세스 옵션', () => {
     expect(second.kind).toBe('busy');
     expect(h.children).toHaveLength(1);
   });
+
+  it('초안 실행도 동시에 하나만 — 두 번째 초안은 거절한다', () => {
+    const h = harness();
+    expect(h.runner.start(draftReq()).ok).toBe(true);
+    const second = h.runner.start(draftReq({ runId: 'd2' }));
+    expect(second).toEqual({ ok: false, kind: 'busy' });
+    expect(h.children).toHaveLength(1);
+  });
+
+  it('초안 실행 중 패널 실행은 거절한다 — 앱 전체 잠금이다', () => {
+    const h = harness();
+    expect(h.runner.start(draftReq()).ok).toBe(true);
+    const second = h.runner.start(panelReq({ runId: 'r2' }));
+    expect(second).toEqual({ ok: false, kind: 'busy' });
+    expect(h.children).toHaveLength(1);
+  });
+
+  it('패널 실행 중 초안 실행은 거절한다 — 공급자가 달라도 같다', () => {
+    const h = harness();
+    expect(h.runner.start(panelReq()).ok).toBe(true);
+    const second = h.runner.start(draftReq({ runId: 'd2', provider: 'codex' }));
+    expect(second).toEqual({ ok: false, kind: 'busy' });
+    expect(h.children).toHaveLength(1);
+  });
+
+  it('정상 종료 뒤에는 다음 실행을 시작할 수 있다', () => {
+    const h = harness();
+    expect(h.runner.start(draftReq()).ok).toBe(true);
+    h.children[0]?.close(0);
+    expect(h.runner.start(draftReq({ runId: 'd2' }))).toEqual({ ok: true });
+    expect(h.children).toHaveLength(2);
+  });
+
+  it('취소 처리 뒤에는 다음 실행을 시작할 수 있다', () => {
+    const h = harness();
+    expect(h.runner.start(panelReq()).ok).toBe(true);
+    h.runner.cancel('r1');
+    h.children[0]?.close(null);
+    expect(h.runner.start(draftReq({ runId: 'd2' }))).toEqual({ ok: true });
+    expect(h.children).toHaveLength(2);
+  });
 });
 
 describe('활성 판정(activeUntil) — 쓰기 게이트가 보는 값', () => {
@@ -396,9 +447,8 @@ describe('취소와 앱 종료', () => {
   it('★cancelAllSync 는 동기로 전부 죽이고 활성값을 **유예창**으로 내린다', () => {
     const h = harness();
     h.runner.start(panelReq());
-    h.runner.start({ runId: 'd1', provider: 'claude', kind: 'draft', prompt: '초안' });
     h.runner.cancelAllSync();
-    expect(h.killed).toHaveLength(2);
+    expect(h.killed).toHaveLength(1);
     // ★0 이 아니다. 이 함수는 uncaughtException 에서도 불리고 그때 앱은 안 죽을 수 있다 —
     //   방금 죽인 자식이 보낸 늦은 쓰기가 15초 안에 오면 여전히 409 여야 한다(UltraQA P1).
     expect(h.runner.ownAiActiveUntil()).toBe(h.now + OWN_AI_ACTIVE_GRACE_MS);

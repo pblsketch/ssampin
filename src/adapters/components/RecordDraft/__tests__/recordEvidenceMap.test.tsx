@@ -359,6 +359,7 @@ describe('기본 보기와 상단 단추', () => {
     expect(
       within(menu).getByRole('menuitem', { name: /주제 미정 근거 1건을 주제로 묶기/ }),
     ).toBeTruthy();
+    expect(within(menu).getByRole('menuitem', { name: /여러 학생의 지도 제안/ })).toBeTruthy();
     // 장면 배치는 흐름 보기로 보내지 않고 **주제마다** 지도 안에서 제안한다(ADR-107).
     fireEvent.click(
       within(menu).getByRole('menuitem', { name: /할인 문구와 선택.*장면 배치 제안/ }),

@@ -1,0 +1,321 @@
+{
+  "schemaVersion": 1,
+  "applications": [
+    {
+      "schemaVersion": 1,
+      "id": "3f16f90c-49cc-4fb6-a822-d5cd87b73c34",
+      "runId": "8309743c-87b5-4901-a6d3-efced520a8a8",
+      "studentRef": "tc:rec-test-class:3-8-1",
+      "proposalAttemptId": "9e97eacf-41fc-469c-be01-f4086dfa6612",
+      "sourceFingerprint": "{\"context\":{\"area\":\"subject\",\"classId\":\"rec-test-class\",\"studentRef\":\"tc:rec-test-class:3-8-1\"},\"evidences\":[{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"\\\"쿠폰이 있으면 왜 필요 없는 물건도 사게 되나요?\\\" 라고 물어, 수업에서 다룬 합리적 선택 개념과 어긋나는 지점을 스스로 짚었다.\",\"date\":\"2026-04-08\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-1\",\"links\":undefined,\"note\":undefined,\"slots\":[\"질문\"],\"sourceId\":\"rec-test-obs-1\",\"sourceType\":\"observation\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-a\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"행동경제학의 준거점 개념을 찾아 읽고, 반 친구 20명에게 물어볼 설문 문항 5개를 직접 만들었다.\",\"date\":\"2026-04-15\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-2\",\"links\":undefined,\"note\":undefined,\"slots\":[\"시도\"],\"sourceId\":\"rec-test-obs-2\",\"sourceType\":\"observation\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-a\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"설문 문항이 유도 질문이라는 지적을 받고, 선택지를 중립적으로 바꿔 다시 돌렸다. 1차 결과는 쓰지 않기로 스스로 결정했다.\",\"date\":\"2026-04-22\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-3\",\"links\":undefined,\"note\":undefined,\"slots\":[\"시행착오\"],\"sourceId\":\"rec-test-obs-3\",\"sourceType\":\"observation\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-a\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"2차 설문 결과를 그래프로 정리해 \\\"할인율이 클수록 불필요한 구매가 늘어난다\\\"는 경향을 발표했다.\",\"date\":\"2026-05-13\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-4\",\"links\":undefined,\"note\":undefined,\"slots\":[\"산출물\"],\"sourceId\":\"rec-test-obs-4\",\"sourceType\":\"observation\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-a\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"표본이 우리 반 20명뿐이라는 되물음에, 일반화할 수 없다고 인정하고 한계를 보고서에 따로 적었다.\",\"date\":\"2026-05-20\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-5\",\"links\":undefined,\"note\":undefined,\"slots\":[\"피드백\"],\"sourceId\":\"rec-test-obs-5\",\"sourceType\":\"observation\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-a\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"수학 시간에 배운 표본오차 개념을 가져와 자기 설문의 한계를 수치로 다시 설명했다.\",\"date\":\"2026-06-10\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-6\",\"links\":undefined,\"note\":undefined,\"slots\":[\"융합\"],\"sourceId\":\"rec-test-obs-6\",\"sourceType\":\"observation\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-a\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"다음에는 다른 학년까지 표본을 넓혀 보고 싶다고 적었다.\",\"date\":\"2026-06-24\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-7\",\"links\":undefined,\"note\":undefined,\"slots\":[\"질문\"],\"sourceId\":\"rec-test-obs-7\",\"sourceType\":\"observation\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-a\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"가정에서 장을 볼 때도 할인 표시가 붙은 물건을 먼저 집게 되는지 설문으로 물어보고 싶다고 말했다.\",\"date\":\"2026-06-26\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-8\",\"links\":undefined,\"note\":undefined,\"slots\":undefined,\"sourceId\":undefined,\"sourceType\":\"manual\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":undefined},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"지역 청년 실업 통계에서 경제활동인구의 정의를 직접 확인했다.\",\"date\":\"2026-03-19\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-9\",\"links\":undefined,\"note\":undefined,\"slots\":[\"시도\"],\"sourceId\":undefined,\"sourceType\":\"observation\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-c\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"통계청 지역별 고용조사에서 우리 지역 청년 실업률을 3년 치 뽑아 표로 정리했다.\",\"date\":\"2026-07-02\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-d1\",\"links\":undefined,\"note\":undefined,\"slots\":undefined,\"sourceId\":undefined,\"sourceType\":undefined,\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-d\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"실업률이 높은 달과 학기 일정이 겹치는 것을 보고 \\\"구직 기간이 아니라 학사 일정 탓 아닐까\\\"라고 되물었다.\",\"date\":\"2026-07-09\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-d2\",\"links\":undefined,\"note\":\"통계를 곧바로 원인으로 읽지 않은 지점.\",\"slots\":undefined,\"sourceId\":undefined,\"sourceType\":undefined,\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-d\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"지역 청년 채용 지원금 안내문을 찾아 조건을 정리하고, 우리 학교 졸업생에게 해당하는지 따져 보았다.\",\"date\":\"2026-07-16\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-d3\",\"links\":undefined,\"note\":undefined,\"slots\":undefined,\"sourceId\":undefined,\"sourceType\":undefined,\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-d\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"학급 규칙을 정하는 회의에서 반대 의견을 먼저 정리해 칠판에 적자고 제안했다.\",\"date\":\"2026-05-22\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-e1\",\"links\":undefined,\"note\":undefined,\"slots\":undefined,\"sourceId\":undefined,\"sourceType\":undefined,\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-e\"},{\"areas\":[\"subject\"],\"classId\":\"rec-test-class\",\"content\":\"규칙을 어긴 상황이 생겼을 때 벌점 대신 회복 방법을 제안해 학급 회의에서 채택되었다.\",\"date\":\"2026-06-05\",\"excludedFromAi\":undefined,\"id\":\"rec-test-ev-e2\",\"links\":undefined,\"note\":undefined,\"slots\":undefined,\"sourceId\":undefined,\"sourceType\":undefined,\"studentRef\":\"tc:rec-test-class:3-8-1\",\"threadId\":\"rec-test-thread-e\"}],\"threads\":[{\"classId\":\"rec-test-class\",\"competencyKeywords\":[\"경제 현상에 대한 자료 해석력\"],\"id\":\"rec-test-thread-a\",\"keywords\":[\"설문\",\"준거점\",\"할인\",\"표본\",\"소비\"],\"link\":undefined,\"nextNotes\":\"다음 학기에 표본을 다른 학년까지 넓혀 볼 것.\",\"order\":undefined,\"scenes\":[{\"evidenceIds\":[],\"id\":\"rec-test-sc-thread-a-1\",\"moduleId\":\"teacherJudgement\",\"note\":\"근거를 모으는 단계에서 이미 \\\"무엇을 비교할지\\\"를 먼저 정하는 학생이다.\",\"noteSource\":\"teacher\",\"role\":\"evaluation\"},{\"evidenceIds\":[\"rec-test-ev-1\"],\"id\":\"rec-test-sc-thread-a-2\",\"moduleId\":\"legacyMotive\",\"role\":\"motive\"},{\"evidenceIds\":[\"rec-test-ev-2\",\"rec-test-ev-3\"],\"id\":\"rec-test-sc-thread-a-3\",\"moduleId\":\"legacyProcess\",\"note\":\"설문 문항의 유도성을 스스로 지적하고 중립 문항으로 바꾼 대목이 이 자리에 맞습니다.\",\"noteSource\":\"ai\",\"role\":\"process\"},{\"evidenceIds\":[\"rec-test-ev-4\"],\"id\":\"rec-test-sc-thread-a-4\",\"moduleId\":\"legacyResult\",\"role\":\"result\"}],\"standardCodes\":[\"[10통사2-02-01]\"],\"status\":\"open\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"term\":\"2026-1\",\"title\":\"소비 선택과 준거점 — 사회문제 탐구 보고서\"},{\"classId\":\"rec-test-class\",\"competencyKeywords\":undefined,\"id\":\"rec-test-thread-c\",\"keywords\":[\"실업\",\"통계\",\"경제활동인구\"],\"link\":undefined,\"nextNotes\":\"통계 정의를 따지는 습관이 자리 잡았다. 마무리함.\",\"order\":undefined,\"scenes\":[{\"evidenceIds\":[],\"id\":\"rec-test-sc-thread-c-1\",\"moduleId\":\"teacherJudgement\",\"role\":\"evaluation\"},{\"evidenceIds\":[\"rec-test-ev-9\"],\"id\":\"rec-test-sc-thread-c-2\",\"moduleId\":\"legacyResult\",\"role\":\"result\"}],\"standardCodes\":undefined,\"status\":\"closed\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"term\":\"2026-1\",\"title\":\"지역 청년 실업 통계 읽기\"},{\"classId\":\"rec-test-class\",\"competencyKeywords\":[\"자료를 근거로 대안을 세우는 힘\"],\"id\":\"rec-test-thread-d\",\"keywords\":[\"실업\",\"정책\",\"제안\"],\"link\":{\"fromThreadId\":\"rec-test-thread-a\",\"note\":\"기초에서 확장\"},\"nextNotes\":undefined,\"order\":undefined,\"scenes\":[{\"evidenceIds\":[],\"id\":\"rec-test-sc-thread-d-1\",\"moduleId\":\"teacherJudgement\",\"role\":\"evaluation\"},{\"evidenceIds\":[\"rec-test-ev-d1\"],\"id\":\"rec-test-sc-thread-d-2\",\"moduleId\":\"legacyMotive\",\"note\":\"앞 주제에서 세운 통계 읽기를 정책으로 밀고 나간 자리.\",\"noteSource\":\"teacher\",\"role\":\"motive\"},{\"evidenceIds\":[\"rec-test-ev-d2\"],\"id\":\"rec-test-sc-thread-d-3\",\"moduleId\":\"legacyProcess\",\"role\":\"process\"},{\"evidenceIds\":[],\"id\":\"rec-test-sc-thread-d-4\",\"moduleId\":\"counterReview\",\"role\":\"process\"},{\"evidenceIds\":[\"rec-test-ev-d3\"],\"id\":\"rec-test-sc-thread-d-5\",\"moduleId\":\"legacyResult\",\"role\":\"result\"}],\"standardCodes\":undefined,\"status\":\"open\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"term\":\"2026-1\",\"title\":\"청년 실업 통계로 지역 정책 제안하기\"},{\"classId\":\"rec-test-class\",\"competencyKeywords\":undefined,\"id\":\"rec-test-thread-e\",\"keywords\":[],\"link\":undefined,\"nextNotes\":undefined,\"order\":undefined,\"scenes\":undefined,\"standardCodes\":undefined,\"status\":\"open\",\"studentRef\":\"tc:rec-test-class:3-8-1\",\"term\":\"2026-1\",\"title\":\"학급 자치 규칙을 만들고 지키는 과정에서 드러난 조정 능력에 대한 관찰 기록\"}]}",
+      "phase": "rolled-back",
+      "evidenceChanges": [
+        {
+          "id": "rec-test-ev-8",
+          "before": {
+            "id": "rec-test-ev-8",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "areas": ["subject"],
+            "content": "가정에서 장을 볼 때도 할인 표시가 붙은 물건을 먼저 집게 되는지 설문으로 물어보고 싶다고 말했다.",
+            "classId": "rec-test-class",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789289704175,
+            "date": "2026-06-26",
+            "sourceType": "manual"
+          },
+          "after": {
+            "id": "rec-test-ev-8",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "areas": ["subject"],
+            "content": "가정에서 장을 볼 때도 할인 표시가 붙은 물건을 먼저 집게 되는지 설문으로 물어보고 싶다고 말했다.",
+            "classId": "rec-test-class",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789292744786,
+            "date": "2026-06-26",
+            "sourceType": "manual",
+            "threadId": "rec-test-thread-a"
+          }
+        }
+      ],
+      "threadChanges": [
+        {
+          "id": "rec-test-thread-a",
+          "before": {
+            "id": "rec-test-thread-a",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "classId": "rec-test-class",
+            "title": "소비 선택과 준거점 — 사회문제 탐구 보고서",
+            "keywords": ["설문", "준거점", "할인", "표본", "소비"],
+            "standardCodes": ["[10통사2-02-01]"],
+            "competencyKeywords": ["경제 현상에 대한 자료 해석력"],
+            "nextNotes": "다음 학기에 표본을 다른 학년까지 넓혀 볼 것.",
+            "status": "open",
+            "term": "2026-1",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789289704175,
+            "scenes": [
+              {
+                "id": "rec-test-sc-thread-a-1",
+                "role": "evaluation",
+                "moduleId": "teacherJudgement",
+                "evidenceIds": [],
+                "note": "근거를 모으는 단계에서 이미 \"무엇을 비교할지\"를 먼저 정하는 학생이다.",
+                "noteSource": "teacher"
+              },
+              {
+                "id": "rec-test-sc-thread-a-2",
+                "role": "motive",
+                "moduleId": "legacyMotive",
+                "evidenceIds": ["rec-test-ev-1"]
+              },
+              {
+                "id": "rec-test-sc-thread-a-3",
+                "role": "process",
+                "moduleId": "legacyProcess",
+                "evidenceIds": ["rec-test-ev-2", "rec-test-ev-3"],
+                "note": "설문 문항의 유도성을 스스로 지적하고 중립 문항으로 바꾼 대목이 이 자리에 맞습니다.",
+                "noteSource": "ai"
+              },
+              {
+                "id": "rec-test-sc-thread-a-4",
+                "role": "result",
+                "moduleId": "legacyResult",
+                "evidenceIds": ["rec-test-ev-4"]
+              }
+            ]
+          },
+          "after": {
+            "id": "rec-test-thread-a",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "classId": "rec-test-class",
+            "title": "소비 선택과 준거점 — 사회문제 탐구 보고서",
+            "keywords": ["설문", "준거점", "할인", "표본", "소비"],
+            "standardCodes": ["[10통사2-02-01]"],
+            "competencyKeywords": ["경제 현상에 대한 자료 해석력"],
+            "nextNotes": "다음 학기에 표본을 다른 학년까지 넓혀 볼 것.",
+            "status": "open",
+            "term": "2026-1",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789292744786,
+            "scenes": [
+              {
+                "id": "rec-test-sc-thread-a-1",
+                "role": "evaluation",
+                "moduleId": "teacherJudgement",
+                "evidenceIds": [],
+                "note": "근거를 모으는 단계에서 이미 \"무엇을 비교할지\"를 먼저 정하는 학생이다.",
+                "noteSource": "teacher"
+              },
+              {
+                "id": "rec-test-sc-thread-a-2",
+                "role": "motive",
+                "moduleId": "legacyMotive",
+                "evidenceIds": ["rec-test-ev-1"]
+              },
+              {
+                "id": "rec-test-sc-thread-a-3",
+                "role": "process",
+                "moduleId": "legacyProcess",
+                "evidenceIds": ["rec-test-ev-2", "rec-test-ev-3", "rec-test-ev-6"],
+                "note": "설문 문항의 유도성을 스스로 지적하고 중립 문항으로 바꾼 대목이 이 자리에 맞습니다.",
+                "noteSource": "ai"
+              },
+              {
+                "id": "rec-test-sc-thread-a-4",
+                "role": "result",
+                "moduleId": "legacyResult",
+                "evidenceIds": ["rec-test-ev-4", "rec-test-ev-5", "rec-test-ev-7", "rec-test-ev-8"]
+              }
+            ]
+          }
+        },
+        {
+          "id": "rec-test-thread-c",
+          "before": {
+            "id": "rec-test-thread-c",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "classId": "rec-test-class",
+            "title": "지역 청년 실업 통계 읽기",
+            "keywords": ["실업", "통계", "경제활동인구"],
+            "nextNotes": "통계 정의를 따지는 습관이 자리 잡았다. 마무리함.",
+            "status": "closed",
+            "term": "2026-1",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789289704175,
+            "scenes": [
+              {
+                "id": "rec-test-sc-thread-c-1",
+                "role": "evaluation",
+                "moduleId": "teacherJudgement",
+                "evidenceIds": []
+              },
+              {
+                "id": "rec-test-sc-thread-c-2",
+                "role": "result",
+                "moduleId": "legacyResult",
+                "evidenceIds": ["rec-test-ev-9"]
+              }
+            ]
+          },
+          "after": {
+            "id": "rec-test-thread-c",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "classId": "rec-test-class",
+            "title": "지역 청년 실업 통계 읽기",
+            "keywords": ["실업", "통계", "경제활동인구"],
+            "nextNotes": "통계 정의를 따지는 습관이 자리 잡았다. 마무리함.",
+            "status": "closed",
+            "term": "2026-1",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789292744786,
+            "scenes": [
+              {
+                "id": "rec-test-sc-thread-c-1",
+                "role": "evaluation",
+                "moduleId": "teacherJudgement",
+                "evidenceIds": []
+              },
+              {
+                "id": "rec-test-sc-thread-c-2",
+                "role": "result",
+                "moduleId": "legacyResult",
+                "evidenceIds": ["rec-test-ev-9"]
+              }
+            ]
+          }
+        },
+        {
+          "id": "rec-test-thread-d",
+          "before": {
+            "id": "rec-test-thread-d",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "classId": "rec-test-class",
+            "title": "청년 실업 통계로 지역 정책 제안하기",
+            "keywords": ["실업", "정책", "제안"],
+            "competencyKeywords": ["자료를 근거로 대안을 세우는 힘"],
+            "link": {
+              "fromThreadId": "rec-test-thread-a",
+              "note": "기초에서 확장"
+            },
+            "status": "open",
+            "term": "2026-1",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789289704175,
+            "scenes": [
+              {
+                "id": "rec-test-sc-thread-d-1",
+                "role": "evaluation",
+                "moduleId": "teacherJudgement",
+                "evidenceIds": []
+              },
+              {
+                "id": "rec-test-sc-thread-d-2",
+                "role": "motive",
+                "moduleId": "legacyMotive",
+                "evidenceIds": ["rec-test-ev-d1"],
+                "note": "앞 주제에서 세운 통계 읽기를 정책으로 밀고 나간 자리.",
+                "noteSource": "teacher"
+              },
+              {
+                "id": "rec-test-sc-thread-d-3",
+                "role": "process",
+                "moduleId": "legacyProcess",
+                "evidenceIds": ["rec-test-ev-d2"]
+              },
+              {
+                "id": "rec-test-sc-thread-d-4",
+                "role": "process",
+                "moduleId": "counterReview",
+                "evidenceIds": []
+              },
+              {
+                "id": "rec-test-sc-thread-d-5",
+                "role": "result",
+                "moduleId": "legacyResult",
+                "evidenceIds": ["rec-test-ev-d3"]
+              }
+            ]
+          },
+          "after": {
+            "id": "rec-test-thread-d",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "classId": "rec-test-class",
+            "title": "청년 실업 통계로 지역 정책 제안하기",
+            "keywords": ["실업", "정책", "제안"],
+            "competencyKeywords": ["자료를 근거로 대안을 세우는 힘"],
+            "link": {
+              "fromThreadId": "rec-test-thread-a",
+              "note": "기초에서 확장"
+            },
+            "status": "open",
+            "term": "2026-1",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789292744786,
+            "scenes": [
+              {
+                "id": "rec-test-sc-thread-d-1",
+                "role": "evaluation",
+                "moduleId": "teacherJudgement",
+                "evidenceIds": []
+              },
+              {
+                "id": "rec-test-sc-thread-d-2",
+                "role": "motive",
+                "moduleId": "legacyMotive",
+                "evidenceIds": ["rec-test-ev-d1"],
+                "note": "앞 주제에서 세운 통계 읽기를 정책으로 밀고 나간 자리.",
+                "noteSource": "teacher"
+              },
+              {
+                "id": "rec-test-sc-thread-d-3",
+                "role": "process",
+                "moduleId": "legacyProcess",
+                "evidenceIds": ["rec-test-ev-d2"]
+              },
+              {
+                "id": "rec-test-sc-thread-d-4",
+                "role": "process",
+                "moduleId": "counterReview",
+                "evidenceIds": []
+              },
+              {
+                "id": "rec-test-sc-thread-d-5",
+                "role": "result",
+                "moduleId": "legacyResult",
+                "evidenceIds": ["rec-test-ev-d3"]
+              }
+            ]
+          }
+        },
+        {
+          "id": "rec-test-thread-e",
+          "before": {
+            "id": "rec-test-thread-e",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "classId": "rec-test-class",
+            "title": "학급 자치 규칙을 만들고 지키는 과정에서 드러난 조정 능력에 대한 관찰 기록",
+            "keywords": [],
+            "status": "open",
+            "term": "2026-1",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789289704175
+          },
+          "after": {
+            "id": "rec-test-thread-e",
+            "studentRef": "tc:rec-test-class:3-8-1",
+            "classId": "rec-test-class",
+            "title": "학급 자치 규칙을 만들고 지키는 과정에서 드러난 조정 능력에 대한 관찰 기록",
+            "keywords": [],
+            "status": "open",
+            "term": "2026-1",
+            "createdAt": 1789289704175,
+            "updatedAt": 1789292744786,
+            "scenes": []
+          }
+        }
+      ],
+      "createdAt": 1789292744786,
+      "updatedAt": 1789292772367
+    }
+  ]
+}
