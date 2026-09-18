@@ -2,6 +2,7 @@ import { Metadata } from 'next';
 import { Suspense } from 'react';
 import DateRangePicker from './DateRangePicker';
 import TabNav from './_components/TabNav';
+import RefreshButton from './_components/RefreshButton';
 import { DEFAULT_TAB, TABS, isTabKey } from './_lib/tabs';
 import OverviewTab from './_sections/OverviewTab';
 import RetentionTab from './_sections/RetentionTab';
@@ -52,14 +53,21 @@ async function RollupFreshness() {
       </span>
     );
   }
-  // 갱신 주기가 30분이라, 그보다 넉넉한 50분을 넘겼을 때만 '뭔가 멈췄다'로 본다.
+  // 정기 갱신은 매시 5분(KST 07~09시 출근 피크는 쉼, 2026-09-09 결정)이고 2~3분 걸린다.
+  // 그보다 넉넉한 70분을 넘겼을 때만 '뭔가 멈췄다'로 본다. 아침엔 쉬는 시간 때문에 넘는 게 정상이다.
   const stale = status.stale_minutes ?? 0;
   const at = new Date(status.refreshed_at).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' });
   return (
-    <span className={stale > 50 ? 'text-amber-400' : 'text-gray-500'}>
-      집계 기준: {at} ({stale < 1 ? '방금' : `${Math.round(stale)}분 전`})
-      {status.last_error ? ` · 갱신 오류: ${status.last_error}` : ''}
-    </span>
+    <>
+      <span
+        className={stale > 70 ? 'text-amber-400' : 'text-gray-500'}
+        title="매시 5분에 자동 갱신 (07~09시 출근 시간은 쉼)"
+      >
+        집계 기준: {at} ({stale < 1 ? '방금' : `${Math.round(stale)}분 전`})
+        {status.last_error ? ` · 갱신 오류: ${status.last_error}` : ''}
+      </span>
+      <RefreshButton />
+    </>
   );
 }
 
