@@ -23,11 +23,13 @@ describe('normalizeShortcutSettings', () => {
     );
   });
 
-  test('저장된 단축키가 없으면 아홉 개 기본 명령을 모두 제공한다', () => {
-    // 2026-08-20에 옆핀 칸별 열기 두 개가 늘어 7 → 9가 됐다.
+  test('저장된 단축키가 없으면 열 개 기본 명령을 모두 제공한다', () => {
+    // 2026-08-20에 옆핀 칸별 열기 두 개가 늘어 7 → 9가 됐고,
+    // 2026-09-15에 학생 빠른 기록이 늘어 9 → 10이 됐다.
     const normalized = normalizeShortcutSettings(undefined);
 
-    expect(Object.keys(normalized.bindings)).toHaveLength(9);
+    expect(Object.keys(normalized.bindings)).toHaveLength(10);
+    expect(normalized.bindings['quickAdd.studentRecord']).toBeDefined();
     expect(normalized.bindings['sticker-picker:toggle']).toBeDefined();
     expect(normalized.bindings['sidePin:toggle']).toBeDefined();
     expect(normalized.bindings['sidePin:openWidget']).toBeDefined();

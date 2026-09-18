@@ -116,21 +116,18 @@ export const TOOLS: ToolCard[] = [
     emoji: '📑',
     name: '마크다운 변환기',
     description: '한글·PDF·엑셀을 AI에 쓰기 좋은 글로 (개인정보 가리기)',
-    badge: 'NEW',
   },
   {
     id: 'tool-school-announcements',
     emoji: '🏫',
     name: '학교 알리미',
     description: '우리 학교·다른 학교 공시, 학사일정, 평가계획을 한 곳에서',
-    badge: 'NEW',
   },
   {
     id: 'tool-score-allocator',
     emoji: '🧮',
     name: '배점 계산기',
     description: '지필평가 문항 배점을 만점에 맞춰 설계',
-    badge: 'NEW',
   },
   {
     id: 'tool-supsori',
@@ -152,7 +149,6 @@ export const TOOLS: ToolCard[] = [
     name: 'DoRms',
     description: 'AI로 현장 문제를 푸는 교사 커뮤니티',
     externalUrl: 'https://dorms.school',
-    badge: 'NEW',
   },
   {
     id: 'tool-dorms-arcade',
@@ -160,7 +156,6 @@ export const TOOLS: ToolCard[] = [
     name: '도름스 오락실',
     description: '교사들이 학생들을 위해 만든 무료 게임 모음',
     externalUrl: 'https://dorms.school/arcade',
-    badge: 'NEW',
   },
   {
     // 웹사이트가 아니라 설치된 외부 프로그램을 실행한다 — externalUrl 대신 전용 클릭 처리를 쓴다.
@@ -168,7 +163,6 @@ export const TOOLS: ToolCard[] = [
     emoji: '🏫',
     name: '원클릭업무포털',
     description: '나이스·에듀파인 업무 화면까지 한 번에',
-    badge: 'NEW',
   },
   {
     id: 'tool-edudraft',
@@ -176,7 +170,6 @@ export const TOOLS: ToolCard[] = [
     name: '스마트 행정 자동화시스템',
     description: '에듀파인 품의서 초안과 예산 잔액을 한 곳에서',
     externalUrl: 'https://edudraft-beta.vercel.app/',
-    badge: 'NEW',
   },
   {
     id: 'tool-pdf-lab',
@@ -184,6 +177,21 @@ export const TOOLS: ToolCard[] = [
     name: 'PDF LAB',
     description: 'PDF 합치기·나누기·서명 — 파일은 내 컴퓨터 안에서만',
     externalUrl: 'https://pdf-lab-kappa.vercel.app/',
+  },
+  {
+    id: 'tool-exam-analysis',
+    emoji: '📈',
+    name: '성취도 분석기',
+    description: 'NEIS 정기고사 엑셀로 성취수준·문항 분석과 보고서까지',
+    externalUrl: 'https://exam-achievement-analyzer.vercel.app/',
+    badge: 'NEW',
+  },
+  {
+    id: 'tool-cut-score',
+    emoji: '✂️',
+    name: '분할점수 산출기',
+    description: '성취평가제 분할점수를 Ebel 방법으로 산출하고 교과협의회 협업',
+    externalUrl: 'https://cut-score-calculator.vercel.app/',
     badge: 'NEW',
   },
 ];
@@ -204,6 +212,8 @@ const EXTERNAL_TOOL_NAMES: Readonly<Record<string, ToolName>> = {
   'tool-oneclick-portal': 'oneclick-portal',
   'tool-edudraft': 'edudraft',
   'tool-pdf-lab': 'pdf-lab',
+  'tool-exam-analysis': 'exam-analysis',
+  'tool-cut-score': 'cut-score',
 };
 
 function trackExternalToolUse(

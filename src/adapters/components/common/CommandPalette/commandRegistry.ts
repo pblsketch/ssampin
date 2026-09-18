@@ -85,6 +85,15 @@ export function buildDefaultCommands({ onNavigate }: BuildDefaultCommandsParams)
 
   const quickAddCommands: Command[] = [
     {
+      id: 'quickAdd.studentRecord',
+      label: '학생 빠른 기록',
+      group: '빠른 추가' as const,
+      icon: 'person_edit',
+      keywords: ['학생', '기록', '특기사항', '누가기록', '관찰', '빠른'],
+      shortcut: comboFor('quickAdd.studentRecord'),
+      run: () => useQuickAddStore.getState().open('student-record'),
+    },
+    {
       id: 'quickAdd.todo',
       label: '할일 빠른 추가',
       group: '빠른 추가' as const,

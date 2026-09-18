@@ -528,6 +528,7 @@ export type QuickAddShortcutId =
   | 'quickAdd.memo'
   | 'quickAdd.note'
   | 'quickAdd.bookmark'
+  | 'quickAdd.studentRecord'
   | 'sticker-picker:toggle'
   | 'sidePin:toggle'
   | 'sidePin:openWidget'

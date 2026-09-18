@@ -228,6 +228,7 @@ const DEFAULT_SETTINGS: Settings = {
       'quickAdd.memo': { combo: 'mod+alt+m', enabled: true },
       'quickAdd.note': { combo: 'mod+alt+n', enabled: true },
       'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
+      'quickAdd.studentRecord': { combo: 'mod+alt+r', enabled: true },
       'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
       'sidePin:toggle': { combo: 'mod+alt+p', enabled: true },
       // 손잡이의 위 버튼이 위젯, 아래 버튼이 메모다. 화살표가 그 배치와 그대로 맞는다.
@@ -246,6 +247,7 @@ export const DEFAULT_SHORTCUTS: ShortcutSettings = {
     'quickAdd.memo': { combo: 'mod+alt+m', enabled: true },
     'quickAdd.note': { combo: 'mod+alt+n', enabled: true },
     'quickAdd.bookmark': { combo: 'mod+alt+b', enabled: true },
+    'quickAdd.studentRecord': { combo: 'mod+alt+r', enabled: true },
     'sticker-picker:toggle': { combo: 'mod+shift+e', enabled: true },
     'sidePin:toggle': { combo: 'mod+alt+p', enabled: true },
     // 손잡이의 위 버튼이 위젯, 아래 버튼이 메모다. 화살표가 그 배치와 그대로 맞는다.

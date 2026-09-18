@@ -132,6 +132,20 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     color: 'bg-red-600/20 text-red-700',
     externalUrl: 'https://pdf-lab-kappa.vercel.app/',
   },
+  {
+    id: 'tool-exam-analysis',
+    name: '성취도 분석기',
+    icon: '📈',
+    color: 'bg-teal-600/20 text-teal-700',
+    externalUrl: 'https://exam-achievement-analyzer.vercel.app/',
+  },
+  {
+    id: 'tool-cut-score',
+    name: '분할점수 산출기',
+    icon: '✂️',
+    color: 'bg-indigo-600/20 text-indigo-700',
+    externalUrl: 'https://cut-score-calculator.vercel.app/',
+  },
 ];
 
 export const DEFAULT_FAVORITE_TOOLS: readonly string[] = [

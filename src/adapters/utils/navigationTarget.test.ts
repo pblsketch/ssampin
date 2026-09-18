@@ -13,6 +13,7 @@ describe('parseNavigationTarget', () => {
       page: 'timetable',
       settingsTab: null,
       timetableIntent: null,
+      studentRecordIntent: null,
     });
   });
 
@@ -21,6 +22,7 @@ describe('parseNavigationTarget', () => {
       page: 'settings',
       settingsTab: 'widget',
       timetableIntent: null,
+      studentRecordIntent: null,
     });
   });
 
@@ -29,6 +31,7 @@ describe('parseNavigationTarget', () => {
       page: 'timetable',
       settingsTab: null,
       timetableIntent: 'sync-review',
+      studentRecordIntent: null,
     });
   });
 
@@ -37,6 +40,7 @@ describe('parseNavigationTarget', () => {
       page: 'timetable',
       settingsTab: null,
       timetableIntent: null,
+      studentRecordIntent: null,
     });
   });
 
@@ -45,6 +49,46 @@ describe('parseNavigationTarget', () => {
       page: 'settings',
       settingsTab: null,
       timetableIntent: null,
+      studentRecordIntent: null,
+    });
+  });
+
+  describe('학생 기록·출결 진입 (창을 건너오는 의도)', () => {
+    it("'dashboard#quick-student-record' 는 빠른 학생 기록을 연다", () => {
+      expect(parseNavigationTarget('dashboard#quick-student-record')).toEqual({
+        page: 'dashboard',
+        settingsTab: null,
+        timetableIntent: null,
+        studentRecordIntent: { kind: 'quick-record', classId: null },
+      });
+    });
+
+    it('수업반 id 를 붙이면 그 명단으로 좁혀 연다', () => {
+      expect(parseNavigationTarget('dashboard#quick-student-record:c-1')).toEqual({
+        page: 'dashboard',
+        settingsTab: null,
+        timetableIntent: null,
+        studentRecordIntent: { kind: 'quick-record', classId: 'c-1' },
+      });
+    });
+
+    it("'homeroom#attendance' 는 담임 출결 화면 의도를 싣는다", () => {
+      expect(parseNavigationTarget('homeroom#attendance').studentRecordIntent).toEqual({
+        kind: 'homeroom-attendance',
+      });
+    });
+
+    it("'class-management#attendance:<id>' 는 그 수업반 출결 의도를 싣는다", () => {
+      expect(parseNavigationTarget('class-management#attendance:c-2').studentRecordIntent).toEqual({
+        kind: 'class-attendance',
+        classId: 'c-2',
+      });
+    });
+
+    it('반 id 가 없으면 의도를 만들지 않는다 — 엉뚱한 반을 열지 않는다', () => {
+      const t = parseNavigationTarget('class-management#attendance:');
+      expect(t.page).toBe('class-management');
+      expect(t.studentRecordIntent).toBeNull();
     });
   });
 });

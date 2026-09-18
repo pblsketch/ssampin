@@ -154,6 +154,7 @@ import { ShareWindowApp } from '@adapters/components/MultiSurvey/v2/Share/ShareW
 import { SidePinApp } from '@adapters/components/SidePin/SidePinApp';
 import { WidgetSyncBanner } from '@widgets/components/WidgetSyncBanner';
 import { parseNavigationTarget } from '@adapters/utils/navigationTarget';
+import { applyStudentRecordIntent } from '@adapters/components/Dashboard/studentRecordNavigation';
 import { parseToolPopupQuery } from '@domain/rules/toolPopupRules';
 import { ToolPopupApp } from '@adapters/components/Tools/popup/ToolPopupApp';
 import { MainToolPopupHost } from '@adapters/components/Tools/popup/MainToolPopupHost';
@@ -204,6 +205,9 @@ function getQuickAddKindFromUrl(): QuickAddKind {
   if (raw === 'todo' || raw === 'event' || raw === 'memo' || raw === 'note' || raw === 'bookmark') {
     return raw;
   }
+  // 메인 프로세스는 commandId 에서 'quickAdd.' 만 떼어 넘긴다 → 'studentRecord'.
+  // kind 이름('student-record')과 달라서 여기서 맞춰 준다(prewarm 실패 시의 직접 빌드 경로).
+  if (raw === 'studentRecord' || raw === 'student-record') return 'student-record';
   return 'todo';
 }
 
@@ -664,6 +668,7 @@ const COMMAND_TO_KIND: Record<string, QuickAddKind> = {
   'quickAdd.memo': 'memo',
   'quickAdd.note': 'note',
   'quickAdd.bookmark': 'bookmark',
+  'quickAdd.studentRecord': 'student-record',
 };
 
 function QuickAddApp(): JSX.Element {
@@ -1039,6 +1044,8 @@ function MainApp() {
       if (target.settingsTab) setSettingsInitialTab(target.settingsTab);
       if (target.timetableIntent) setTimetableInitialIntent(target.timetableIntent);
       setCurrentPage(target.page);
+      // 위젯 창에서 넘어온 학생 기록·출결 진입 — 하위 탭 요청은 창을 못 건너오므로 여기서 푼다.
+      if (target.studentRecordIntent) applyStudentRecordIntent(target.studentRecordIntent);
     });
 
     return unsubscribe;
@@ -1068,6 +1075,7 @@ function MainApp() {
       if (target.settingsTab) setSettingsInitialTab(target.settingsTab);
       if (target.timetableIntent) setTimetableInitialIntent(target.timetableIntent);
       setCurrentPage(target.page);
+      if (target.studentRecordIntent) applyStudentRecordIntent(target.studentRecordIntent);
     };
     window.addEventListener('ssampin:navigate', handler);
     return () => window.removeEventListener('ssampin:navigate', handler);

@@ -7,6 +7,7 @@ import { QuickAddEventForm } from './QuickAddEventForm';
 import { QuickAddMemoForm } from './QuickAddMemoForm';
 import { QuickAddNoteForm } from './QuickAddNoteForm';
 import { QuickAddBookmarkForm } from './QuickAddBookmarkForm';
+import { QuickAddStudentRecordForm } from './QuickAddStudentRecordForm';
 
 interface KindMeta {
   readonly label: string;
@@ -39,6 +40,12 @@ const KIND_META: Record<QuickAddKind, KindMeta> = {
     icon: 'description',
     barClass: 'bg-violet-400',
     iconClass: 'text-violet-400',
+  },
+  'student-record': {
+    label: '학생 기록',
+    icon: 'person_edit',
+    barClass: 'bg-sp-accent',
+    iconClass: 'text-sp-accent',
   },
   bookmark: {
     label: '즐겨찾기',
@@ -98,11 +105,13 @@ export function QuickAddModal({ standalone = false }: QuickAddModalProps = {}): 
       {/* 헤더 — standalone 모드에서는 창 드래그 가능 */}
       <div
         className="flex items-stretch border-b border-sp-border"
-        style={standalone ? { WebkitAppRegion: 'drag' } as React.CSSProperties : undefined}
+        style={standalone ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
       >
         <div className={`w-[3px] ${meta.barClass}`} aria-hidden="true" />
         <div className="flex-1 flex items-center gap-2.5 px-4 py-3">
-          <span className={`material-symbols-outlined text-icon-md ${meta.iconClass}`}>{meta.icon}</span>
+          <span className={`material-symbols-outlined text-icon-md ${meta.iconClass}`}>
+            {meta.icon}
+          </span>
           <h2 className="text-[13px] font-sp-semibold text-sp-muted uppercase tracking-wider">
             빠른 추가 · {meta.label}
           </h2>
@@ -111,7 +120,7 @@ export function QuickAddModal({ standalone = false }: QuickAddModalProps = {}): 
             type="button"
             onClick={close}
             aria-label="닫기"
-            style={standalone ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}
+            style={standalone ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined}
             className="text-sp-muted hover:text-sp-text transition-colors"
           >
             <span className="material-symbols-outlined text-icon-md">close</span>
@@ -126,6 +135,7 @@ export function QuickAddModal({ standalone = false }: QuickAddModalProps = {}): 
         {kind === 'memo' && <QuickAddMemoForm onClose={close} />}
         {kind === 'note' && <QuickAddNoteForm onClose={close} />}
         {kind === 'bookmark' && <QuickAddBookmarkForm onClose={close} />}
+        {kind === 'student-record' && <QuickAddStudentRecordForm onClose={close} />}
       </div>
 
       {/* 푸터 키 힌트 */}

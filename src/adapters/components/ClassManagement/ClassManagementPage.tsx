@@ -20,6 +20,10 @@ import { ClassAssessmentManagementTab } from './GradeAnalysis/ClassAssessmentMan
 import { AddClassModal } from './AddClassModal';
 import { PageHeader } from '@adapters/components/common/PageHeader';
 import { ScrollRow } from '@adapters/components/common/ScrollRow';
+import {
+  CLASS_MANAGEMENT_OPEN_TAB_EVENT,
+  consumePendingClassManagementTab,
+} from './classManagementTabIntent';
 
 type TabId =
   | 'roster'
@@ -86,6 +90,24 @@ export function ClassManagementPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  /**
+   * 바깥(대시보드 빠른 학생 기록 카드 등)에서 들어온 탭 요청을 받는다.
+   * 마운트 직전에 들어온 요청은 이벤트를 놓치므로 consume 으로 한 번 더 받는다 — 담임 업무와 같은 방식.
+   */
+  useEffect(() => {
+    const validTabs = TABS.map((t) => t.id);
+    const pending = consumePendingClassManagementTab();
+    if (pending !== null && validTabs.includes(pending)) setActiveTab(pending);
+
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<string>).detail;
+      consumePendingClassManagementTab();
+      if (validTabs.includes(detail as TabId)) setActiveTab(detail as TabId);
+    };
+    window.addEventListener(CLASS_MANAGEMENT_OPEN_TAB_EVENT, handler);
+    return () => window.removeEventListener(CLASS_MANAGEMENT_OPEN_TAB_EVENT, handler);
+  }, []);
 
   /* ── 보관된 반 읽기 전용 방어 (school-year-archive plan §4 S1.3 — 3중 방어의 1·3겹) ── */
   const selectedClass = useMemo(

@@ -11,6 +11,7 @@ const COMMAND_TO_KIND: Record<string, QuickAddKind> = {
   'quickAdd.memo': 'memo',
   'quickAdd.note': 'note',
   'quickAdd.bookmark': 'bookmark',
+  'quickAdd.studentRecord': 'student-record',
   // 'sticker-picker:toggle'은 QuickAdd가 아닌 별도 윈도우 토글이므로 여기 매핑하지 않음.
   // settings.shortcuts.bindings 에는 포함되어 syncShortcuts IPC로 메인에 전달되며,
   // 메인 프로세스의 triggerShortcut()이 stickerPickerWindow 토글을 직접 처리한다.

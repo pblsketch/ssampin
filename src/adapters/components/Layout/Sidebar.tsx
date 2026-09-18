@@ -43,6 +43,8 @@ export type PageId =
   | 'tool-oneclick-portal'
   | 'tool-edudraft'
   | 'tool-pdf-lab'
+  | 'tool-exam-analysis'
+  | 'tool-cut-score'
   | 'tool-assignment'
   | 'tool-assignment-detail'
   | 'tool-grouping'
@@ -485,7 +487,7 @@ export function Sidebar({ currentPage, onNavigate, onFeedback }: SidebarProps) {
 
         {!sidebarCollapsed && (
           <p className="text-caption text-sp-muted text-center mt-2">
-            v2.5.2
+            v2.5.3
             {showUpdateBadge && newVersion && (
               <button
                 type="button"

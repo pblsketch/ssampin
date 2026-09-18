@@ -41,6 +41,12 @@ const COMMANDS: readonly CommandRow[] = [
     iconColor: 'text-amber-400',
   },
   {
+    id: 'quickAdd.studentRecord',
+    label: '학생 빠른 기록',
+    icon: 'person_edit',
+    iconColor: 'text-sp-accent',
+  },
+  {
     id: 'sticker-picker:toggle',
     label: '내 이모티콘 피커 열기/닫기',
     icon: 'mood',

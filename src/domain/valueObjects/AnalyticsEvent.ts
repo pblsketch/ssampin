@@ -124,7 +124,10 @@ export type ToolName =
   | 'dorms-arcade'
   | 'oneclick-portal'
   | 'edudraft'
-  | 'pdf-lab';
+  | 'pdf-lab'
+  // ── 2026-09-18 추가: 오너 직접 제작 외부 웹 도구 ──
+  | 'exam-analysis'
+  | 'cut-score';
 
 /** 이벤트별 properties 타입 매핑 */
 export interface AnalyticsEventProperties {
