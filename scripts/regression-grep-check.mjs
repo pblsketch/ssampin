@@ -42,15 +42,21 @@ const presenceChecks = [
   // 동작 검증은 src/widgets/components/__tests__/SortableWidgetKeyboardInput.spec.tsx.
   // ────────────────────────────────────────────────────────────────────────
   // ────────────────────────────────────────────────────────────────────────
-  // REGRESSION #73 (2026-09-08) — 컴시간 "이번 주 변경"(일일자료) 배선.
+  // REGRESSION #73 (2026-09-08 / 2026-09-18 갱신) — 컴시간 "이번 주 변경"(일일자료) 배선.
   //
   // 앱은 컴시간 원자료(기본 편성표, 자료481)만 읽어서 보강·교체(일일자료, 자료147)가
   // 있어도 "바뀐 내용이 없어요"라고 답했다(사용자 제보). 유스케이스가 `weekly` 를 계산해도
   // 확인 함수가 안 쓰면 순수 함수 테스트는 초록인 채 화면은 예전 그대로다("층은 만들었는데
-  // 배선을 잊은" 사고 유형 — #57 주석). 세 자리를 글자로 못 박는다:
+  // 배선을 잊은" 사고 유형 — #57 주석).
+  //
+  // 2026-09-18(ADR-123): "알리기만" 을 그만두고 **그 주 날짜의 변동 시간표로 자동 등록**한다.
+  // 사용자 제보 — "변동내역이 알림으로 뜨는 게 아니라 직접 변경된 시간표로 표시되면 좋겠다".
+  // 다섯 자리를 글자로 못 박는다:
   //  (1) API 클라이언트가 일일자료 코드를 읽어 dailyGrid 로 넘긴다.
-  //  (2) 확인 함수가 result.weekly 를 스토어(weeklyComciganChanges)에 싣고 결과에 weeklyChangeCount 를 준다.
-  //  (3) 위젯 배너 요약이 unchanged + weeklyChangeCount>0 을 'weekly' 로 올린다.
+  //  (2) 확인 함수가 교사·학급 이번 주 변경을 등록 경로에 넘기고 반영 칸 수를 결과에 준다.
+  //  (3) 위젯 배너 요약이 "반영됨"과 "반영 안 됨"을 구분한다(최신 상태로 뭉개지 않는다).
+  //  (4) 등록 규칙이 사용자가 직접 만든 변동이 있는 칸을 건너뛴다(덮어쓰기 금지 — 데이터 손실).
+  //  (5) 주말과 사용자가 되돌린 주에는 자동 등록하지 않는다.
   // ────────────────────────────────────────────────────────────────────────
   {
     file: 'src/infrastructure/comcigan/ComciganApiClient.ts',
@@ -61,13 +67,26 @@ const presenceChecks = [
   {
     file: 'src/adapters/hooks/useComciganAutoSync.ts',
     pattern:
-      /result\.weekly\?\.diff\.changes[\s\S]{0,400}?setWeeklyComciganChanges\([\s\S]{0,1500}?status: 'unchanged', changeCount: 0, weeklyChangeCount/,
-    name: 'REGRESSION #73-2: 컴시간 확인 함수가 이번 주 변경을 스토어에 싣고 weeklyChangeCount 를 돌려준다',
+      /result\.weekly\?\.diff\.changes[\s\S]{0,300}?result\.weeklyClass\?\.diff\.changes[\s\S]{0,300}?applyWeeklyChanges\([\s\S]{0,2000}?weeklyAppliedCount: applyOutcome\.applied/,
+    name: 'REGRESSION #73-2: 컴시간 확인 함수가 이번 주 변경(교사·학급)을 시간표에 등록하고 반영 칸 수를 돌려준다',
   },
   {
     file: 'src/widgets/hooks/useTimetableChangeCheck.ts',
-    pattern: /case 'unchanged':[\s\S]{0,300}?weeklyCount > 0\) return \{ kind: 'weekly'/,
-    name: 'REGRESSION #73-3: 위젯 배너는 기본 편성표 무변경 + 이번 주 변경을 "최신 상태"로 뭉개지 않는다',
+    pattern:
+      /case 'unchanged':[\s\S]{0,400}?weeklyApplied > 0\) return \{ kind: 'weeklyApplied'[\s\S]{0,400}?weeklyCount > 0\)/,
+    name: 'REGRESSION #73-3: 위젯 배너는 이번 주 변경의 "반영됨"과 "반영 안 됨"을 구분한다',
+  },
+  {
+    file: 'src/domain/rules/comciganWeeklyOverrides.ts',
+    pattern:
+      /userKeyed\.has\(`\$\{draft\.date\}__\$\{draft\.period\}__\$\{draft\.scope\}`\)[\s\S]{0,400}?skipped \+= 1;[\s\S]{0,200}?continue;/,
+    name: 'REGRESSION #73-4: 자동 등록은 사용자가 직접 만든 변동이 있는 칸을 건너뛴다(덮어쓰기 금지)',
+  },
+  {
+    file: 'src/adapters/hooks/useComciganAutoSync.ts',
+    pattern:
+      /if \(isWeekendDate\(now\)\) return notApplied\('weekend'\);[\s\S]{0,400}?if \(suppressed && !input\.manual\) return notApplied\('suppressed'\);/,
+    name: 'REGRESSION #73-5: 주말과 사용자가 되돌린 주에는 이번 주 변경을 자동 등록하지 않는다',
   },
   {
     file: 'src/widgets/components/SortableWidget.tsx',

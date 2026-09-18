@@ -26,7 +26,7 @@ import { periodTimesToSettingsPatch } from '@domain/rules/comciganRules';
 import type { ParsedComciganPeriodTimes } from '@domain/rules/comciganRules';
 import type { DayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
-import { periodTimeLabel, resolvePeriodLabel } from '@domain/rules/periodLabel';
+import { periodTimeLabel } from '@domain/rules/periodLabel';
 import type { TeacherPeriod, ClassPeriod, TimetableOverride } from '@domain/entities/Timetable';
 import type { SubjectColorMap, SubjectColorId } from '@domain/valueObjects/SubjectColor';
 import { DEFAULT_SUBJECT_COLORS } from '@domain/valueObjects/SubjectColor';
@@ -43,7 +43,12 @@ import {
   autoAssignClassroomColors,
 } from '@domain/rules/subjectColorRules';
 import { getCurrentISOWeek } from '@usecases/timetable/AutoSyncNeisTimetable';
-import { checkComciganTimetableChange } from '@adapters/hooks/useComciganAutoSync';
+import {
+  checkComciganTimetableChange,
+  reapplyComciganWeeklyApply,
+  refreshComciganWeeklyAfterBaseApplied,
+  revertComciganWeeklyApply,
+} from '@adapters/hooks/useComciganAutoSync';
 import { checkAppinTimetableChange } from '@adapters/hooks/useAppinAutoSync';
 import type { ClassScheduleData, TeacherScheduleData } from '@domain/entities/Timetable';
 import type { ComciganTeacherFingerprint } from '@domain/entities/Settings';
@@ -80,15 +85,18 @@ type TabType = 'class' | 'teacher';
  */
 export type TimetableInitialIntent = 'sync-review';
 
-/** 이번 주 변경 배너의 한 칸 표기 — diff 키('과목@교실' 또는 공강 '')를 사람 말로 */
-function formatWeeklyCell(key: string): string {
-  if (key === '') return '공강';
-  const [subject, room] = key.split('@');
-  return room ? `${subject} ${room}` : (subject ?? '');
+/**
+ * 셀 오른쪽 위 변동 표식.
+ * 컴시간에서 자동으로 들어온 이번 주 변동과 사용자가 직접 만든 변동을 아이콘으로 구분한다.
+ */
+function overrideMarkIcon(override: TimetableOverride): string {
+  return override.source === 'comcigan' ? 'event_repeat' : 'push_pin';
 }
 
-/** 이번 주 변경 배너에 바로 펼쳐 보이는 칸 수(그 이상은 "외 n칸") */
-const WEEKLY_CHANGES_PREVIEW = 6;
+function overrideMarkTitle(override: TimetableOverride): string {
+  if (override.source === 'comcigan') return '컴시간에서 온 이번 주 변동';
+  return `임시 변경: ${override.reason ?? ''}`;
+}
 
 interface TimetablePageProps {
   readonly initialIntent?: TimetableInitialIntent | null;
@@ -666,8 +674,8 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
   // ── 컴시간 변경 감지: 대기 중 검토 + 수동 확인 ──
   const pendingComciganReview = useScheduleStore((s) => s.pendingComciganReview);
   const setPendingComciganReview = useScheduleStore((s) => s.setPendingComciganReview);
-  const weeklyComciganChanges = useScheduleStore((s) => s.weeklyComciganChanges);
-  const setWeeklyComciganChanges = useScheduleStore((s) => s.setWeeklyComciganChanges);
+  const weeklyApply = useScheduleStore((s) => s.comciganWeeklyApply);
+  const setComciganWeeklyApply = useScheduleStore((s) => s.setComciganWeeklyApply);
   const [checkingComcigan, setCheckingComcigan] = useState(false);
   const comciganAutoSyncOn = settings.comcigan?.autoSync?.enabled === true;
 
@@ -679,6 +687,55 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
     setPreviewFingerprint(null);
     setShowExcelPreview(true);
   }, [pendingComciganReview]);
+
+  /* ── 컴시간 이번 주 변동: 반영 결과 배너 ── */
+  const [weeklyBusy, setWeeklyBusy] = useState(false);
+
+  const handleRevertWeekly = useCallback(async () => {
+    if (weeklyBusy) return;
+    setWeeklyBusy(true);
+    try {
+      await revertComciganWeeklyApply();
+    } finally {
+      setWeeklyBusy(false);
+    }
+  }, [weeklyBusy]);
+
+  const handleReapplyWeekly = useCallback(async () => {
+    if (weeklyBusy) return;
+    setWeeklyBusy(true);
+    try {
+      await reapplyComciganWeeklyApply();
+    } finally {
+      setWeeklyBusy(false);
+    }
+  }, [weeklyBusy]);
+
+  const weeklyBannerTitle = useMemo(() => {
+    if (!weeklyApply) return '';
+    if (weeklyApply.state === 'reverted') return '이번 주 변동을 되돌렸어요';
+    if (weeklyApply.state === 'not-applied') {
+      return `이번 주 컴시간 보강·교체가 ${weeklyApply.changeCount}칸 있어요`;
+    }
+    if (weeklyApply.applied === 0) return '이번 주 변동은 이미 반영돼 있어요';
+    return `이번 주 시간표에 ${weeklyApply.applied}칸 반영했어요`;
+  }, [weeklyApply]);
+
+  const weeklyBannerDetail = useMemo(() => {
+    if (!weeklyApply) return '';
+    if (weeklyApply.state === 'reverted') {
+      return '이번 주에는 자동으로 넣지 않아요. 다시 반영하기를 누르면 되돌아와요.';
+    }
+    if (weeklyApply.reason === 'weekend') {
+      return '주말에는 자동으로 반영하지 않아요. 월요일에 다시 확인해요.';
+    }
+    if (weeklyApply.reason === 'suppressed') {
+      return '되돌린 상태라 반영하지 않았어요. 변동 확인을 누르면 다시 들어와요.';
+    }
+    const skipNote =
+      weeklyApply.skipped > 0 ? ` 직접 바꾼 ${weeklyApply.skipped}칸은 그대로 뒀어요.` : '';
+    return `보강·교체로 이번 주만 바뀐 칸이에요. 기본 시간표는 그대로예요.${skipNote}`;
+  }, [weeklyApply]);
 
   // 수동 '컴시간 변동 확인' — 지금 다시 확인(스로틀 무시)
   const handleComciganCheck = useCallback(async () => {
@@ -830,6 +887,8 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
     setPreviewPeriodTimes(null);
     setPreviewFingerprint(null);
     setPendingComciganReview(null);
+    // 기본 편성표가 바뀌었으니 이번 주 컴시간 항목을 다시 맞춘다(컴시간 재조회 없음).
+    await refreshComciganWeeklyAfterBaseApplied();
   }, [
     settings.periodTimes,
     previewSchedule,
@@ -1104,54 +1163,61 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
             </div>
           )}
 
-          {/* 컴시간 이번 주 변경 배너 — 일일자료(보강·교체)로 이번 주만 달라진 칸.
-              검토·적용 대상이 아니라 알림뿐이라 경고색(amber)이 아닌 강조색을 쓴다.
-              기본 편성표는 건드리지 않는다 — 이번 주만의 일을 기본 편성표에 덮으면 다음 주가 틀어진다. */}
-          {tab === 'teacher' && weeklyComciganChanges && (
+          {/* 컴시간 이번 주 변동 배너 — 보강·교체는 이미 그 주 날짜의 변동으로 시간표에 들어가 있다.
+              여기서는 몇 칸 반영했는지 알리고 되돌릴 수 있게만 한다(내용 나열은 표가 대신한다).
+              기본 편성표는 건드리지 않는다 — 이번 주만의 일을 편성표에 덮으면 다음 주가 틀어진다. */}
+          {weeklyApply && (
             <div
               style={{
                 backgroundColor: 'color-mix(in srgb, var(--sp-accent) 7%, var(--sp-card))',
                 borderColor: 'color-mix(in srgb, var(--sp-accent) 22%, transparent)',
               }}
-              className="flex flex-col gap-3 rounded-xl border px-4 py-3"
+              className="flex flex-col gap-3 rounded-xl border px-4 py-3 sm:flex-row sm:items-center"
             >
-              <div className="flex items-start gap-3">
+              <div className="flex min-w-0 flex-1 items-start gap-2">
                 <span className="material-symbols-outlined shrink-0 text-xl text-sp-accent">
                   event_repeat
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-bold text-sp-text">
-                    이번 주 컴시간 시간표가 {weeklyComciganChanges.changes.length}칸 달라요
-                  </p>
-                  <p className="mt-0.5 text-xs text-sp-muted">
-                    보강·교체로 이번 주만 바뀐 칸이에요. 기본 시간표는 그대로 두고 알려만 드려요.
-                  </p>
-                  <ul className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-sp-text">
-                    {weeklyComciganChanges.changes
-                      .slice(0, WEEKLY_CHANGES_PREVIEW)
-                      .map((change) => (
-                        <li key={`${change.day}-${change.period}`} className="whitespace-nowrap">
-                          <span className="font-semibold">
-                            {/* 교사가 붙인 교시 이름("창체")을 여기서도 존중한다 — 정본에 위임 */}
-                            {change.day}요일{' '}
-                            {resolvePeriodLabel(change.period, settings.periodTimes)}
-                          </span>{' '}
-                          {formatWeeklyCell(change.before)} → {formatWeeklyCell(change.after)}
-                        </li>
-                      ))}
-                    {weeklyComciganChanges.changes.length > WEEKLY_CHANGES_PREVIEW && (
-                      <li className="text-sp-muted">
-                        외 {weeklyComciganChanges.changes.length - WEEKLY_CHANGES_PREVIEW}칸
-                      </li>
-                    )}
-                  </ul>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-sp-text">{weeklyBannerTitle}</p>
+                  <p className="mt-0.5 text-xs text-sp-muted">{weeklyBannerDetail}</p>
                 </div>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {weeklyApply.state === 'applied' && (
+                  <button
+                    onClick={handleRevertWeekly}
+                    disabled={weeklyBusy}
+                    className="flex items-center gap-1.5 rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-icon-sm">undo</span>
+                    되돌리기
+                  </button>
+                )}
+                {weeklyApply.state === 'reverted' && (
+                  <button
+                    onClick={handleReapplyWeekly}
+                    disabled={weeklyBusy}
+                    className="flex items-center gap-1.5 rounded-lg bg-sp-accent px-3.5 py-2 text-sm font-bold text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-icon-sm">redo</span>
+                    다시 반영하기
+                  </button>
+                )}
                 <button
-                  onClick={() => setWeeklyComciganChanges(null)}
-                  className="shrink-0 rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
+                  onClick={() => setOverridesPanelOpen(true)}
+                  className="rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
                 >
-                  닫기
+                  목록 보기
                 </button>
+                {weeklyApply.state !== 'reverted' && (
+                  <button
+                    onClick={() => setComciganWeeklyApply(null)}
+                    className="rounded-lg border border-sp-border px-3 py-2 text-sm font-semibold text-sp-muted transition-colors hover:bg-sp-surface hover:text-sp-text"
+                  >
+                    닫기
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -1826,9 +1892,11 @@ function SubjectCell({
           {isOverridden && (
             <span
               className="absolute top-0.5 right-0.5 text-micro text-amber-400"
-              title={`임시 변경: ${override.reason ?? ''}`}
+              title={overrideMarkTitle(override)}
             >
-              <span className="material-symbols-outlined text-xs">push_pin</span>
+              <span className="material-symbols-outlined text-xs">
+                {overrideMarkIcon(override)}
+              </span>
             </span>
           )}
         </div>
@@ -1868,7 +1936,9 @@ function SubjectCell({
           {cellContent}
           {isOverridden ? (
             <span className="absolute -top-1 -right-1 text-amber-400">
-              <span className="material-symbols-outlined text-icon-sm">push_pin</span>
+              <span className="material-symbols-outlined text-icon-sm">
+                {overrideMarkIcon(override)}
+              </span>
             </span>
           ) : (
             <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
@@ -1903,9 +1973,9 @@ function SubjectCell({
         {isOverridden && (
           <span
             className="absolute top-0.5 right-0.5 text-amber-400"
-            title={`임시 변경: ${override.reason ?? ''}`}
+            title={overrideMarkTitle(override)}
           >
-            <span className="material-symbols-outlined text-xs">push_pin</span>
+            <span className="material-symbols-outlined text-xs">{overrideMarkIcon(override)}</span>
           </span>
         )}
       </div>
@@ -1984,9 +2054,11 @@ function TeacherCell({
           {isOverridden && (
             <span
               className="absolute top-0.5 right-0.5 text-amber-400"
-              title={`임시 변경: ${override.reason ?? ''}`}
+              title={overrideMarkTitle(override)}
             >
-              <span className="material-symbols-outlined text-xs">push_pin</span>
+              <span className="material-symbols-outlined text-xs">
+                {overrideMarkIcon(override)}
+              </span>
             </span>
           )}
           {overlay}
@@ -2035,7 +2107,9 @@ function TeacherCell({
           {cellContent}
           {isOverridden ? (
             <span className="absolute -top-1 -right-1 text-amber-400">
-              <span className="material-symbols-outlined text-icon-sm">push_pin</span>
+              <span className="material-symbols-outlined text-icon-sm">
+                {overrideMarkIcon(override)}
+              </span>
             </span>
           ) : (
             <span className="block w-2 h-2 rounded-full bg-amber-400 animate-ping absolute -top-1 -right-1" />
@@ -2073,9 +2147,9 @@ function TeacherCell({
         {isOverridden && (
           <span
             className="absolute top-0.5 right-0.5 text-amber-400"
-            title={`임시 변경: ${override.reason ?? ''}`}
+            title={overrideMarkTitle(override)}
           >
-            <span className="material-symbols-outlined text-xs">push_pin</span>
+            <span className="material-symbols-outlined text-xs">{overrideMarkIcon(override)}</span>
           </span>
         )}
         {overlay}

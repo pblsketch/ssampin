@@ -174,6 +174,12 @@ export function ComciganClassImportModal({
       setPeriodTimesApplied(true);
     }
 
+    // 이번 주 보강·교체를 우리 반 시간표에도 반영하려면 "컴시간 격자에서 우리 반이 몇 학년 몇 반인가"가
+    // 필요하다. 여기서 고른 값이 그 정본이다(담임 학급 설정으로 대신하지 않는다).
+    await updateSettings({
+      comcigan: { classRef: { grade: Number(selectedGrade), classNum: Number(selectedClass) } },
+    });
+
     const { schedule, maxPeriod } = buildClassSchedule(
       lessons,
       Number(selectedGrade),

@@ -4,6 +4,12 @@ import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { comciganPort } from '@adapters/di/container';
 import { autoSyncComciganTimetable } from '@usecases/timetable/AutoSyncComciganTimetable';
+import {
+  buildComciganWeeklyOverrides,
+  isWeekendDate,
+  weekMondayOf,
+} from '@domain/rules/comciganWeeklyOverrides';
+import type { TimetableChange } from '@domain/rules/timetableDiff';
 import { toLocalDateString } from '@shared/utils/localDate';
 import type { TimetableCheckResult } from './timetableCheckTypes';
 
@@ -20,11 +26,144 @@ async function markComciganSynced(today: string): Promise<void> {
   await store.update({ comcigan: { autoSync: { ...autoSync, lastSyncDate: today } } });
 }
 
+/** 되돌린 주 표식을 쓴다/지운다. 설정에 저장되므로 재시작·다른 기기에서도 유지된다. */
+async function setWeeklySuppressedWeek(week: string | undefined): Promise<void> {
+  const store = useSettingsStore.getState();
+  if ((store.settings.comcigan?.weeklySuppressedWeek ?? undefined) === week) return;
+  await store.update({ comcigan: { weeklySuppressedWeek: week } });
+}
+
+interface WeeklyApplyOutcome {
+  readonly weekMonday: string;
+  readonly changeCount: number;
+  readonly applied: number;
+  readonly skipped: number;
+  readonly reason?: 'weekend' | 'suppressed';
+}
+
+/**
+ * 이번 주 변동을 그 주 날짜의 변동 시간표로 등록한다(자동 반영).
+ *
+ * - 주말(토·일)에는 등록하지 않는다. 컴시간 이번 주 자료가 주말에 어느 주를 가리키는지
+ *   실측되지 않았고, 이미 반영된 이번 주 항목을 지우지도 않는다.
+ * - 사용자가 되돌린 주에는 자동 확인이 다시 넣지 않는다. 사용자가 **직접 누른** 확인이면
+ *   그 표식을 지우고 다시 넣는다(실수로 되돌린 경우의 복구 경로).
+ * - 변동이 0칸이어도 등록을 호출한다 — 컴시간에서 보강이 취소되면 그 주 항목이 사라져야 한다.
+ */
+async function applyWeeklyChanges(input: {
+  readonly teacherChanges: readonly TimetableChange[];
+  readonly classChanges: readonly TimetableChange[];
+  readonly manual: boolean;
+}): Promise<WeeklyApplyOutcome> {
+  const settings = useSettingsStore.getState().settings;
+  const schedule = useScheduleStore.getState();
+  const changeCount = input.teacherChanges.length + input.classChanges.length;
+  const now = new Date();
+  const weekMonday = weekMondayOf(now);
+
+  const notApplied = (reason: 'weekend' | 'suppressed'): WeeklyApplyOutcome => {
+    schedule.setComciganWeeklyApply(
+      changeCount > 0
+        ? {
+            weekMonday,
+            changeCount,
+            applied: 0,
+            skipped: 0,
+            state: 'not-applied',
+            reason,
+            drafts: [],
+          }
+        : null,
+    );
+    return { weekMonday, changeCount, applied: 0, skipped: 0, reason };
+  };
+
+  if (isWeekendDate(now)) return notApplied('weekend');
+
+  const suppressed = settings.comcigan?.weeklySuppressedWeek === weekMonday;
+  if (suppressed && !input.manual) return notApplied('suppressed');
+
+  const { drafts } = buildComciganWeeklyOverrides({
+    baseDate: now,
+    teacherChanges: input.teacherChanges,
+    classChanges: input.classChanges,
+    maxPeriods: settings.maxPeriods,
+  });
+  const { applied, skipped } = await schedule.applyComciganWeeklyOverrides(weekMonday, drafts);
+  if (suppressed) await setWeeklySuppressedWeek(undefined);
+
+  schedule.setComciganWeeklyApply(
+    changeCount > 0
+      ? { weekMonday, changeCount, applied, skipped, state: 'applied', drafts }
+      : null,
+  );
+  return { weekMonday, changeCount, applied, skipped };
+}
+
+/** 토스트에 덧붙일 이번 주 반영 안내 (앞에 공백 한 칸) */
+function weeklyNoteOf(outcome: WeeklyApplyOutcome): string {
+  if (outcome.changeCount === 0) return '';
+  if (outcome.reason === 'weekend') {
+    return ` 이번 주 보강·교체가 ${outcome.changeCount}칸 있어요. 주말에는 자동으로 반영하지 않아요.`;
+  }
+  if (outcome.reason === 'suppressed') {
+    return ` 이번 주 보강·교체가 ${outcome.changeCount}칸 있어요. 되돌린 상태라 반영하지 않았어요.`;
+  }
+  const skipNote = outcome.skipped > 0 ? ` 직접 바꾼 ${outcome.skipped}칸은 그대로 뒀어요.` : '';
+  if (outcome.applied === 0) {
+    return skipNote || ` 이번 주 보강·교체 ${outcome.changeCount}칸은 이미 반영돼 있어요.`;
+  }
+  return ` 이번 주 시간표 ${outcome.applied}칸을 반영했어요.${skipNote}`;
+}
+
+/**
+ * 되돌리기 — 그 주의 컴시간발 항목을 지우고 "이번 주는 자동으로 넣지 마" 표식을 남긴다.
+ * 배너는 사라지지 않고 '다시 반영하기'로 남는다(실수로 되돌린 경우의 복구 경로).
+ */
+export async function revertComciganWeeklyApply(): Promise<void> {
+  const schedule = useScheduleStore.getState();
+  const current = schedule.comciganWeeklyApply;
+  if (!current) return;
+  await schedule.revertComciganWeeklyOverrides(current.weekMonday);
+  await setWeeklySuppressedWeek(current.weekMonday);
+  schedule.setComciganWeeklyApply({ ...current, applied: 0, skipped: 0, state: 'reverted' });
+}
+
+/** 다시 반영하기 — 되돌리기 직후 배너에서 부른다. 컴시간을 다시 조회하지 않는다. */
+export async function reapplyComciganWeeklyApply(): Promise<void> {
+  const schedule = useScheduleStore.getState();
+  const current = schedule.comciganWeeklyApply;
+  if (!current) return;
+  const { applied, skipped } = await schedule.applyComciganWeeklyOverrides(
+    current.weekMonday,
+    current.drafts,
+  );
+  await setWeeklySuppressedWeek(undefined);
+  schedule.setComciganWeeklyApply({ ...current, applied, skipped, state: 'applied' });
+}
+
+/**
+ * 학기 기본 편성표를 검토·적용한 직후 이번 주 항목을 다시 맞춘다.
+ * 컴시간을 다시 조회하지 않고(폴링 금지) 들고 있던 초안을 그대로 재적용한다 —
+ * 교시 수·사용자 변동이 그 사이 달라졌을 수 있어 건너뛴 칸 판정이 바뀔 수 있다.
+ */
+export async function refreshComciganWeeklyAfterBaseApplied(): Promise<void> {
+  const schedule = useScheduleStore.getState();
+  const current = schedule.comciganWeeklyApply;
+  if (!current || current.state !== 'applied') return;
+  const { applied, skipped } = await schedule.applyComciganWeeklyOverrides(
+    current.weekMonday,
+    current.drafts,
+  );
+  schedule.setComciganWeeklyApply({ ...current, applied, skipped });
+}
+
 /**
  * 컴시간 변경 확인 + 결과 처리(부수효과). 앱 시작 훅과 수동 버튼, 위젯 새로고침이 공유한다.
  * - 매칭 실패 → "다시 선택" 안내(적용 0)
  * - 변경 없음 → (수동일 때만) 안내
- * - 이번 주 보강·교체(일일자료) → 기본 편성표 판정과 별개로 알림만(반영 안 함, 스토어 weeklyComciganChanges)
+ * - 이번 주 보강·교체(일일자료) → 기본 편성표 판정과 별개로 그 주 날짜의 변동 시간표에 자동 등록
+ *   (결과 요약만 스토어 comciganWeeklyApply 에 싣는다)
  * - 변경 있음 + autoApply → 무음 적용, 아니면 검토 대기(비파괴) + 알림
  *
  * 판정 결과를 반환하는 이유: 위젯 창에는 토스트 표시기가 없어(App.tsx WidgetApp) 안내를
@@ -50,6 +189,7 @@ export async function checkComciganTimetableChange(opts: {
     comciganPort,
     comcigan.fingerprint,
     schedule.teacherSchedule,
+    comcigan.classRef,
   );
 
   if (result.skipped) {
@@ -82,35 +222,42 @@ export async function checkComciganTimetableChange(opts: {
     return { status: 'unmatched', changeCount: 0 };
   }
 
-  // 이번 주 변경(보강·교체) — 일일자료가 있을 때만. 기본 편성표 판정과 따로 알리고,
-  // 시간표에는 반영하지 않는다(이번 주만의 일이라 기본 편성표를 덮으면 안 된다).
-  // 예전엔 원자료만 봐서 이 변경이 있어도 "바뀐 내용이 없어요"라고 답했다(2026-09-08 제보).
+  // 이번 주 변동(보강·교체) — 일일자료가 있을 때만. 기본 편성표 판정과 별개로,
+  // 그 주 날짜의 변동 시간표로 **자동 등록**한다(ADR-091 3항의 "알리기만" 결정을 대체).
+  // 학기 기본 편성표는 건드리지 않는다 — 이번 주만의 일을 편성표에 덮으면 다음 주가 틀어진다.
   const weeklyChanges = result.weekly?.diff.changes ?? [];
-  const weeklyChangeCount = weeklyChanges.length;
-  useScheduleStore
-    .getState()
-    .setWeeklyComciganChanges(
-      result.weekly && weeklyChangeCount > 0
-        ? { changes: weeklyChanges, schedule: result.weekly.schedule, checkedAt: today }
-        : null,
-    );
-  const weeklyNote =
-    weeklyChangeCount > 0 ? ` 이번 주 보강·교체도 ${weeklyChangeCount}칸 있어요.` : '';
+  const weeklyClassChanges = result.weeklyClass?.diff.changes ?? [];
+  const weeklyChangeCount = weeklyChanges.length + weeklyClassChanges.length;
+  const applyOutcome = await applyWeeklyChanges({
+    teacherChanges: weeklyChanges,
+    classChanges: weeklyClassChanges,
+    manual,
+  });
+  const weeklyNote = weeklyNoteOf(applyOutcome);
+  /** 확인 결과에 실어 보낼 이번 주 반영 요약 (위젯 배너가 문구를 정하는 근거) */
+  const weeklyResult = {
+    weeklyChangeCount,
+    weeklyAppliedCount: applyOutcome.applied,
+    ...(applyOutcome.reason ? { weeklyNotApplied: applyOutcome.reason } : {}),
+  };
 
   if (!result.changed || !result.data) {
     if (weeklyChangeCount > 0) {
       // 자동 확인(앱 시작, 하루 1회)에서도 알린다 — 이번 주 수업이 달라졌다는 건 오늘의 일이다.
       toast(
-        `기본 시간표는 그대로예요. 이번 주 보강·교체가 ${weeklyChangeCount}칸 있어요.`,
+        `기본 시간표는 그대로예요.${weeklyNote}`,
         'info',
-        { label: '보기', onClick: navigateToTimetable },
+        {
+          label: '보기',
+          onClick: navigateToTimetable,
+        },
         6000,
       );
     } else if (manual) {
       toast('시간표에 바뀐 내용이 없어요. 최신 상태예요.', 'success');
     }
     await markComciganSynced(today);
-    return { status: 'unchanged', changeCount: 0, weeklyChangeCount };
+    return { status: 'unchanged', changeCount: 0, ...weeklyResult };
   }
 
   const changeCount = result.diff?.changes.length ?? 0;
@@ -120,7 +267,7 @@ export async function checkComciganTimetableChange(opts: {
     await useScheduleStore.getState().updateTeacherSchedule(result.data);
     toast(`컴시간 시간표가 업데이트됐어요. (${changeCount}칸 변경)${weeklyNote}`, 'success');
     await markComciganSynced(today);
-    return { status: 'applied', changeCount, weeklyChangeCount };
+    return { status: 'applied', changeCount, ...weeklyResult };
   }
 
   // 기본: 비파괴 — 검토 대기로 두고 알림만
@@ -134,7 +281,7 @@ export async function checkComciganTimetableChange(opts: {
     },
   );
   await markComciganSynced(today);
-  return { status: 'pending', changeCount, weeklyChangeCount };
+  return { status: 'pending', changeCount, ...weeklyResult };
 }
 
 /**

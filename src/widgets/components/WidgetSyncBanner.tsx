@@ -48,6 +48,15 @@ export function WidgetSyncBanner() {
     );
   }
 
+  if (state.kind === 'weeklyApplied') {
+    // 이미 이번 주 변동으로 반영됐다 — 위젯 시간표 카드가 바로 새 수업을 보여준다.
+    return (
+      <div className={`${BASE} bg-green-600 cursor-default`}>
+        이번 주 시간표 {state.changeCount}칸을 반영했어요
+      </div>
+    );
+  }
+
   const goToTimetable = (fragment: string): void => {
     // 메인 창을 열어 시간표 화면으로 이동한다(main 이 위젯 창을 닫는다).
     // 감지 결과 자체는 창을 넘지 못하므로 "무엇을 하러 왔는지"만 넘기고,
@@ -56,14 +65,19 @@ export function WidgetSyncBanner() {
   };
 
   if (state.kind === 'weekly') {
-    // 기본 편성표는 그대로 — 검토(amber)가 아니라 안내라서 강조색을 쓴다.
-    // 메인 창 시간표 화면이 도착 즉시 다시 확인해 이번 주 변경 배너를 띄운다(sync-review 의도).
+    // 이번 주 변동이 있지만 반영하지 않은 경우(주말이거나 사용자가 그 주를 되돌린 상태).
+    const label =
+      state.reason === 'weekend'
+        ? `이번 주 컴시간 보강·교체 ${state.changeCount}칸 — 주말에는 반영하지 않아요`
+        : state.reason === 'suppressed'
+          ? `이번 주 컴시간 보강·교체 ${state.changeCount}칸 — 되돌린 상태예요`
+          : `이번 주 컴시간 보강·교체 ${state.changeCount}칸 — 눌러서 보기`;
     return (
       <ActionBanner
         tone="bg-sp-accent hover:brightness-110"
         onClick={() => goToTimetable('timetable#sync-review')}
         onDismiss={dismiss}
-        label={`이번 주 컴시간 보강·교체 ${state.changeCount}칸 — 눌러서 보기`}
+        label={label}
       />
     );
   }

@@ -96,4 +96,47 @@ describe('autoSyncComciganTimetable', () => {
     expect(r).toMatchObject({ skipped: false, matched: false, changed: false, reason: 'no-match' });
     expect(r.data).toBeUndefined();
   });
+
+  describe('우리 반 이번 주 변경 (weeklyClass)', () => {
+    /** 이번 주: 1학년 1반 월 2교시 문학이 빠지고 월 3교시 국어가 생김 */
+    const withDaily = (): ComciganRawSchoolData => ({
+      ...fixture(),
+      dailyGrid: [[], [[], [[], [3, code(1, 1), 0, `>${code(1, 1)}`]]]],
+    });
+
+    it('학년·반을 넘기지 않으면 계산하지 않는다', async () => {
+      const r = await autoSyncComciganTimetable(port(withDaily()), FP, EMPTY);
+      expect(r.weekly?.diff.changed).toBe(true);
+      expect(r.weeklyClass).toBeUndefined();
+    });
+
+    it('학년·반을 넘기면 서버 원자료↔일일자료 차이를 학급 시간표로 돌려준다', async () => {
+      const r = await autoSyncComciganTimetable(port(withDaily()), FP, EMPTY, {
+        grade: 1,
+        classNum: 1,
+      });
+      expect(r.weeklyClass?.diff.changed).toBe(true);
+      expect(r.weeklyClass?.diff.changes).toEqual([
+        { day: '월', period: 2, before: '문학/백순*', after: '' },
+        { day: '월', period: 3, before: '', after: '국어/백순*' },
+      ]);
+      expect(r.weeklyClass?.schedule['월']?.[2]).toEqual({ subject: '국어', teacher: '백순*' });
+    });
+
+    it('일일자료가 없는 학교는 학년·반을 넘겨도 계산하지 않는다', async () => {
+      const r = await autoSyncComciganTimetable(port(fixture()), FP, EMPTY, {
+        grade: 1,
+        classNum: 1,
+      });
+      expect(r.weeklyClass).toBeUndefined();
+    });
+
+    it('없는 학년·반이면 변동 없음으로 나온다', async () => {
+      const r = await autoSyncComciganTimetable(port(withDaily()), FP, EMPTY, {
+        grade: 9,
+        classNum: 9,
+      });
+      expect(r.weeklyClass?.diff.changed).toBe(false);
+    });
+  });
 });

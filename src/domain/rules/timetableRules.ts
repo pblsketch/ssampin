@@ -11,7 +11,10 @@ import type {
 /**
  * 비어있는 학급 시간표 생성 (순수 함수)
  */
-export function createEmptyClassSchedule(maxPeriods: number, weekendDays?: readonly WeekendDay[]): ClassScheduleData {
+export function createEmptyClassSchedule(
+  maxPeriods: number,
+  weekendDays?: readonly WeekendDay[],
+): ClassScheduleData {
   const activeDays = getActiveDays(weekendDays);
   const data: Record<string, ClassPeriod[]> = {};
   for (const day of activeDays) {
@@ -44,9 +47,12 @@ export function migrateClassScheduleData(
 /**
  * 비어있는 교사 시간표 생성 (순수 함수)
  */
-export function createEmptyTeacherSchedule(maxPeriods: number, weekendDays?: readonly WeekendDay[]): TeacherScheduleData {
+export function createEmptyTeacherSchedule(
+  maxPeriods: number,
+  weekendDays?: readonly WeekendDay[],
+): TeacherScheduleData {
   const activeDays = getActiveDays(weekendDays);
-  const data: Record<string, (null)[]> = {};
+  const data: Record<string, null[]> = {};
   for (const day of activeDays) {
     data[day] = Array.from({ length: maxPeriods }, () => null);
   }
@@ -101,10 +107,7 @@ export function upsertOverride(
  * 해당 override가 주어진 scope(view)에 적용되는지 판정.
  * 기존 데이터(undefined)는 'both'로 간주 (backward compat).
  */
-function appliesToScope(
-  override: TimetableOverride,
-  view: 'teacher' | 'class',
-): boolean {
+function appliesToScope(override: TimetableOverride, view: 'teacher' | 'class'): boolean {
   const s = override.scope ?? 'both';
   if (s === 'both') return true;
   return s === view;
@@ -145,9 +148,12 @@ export function mergeOverridesIntoClassSchedule(
     const idx = override.period - 1;
     if (idx < 0 || idx >= periods.length) continue;
     if (override.subject) {
+      // 담당 교사 이름이 항목에 있으면 그 이름으로 바꾼다(보강으로 다른 교사가 들어온 경우).
+      // 없으면 기존 교사 이름을 유지한다 — 이름이 없는 기존 항목의 표시는 예전과 같다.
+      const teacher = override.substituteTeacher?.trim();
       periods[idx] = {
         subject: override.subject,
-        teacher: base[idx]?.teacher ?? '',
+        teacher: teacher ? teacher : (base[idx]?.teacher ?? ''),
       };
     } else {
       periods[idx] = { subject: '', teacher: '' };

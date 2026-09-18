@@ -27,6 +27,7 @@ const mkOverride = (partial: Partial<TimetableOverride>): TimetableOverride => (
   kind: partial.kind,
   pairId: partial.pairId,
   substituteTeacher: partial.substituteTeacher,
+  source: partial.source,
 });
 
 describe('upsertOverride', () => {
@@ -180,9 +181,7 @@ describe('mergeOverridesIntoClassSchedule', () => {
   ];
 
   it('subject="" → {subject:"", teacher:""} (공강)', () => {
-    const result = mergeOverridesIntoClassSchedule(base, [
-      mkOverride({ period: 2, subject: '' }),
-    ]);
+    const result = mergeOverridesIntoClassSchedule(base, [mkOverride({ period: 2, subject: '' })]);
     expect(result[1]).toEqual({ subject: '', teacher: '' });
   });
 
@@ -212,6 +211,27 @@ describe('mergeOverridesIntoClassSchedule', () => {
       mkOverride({ period: 1, subject: '체육' }),
     ]);
     expect(result[0]).toEqual({ subject: '체육', teacher: '김선생' });
+  });
+
+  it('substituteTeacher 가 있으면 그 이름으로 교체한다 (보강 교사)', () => {
+    const result = mergeOverridesIntoClassSchedule(base, [
+      mkOverride({ period: 1, subject: '체육', substituteTeacher: '최선생' }),
+    ]);
+    expect(result[0]).toEqual({ subject: '체육', teacher: '최선생' });
+  });
+
+  it('substituteTeacher 가 공백뿐이면 기존 교사 이름을 유지한다', () => {
+    const result = mergeOverridesIntoClassSchedule(base, [
+      mkOverride({ period: 1, subject: '체육', substituteTeacher: '   ' }),
+    ]);
+    expect(result[0]).toEqual({ subject: '체육', teacher: '김선생' });
+  });
+
+  it('자습(subject="")은 substituteTeacher 가 있어도 빈 칸으로 만든다', () => {
+    const result = mergeOverridesIntoClassSchedule(base, [
+      mkOverride({ period: 2, subject: '', substituteTeacher: '최선생' }),
+    ]);
+    expect(result[1]).toEqual({ subject: '', teacher: '' });
   });
 
   it('base[idx]가 없으면 teacher 공란 fallback', () => {
@@ -259,8 +279,19 @@ describe('dedupeOverridesKeepLatest', () => {
 
   it('updatedAt > createdAt 최신 항목 승자', () => {
     const data = [
-      mkOverride({ id: 'old', date: '2026-04-22', period: 1, createdAt: '2026-01-01T00:00:00.000Z' }),
-      mkOverride({ id: 'new', date: '2026-04-22', period: 1, createdAt: '2026-02-01T00:00:00.000Z', updatedAt: '2026-04-01T00:00:00.000Z' }),
+      mkOverride({
+        id: 'old',
+        date: '2026-04-22',
+        period: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+      }),
+      mkOverride({
+        id: 'new',
+        date: '2026-04-22',
+        period: 1,
+        createdAt: '2026-02-01T00:00:00.000Z',
+        updatedAt: '2026-04-01T00:00:00.000Z',
+      }),
     ];
     const result = dedupeOverridesKeepLatest(data);
     expect(result).toHaveLength(1);

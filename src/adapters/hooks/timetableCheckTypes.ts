@@ -28,6 +28,10 @@ export interface TimetableCheckResult {
    * status 가 unchanged 여도 0 보다 클 수 있다. 압핀·일일자료 없는 학교는 생략(0 으로 본다).
    */
   readonly weeklyChangeCount?: number;
+  /** 그중 실제로 시간표(변동 항목)에 반영한 칸 수 */
+  readonly weeklyAppliedCount?: number;
+  /** 반영하지 않은 경우의 이유 — 주말이거나 사용자가 그 주를 되돌린 상태 */
+  readonly weeklyNotApplied?: 'weekend' | 'suppressed';
 }
 
 /** 확인 대상 원천 */

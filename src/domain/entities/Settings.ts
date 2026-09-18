@@ -401,6 +401,25 @@ export interface ComciganTeacherFingerprint {
 export interface ComciganSettings {
   readonly autoSync?: ComciganAutoSyncSettings;
   readonly fingerprint?: ComciganTeacherFingerprint;
+  /**
+   * 컴시간에서 우리 반 시간표를 가져올 때 고른 학년·반.
+   * 이번 주 보강·교체를 우리 반 시간표에도 반영할 때의 대상이다. 없으면 우리 반 쪽은 건너뛴다
+   * (담임 학급 설정으로 대신하지 않는다 — 나이스·엑셀로 넣은 시간표에 컴시간 과목 표기를
+   *  얹으면 원본과 어긋난다).
+   */
+  readonly classRef?: ComciganClassRefSettings;
+  /**
+   * 이번 주 변동 자동 반영을 쉬는 주의 월요일('YYYY-MM-DD').
+   * 사용자가 되돌리기를 누르면 그 주가 기록되고, 사용자가 직접 변동 확인을 누르면 지워진다.
+   * 저장·동기화되므로 앱을 다시 켜도, 다른 기기의 확인에도 유지된다.
+   */
+  readonly weeklySuppressedWeek?: string;
+}
+
+/** 컴시간에서 가져온 우리 반 식별 (컴시간 격자의 학년·반) */
+export interface ComciganClassRefSettings {
+  readonly grade: number;
+  readonly classNum: number;
 }
 
 /**

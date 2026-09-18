@@ -15,7 +15,11 @@ import {
   filterOverridesInRange,
   dedupeOverridesKeepLatest,
 } from '@domain/rules/timetableRules';
-import type { TimetableChange } from '@domain/rules/timetableDiff';
+import {
+  reconcileComciganWeeklyOverrides,
+  removeComciganWeeklyOverrides,
+} from '@domain/rules/comciganWeeklyOverrides';
+import type { WeeklyOverrideDraft } from '@domain/rules/comciganWeeklyOverrides';
 import { scheduleRepository } from '@adapters/di/container';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import type { WeekendDay } from '@domain/valueObjects/DayOfWeek';
@@ -41,17 +45,28 @@ export interface PendingComciganReview {
 }
 
 /**
- * 컴시간 일일자료에서 본 "이번 주 변경"(보강·교체). 기본 편성표 검토(PendingComciganReview)와
- * 별개로 알리기만 하고 시간표에는 반영하지 않는다. 확인 함수(useComciganAutoSync)가 채우고
- * 시간표 화면이 배너로 노출한다. 영속·동기화 안 함.
+ * 컴시간 이번 주 변동(보강·교체) 자동 반영 결과. 시간표 화면 배너가 이 값을 읽는다.
+ * 변동 자체는 변동 시간표(overrides)로 이미 저장됐으므로 이 값은 **안내용**이며 영속·동기화하지 않는다.
  */
-export interface WeeklyComciganChanges {
-  /** 기본 편성표 → 이번 주 시간표 차이(요일·교시·전/후) */
-  readonly changes: readonly TimetableChange[];
-  /** 이번 주 실제 교사 시간표(보강·교체 반영) */
-  readonly schedule: TeacherScheduleData;
-  /** 확인한 날짜 'YYYY-MM-DD' */
-  readonly checkedAt: string;
+export interface ComciganWeeklyApplyState {
+  /** 대상 주의 월요일 'YYYY-MM-DD' */
+  readonly weekMonday: string;
+  /** 컴시간이 알려준 이번 주 변동 칸 수 */
+  readonly changeCount: number;
+  /** 실제로 시간표에 반영한 칸 수 */
+  readonly applied: number;
+  /** 사용자가 직접 만든 변동이 있어 건너뛴 칸 수 */
+  readonly skipped: number;
+  /**
+   * - 'applied': 반영했다
+   * - 'reverted': 사용자가 되돌렸다(다시 반영하기 가능)
+   * - 'not-applied': 반영하지 않았다(주말·되돌린 주)
+   */
+  readonly state: 'applied' | 'reverted' | 'not-applied';
+  /** 'not-applied' 이유 */
+  readonly reason?: 'weekend' | 'suppressed';
+  /** 되돌린 뒤 '다시 반영하기'로 복원할 초안 */
+  readonly drafts: readonly WeeklyOverrideDraft[];
 }
 
 /**
@@ -79,9 +94,9 @@ interface ScheduleState {
   pendingComciganReview: PendingComciganReview | null;
   setPendingComciganReview: (review: PendingComciganReview | null) => void;
 
-  /** 컴시간 이번 주 변경(보강·교체) — 알림 전용, 없으면 null */
-  weeklyComciganChanges: WeeklyComciganChanges | null;
-  setWeeklyComciganChanges: (changes: WeeklyComciganChanges | null) => void;
+  /** 컴시간 이번 주 변동 자동 반영 결과 — 안내 전용, 없으면 null */
+  comciganWeeklyApply: ComciganWeeklyApplyState | null;
+  setComciganWeeklyApply: (state: ComciganWeeklyApplyState | null) => void;
 
   /** 압핀 변경 감지 후 검토 대기 중인 시간표(교사/학급, 없으면 null) */
   pendingAppinReview: PendingAppinReview | null;
@@ -110,6 +125,16 @@ interface ScheduleState {
     patch: Partial<Omit<TimetableOverride, 'id' | 'date' | 'period' | 'createdAt'>>,
   ) => Promise<void>;
   deleteOverride: (id: string) => Promise<void>;
+  /**
+   * 컴시간 이번 주 변동 자동 등록. 그 주의 컴시간발 항목 전체를 새 결과로 교체하고,
+   * 지난 주 이전 컴시간발 항목을 정리한다. 사용자가 직접 만든 변동이 있는 칸은 건너뛴다.
+   */
+  applyComciganWeeklyOverrides: (
+    weekMonday: string,
+    drafts: readonly WeeklyOverrideDraft[],
+  ) => Promise<{ applied: number; skipped: number }>;
+  /** 되돌리기 — 그 주의 컴시간발 항목만 지운다 */
+  revertComciganWeeklyOverrides: (weekMonday: string) => Promise<{ removed: number }>;
   /** 특정 날짜의 오버라이드가 적용된 교사 시간표 반환 */
   getEffectiveTeacherSchedule: (
     date: string,
@@ -143,11 +168,11 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
     overrides: [],
     pendingComciganReview: null,
     pendingAppinReview: null,
-    weeklyComciganChanges: null,
+    comciganWeeklyApply: null,
 
     setPendingComciganReview: (review) => set({ pendingComciganReview: review }),
 
-    setWeeklyComciganChanges: (changes) => set({ weeklyComciganChanges: changes }),
+    setComciganWeeklyApply: (state) => set({ comciganWeeklyApply: state }),
 
     setPendingAppinReview: (review) => set({ pendingAppinReview: review }),
 
@@ -338,6 +363,34 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       const newOverrides = get().overrides.filter((o) => o.id !== id);
       set({ overrides: newOverrides });
       await scheduleRepository.saveTimetableOverrides({ overrides: newOverrides });
+    },
+
+    applyComciganWeeklyOverrides: async (weekMonday, drafts) => {
+      const now = new Date().toISOString();
+      let seq = 0;
+      const idFactory = () =>
+        `ovr-cmc-${Date.now()}-${(seq++).toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const result = reconcileComciganWeeklyOverrides({
+        existing: get().overrides,
+        weekMonday,
+        drafts,
+        now,
+        idFactory,
+      });
+      // 변화가 없으면 저장하지 않는다 — 불필요한 클라우드 동기화 쓰기를 만들지 않는다.
+      if (result.changed) {
+        set({ overrides: result.overrides });
+        await scheduleRepository.saveTimetableOverrides({ overrides: result.overrides });
+      }
+      return { applied: result.applied, skipped: result.skipped };
+    },
+
+    revertComciganWeeklyOverrides: async (weekMonday) => {
+      const { overrides, removed } = removeComciganWeeklyOverrides(get().overrides, weekMonday);
+      if (removed === 0) return { removed: 0 };
+      set({ overrides });
+      await scheduleRepository.saveTimetableOverrides({ overrides });
+      return { removed };
     },
 
     getEffectiveTeacherSchedule: (date, weekendDays) => {

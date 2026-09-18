@@ -265,6 +265,17 @@ export function TimetableOverridesPanel({
                         >
                           {scopeMeta.label}
                         </span>
+                        {o.source === 'comcigan' && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-caption font-bold rounded border border-sp-accent/40 text-sp-accent bg-sp-accent/10"
+                            title="컴시간 이번 주 보강·교체에서 자동으로 들어온 변동이에요"
+                          >
+                            <span className="material-symbols-outlined text-detail">
+                              event_repeat
+                            </span>
+                            컴시간
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         <button

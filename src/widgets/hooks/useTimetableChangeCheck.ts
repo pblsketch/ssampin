@@ -31,6 +31,7 @@ const AUTO_HIDE_MS: Partial<Record<WidgetSyncState['kind'], number>> = {
   cooldown: 2000,
   unchanged: 2500,
   applied: 3500,
+  weeklyApplied: 3500,
 };
 
 export type WidgetSyncState =
@@ -38,8 +39,10 @@ export type WidgetSyncState =
   | { kind: 'checking' }
   | { kind: 'cooldown' }
   | { kind: 'unchanged' }
-  /** 기본 편성표는 그대로인데 컴시간 이번 주 보강·교체만 있음 — 눌러서 보기 */
-  | { kind: 'weekly'; changeCount: number }
+  /** 기본 편성표는 그대로인데 컴시간 이번 주 보강·교체만 있음 — 반영하지 않은 경우(주말·되돌린 주) */
+  | { kind: 'weekly'; changeCount: number; reason?: 'weekend' | 'suppressed' }
+  /** 이번 주 보강·교체를 그 주 변동으로 반영했음 — 위젯 시간표 카드가 이미 새 수업을 보여준다 */
+  | { kind: 'weeklyApplied'; changeCount: number }
   | { kind: 'applied'; sources: TimetableSource[]; changeCount: number }
   | { kind: 'pending'; sources: TimetableSource[]; changeCount: number }
   | { kind: 'unmatched'; sources: TimetableSource[] }
@@ -68,6 +71,9 @@ interface SourceOutcome {
 function summarize(outcomes: readonly SourceOutcome[]): WidgetSyncState {
   // 이번 주 보강·교체 칸 수(컴시간 일일자료). 기본 편성표 판정과 별개라 status 로는 안 보인다.
   const weeklyCount = outcomes.reduce((sum, o) => sum + (o.result.weeklyChangeCount ?? 0), 0);
+  // 그중 실제로 시간표에 반영된 칸 수. 반영되면 위젯 시간표 카드가 이미 새 수업을 보여준다.
+  const weeklyApplied = outcomes.reduce((sum, o) => sum + (o.result.weeklyAppliedCount ?? 0), 0);
+  const weeklyBlocked = outcomes.find((o) => o.result.weeklyNotApplied)?.result.weeklyNotApplied;
 
   for (const status of STATUS_PRIORITY) {
     const hit = outcomes.filter((o) => o.result.status === status);
@@ -87,7 +93,12 @@ function summarize(outcomes: readonly SourceOutcome[]): WidgetSyncState {
         return { kind: 'applied', sources, changeCount };
       case 'unchanged':
         // 기본 편성표는 그대로여도 이번 주만 달라진 칸이 있으면 "최신 상태예요"로 끝내지 않는다.
-        if (weeklyCount > 0) return { kind: 'weekly', changeCount: weeklyCount };
+        if (weeklyApplied > 0) return { kind: 'weeklyApplied', changeCount: weeklyApplied };
+        if (weeklyCount > 0) {
+          return weeklyBlocked
+            ? { kind: 'weekly', changeCount: weeklyCount, reason: weeklyBlocked }
+            : { kind: 'weekly', changeCount: weeklyCount };
+        }
         return { kind: 'unchanged' };
       default:
         // not-configured — 연동을 쓰지 않는 사용자에게는 아무 안내도 띄우지 않는다.

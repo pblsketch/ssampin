@@ -45,16 +45,25 @@ export type TimetableOverrideKind = 'swap' | 'substitute' | 'cancel' | 'custom';
  */
 export type TimetableOverrideScope = 'teacher' | 'class' | 'both';
 
+/**
+ * 변동 항목을 만든 주체.
+ * - 'comcigan': 컴시간 일일자료(이번 주 보강·교체)에서 자동으로 등록한 항목.
+ *   확인할 때마다 그 주 항목 전체가 새 결과로 교체되고, 지난 주 것은 정리된다.
+ * - 미설정(undefined): 사용자가 직접 만든 항목. 자동 등록이 절대 덮거나 지우지 않는다.
+ *   기존 저장 데이터는 이 필드가 없으므로 undefined = 사용자 제작으로 해석한다(하위 호환).
+ */
+export type TimetableOverrideSource = 'comcigan';
+
 /** 시간표 임시 변경 (특정 날짜의 특정 교시를 오버라이드) */
 export interface TimetableOverride {
   readonly id: string;
-  readonly date: string;           // "YYYY-MM-DD"
-  readonly period: number;         // 교시 (1-based)
-  readonly subject: string;        // 변경된 과목 (빈 문자열 = 자습/공강)
-  readonly classroom?: string;     // 변경된 교실 (교사 시간표용)
-  readonly reason?: string;        // 변경 사유 ("수업 교환", "시험", "행사" 등)
+  readonly date: string; // "YYYY-MM-DD"
+  readonly period: number; // 교시 (1-based)
+  readonly subject: string; // 변경된 과목 (빈 문자열 = 자습/공강)
+  readonly classroom?: string; // 변경된 교실 (교사 시간표용)
+  readonly reason?: string; // 변경 사유 ("수업 교환", "시험", "행사" 등)
   readonly createdAt: string;
-  readonly updatedAt?: string;     // 마지막 수정 시각 (optional — 기존 데이터 호환)
+  readonly updatedAt?: string; // 마지막 수정 시각 (optional — 기존 데이터 호환)
 
   // --- 변동 유형 확장 (optional, backward compatible) ---
   readonly kind?: TimetableOverrideKind;
@@ -64,6 +73,8 @@ export interface TimetableOverride {
   readonly substituteTeacher?: string;
   /** 변동이 적용되는 뷰 범위. undefined → 'both' (기존 데이터 호환) */
   readonly scope?: TimetableOverrideScope;
+  /** 항목을 만든 주체. undefined → 사용자가 직접 만든 항목 (기존 데이터 호환) */
+  readonly source?: TimetableOverrideSource;
 }
 
 export interface TimetableOverridesData {

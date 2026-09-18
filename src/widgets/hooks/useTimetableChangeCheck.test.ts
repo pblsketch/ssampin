@@ -290,7 +290,13 @@ describe('useWidgetTimetableCheck', () => {
   it('기본 편성표는 그대로인데 이번 주 보강·교체가 있으면 "최신 상태"가 아니라 이번 주 변경으로 알린다', async () => {
     settings = bothConfigured;
     comciganCheck.mockImplementation(() =>
-      Promise.resolve({ status: 'unchanged', changeCount: 0, weeklyChangeCount: 3 }),
+      Promise.resolve({
+        status: 'unchanged',
+        changeCount: 0,
+        weeklyChangeCount: 3,
+        weeklyAppliedCount: 0,
+        weeklyNotApplied: 'weekend',
+      }),
     );
     appinCheck.mockImplementation(() => ok('unchanged'));
     const { result } = renderHook(() => useTimetableChangeCheck());
@@ -299,12 +305,61 @@ describe('useWidgetTimetableCheck', () => {
       triggerTimetableCheck();
     });
 
-    expect(result.current.state).toEqual({ kind: 'weekly', changeCount: 3 });
+    expect(result.current.state).toEqual({
+      kind: 'weekly',
+      changeCount: 3,
+      reason: 'weekend',
+    });
     // 사용자가 눌러 볼 안내라 스스로 사라지지 않는다
     await act(async () => {
       vi.advanceTimersByTime(10_000);
     });
     expect(result.current.state.kind).toBe('weekly');
+  });
+
+  it('이번 주 보강·교체가 시간표에 반영되면 "반영했어요"로 알리고 스스로 사라진다', async () => {
+    settings = bothConfigured;
+    comciganCheck.mockImplementation(() =>
+      Promise.resolve({
+        status: 'unchanged',
+        changeCount: 0,
+        weeklyChangeCount: 3,
+        weeklyAppliedCount: 3,
+      }),
+    );
+    appinCheck.mockImplementation(() => ok('unchanged'));
+    const { result } = renderHook(() => useTimetableChangeCheck());
+
+    await act(async () => {
+      triggerTimetableCheck();
+    });
+
+    expect(result.current.state).toEqual({ kind: 'weeklyApplied', changeCount: 3 });
+
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(result.current.state.kind).toBe('hidden');
+  });
+
+  it('직접 만든 변동 때문에 한 칸도 못 넣었으면 반영 안내로 뭉개지 않는다', async () => {
+    settings = bothConfigured;
+    comciganCheck.mockImplementation(() =>
+      Promise.resolve({
+        status: 'unchanged',
+        changeCount: 0,
+        weeklyChangeCount: 2,
+        weeklyAppliedCount: 0,
+      }),
+    );
+    appinCheck.mockImplementation(() => ok('unchanged'));
+    const { result } = renderHook(() => useTimetableChangeCheck());
+
+    await act(async () => {
+      triggerTimetableCheck();
+    });
+
+    expect(result.current.state).toEqual({ kind: 'weekly', changeCount: 2 });
   });
 
   it('기본 편성표 변경(pending)이 있으면 이번 주 변경보다 검토가 먼저다', async () => {
