@@ -17,17 +17,20 @@ import { QuestionResponseSummary } from './QuestionResponseSummary';
 import { ShareEntryCodeBar } from './v2/Share/ShareEntryCodeBar';
 import { ShareLobbyScreen } from './v2/Share/ShareLobbyScreen';
 import type { ShareSnapshot } from './v2/Share/shareSnapshot';
-import { questionHasAnswer } from '@domain/rules/participationRules';
 
 export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
   const data = snapshot.participation;
   if (!data) return null;
   const question = snapshot.currentQuestion;
-  const finished = snapshot.phase === 'end' || snapshot.phase === 'podium';
-  const scored = !!question && questionHasAnswer(question);
+  const stage = data.stage;
+  const finished = stage === 'finished';
+  // 정답을 도려낸 뒤에는 문항만 보고 판단할 수 없어 스냅샷이 실어 보낸 값을 쓴다.
+  const scored = snapshot.currentQuestionScored;
   const total = snapshot.students.length;
   const answered = data.answeredCount;
   const everyone = total > 0 && answered >= total;
+  /** 응답을 마감했지만 아직 아무것도 공개하지 않은 상태 */
+  const closedOnly = stage === 'closed';
   const choices =
     question?.type === 'multiple'
       ? question.choices
@@ -41,7 +44,7 @@ export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
           : [];
   const traffic = question?.presentation === 'trafficlight';
   /** 응답 받는 중에 결과를 보여도 되는 문항인가 — 정답이 없는 의견 문항만 */
-  const showLive = snapshot.phase === 'open' && !scored && snapshot.responsesForCurrent.length > 0;
+  const showLive = stage === 'collecting' && !scored && snapshot.responsesForCurrent.length > 0;
   /** 공감 목록이 이미 모든 생각을 담고 있으면 같은 글을 두 번 그리지 않는다. */
   const votes = data.votes ?? [];
   const voted = votes.some((v) => v.count > 0);
@@ -50,7 +53,7 @@ export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
    * 16:9 화면의 가로 60%가 빈다. 이 문항만 질문·현황을 왼쪽 단으로 보내고
    * 오른쪽 단을 판에 통째로 준다 — 판 한 변이 44vh 에서 76vh 로 커진다.
    */
-  const squareChart = !finished && question?.type === 'quadrant';
+  const squareChart = !finished && !closedOnly && question?.type === 'quadrant';
   return (
     <main className="flex h-screen flex-col overflow-auto bg-sp-bg text-sp-text">
       <ShareEntryCodeBar
@@ -85,12 +88,18 @@ export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
                   </span>
                   <span
                     className={`rounded-full border-2 px-4 py-1 text-2xl font-bold ${
-                      snapshot.phase === 'open'
+                      stage === 'collecting'
                         ? 'border-sp-border text-sp-muted'
                         : 'border-sp-highlight text-sp-highlight'
                     }`}
                   >
-                    {snapshot.phase === 'open' ? '응답 받는 중' : '결과 공개'}
+                    {stage === 'collecting'
+                      ? '응답 받는 중'
+                      : closedOnly
+                        ? '응답 마감'
+                        : stage === 'answer'
+                          ? '정답 공개'
+                          : '결과 공개'}
                   </span>
                 </div>
                 <h1 className="break-keep text-6xl font-bold leading-tight">{question?.text}</h1>
@@ -113,11 +122,13 @@ export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
                     </span>
                   </p>
                   <p className="text-3xl font-bold text-sp-muted">
-                    {snapshot.phase !== 'open'
-                      ? '결과를 함께 살펴봐요'
-                      : everyone
-                        ? '모두 냈어요!'
-                        : '아직 받는 중이에요'}
+                    {closedOnly
+                      ? '더 낼 수 없어요'
+                      : stage !== 'collecting'
+                        ? '결과를 함께 살펴봐요'
+                        : everyone
+                          ? '모두 냈어요!'
+                          : '아직 받는 중이에요'}
                   </p>
                 </div>
                 <div className="mt-4 h-5 overflow-hidden rounded-full bg-sp-border">
@@ -134,7 +145,7 @@ export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
 
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="my-auto w-full">
-              {snapshot.phase === 'open' && choices.length > 0 && (
+              {(stage === 'collecting' || closedOnly) && choices.length > 0 && (
                 <div className="grid grid-cols-2 gap-6">
                   {choices.map((o, i) => (
                     <div
@@ -164,7 +175,13 @@ export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
                 </div>
               )}
 
-              {snapshot.phase === 'open' && !scored && choices.length === 0 && (
+              {closedOnly && choices.length === 0 && (
+                <p className="mb-6 text-3xl font-bold text-sp-muted">
+                  응답을 마감했어요. 결과를 함께 살펴볼까요?
+                </p>
+              )}
+
+              {stage === 'collecting' && !scored && choices.length === 0 && (
                 <p className="mb-6 text-3xl font-bold text-sp-muted">
                   {showLive ? '지금까지 모인 생각이에요' : '휴대전화에서 생각을 적어 주세요'}
                 </p>
@@ -193,7 +210,7 @@ export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
                   </section>
                 )}
 
-                {snapshot.phase === 'revealed' && question && votes.length === 0 && (
+                {(stage === 'results' || stage === 'answer') && question && votes.length === 0 && (
                   <section aria-label="우리 반의 응답">
                     <h2 className="mb-6 text-4xl font-bold">우리 반의 응답</h2>
                     <QuestionResponseSummary

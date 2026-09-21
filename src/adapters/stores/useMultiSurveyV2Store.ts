@@ -17,7 +17,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { ParticipationResult } from '@domain/rules/participationRules';
+import { questionHasAnswer, type ParticipationResult } from '@domain/rules/participationRules';
 import { normalizeWord } from '@domain/rules/wordCloudTally';
 import type {
   MultiSurveyV2,
@@ -114,6 +114,15 @@ interface MultiSurveyV2StoreState {
   saveParticipationResult: () => void;
   reopenDiscussion: () => void;
   setRankingVisible: (visible: boolean) => void;
+  /**
+   * 응답 마감 — 공개는 하지 않는다. `phase` 를 'revealed'(=마감됨)로 올리고
+   * 공개 플래그 두 개를 내린다. 마감과 공개를 나눈 이유는 설계 문서 §3 참조.
+   */
+  closeResponses: () => void;
+  /** 응답 분포 공개 */
+  publishResults: () => void;
+  /** 정답·해설 공개 (정답이 있는 문항에서만) */
+  publishAnswer: () => void;
 
   /**
    * 문항별 open 진입 시각 (ISO 8601). persist 제외 — 메모리 전용.
@@ -322,6 +331,8 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
           attempt: 1,
           responseHistory: [],
           rankingVisible: false,
+          resultsPublished: false,
+          answerPublished: false,
           phase: 'lobby',
           currentQuestionIndex: 0,
           students: [],
@@ -364,6 +375,8 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
             phase: next,
             attempt: advancesQuestion ? 1 : live.attempt,
             rankingVisible: false,
+            // 문항이 넘어가거나 다시 받기 시작하면 공개는 처음부터 다시 고른다.
+            ...(next === 'open' ? { resultsPublished: false, answerPublished: false } : {}),
             currentQuestionIndex: newQuestionIndex,
             endedAt: next === 'end' ? new Date().toISOString() : live.endedAt,
           },
@@ -417,6 +430,37 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
         set({ liveSession: { ...live, rankingVisible: visible } });
       },
 
+      closeResponses() {
+        const live = get().liveSession;
+        if (!live || live.phase !== 'open') return;
+        set({
+          liveSession: {
+            ...live,
+            phase: 'revealed',
+            resultsPublished: false,
+            answerPublished: false,
+            rankingVisible: false,
+          },
+        });
+      },
+
+      publishResults() {
+        const live = get().liveSession;
+        if (!live || live.phase !== 'revealed') return;
+        if (live.resultsPublished) return;
+        set({ liveSession: { ...live, resultsPublished: true } });
+      },
+
+      publishAnswer() {
+        const live = get().liveSession;
+        const survey = get().sessions.find((s) => s.id === live?.surveyId);
+        const question = survey?.questions[live?.currentQuestionIndex ?? -1];
+        if (!live || live.phase !== 'revealed' || !question) return;
+        if (!questionHasAnswer(question)) return;
+        // 정답을 공개하면 결과도 함께 본다 — 정답만 보이고 분포가 없으면 읽히지 않는다.
+        set({ liveSession: { ...live, answerPublished: true, resultsPublished: true } });
+      },
+
       reopenDiscussion() {
         const live = get().liveSession;
         const survey = get().sessions.find((s) => s.id === live?.surveyId);
@@ -426,6 +470,8 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
           liveSession: {
             ...live,
             phase: 'open',
+            resultsPublished: false,
+            answerPublished: false,
             attempt: (live.attempt ?? 1) + 1,
             voteHistory: [
               ...(live.voteHistory ?? []),

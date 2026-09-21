@@ -69,6 +69,19 @@ export interface LiveSession {
   readonly responseHistory?: readonly Response[];
   readonly attempt?: number;
   readonly rankingVisible?: boolean;
+  /**
+   * 이번 문항의 **응답 분포**를 학생·교실 화면에 공개했는가 (기본 false).
+   *
+   * `phase === 'revealed'` 는 이제 "응답을 마감했다"만 뜻한다 — 공개는 따로 고른다.
+   * Slido 의 자물쇠(투표 잠금)와 눈(결과 표시)이 따로 있는 것과 같은 구분이다.
+   * 문항을 넘기거나 다시 받을 때 false 로 돌아간다.
+   */
+  readonly resultsPublished?: boolean;
+  /**
+   * 이번 문항의 **정답·해설**을 공개했는가 (기본 false).
+   * 정답이 없는 문항에서는 언제나 false 다.
+   */
+  readonly answerPublished?: boolean;
   readonly id: string;
   readonly surveyId: string;
   /** "한 번 더" 재실행 회차. 기본 1 (DN-04) */

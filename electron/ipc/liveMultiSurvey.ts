@@ -83,8 +83,14 @@ interface PerAnswer {
   scale?: number;
 }
 
-/** 세션 phase */
-type Phase = 'lobby' | 'open' | 'revealed' | 'ended';
+/**
+ * 세션 phase.
+ *
+ * `closed` 는 **응답만 닫은 상태**다 — 결과도 정답도 아직 공개하지 않았다.
+ * 옛 구조에서는 마감이 곧 공개라 선생님이 "그만 내세요"만 하고 싶어도
+ * 분포가 학생 화면에 바로 떴다. Slido·Wooclap 처럼 두 조작을 나눈다.
+ */
+type Phase = 'lobby' | 'open' | 'closed' | 'revealed' | 'ended';
 
 // ─────────────────────────────────────────────────────────────────────
 // Phase B B.4 — 신규 IPC 이벤트 타입 (DN-03, DN-06)
@@ -369,20 +375,21 @@ function buildStatePayload(s: LiveMultiSurveySession, ws: WebSocket): Record<str
   if (s.participation) {
     payload.roomId = s.participation.roomId;
     payload.attempt = s.attempt ?? 1;
+    // 개인 결과는 교사가 공개(publish)할 때만 채워진다 — `closed` 에서는 비어 있다.
     if (s.phase !== 'lobby') payload.personal = s.personalResults?.get(sessionId);
   }
 
-  if (s.phase === 'open' || s.phase === 'revealed') {
+  if (s.phase === 'open' || s.phase === 'closed' || s.phase === 'revealed') {
     const question = s.questions[s.currentQuestionIndex];
     if (question) payload.question = question;
     const myAnswer = participant?.answers.get(s.currentQuestionIndex);
     if (myAnswer) payload.myAnswer = myAnswer;
   }
 
-  if (
-    s.phase === 'revealed' &&
-    (!s.participation || !s.questions[s.currentQuestionIndex]?.scored)
-  ) {
+  // 결과를 공개한 뒤에는 **정답이 있는 문항도** 분포를 내려보낸다.
+  // 어느 보기가 정답인지는 표시하지 않으므로 정답이 새지 않는다
+  // (Slido 도 잠금→결과 표시→정답 표시를 따로 둔다).
+  if (s.phase === 'revealed') {
     const aggregated = aggregateAnswers(s, s.currentQuestionIndex);
     if (aggregated) payload.aggregated = aggregated;
     const current = s.questions[s.currentQuestionIndex];
@@ -507,29 +514,37 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
           s.phase = 'open';
           break;
         case 'close':
-          if (s.phase !== 'open' && s.phase !== 'revealed')
+          // 이미 마감했거나 공개까지 간 상태에서 다시 눌러도 그대로 둔다(중복 클릭 안전).
+          if (s.phase !== 'open' && s.phase !== 'closed' && s.phase !== 'revealed')
             throw new Error('응답 중인 문항이 없습니다.');
-          s.phase = 'revealed';
+          if (s.phase === 'open') s.phase = 'closed';
           break;
         case 'publish':
-          if (s.phase !== 'revealed' && s.phase !== 'ended')
+          if (s.phase !== 'closed' && s.phase !== 'revealed' && s.phase !== 'ended')
             throw new Error('응답을 먼저 마감해 주세요.');
           s.personalResults = new Map((command.results ?? []).map((r) => [r.studentId, r]));
+          if (s.phase === 'closed') s.phase = 'revealed';
           break;
         case 'advance':
-          if (s.phase !== 'revealed') throw new Error('응답을 먼저 마감해 주세요.');
+          if (s.phase !== 'closed' && s.phase !== 'revealed')
+            throw new Error('응답을 먼저 마감해 주세요.');
           if (s.currentQuestionIndex + 1 >= s.questions.length) s.phase = 'ended';
           else {
             s.currentQuestionIndex++;
             s.attempt = 1;
+            s.personalResults = undefined;
             s.phase = 'open';
           }
           break;
         case 'reopen':
-          if (s.phase !== 'revealed' || s.questions[s.currentQuestionIndex]?.scored)
+          if (
+            (s.phase !== 'closed' && s.phase !== 'revealed') ||
+            s.questions[s.currentQuestionIndex]?.scored
+          )
             throw new Error('토의·토론 결과에서 다시 응답받을 수 있습니다.');
           s.attempt = (s.attempt ?? 1) + 1;
           for (const p of s.participants.values()) p.answers.delete(s.currentQuestionIndex);
+          s.personalResults = undefined;
           s.phase = 'open';
           break;
         case 'end':

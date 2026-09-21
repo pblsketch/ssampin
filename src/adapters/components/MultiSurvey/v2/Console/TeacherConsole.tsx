@@ -68,6 +68,14 @@ export interface TeacherConsoleProps {
   readonly onOpenShareWindow?: () => void;
   /** 교실 화면(별도 창) 닫기 콜백 (LiveConsoleContainer 주입) */
   readonly onCloseShareWindow?: () => void;
+  /** 교실 화면이 지금 열려 있는가 — 운영체제 닫기 단추로 닫은 것도 반영한다 */
+  readonly shareWindowOpen?: boolean;
+  /** 응답 마감 (공개는 하지 않는다) */
+  readonly onClose?: () => void;
+  /** 응답 분포 공개 */
+  readonly onPublishResults?: () => void;
+  /** 정답·해설 공개 */
+  readonly onPublishAnswer?: () => void;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -107,6 +115,11 @@ function TeacherConsoleImpl({
   focusModeActive = false,
   onToggleFocusMode,
   onOpenShareWindow,
+  onCloseShareWindow,
+  shareWindowOpen = false,
+  onClose,
+  onPublishResults,
+  onPublishAnswer,
 }: TeacherConsoleProps): JSX.Element {
   const live = useMultiSurveyV2Store((s) => s.liveSession);
   const survey = useMultiSurveyV2Store(selectActiveLiveSurvey);
@@ -178,6 +191,11 @@ function TeacherConsoleImpl({
         onExit={onExit}
         onRestart={onRestart}
         onOpenShareWindow={onOpenShareWindow}
+        onCloseShareWindow={onCloseShareWindow}
+        shareWindowOpen={shareWindowOpen}
+        onClose={onClose}
+        onPublishResults={onPublishResults}
+        onPublishAnswer={onPublishAnswer}
         onReopen={onReopen}
         busy={busy}
         actionError={actionError}

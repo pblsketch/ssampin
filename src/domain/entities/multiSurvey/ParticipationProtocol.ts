@@ -18,6 +18,12 @@ export interface PersonalResult {
   readonly review: readonly {
     question: string;
     isCorrect: boolean;
+    /** 내가 낸 답 (읽을 수 있는 말로) */
+    mine?: string;
+    /** 내가 쓴 이유 */
+    myReason?: string;
+    /** 토론 전 처음 생각 — 차수가 여럿일 때만 */
+    myFirst?: string;
     answer?: string;
     explanation?: string;
   }[];

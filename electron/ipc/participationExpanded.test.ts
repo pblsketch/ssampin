@@ -241,12 +241,22 @@ describe('새 문항 학생 HTTP와 WebSocket 실제 왕복', () => {
       }),
     );
     await ack;
-    const reveal = message(ws, (m) => m.phase === 'revealed');
+    // 마감은 응답만 닫는다 — 공개는 따로 한다.
+    const closed = message(ws, (m) => m.phase === 'closed');
     call('participation-control', {
       roomId: 'votes',
       questionIndex: 0,
       attempt: 1,
       action: 'close',
+    });
+    expect((await closed).voteCandidates).toBeUndefined();
+    const reveal = message(ws, (m) => m.phase === 'revealed');
+    call('participation-control', {
+      roomId: 'votes',
+      questionIndex: 0,
+      attempt: 1,
+      action: 'publish',
+      results: [],
     });
     const state = await reveal;
     expect(state.voteCandidates).toHaveLength(2);

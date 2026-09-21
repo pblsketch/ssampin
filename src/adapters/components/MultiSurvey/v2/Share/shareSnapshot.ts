@@ -21,6 +21,30 @@ import {
   participationStandings,
   questionHasAnswer,
 } from '@domain/rules/participationRules';
+import {
+  mayShowAnswer,
+  mayShowResults,
+  participationStage,
+} from '@domain/rules/participationStage';
+
+/**
+ * 교실 화면 창으로 보내기 전에 **정답을 도려낸다.**
+ *
+ * 화면이 그리지 않더라도 자료가 그 창에 있으면 개발자 도구·화면 녹화·확장 프로그램으로
+ * 샐 수 있다. 실제로 응답을 받는 중에도 `correctChoiceIds` 가 통째로 실려 나가고 있었다.
+ * 정답을 공개하기 전까지는 **보낼 필요가 없는 값은 보내지 않는다.**
+ */
+function withoutAnswer(question: Question): Question {
+  const stripped = { ...(question as unknown as Record<string, unknown>) };
+  // 배열 자리는 **지우지 말고 비운다.** 없애 버리면 그것을 읽는 화면이 터진다
+  // (교실 화면의 결과 그림이 `correctChoiceIds.includes(...)` 로 정답 표시를 고른다).
+  if ('correctChoiceIds' in stripped) stripped['correctChoiceIds'] = [];
+  if ('acceptedAnswers' in stripped) stripped['acceptedAnswers'] = [];
+  delete stripped['correctAnswer'];
+  delete stripped['solution'];
+  delete stripped['explanation'];
+  return stripped as unknown as Question;
+}
 
 /**
  * Share window에 IPC로 전달되는 스냅샷.
@@ -37,6 +61,8 @@ export interface ShareSnapshot {
     readonly opinions: readonly { answer: string; reason?: string }[];
     readonly votes?: readonly import('@domain/entities/multiSurvey/ParticipationVote').ParticipationVote[];
     readonly answeredCount: number;
+    /** 진행 단계 — 교실 화면이 마감·공개를 구분해 그리는 기준 */
+    readonly stage: import('@domain/rules/participationStage').ParticipationStage;
   };
   /** 렌더러 6단계 phase */
   readonly phase: LivePhase;
@@ -50,6 +76,10 @@ export interface ShareSnapshot {
   readonly responsesForCurrent: readonly Response[];
   /** 전체 응답 (round_result/podium 순위 계산용) */
   readonly allResponses: readonly Response[];
+  /** 진행 단계 (참여 활동이 아닐 때도 채운다) */
+  readonly stage: import('@domain/rules/participationStage').ParticipationStage;
+  /** 현재 문항이 정답을 쓰는 문항인가 (정답을 도려낸 뒤에도 판단할 수 있게) */
+  readonly currentQuestionScored: boolean;
   /** 입장한 학생 목록 */
   readonly students: readonly StudentProfile[];
   /** T02: 해설 노출 여부 */
@@ -83,9 +113,22 @@ export function buildShareSnapshot(
   entryCode: string | null = null,
 ): ShareSnapshot {
   const question = survey.questions[liveSession.currentQuestionIndex] ?? null;
-  const responsesForCurrent = question
+  const stage = participationStage(liveSession);
+  const scored = !!question && questionHasAnswer(question);
+  /**
+   * 마감·공개를 나눈 것은 **퀴즈·설문·토론 활동**(`purpose` 가 있는 것)뿐이다.
+   * 옛 멀티설문 v2 경로는 `phase` 하나로 돌아가므로 건드리지 않는다.
+   */
+  const participationMode = !!survey.purpose;
+  const answerVisible = participationMode
+    ? mayShowAnswer(stage, question)
+    : liveSession.phase === 'revealed';
+  const resultsVisible = participationMode ? mayShowResults(stage, question) : true;
+  const allResponsesForCurrent = question
     ? liveSession.responses.filter((r) => r.questionId === question.id)
     : [];
+  // 공개하기 전에는 응답 원문도 보내지 않는다 — 뒷자리에서 안 보여도 창 안에는 남는다.
+  const responsesForCurrent = participationMode && !resultsVisible ? [] : allResponsesForCurrent;
 
   return {
     ...(survey.purpose
@@ -99,7 +142,7 @@ export function buildShareSnapshot(
                     .filter((r) => r.rank <= 3)
                     .map(({ nickname, rank, score }) => ({ nickname, rank, score }))
                 : [],
-            ...(liveSession.phase === 'revealed' && question && questionHasAnswer(question)
+            ...(answerVisible && question
               ? {
                   answer: correctAnswerLabel(question),
                   explanation: survey.presentationOpts.revealExplanation
@@ -108,26 +151,35 @@ export function buildShareSnapshot(
                 }
               : {}),
             opinions:
-              liveSession.phase === 'revealed' && question && !questionHasAnswer(question)
+              resultsVisible && question && !questionHasAnswer(question)
                 ? responsesForCurrent.map((r) => ({
                     answer: answerLabel(question, r.answer),
                     reason: r.reason,
                   }))
                 : [],
             votes:
-              question && liveSession.phase === 'revealed'
+              question && resultsVisible && stage !== 'collecting'
                 ? liveSession.votesByQuestion?.[question.id]
                 : undefined,
-            answeredCount: responsesForCurrent.length,
+            // 응답 현황은 공개 여부와 무관하게 보여 준다 — 몇 명이 냈는지는 정답이 아니다.
+            answeredCount: allResponsesForCurrent.length,
+            stage,
           },
         }
       : {}),
     phase: liveSession.phase,
-    currentQuestion: question,
+    currentQuestion:
+      question && participationMode && !answerVisible ? withoutAnswer(question) : question,
+    /**
+     * 이 문항이 정답을 쓰는 문항인가. `currentQuestion` 에서 정답을 도려내면
+     * `questionHasAnswer()` 가 더는 판단하지 못하므로 따로 실어 보낸다.
+     */
+    currentQuestionScored: scored,
     questionNumber: liveSession.currentQuestionIndex + 1,
     totalQuestions: survey.questions.length,
     responsesForCurrent,
     allResponses: survey.purpose ? [] : liveSession.responses,
+    stage,
     students: survey.purpose
       ? liveSession.students.map((s) => ({ ...s, pin4: '' }))
       : liveSession.students,

@@ -1093,6 +1093,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.removeListener('multi-survey-share:snapshot', handler);
     };
   },
+  /** 교실 화면 창이 닫혔다 — 운영체제 닫기 단추로 닫은 것도 포함한다 */
+  onMultiSurveyShareWindowClosed: (callback: () => void): (() => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('multi-survey-share:closed', handler);
+    return () => {
+      ipcRenderer.removeListener('multi-survey-share:closed', handler);
+    };
+  },
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;

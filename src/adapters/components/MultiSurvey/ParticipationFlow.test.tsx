@@ -66,15 +66,79 @@ describe('참여교실 작성·유형 선택', () => {
     expect(back).toHaveBeenCalledOnce();
     expect(useMultiSurveyV2Store.getState().sessions[0]?.title).toBe('원래 제목');
   });
-  it('저장 시 작성 내용을 반영하고 공백 정답은 초대를 막는다', () => {
+  it('저장 시 작성 내용을 반영하고 공백 정답은 고칠 자리를 알려 준다', () => {
     const original = session();
     render(<ParticipationEditor session={original} onBack={vi.fn()} />);
     fireEvent.change(screen.getByLabelText('활동 제목'), { target: { value: '새 제목' } });
     fireEvent.click(screen.getByRole('button', { name: '저장' }));
     expect(useMultiSurveyV2Store.getState().sessions[0]?.title).toBe('새 제목');
     fireEvent.change(screen.getByLabelText(/인정할 정답/), { target: { value: ' ' } });
+    // 흐린 단추로 막기만 하지 않는다 — 어디를 고쳐야 하는지 말해 준다.
+    fireEvent.click(screen.getByRole('button', { name: '학생 초대하기' }));
+    expect(screen.getByText('아직 학생을 초대할 수 없어요.')).toBeTruthy();
     expect(
-      (screen.getByRole('button', { name: '학생 초대하기' }) as HTMLButtonElement).disabled,
+      screen.getByRole('button', { name: '1번 문항에 인정할 정답을 입력해 주세요.' }),
+    ).toBeTruthy();
+    expect(useMultiSurveyV2Store.getState().liveSession).toBeNull();
+  });
+
+  it('저장한 뒤 다시 고치면 저장 표시가 저장하지 않은 변경으로 바뀐다', () => {
+    const original = session();
+    render(<ParticipationEditor session={original} onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    expect(screen.getByRole('status').textContent).toContain('저장됨');
+    fireEvent.change(screen.getByLabelText('활동 제목'), { target: { value: '또 고친 제목' } });
+    expect(screen.getByRole('status').textContent).toContain('저장하지 않은 변경');
+  });
+});
+
+describe('참여교실 보기 조작', () => {
+  function choiceSession() {
+    const store = useMultiSurveyV2Store.getState();
+    const created = store.createSession({ title: '보기', purpose: 'activity' });
+    store.updateSession(created.id, {
+      questions: [
+        {
+          id: 'q',
+          type: 'multiple',
+          text: '무엇이 맞나요?',
+          timerSeconds: 60,
+          score: 10,
+          choices: [
+            { id: 'a', text: '가' },
+            { id: 'b', text: '나' },
+            { id: 'c', text: '다' },
+          ],
+          correctChoiceIds: ['c'],
+        },
+      ],
+    });
+    return useMultiSurveyV2Store.getState().sessions[0]!;
+  }
+
+  it('보기를 옮겨도 정답 연결이 따라간다', () => {
+    render(<ParticipationEditor session={choiceSession()} onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '3번 보기를 위로 옮기기' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    const saved = useMultiSurveyV2Store.getState().sessions[0]!.questions[0]!;
+    expect(saved.type === 'multiple' && saved.choices.map((c) => c.id)).toEqual(['a', 'c', 'b']);
+    expect(saved.type === 'multiple' && saved.correctChoiceIds).toEqual(['c']);
+  });
+
+  it('정답이던 보기를 지우면 정답 목록에서도 빠지고 나머지는 그대로다', () => {
+    render(<ParticipationEditor session={choiceSession()} onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '3번 보기 지우기' }));
+    fireEvent.click(screen.getByRole('button', { name: '저장' }));
+    const saved = useMultiSurveyV2Store.getState().sessions[0]!.questions[0]!;
+    expect(saved.type === 'multiple' && saved.choices.map((c) => c.id)).toEqual(['a', 'b']);
+    expect(saved.type === 'multiple' && saved.correctChoiceIds).toEqual([]);
+  });
+
+  it('보기는 두 개 아래로 줄이지 못한다', () => {
+    render(<ParticipationEditor session={choiceSession()} onBack={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '3번 보기 지우기' }));
+    expect(
+      (screen.getByRole('button', { name: '2번 보기 지우기' }) as HTMLButtonElement).disabled,
     ).toBe(true);
   });
 });
@@ -118,11 +182,10 @@ describe('참여교실 문항 순서 바꾸기', () => {
     fireEvent.dragStart(items[2]!, { dataTransfer });
     fireEvent.dragOver(items[0]!, { dataTransfer });
     fireEvent.drop(items[0]!, { dataTransfer });
-    expect(listText().map((t) => t.replace(/\D*(\d)\./, '$1.'))).toEqual([
-      '1. 셋째 질문',
-      '2. 첫 질문',
-      '3. 둘째 질문',
-    ]);
+    expect(listText().map((t) => t.replace(/\D/g, '').slice(0, 1))).toEqual(['1', '2', '3']);
+    expect(listText()[0]).toContain('셋째 질문');
+    expect(listText()[1]).toContain('첫 질문');
+    expect(listText()[2]).toContain('둘째 질문');
     // 옮긴 문항을 그대로 보고 있어야 한다 — 자리만 바뀌고 편집 대상이 튀지 않는다.
     expect(screen.getByText('1번 문항')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '저장' }));
@@ -134,11 +197,13 @@ describe('참여교실 문항 순서 바꾸기', () => {
   });
   it('키보드로도 위로·아래로 옮길 수 있고 끝에서는 막힌다', () => {
     render(<ParticipationEditor session={ordered()} onBack={vi.fn()} />);
-    expect((screen.getByRole('button', { name: '위로' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: '아래로' }));
-    expect(listText().some((t) => t.includes('2. 첫 질문'))).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: '위로' }));
-    expect(listText().some((t) => t.includes('1. 첫 질문'))).toBe(true);
+    expect(
+      (screen.getByRole('button', { name: '이 문항을 위로 옮기기' }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '이 문항을 아래로 옮기기' }));
+    expect(listText()[1]).toContain('첫 질문');
+    fireEvent.click(screen.getByRole('button', { name: '이 문항을 위로 옮기기' }));
+    expect(listText()[0]).toContain('첫 질문');
   });
 });
 

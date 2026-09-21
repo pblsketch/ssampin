@@ -196,3 +196,41 @@ it('크게 보기는 Esc 로도 닫힌다', async () => {
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.queryByRole('dialog')).toBeNull();
 });
+
+/**
+ * 교실 화면은 정답을 공개하기 전까지 **정답을 비운 문항**을 받는다(shareSnapshot).
+ * 그 값으로도 결과 그림이 그려져야 한다 — 실제로 여기서 화면이 통째로 하얘진 적이 있다.
+ */
+it('정답을 비운 문항으로도 결과를 그린다', () => {
+  const question = {
+    id: 'q',
+    type: 'multiple' as const,
+    text: '무엇이 맞나요?',
+    timerSeconds: 60,
+    score: 10,
+    choices: [
+      { id: 'a', text: '가' },
+      { id: 'b', text: '나' },
+    ],
+    // 공개 전에는 빈 배열로 내려온다
+    correctChoiceIds: [] as readonly string[],
+  };
+  render(
+    <QuestionResponseSummary
+      question={question}
+      responses={[
+        {
+          id: 'r',
+          studentId: 's',
+          questionId: 'q',
+          answer: ['a'],
+          submittedAt: '2026-09-21T00:00:00.000Z',
+          scoreEarned: 0,
+        },
+      ]}
+    />,
+  );
+  expect(screen.getByText('가')).toBeTruthy();
+  // 정답 표시는 붙지 않는다
+  expect(screen.queryByText(/· 정답/)).toBeNull();
+});

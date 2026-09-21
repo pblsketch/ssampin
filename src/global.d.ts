@@ -763,6 +763,8 @@ interface ElectronAPI {
       snapshot: import('./adapters/components/MultiSurvey/v2/Share/shareSnapshot').ShareSnapshot,
     ) => void,
   ) => () => void;
+  /** 교실 화면 창이 닫혔다 (운영체제 닫기 단추 포함) */
+  onMultiSurveyShareWindowClosed: (callback: () => void) => () => void;
   // Live Word Cloud
   startLiveWordCloud: (data: {
     question: string;

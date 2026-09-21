@@ -216,7 +216,14 @@ describe('참여교실 실제 HTTP/WebSocket 왕복', () => {
       a.ws.once('pong', () => resolve());
       a.ws.ping();
     });
+    // 마감만 해서는 아직 아무것도 공개되지 않는다 — 공감 목록도 내려가지 않는다.
     control('close');
+    await new Promise<void>((resolve) => {
+      a.ws.once('pong', () => resolve());
+      a.ws.ping();
+    });
+    expect(a.latest().voteCandidates).toBeUndefined();
+    control('publish', 0, 1, []);
     await vi.waitFor(() => expect(a.latest().voteCandidates).toBeDefined());
     const candidates = a.latest().voteCandidates as Array<{ id: string; count: number }>;
     expect(candidates[0]?.count).toBe(0);

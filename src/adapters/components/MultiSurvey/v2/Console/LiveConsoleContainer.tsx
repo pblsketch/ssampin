@@ -61,6 +61,8 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   const [busy, setBusy] = useState(false);
   const actionBusy = useRef(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  /** 교실 화면(별도 창)이 열려 있는가 */
+  const [shareWindowOpen, setShareWindowOpen] = useState(false);
 
   const clientRef = useRef(new LiveSessionClient());
   /** 라이브 중 survey 식별 안정화 — effect 의존성에서 객체 identity 제외 */
@@ -221,67 +223,40 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   }, [liveId, appendStudent, appendResponse, appendInteraction]);
 
   // ── phase 전이: 학생 페이지 IPC 동기화 + store nextPhase ──
-  const runParticipationAction = useCallback(async (kind: 'advance' | 'reopen' | 'end') => {
-    if (actionBusy.current) return;
-    const store = useMultiSurveyV2Store.getState();
-    const live = store.liveSession;
-    const active = store.sessions.find((s) => s.id === live?.surveyId);
-    const control = window.electronAPI?.participationControl;
-    if (!live || !active?.purpose || !control) return;
-    actionBusy.current = true;
-    setBusy(true);
-    setActionError(null);
-    const command = (action: ParticipationControl['action']) =>
-      control({
-        roomId: live.id,
-        questionIndex: live.currentQuestionIndex,
-        attempt: live.attempt ?? 1,
-        action,
-      });
-    try {
-      if (kind === 'reopen') {
-        await command('reopen');
-        store.reopenDiscussion();
-      } else if (kind === 'end') {
-        if (live.phase === 'open') {
-          const closed = await command('close');
-          const question = active.questions[live.currentQuestionIndex];
-          if (question)
-            for (const item of closed.answers) {
-              const response = buildResponseFromLiveAnswer({
-                question,
-                studentId: item.studentId,
-                payload: item.answer,
-              });
-              if (response) store.appendResponse(response);
-            }
-        }
-        const updated = useMultiSurveyV2Store.getState().liveSession;
-        if (updated && live.phase !== 'lobby')
-          await control({
-            roomId: live.id,
-            questionIndex: live.currentQuestionIndex,
-            attempt: live.attempt ?? 1,
-            action: 'publish',
-            results: buildPersonalResults({ ...updated, phase: 'revealed' }, active),
-          });
-        await command('end');
-        store.endLive();
-      } else if (live.phase === 'lobby') {
-        await command('activate');
-        store.nextPhase();
-      } else if (live.phase === 'open') {
+  const runParticipationAction = useCallback(
+    async (kind: 'advance' | 'reopen' | 'end' | 'close' | 'results' | 'answer') => {
+      if (actionBusy.current) return;
+      const store = useMultiSurveyV2Store.getState();
+      const live = store.liveSession;
+      const active = store.sessions.find((s) => s.id === live?.surveyId);
+      const control = window.electronAPI?.participationControl;
+      if (!live || !active?.purpose || !control) return;
+      actionBusy.current = true;
+      setBusy(true);
+      setActionError(null);
+      const command = (action: ParticipationControl['action']) =>
+        control({
+          roomId: live.id,
+          questionIndex: live.currentQuestionIndex,
+          attempt: live.attempt ?? 1,
+          action,
+        });
+      /** 마감 시점에 서버가 들고 있던 답을 store 로 옮긴다 (막판 제출 회수) */
+      const drainClosedAnswers = async (): Promise<void> => {
         const closed = await command('close');
         const question = active.questions[live.currentQuestionIndex];
-        if (question)
-          for (const item of closed.answers) {
-            const response = buildResponseFromLiveAnswer({
-              question,
-              studentId: item.studentId,
-              payload: item.answer,
-            });
-            if (response) store.appendResponse(response);
-          }
+        if (!question) return;
+        for (const item of closed.answers) {
+          const response = buildResponseFromLiveAnswer({
+            question,
+            studentId: item.studentId,
+            payload: item.answer,
+          });
+          if (response) store.appendResponse(response);
+        }
+      };
+      /** 지금 공개 수준에 맞는 개인 결과를 학생 기기로 내려보낸다 */
+      const publish = async (revealAnswer: boolean): Promise<void> => {
         const updated = useMultiSurveyV2Store.getState().liveSession;
         if (!updated) return;
         await control({
@@ -289,26 +264,65 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
           questionIndex: live.currentQuestionIndex,
           attempt: live.attempt ?? 1,
           action: 'publish',
-          results: buildPersonalResults({ ...updated, phase: 'revealed' }, active),
+          results: buildPersonalResults({ ...updated, phase: 'revealed' }, active, {
+            revealAnswer,
+          }),
         });
-        store.nextPhase();
-        store.saveParticipationResult();
-      } else if (live.phase === 'revealed') {
-        await command('advance');
-        store.nextPhase();
-        store.saveParticipationResult();
-      } else if (live.phase === 'podium') {
-        store.endLive();
+      };
+      try {
+        if (kind === 'close') {
+          // 마감만 한다 — 결과도 정답도 아직 공개하지 않는다.
+          await drainClosedAnswers();
+          store.closeResponses();
+          store.saveParticipationResult();
+        } else if (kind === 'results') {
+          store.publishResults();
+          await publish(false);
+        } else if (kind === 'answer') {
+          store.publishAnswer();
+          await publish(true);
+        } else if (kind === 'reopen') {
+          await command('reopen');
+          store.reopenDiscussion();
+        } else if (kind === 'end') {
+          if (live.phase === 'open') {
+            await drainClosedAnswers();
+            store.closeResponses();
+          }
+          // 활동을 끝낼 때는 정답까지 공개한다 — 마무리 화면에서 돌아봐야 한다.
+          if (live.phase !== 'lobby') await publish(true);
+          await command('end');
+          store.endLive();
+        } else if (live.phase === 'lobby') {
+          await command('activate');
+          store.nextPhase();
+        } else if (live.phase === 'open') {
+          // 아직 마감 전인데 [다음 문항]을 눌렀다면 마감까지 한 번에 처리한다.
+          await drainClosedAnswers();
+          store.closeResponses();
+          await command('advance');
+          store.nextPhase();
+          store.saveParticipationResult();
+        } else if (live.phase === 'revealed') {
+          await command('advance');
+          store.nextPhase();
+          store.saveParticipationResult();
+        } else if (live.phase === 'podium') {
+          store.endLive();
+        }
+      } catch (error) {
+        setActionError(
+          error instanceof Error
+            ? error.message
+            : '진행 상태를 바꾸지 못했어요. 다시 시도해 주세요.',
+        );
+      } finally {
+        actionBusy.current = false;
+        setBusy(false);
       }
-    } catch (error) {
-      setActionError(
-        error instanceof Error ? error.message : '진행 상태를 바꾸지 못했어요. 다시 시도해 주세요.',
-      );
-    } finally {
-      actionBusy.current = false;
-      setBusy(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   const handleAdvance = useCallback(() => {
     const state = useMultiSurveyV2Store.getState();
@@ -350,6 +364,16 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
     }
     nextPhase();
   }, [nextPhase, runParticipationAction]);
+
+  const handleCloseResponses = useCallback(() => {
+    void runParticipationAction('close');
+  }, [runParticipationAction]);
+  const handlePublishResults = useCallback(() => {
+    void runParticipationAction('results');
+  }, [runParticipationAction]);
+  const handlePublishAnswer = useCallback(() => {
+    void runParticipationAction('answer');
+  }, [runParticipationAction]);
 
   // ── 세션 종료 (헤더/사이드 패널 "세션 종료") ──
   const handleEnd = useCallback(() => {
@@ -398,6 +422,7 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   // 창을 연 직후 지금 상태를 한 번 더 보낸다 — 대기 화면에서 열면
   // 다음 변화(학생 입장 등)까지 아무 일도 없어 빈 화면처럼 보이기 때문이다.
   const handleOpenShareWindow = useCallback(async () => {
+    setShareWindowOpen(true);
     await window.electronAPI?.openMultiSurveyShareWindow?.(entryUrlRef.current);
     const state = useMultiSurveyV2Store.getState();
     const live = state.liveSession;
@@ -409,7 +434,17 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   }, []);
 
   const handleCloseShareWindow = useCallback(() => {
+    setShareWindowOpen(false);
     void window.electronAPI?.closeMultiSurveyShareWindow?.();
+  }, []);
+
+  // 운영체제 닫기 단추로 교실 창을 닫아도 교사 화면이 알아야 한다.
+  // (옛 구조에서는 지역 state 라 [교실 화면 닫기] 가 남아 있었다.)
+  useEffect(() => {
+    const unsub = window.electronAPI?.onMultiSurveyShareWindowClosed?.(() => {
+      setShareWindowOpen(false);
+    });
+    return unsub;
   }, []);
 
   // ── 입장 코드를 기억하기 쉬운 이름으로 바꾸기 ──
@@ -507,6 +542,10 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
         void handleOpenShareWindow();
       }}
       onCloseShareWindow={handleCloseShareWindow}
+      shareWindowOpen={shareWindowOpen}
+      onClose={handleCloseResponses}
+      onPublishResults={handlePublishResults}
+      onPublishAnswer={handlePublishAnswer}
     />
   );
 }

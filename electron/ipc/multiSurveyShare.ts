@@ -31,7 +31,10 @@ let lastSnapshot: unknown = null;
  * 두 번째 모니터 전체화면 사용이 목적이므로 fullscreen: true.
  * 단일 모니터 환경에서는 최대화된 일반 창으로 열린다.
  */
-function buildMultiSurveyShareWindow(entryUrl: string): BrowserWindow {
+function buildMultiSurveyShareWindow(
+  entryUrl: string,
+  teacherWindow: BrowserWindow,
+): BrowserWindow {
   const win = new BrowserWindow({
     width: 1280,
     height: 800,
@@ -76,6 +79,14 @@ function buildMultiSurveyShareWindow(entryUrl: string): BrowserWindow {
 
   win.on('closed', () => {
     multiSurveyShareWindow = null;
+    // 운영체제 닫기 단추로 닫아도 교사 화면이 알아야 [교실 화면 띄우기]로 되돌아간다.
+    if (!teacherWindow.isDestroyed()) {
+      try {
+        teacherWindow.webContents.send('multi-survey-share:closed');
+      } catch {
+        // 렌더러가 이미 사라졌으면 무시
+      }
+    }
   });
 
   return win;
@@ -85,7 +96,7 @@ function buildMultiSurveyShareWindow(entryUrl: string): BrowserWindow {
  * MultiSurvey Share IPC 핸들러 등록.
  * app ready 이후 mainWindow 생성 직후에 호출한다.
  */
-export function registerMultiSurveyShareHandlers(_mainWindow: BrowserWindow): void {
+export function registerMultiSurveyShareHandlers(mainWindow: BrowserWindow): void {
   // multi-survey-share:open — Share window 열기 (없으면 새로 생성, 있으면 포커스)
   ipcMain.handle('multi-survey-share:open', (_event, payload: unknown) => {
     // IPC 입력 검증 — entryUrl 비문자열/비객체 payload 거부
@@ -96,7 +107,7 @@ export function registerMultiSurveyShareHandlers(_mainWindow: BrowserWindow): vo
       multiSurveyShareWindow.focus();
       return;
     }
-    multiSurveyShareWindow = buildMultiSurveyShareWindow(entryUrl);
+    multiSurveyShareWindow = buildMultiSurveyShareWindow(entryUrl, mainWindow);
     multiSurveyShareWindow.once('ready-to-show', () => {
       if (!multiSurveyShareWindow || multiSurveyShareWindow.isDestroyed()) return;
       multiSurveyShareWindow.show();

@@ -25,6 +25,8 @@ function makeSnapshot(phase: ShareSnapshot['phase'] = 'lobby'): ShareSnapshot {
     totalQuestions: 3,
     responsesForCurrent: [],
     allResponses: [],
+    stage: 'lobby',
+    currentQuestionScored: false,
     students: [],
     revealExplanation: false,
     allowReentry: false,
