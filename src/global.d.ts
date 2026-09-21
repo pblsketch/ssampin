@@ -672,6 +672,7 @@ interface ElectronAPI {
   ) => () => void;
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
+    participation?: import('./domain/entities/multiSurvey/ParticipationProtocol').ParticipationConfig;
     questions: Array<{
       id: string;
       type: 'single-choice' | 'multi-choice' | 'text' | 'scale';
@@ -687,6 +688,11 @@ interface ElectronAPI {
     stepMode?: boolean;
   }) => Promise<{ port: number; localIPs: string[] }>;
   stopLiveMultiSurvey: () => Promise<void>;
+  participationControl: (
+    command: import('./domain/entities/multiSurvey/ParticipationProtocol').ParticipationControl,
+  ) => Promise<
+    import('./domain/entities/multiSurvey/ParticipationProtocol').ParticipationControlResult
+  >;
   multiSurveyTunnelAvailable: () => Promise<boolean>;
   multiSurveyTunnelInstall: () => Promise<void>;
   multiSurveyTunnelStart: () => Promise<{ tunnelUrl: string }>;
@@ -708,6 +714,7 @@ interface ElectronAPI {
   // Live Multi Survey — step mode events
   onLiveMultiSurveyStudentAnswered: (
     callback: (data: {
+      votes?: readonly import('./domain/entities/multiSurvey/ParticipationVote').ParticipationVote[];
       sessionId: string;
       nickname: string;
       questionIndex: number;
@@ -715,7 +722,8 @@ interface ElectronAPI {
       totalConnected: number;
       aggregatedPreview: AggregatedResult | null;
       /** 학생 답변 원본 (stepMode v2 콘솔 정답 판정용 — v1 UI는 무시) */
-      answer?: { optionIds?: string[]; text?: string; scale?: number };
+      answer?: import('./domain/entities/multiSurvey/ParticipationProtocol').ParticipationAnswer;
+      roomId?: string;
     }) => void,
   ) => () => void;
   onLiveMultiSurveyPhaseChanged: (

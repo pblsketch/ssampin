@@ -38,6 +38,8 @@ export interface DisplayOpts {
  * v1 MultiSurvey와 달리 quiz 메카닉(정답·점수·포디움)을 지원하는 9종 문항 union을 품는다.
  */
 export interface MultiSurveyV2 {
+  readonly purpose?: 'quiz' | 'discussion' | 'activity';
+  readonly competitionMode?: boolean;
   readonly id: string;
   readonly formatVersion: typeof FORMAT_VERSION_V2;
   readonly title: string;

@@ -14,11 +14,16 @@ function escapeHtml(text: string): string {
 }
 
 export interface MultiSurveyQuestionForHTML {
+  interaction?: import('../../src/domain/entities/multiSurvey/AdvancedQuestion').AdvancedPublicQuestion;
+  scored?: boolean;
+  allowVoting?: boolean;
+  presentation?: 'trafficlight' | 'valueline';
+  collectReason?: boolean;
   id: string;
   type: 'single-choice' | 'multi-choice' | 'text' | 'scale';
   question: string;
   required: boolean;
-  options?: { id: string; text: string }[];
+  options?: { id: string; text: string; imageUrl?: string }[];
   scaleMin?: number;
   scaleMax?: number;
   scaleMinLabel?: string;

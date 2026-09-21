@@ -11,15 +11,24 @@
 
 import { useMultiSurveyV2Store } from '@adapters/stores/useMultiSurveyV2Store';
 import {
+  isKnownQuestionType,
+  isOpinionType,
   isQuizType,
+  QNA_DEFAULT_MAX_LENGTH,
+  WORDCLOUD_DEFAULT_MAX_WORDS,
+  WORDCLOUD_DEFAULT_MAX_WORD_LENGTH,
+  WORDCLOUD_MAX_WORDS_LIMIT,
   type Question,
   type QuestionType,
   type QuizQuestionType,
+  type OpinionQuestionType,
   type OXQuestion,
   type MultipleQuestion,
   type ShortQuestion,
   type BlankQuestion,
   type DescriptionQuestion,
+  type WordCloudQuestion,
+  type QnaQuestion,
 } from '@domain/entities/multiSurvey/Question';
 import { QuestionTypeChip, QUESTION_TYPE_LABELS } from './QuestionTypeChip';
 import { QuestionTextInput } from './QuestionTextInput';
@@ -32,8 +41,12 @@ interface QuestionEditorProps {
 }
 
 const QUIZ_TYPES: readonly QuizQuestionType[] = ['ox', 'multiple', 'short', 'blank', 'description'];
+const OPINION_TYPES: readonly OpinionQuestionType[] = ['wordcloud', 'qna'];
 
-function defaultQuestionForType(base: Question, nextType: QuizQuestionType): Question {
+function defaultQuestionForType(
+  base: Question,
+  nextType: QuizQuestionType | OpinionQuestionType,
+): Question {
   const commonBase = {
     id: base.id,
     text: base.text,
@@ -44,6 +57,25 @@ function defaultQuestionForType(base: Question, nextType: QuizQuestionType): Que
   };
 
   switch (nextType) {
+    case 'wordcloud': {
+      const q: WordCloudQuestion = {
+        ...commonBase,
+        type: 'wordcloud',
+        score: 0,
+        maxWords: WORDCLOUD_DEFAULT_MAX_WORDS,
+        maxWordLength: WORDCLOUD_DEFAULT_MAX_WORD_LENGTH,
+      };
+      return q;
+    }
+    case 'qna': {
+      const q: QnaQuestion = {
+        ...commonBase,
+        type: 'qna',
+        score: 0,
+        maxLength: QNA_DEFAULT_MAX_LENGTH,
+      };
+      return q;
+    }
     case 'ox': {
       const q: OXQuestion = { ...commonBase, type: 'ox', correctAnswer: 'O' };
       return q;
@@ -87,11 +119,67 @@ function defaultQuestionForType(base: Question, nextType: QuizQuestionType): Que
   }
 }
 
+interface StepperRowProps {
+  readonly label: string;
+  readonly value: string;
+  readonly onDecrease: () => void;
+  readonly onIncrease: () => void;
+  readonly decreaseDisabled: boolean;
+  readonly increaseDisabled: boolean;
+}
+
+const STEPPER_BUTTON_CLASS = [
+  'w-6 h-6 inline-flex items-center justify-center rounded border border-sp-border text-sp-text',
+  'hover:bg-sp-bg/40 disabled:opacity-40 disabled:cursor-not-allowed',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sp-accent',
+].join(' ');
+
+/** 숫자 하나를 ±로 조절하는 줄 (타이머·점수 패널과 같은 조작 방식) */
+function StepperRow({
+  label,
+  value,
+  onDecrease,
+  onIncrease,
+  decreaseDisabled,
+  increaseDisabled,
+}: StepperRowProps): JSX.Element {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs font-sp-medium text-sp-muted">{label}</span>
+      <div className="inline-flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onDecrease}
+          disabled={decreaseDisabled}
+          aria-label={`${label} 줄이기`}
+          className={STEPPER_BUTTON_CLASS}
+        >
+          −
+        </button>
+        <span className="min-w-[3rem] text-center text-sm font-sp-semibold text-sp-text tabular-nums">
+          {value}
+        </span>
+        <button
+          type="button"
+          onClick={onIncrease}
+          disabled={increaseDisabled}
+          aria-label={`${label} 늘리기`}
+          className={STEPPER_BUTTON_CLASS}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function QuestionEditor({ sessionId, question }: QuestionEditorProps): JSX.Element {
   const updateSession = useMultiSurveyV2Store((s) => s.updateSession);
   const sessions = useMultiSurveyV2Store((s) => s.sessions);
 
-  const isV1Survey = !isQuizType(question.type);
+  const isUnknownType = !isKnownQuestionType(question.type);
+  const isOpinion = !isUnknownType && isOpinionType(question.type);
+  const isV1Survey = !isUnknownType && !isQuizType(question.type) && !isOpinion;
 
   const patchQuestion = (next: Question): void => {
     const current = sessions.find((sess) => sess.id === sessionId);
@@ -110,9 +198,35 @@ export function QuestionEditor({ sessionId, question }: QuestionEditorProps): JS
 
   const handleTypeChange = (nextType: QuestionType): void => {
     if (nextType === question.type) return;
-    if (!isQuizType(nextType)) return; // Q11: v1 변환 미지원
+    if (isUnknownType) return; // 모르는 유형은 편집하지 않는다
     if (isV1Survey) return; // v1 → v2 변환 금지 (Q11)
+    // 같은 계열 안에서만 전환한다. 퀴즈 ↔ 의견 수집을 넘나들면 정답이 사라지거나
+    // 없는 정답이 생겨 교사가 눈치채기 어렵다.
+    if (isOpinion && !isOpinionType(nextType)) return;
+    if (!isOpinion && !isQuizType(nextType)) return;
+    if (!isQuizType(nextType) && !isOpinionType(nextType)) return;
     patchQuestion(defaultQuestionForType(question, nextType));
+  };
+
+  const handleMaxWordsChange = (delta: number): void => {
+    if (question.type !== 'wordcloud') return;
+    const next = Math.max(1, Math.min(WORDCLOUD_MAX_WORDS_LIMIT, question.maxWords + delta));
+    const patched: WordCloudQuestion = { ...question, maxWords: next };
+    patchQuestion(patched);
+  };
+
+  const handleMaxWordLengthChange = (delta: number): void => {
+    if (question.type !== 'wordcloud') return;
+    const next = Math.max(2, Math.min(30, question.maxWordLength + delta));
+    const patched: WordCloudQuestion = { ...question, maxWordLength: next };
+    patchQuestion(patched);
+  };
+
+  const handleQnaMaxLengthChange = (delta: number): void => {
+    if (question.type !== 'qna') return;
+    const next = Math.max(20, Math.min(500, question.maxLength + delta));
+    const patched: QnaQuestion = { ...question, maxLength: next };
+    patchQuestion(patched);
   };
 
   const handleOXAnswerChange = (answer: 'O' | 'X'): void => {
@@ -150,7 +264,11 @@ export function QuestionEditor({ sessionId, question }: QuestionEditorProps): JS
           <span className="text-xs font-sp-medium text-sp-muted">문항 유형</span>
           <QuestionTypeChip type={question.type} />
         </div>
-        {isV1Survey ? (
+        {isUnknownType ? (
+          <p className="text-xs text-sp-muted leading-relaxed">
+            이 문항은 최신 버전의 쌤핀에서 볼 수 있어요. 여기서는 편집할 수 없습니다.
+          </p>
+        ) : isV1Survey ? (
           <p className="text-xs text-sp-muted leading-relaxed">
             v1 설문 유형은 표시 전용입니다. (v2 퀴즈로 변환 불가)
           </p>
@@ -160,7 +278,7 @@ export function QuestionEditor({ sessionId, question }: QuestionEditorProps): JS
             aria-label="문항 유형 선택"
             className="inline-flex items-center gap-1 p-1 bg-sp-bg/40 border border-sp-border rounded-lg"
           >
-            {QUIZ_TYPES.map((t) => {
+            {(isOpinion ? OPINION_TYPES : QUIZ_TYPES).map((t) => {
               const active = question.type === t;
               return (
                 <button
@@ -249,6 +367,47 @@ export function QuestionEditor({ sessionId, question }: QuestionEditorProps): JS
       {question.type === 'description' && (
         <div className="text-xs text-sp-muted">
           서술형 — 최소 {question.minLength}자 / 최대 {question.maxLength}자
+        </div>
+      )}
+
+      {question.type === 'wordcloud' && (
+        <div className="flex flex-col gap-2">
+          <StepperRow
+            label="학생 1명이 낼 단어 수"
+            value={`${question.maxWords}개`}
+            onDecrease={() => handleMaxWordsChange(-1)}
+            onIncrease={() => handleMaxWordsChange(1)}
+            decreaseDisabled={question.maxWords <= 1}
+            increaseDisabled={question.maxWords >= WORDCLOUD_MAX_WORDS_LIMIT}
+          />
+          <StepperRow
+            label="단어 하나의 글자 수"
+            value={`${question.maxWordLength}자`}
+            onDecrease={() => handleMaxWordLengthChange(-1)}
+            onIncrease={() => handleMaxWordLengthChange(1)}
+            decreaseDisabled={question.maxWordLength <= 2}
+            increaseDisabled={question.maxWordLength >= 30}
+          />
+          <p className="text-xs text-sp-muted leading-relaxed">
+            학생은 쉼표로 구분해 최대 {question.maxWords}개까지 적습니다. 같은 단어가 많이 나오면
+            교실 화면에서 글자가 커집니다. 정답과 점수는 없습니다.
+          </p>
+        </div>
+      )}
+
+      {question.type === 'qna' && (
+        <div className="flex flex-col gap-2">
+          <StepperRow
+            label="질문 글자 수"
+            value={`${question.maxLength}자`}
+            onDecrease={() => handleQnaMaxLengthChange(-10)}
+            onIncrease={() => handleQnaMaxLengthChange(10)}
+            decreaseDisabled={question.maxLength <= 20}
+            increaseDisabled={question.maxLength >= 500}
+          />
+          <p className="text-xs text-sp-muted leading-relaxed">
+            교실 화면에는 이름 없이 질문만 보입니다. 누가 냈는지는 선생님 화면에서만 보입니다.
+          </p>
         </div>
       )}
 

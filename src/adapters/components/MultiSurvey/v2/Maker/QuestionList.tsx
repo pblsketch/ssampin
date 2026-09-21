@@ -10,7 +10,16 @@
 
 import { useState } from 'react';
 import { useMultiSurveyV2Store, selectSessionById } from '@adapters/stores/useMultiSurveyV2Store';
-import type { OXQuestion, Question } from '@domain/entities/multiSurvey/Question';
+import {
+  OPINION_DEFAULT_TIMER_SECONDS,
+  QNA_DEFAULT_MAX_LENGTH,
+  WORDCLOUD_DEFAULT_MAX_WORDS,
+  WORDCLOUD_DEFAULT_MAX_WORD_LENGTH,
+  type OXQuestion,
+  type QnaQuestion,
+  type Question,
+  type WordCloudQuestion,
+} from '@domain/entities/multiSurvey/Question';
 import { QuestionListItem } from './QuestionListItem';
 
 interface QuestionListProps {
@@ -38,6 +47,39 @@ function createDefaultQuestion(): OXQuestion {
   };
 }
 
+/** 의견 수집 문항 기본값 — 정답·점수 없음, 타이머는 넉넉하게 */
+function createWordCloudQuestion(): WordCloudQuestion {
+  return {
+    id: defaultQuestionId(),
+    type: 'wordcloud',
+    text: '',
+    timerSeconds: OPINION_DEFAULT_TIMER_SECONDS,
+    score: 0,
+    maxWords: WORDCLOUD_DEFAULT_MAX_WORDS,
+    maxWordLength: WORDCLOUD_DEFAULT_MAX_WORD_LENGTH,
+  };
+}
+
+function createQnaQuestion(): QnaQuestion {
+  return {
+    id: defaultQuestionId(),
+    type: 'qna',
+    text: '',
+    timerSeconds: OPINION_DEFAULT_TIMER_SECONDS,
+    score: 0,
+    maxLength: QNA_DEFAULT_MAX_LENGTH,
+  };
+}
+
+/** 의견 수집 문항 추가 버튼 공통 스타일 (보조 액션) */
+const SECONDARY_ADD_BUTTON_CLASS = [
+  'flex-1 px-2 py-1.5 text-xs font-sp-medium rounded-lg',
+  'border border-dashed border-sp-border text-sp-muted',
+  'hover:text-sp-text hover:border-sp-accent',
+  'transition-colors duration-sp-base motion-reduce:transition-none',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sp-accent',
+].join(' ');
+
 export function QuestionList({
   sessionId,
   questions,
@@ -51,11 +93,14 @@ export function QuestionList({
   );
   const [dragIndex, setDragIndex] = useState<number | null>(null);
 
-  const handleAdd = (): void => {
-    const newQuestion = createDefaultQuestion();
+  const handleAddQuestion = (newQuestion: Question): void => {
     const next = [...questions, newQuestion];
     updateSession(sessionId, { questions: next });
     onSelectQuestion(newQuestion.id);
+  };
+
+  const handleAdd = (): void => {
+    handleAddQuestion(createDefaultQuestion());
   };
 
   const handleDelete = (id: string): void => {
@@ -123,7 +168,7 @@ export function QuestionList({
         ))}
       </ul>
 
-      <footer className="shrink-0 p-2 border-t border-sp-border">
+      <footer className="shrink-0 p-2 border-t border-sp-border flex flex-col gap-1.5">
         <button
           type="button"
           onClick={handleAdd}
@@ -136,6 +181,24 @@ export function QuestionList({
         >
           + 문항 추가
         </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => handleAddQuestion(createWordCloudQuestion())}
+            title="학생이 낸 단어를 모아 크기로 보여주는 문항"
+            className={SECONDARY_ADD_BUTTON_CLASS}
+          >
+            + 워드클라우드
+          </button>
+          <button
+            type="button"
+            onClick={() => handleAddQuestion(createQnaQuestion())}
+            title="학생이 익명으로 질문을 내는 문항"
+            className={SECONDARY_ADD_BUTTON_CLASS}
+          >
+            + 질문받기
+          </button>
+        </div>
       </footer>
     </aside>
   );

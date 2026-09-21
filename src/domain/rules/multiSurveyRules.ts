@@ -5,6 +5,7 @@ import type {
 } from '../entities/multiSurvey/MultiSurveyV2';
 import {
   isQuizType,
+  WORDCLOUD_MAX_WORDS_LIMIT,
   type Question,
   type SingleChoiceQuestion,
   type MultiChoiceQuestion,
@@ -13,8 +14,12 @@ import {
   type ShortQuestion,
   type BlankQuestion,
   type DescriptionQuestion,
+  type WordCloudQuestion,
+  type QnaQuestion,
 } from '../entities/multiSurvey/Question';
 import type { Response } from '../entities/multiSurvey/Response';
+import { isAdvancedType, type AdvancedQuestion } from '../entities/multiSurvey/AdvancedQuestion';
+import { advancedCorrect, validateAdvancedQuestion } from './advancedQuestionRules';
 
 // ──────────────────────────────────────────────
 // normalizeHangulInitial
@@ -105,6 +110,10 @@ export function validateSession(
       }
 
       // type-specific shape validation
+      if (isAdvancedType(q.type))
+        errors.push(
+          ...validateAdvancedQuestion(q as AdvancedQuestion).map((error) => `${prefix} ${error}`),
+        );
       switch (q.type) {
         case 'single-choice':
         case 'multi-choice': {
@@ -136,14 +145,20 @@ export function validateSession(
         }
         case 'short': {
           const sq = q as ShortQuestion;
-          if (!sq.acceptedAnswers || sq.acceptedAnswers.length === 0) {
+          if (
+            !sq.acceptedAnswers ||
+            !sq.acceptedAnswers.some((answer) => answer.trim().length > 0)
+          ) {
             errors.push(`${prefix} acceptedAnswers가 1개 이상 필요합니다.`);
           }
           break;
         }
         case 'blank': {
           const bq = q as BlankQuestion;
-          if (!bq.acceptedAnswers || bq.acceptedAnswers.length === 0) {
+          if (
+            !bq.acceptedAnswers ||
+            !bq.acceptedAnswers.some((answer) => answer.trim().length > 0)
+          ) {
             errors.push(`${prefix} acceptedAnswers가 1개 이상 필요합니다.`);
           }
           break;
@@ -158,7 +173,28 @@ export function validateSession(
           }
           break;
         }
+        case 'wordcloud': {
+          const wq = q as WordCloudQuestion;
+          if (wq.maxWords < 1 || wq.maxWords > WORDCLOUD_MAX_WORDS_LIMIT) {
+            errors.push(
+              `${prefix} maxWords는 1 이상 ${WORDCLOUD_MAX_WORDS_LIMIT} 이하여야 합니다.`,
+            );
+          }
+          if (wq.maxWordLength < 1) {
+            errors.push(`${prefix} maxWordLength는 1 이상이어야 합니다.`);
+          }
+          break;
+        }
+        case 'qna': {
+          const qq = q as QnaQuestion;
+          if (qq.maxLength < 1) {
+            errors.push(`${prefix} maxLength는 1 이상이어야 합니다.`);
+          }
+          break;
+        }
         // 'text' | 'scale' — 별도 shape 검증 없음
+        // 그 외(알 수 없는 유형) — 오류로 만들지 않는다. 옛/새 버전 사이에서 모르는 유형을
+        // 만나도 세션 전체가 못 쓰게 되는 것을 막는다(관용 처리).
       }
     });
   }
@@ -182,6 +218,7 @@ export function isAnswerCorrect(
   question: Question,
   answer: Response['answer'],
 ): boolean | undefined {
+  if (isAdvancedType(question.type)) return advancedCorrect(question as AdvancedQuestion, answer);
   if (!isQuizType(question.type)) {
     // v1 survey 4종 — 정답 개념 없음
     return undefined;
@@ -242,6 +279,10 @@ export function isAnswerCorrect(
  * 필요하므로 Phase B에서 세션 레벨 calcSessionScore()로 분리 구현.
  */
 export function calcScore(question: Question, response: Response): number {
+  if (isAdvancedType(question.type))
+    return advancedCorrect(question as AdvancedQuestion, response.answer) === true
+      ? question.score
+      : 0;
   if (!isQuizType(question.type)) {
     return 0;
   }
@@ -413,7 +454,7 @@ export function calcSessionScore(ctx: SessionScoreContext): SessionScoreBreakdow
   const { question, response, questionOpenedAt, currentStreak, opts, rng } = ctx;
 
   // survey 타입이거나 오답이면 보너스 포함 전부 0
-  if (!isQuizType(question.type) || response.isCorrect !== true) {
+  if (response.isCorrect !== true) {
     return { base: 0, fastSolve: 0, streak: 0, random: 0, total: 0 };
   }
 

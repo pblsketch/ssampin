@@ -1,3 +1,5 @@
+import { PARTICIPATION_TOOL_NAME } from '@adapters/multiSurvey/participationBranding';
+
 export interface ToolDefinition {
   readonly id: string;
   readonly name: string;
@@ -36,7 +38,7 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
   { id: 'tool-survey', name: '주관식 설문', icon: '📝', color: 'bg-violet-500/20 text-violet-600' },
   {
     id: 'tool-multi-survey',
-    name: '복합 유형 설문',
+    name: PARTICIPATION_TOOL_NAME,
     icon: '📋',
     color: 'bg-rose-500/20 text-rose-600',
   },

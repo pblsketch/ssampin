@@ -6,6 +6,8 @@
  * calcAccuracy()에서 isCorrect === undefined인 응답은 분모에서 제외.
  */
 export interface Response {
+  readonly reason?: string;
+  readonly attempt?: number;
   readonly id: string;
   readonly studentId: string;
   readonly questionId: string;

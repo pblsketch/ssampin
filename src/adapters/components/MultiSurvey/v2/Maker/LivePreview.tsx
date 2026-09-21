@@ -7,7 +7,7 @@
  */
 
 import { isQuizType, type Question, type Choice } from '@domain/entities/multiSurvey/Question';
-import { QUESTION_TYPE_LABELS } from './QuestionTypeChip';
+import { questionTypeLabel } from './QuestionTypeChip';
 
 interface LivePreviewProps {
   readonly question: Question | null;
@@ -76,7 +76,7 @@ export function LivePreview({
             <>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-sp-medium text-sp-muted">
-                  {QUESTION_TYPE_LABELS[question.type]}
+                  {questionTypeLabel(question.type)}
                 </span>
                 {showTimer && (
                   <span className="text-xs text-sp-muted tabular-nums">
@@ -175,6 +175,24 @@ export function LivePreview({
                 <div className="mt-2">
                   <div className="w-full px-3 py-3 text-sm text-sp-muted bg-sp-card border border-sp-border rounded-lg">
                     자유 응답
+                  </div>
+                </div>
+              )}
+
+              {/* 워드클라우드 */}
+              {question.type === 'wordcloud' && (
+                <div className="mt-2">
+                  <div className="w-full px-3 py-3 text-sm text-sp-muted bg-sp-card border border-sp-border rounded-lg">
+                    단어를 쉼표로 구분해 최대 {question.maxWords}개
+                  </div>
+                </div>
+              )}
+
+              {/* 질문 받기 */}
+              {question.type === 'qna' && (
+                <div className="mt-2">
+                  <div className="w-full px-3 py-3 text-sm text-sp-muted bg-sp-card border border-sp-border rounded-lg">
+                    궁금한 점을 {question.maxLength}자까지
                   </div>
                 </div>
               )}

@@ -15,6 +15,7 @@ import {
   useOneClickPortalLauncher,
 } from '@adapters/components/Tools/useOneClickPortalLauncher';
 import { ToolPopupCardAction } from '@adapters/components/Tools/popup/ToolPopupCardAction';
+import { PARTICIPATION_TOOL_NAME } from '@adapters/multiSurvey/participationBranding';
 
 interface ToolsGridProps {
   onNavigate: (page: PageId) => void;
@@ -47,8 +48,8 @@ export const TOOLS: ToolCard[] = [
   {
     id: 'tool-multi-survey',
     emoji: '📋',
-    name: '복합 유형 설문',
-    description: '여러 질문 유형을 한 번에 설문',
+    name: PARTICIPATION_TOOL_NAME,
+    description: '퀴즈로 확인하고 토의·토론으로 생각 나누기',
   },
   {
     id: 'tool-classroom-agreement',
@@ -272,7 +273,16 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
   const isDev = import.meta.env.DEV;
 
   const visibleTools = useMemo(() => {
-    const base = isDev ? TOOLS : TOOLS.filter((t) => !t.hidden);
+    const integrated = new Set([
+      'tool-poll',
+      'tool-survey',
+      'tool-wordcloud',
+      'tool-valueline',
+      'tool-traffic-discussion',
+    ]);
+    const base = (isDev ? TOOLS : TOOLS.filter((t) => !t.hidden)).filter(
+      (t) => !integrated.has(t.id),
+    );
     if (view === 'all') return base;
     const sorted = sortByOrder(base, toolsOrder);
     const hidden = new Set(hiddenTools ?? []);

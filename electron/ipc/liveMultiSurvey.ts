@@ -1,3 +1,8 @@
+import {
+  parseAdvancedAnswer,
+  advancedAnswerLabel,
+} from '../../src/domain/rules/advancedQuestionRules';
+import type { ParticipationVote } from '../../src/domain/entities/multiSurvey/ParticipationVote';
 /**
  * 실시간 복수 설문 IPC 핸들러
  *
@@ -14,6 +19,13 @@ import os from 'os';
 import { WebSocketServer, WebSocket } from 'ws';
 import { generateMultiSurveyHTML, MultiSurveyQuestionForHTML } from './liveMultiSurveyHTML';
 import { isTunnelAvailable, installTunnel, openTunnel, closeTunnel } from './tunnel';
+import { generateParticipationStudentPage } from '../../src/adapters/multiSurvey/participationStudentPage';
+import type {
+  ParticipationConfig,
+  ParticipationControl,
+  ParticipationControlResult,
+  PersonalResult,
+} from '../../src/domain/entities/multiSurvey/ParticipationProtocol';
 
 /** WSL/Hyper-V 등 가상 네트워크 대역 (외부 기기 접속 불가) */
 const VIRTUAL_PREFIXES = [
@@ -63,6 +75,9 @@ function getLocalIPs(): string[] {
 
 /** 문항별 답변 표현 (phase 머신 모드 전용) */
 interface PerAnswer {
+  reason?: string;
+  attempt?: number;
+  submittedAt?: string;
   optionIds?: string[];
   text?: string;
   scale?: number;
@@ -116,6 +131,10 @@ interface TextAggregate {
 type AggregatedResult = ChoiceAggregate | ScaleAggregate | TextAggregate;
 
 interface LiveMultiSurveySession {
+  votes?: Map<string, Set<string>>;
+  participation?: ParticipationConfig;
+  attempt?: number;
+  personalResults?: Map<string, PersonalResult>;
   server: http.Server;
   wss: WebSocketServer;
   questions: MultiSurveyQuestionForHTML[];
@@ -313,6 +332,25 @@ function buildRoster(s: LiveMultiSurveySession): RosterEntry[] {
 /**
  * 특정 WebSocket 클라이언트에게 보낼 state payload 생성
  */
+function voteCandidates(s: LiveMultiSurveySession): ParticipationVote[] {
+  const q = s.questions[s.currentQuestionIndex];
+  if (!q?.allowVoting) return [];
+  const texts: string[] = [];
+  for (const p of s.participants.values()) {
+    const raw = p.answers.get(s.currentQuestionIndex)?.text;
+    if (!raw) continue;
+    if (q.interaction?.type === 'brainstorm') {
+      const ideas = parseAdvancedAnswer(q.interaction, raw);
+      if (Array.isArray(ideas)) texts.push(...ideas);
+    } else texts.push(raw);
+  }
+  return texts.map((text, index) => ({
+    id: `idea-${index}`,
+    text,
+    count: s.votes?.get(`${s.currentQuestionIndex}:${s.attempt}:idea-${index}`)?.size ?? 0,
+  }));
+}
+
 function buildStatePayload(s: LiveMultiSurveySession, ws: WebSocket): Record<string, unknown> {
   const sessionId = s.clients.get(ws) ?? '';
   const participant = sessionId ? s.participants.get(sessionId) : undefined;
@@ -328,6 +366,11 @@ function buildStatePayload(s: LiveMultiSurveySession, ws: WebSocket): Record<str
     totalAnswered,
     myNickname,
   };
+  if (s.participation) {
+    payload.roomId = s.participation.roomId;
+    payload.attempt = s.attempt ?? 1;
+    if (s.phase !== 'lobby') payload.personal = s.personalResults?.get(sessionId);
+  }
 
   if (s.phase === 'open' || s.phase === 'revealed') {
     const question = s.questions[s.currentQuestionIndex];
@@ -336,9 +379,28 @@ function buildStatePayload(s: LiveMultiSurveySession, ws: WebSocket): Record<str
     if (myAnswer) payload.myAnswer = myAnswer;
   }
 
-  if (s.phase === 'revealed') {
+  if (
+    s.phase === 'revealed' &&
+    (!s.participation || !s.questions[s.currentQuestionIndex]?.scored)
+  ) {
     const aggregated = aggregateAnswers(s, s.currentQuestionIndex);
     if (aggregated) payload.aggregated = aggregated;
+    const current = s.questions[s.currentQuestionIndex];
+    if (current?.interaction)
+      payload.aggregated = {
+        answers: [...s.participants.values()]
+          .map((p) => p.answers.get(s.currentQuestionIndex)?.text)
+          .filter((text): text is string => !!text)
+          .map((text) => advancedAnswerLabel(current.interaction!, text)),
+      };
+    if (current?.allowVoting) {
+      payload.voteCandidates = voteCandidates(s);
+      payload.myVotes = voteCandidates(s)
+        .filter((candidate) =>
+          s.votes?.get(`${s.currentQuestionIndex}:${s.attempt}:${candidate.id}`)?.has(sessionId),
+        )
+        .map((candidate) => candidate.id);
+    }
   }
 
   return payload;
@@ -422,6 +484,65 @@ function emitConnectionCount(mainWindow: BrowserWindow, s: LiveMultiSurveySessio
  * @param mainWindow 렌더러에 이벤트를 전달할 메인 윈도우
  */
 export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void {
+  ipcMain.handle(
+    'live-multi-survey:participation-control',
+    (_event, command: ParticipationControl): ParticipationControlResult => {
+      const s = session;
+      if (
+        !s?.participation ||
+        s.participation.roomId !== command.roomId ||
+        s.currentQuestionIndex !== command.questionIndex ||
+        s.attempt !== command.attempt
+      ) {
+        throw new Error('활동 상태가 달라졌습니다. 다시 확인해 주세요.');
+      }
+      const votes = voteCandidates(s);
+      const answers = [...s.participants.entries()].flatMap(([studentId, p]) => {
+        const answer = p.answers.get(s.currentQuestionIndex);
+        return answer ? [{ studentId, answer }] : [];
+      });
+      switch (command.action) {
+        case 'activate':
+          if (s.phase !== 'lobby') throw new Error('대기실에서 시작해 주세요.');
+          s.phase = 'open';
+          break;
+        case 'close':
+          if (s.phase !== 'open' && s.phase !== 'revealed')
+            throw new Error('응답 중인 문항이 없습니다.');
+          s.phase = 'revealed';
+          break;
+        case 'publish':
+          if (s.phase !== 'revealed' && s.phase !== 'ended')
+            throw new Error('응답을 먼저 마감해 주세요.');
+          s.personalResults = new Map((command.results ?? []).map((r) => [r.studentId, r]));
+          break;
+        case 'advance':
+          if (s.phase !== 'revealed') throw new Error('응답을 먼저 마감해 주세요.');
+          if (s.currentQuestionIndex + 1 >= s.questions.length) s.phase = 'ended';
+          else {
+            s.currentQuestionIndex++;
+            s.attempt = 1;
+            s.phase = 'open';
+          }
+          break;
+        case 'reopen':
+          if (s.phase !== 'revealed' || s.questions[s.currentQuestionIndex]?.scored)
+            throw new Error('토의·토론 결과에서 다시 응답받을 수 있습니다.');
+          s.attempt = (s.attempt ?? 1) + 1;
+          for (const p of s.participants.values()) p.answers.delete(s.currentQuestionIndex);
+          s.phase = 'open';
+          break;
+        case 'end':
+          s.phase = 'ended';
+          break;
+        default:
+          throw new Error('지원하지 않는 활동 동작입니다.');
+      }
+      broadcastState(s);
+      emitPhaseChanged(mainWindow, s);
+      return { answers, votes };
+    },
+  );
   /**
    * live-multi-survey:start — 복수 설문 세션 시작
    *
@@ -433,7 +554,11 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
     'live-multi-survey:start',
     async (
       _event,
-      args: { questions: MultiSurveyQuestionForHTML[]; stepMode?: boolean },
+      args: {
+        questions: MultiSurveyQuestionForHTML[];
+        stepMode?: boolean;
+        participation?: ParticipationConfig;
+      },
     ): Promise<{ port: number; localIPs: string[] }> => {
       return new Promise<{ port: number; localIPs: string[] }>((resolve, reject) => {
         // 기존 세션 정리
@@ -441,7 +566,9 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
 
         const { questions } = args;
         const stepMode = args.stepMode ?? false;
-        const html = generateMultiSurveyHTML(questions, stepMode);
+        const html = args.participation
+          ? generateParticipationStudentPage(args.participation)
+          : generateMultiSurveyHTML(questions, stepMode);
 
         const server = http.createServer((req, res) => {
           const pathname = req.url?.split('?')[0] ?? '/';
@@ -466,6 +593,9 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
 
         // 세션을 server.listen() 전에 미리 생성 — WSS connection 핸들러가 session을 null로 보는 race condition 방지
         session = {
+          participation: args.participation,
+          attempt: 1,
+          personalResults: new Map(),
           server,
           wss,
           questions,
@@ -511,6 +641,34 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
             // phase 머신 모드(stepMode=true) 전용 메시지
             // ─────────────────────────────────────────────────────────
             if (session.stepMode) {
+              if (type === 'vote') {
+                const voter = session.clients.get(ws);
+                const target = msg['target'];
+                if (
+                  !voter ||
+                  session.phase !== 'revealed' ||
+                  msg['roomId'] !== session.participation?.roomId ||
+                  msg['questionIndex'] !== session.currentQuestionIndex ||
+                  msg['attempt'] !== session.attempt ||
+                  typeof target !== 'string' ||
+                  !voteCandidates(session).some((candidate) => candidate.id === target)
+                )
+                  return;
+                session.votes ??= new Map();
+                const key = `${session.currentQuestionIndex}:${session.attempt}:${target}`;
+                const voters = session.votes.get(key) ?? new Set<string>();
+                if (msg['selected'] === false) voters.delete(voter);
+                else voters.add(voter);
+                session.votes.set(key, voters);
+                broadcastState(session);
+                mainWindow.webContents.send('live-multi-survey:student-answered', {
+                  roomId: session.participation?.roomId,
+                  sessionId: voter,
+                  questionIndex: session.currentQuestionIndex,
+                  votes: voteCandidates(session),
+                });
+                return;
+              }
               if (type === 'join') {
                 const nickname = validateNickname(msg['nickname']);
                 if (nickname === null) {
@@ -591,6 +749,7 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
 
                 const participant = session.participants.get(sessionId);
                 if (!participant) return;
+                if (session.participation && session.clients.get(ws) !== sessionId) return;
 
                 // phase 검증: open 일 때만, 그리고 현재 문항 인덱스와 일치할 때만
                 if (session.phase !== 'open') return;
@@ -602,6 +761,18 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
 
                 const question = session.questions[questionIndex];
                 if (!question) return;
+                if (
+                  session.participation &&
+                  (msg['roomId'] !== session.participation.roomId ||
+                    msg['questionId'] !== question.id ||
+                    msg['attempt'] !== session.attempt)
+                )
+                  return;
+                if (session.participation && participant.answers.has(questionIndex)) {
+                  ws.send(JSON.stringify({ type: 'ack', questionIndex }));
+                  sendStateToClient(session, ws);
+                  return;
+                }
 
                 const rawAnswer = msg['answer'];
                 if (typeof rawAnswer !== 'object' || rawAnswer === null) return;
@@ -617,6 +788,12 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
                   }
                   if (optionIds.length === 0) return;
                   if (question.type === 'single-choice' && optionIds.length > 1) return;
+                  if (
+                    session.participation &&
+                    (new Set(optionIds).size !== optionIds.length ||
+                      optionIds.some((id) => !question.options?.some((o) => o.id === id)))
+                  )
+                    return;
                   perAnswer.optionIds = optionIds;
                 } else if (question.type === 'scale') {
                   const scaleRaw = ansObj['scale'];
@@ -629,13 +806,38 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
                 } else if (question.type === 'text') {
                   const textRaw = ansObj['text'];
                   if (typeof textRaw !== 'string') return;
+                  if (
+                    question.interaction &&
+                    parseAdvancedAnswer(question.interaction, textRaw) === null
+                  ) {
+                    ws.send(
+                      JSON.stringify({
+                        type: 'error',
+                        message: '입력 범위와 항목을 확인해 주세요.',
+                      }),
+                    );
+                    return;
+                  }
                   const maxLen = question.maxLength ?? 500;
                   const text = textRaw.slice(0, maxLen);
                   if (text.trim().length === 0) return;
                   perAnswer.text = text;
                 }
 
-                // 덮어쓰기 허용
+                if (session.participation) {
+                  if (question.collectReason) {
+                    if (
+                      typeof ansObj['reason'] !== 'string' ||
+                      !ansObj['reason'].trim() ||
+                      ansObj['reason'].length > 500
+                    )
+                      return;
+                    perAnswer.reason = ansObj['reason'].trim();
+                  }
+                  perAnswer.attempt = session.attempt;
+                  perAnswer.submittedAt = new Date().toISOString();
+                }
+                // 기존 설문만 덮어쓰기 허용. 참여교실은 한 회차에 한 번.
                 participant.answers.set(questionIndex, perAnswer);
 
                 if (ws.readyState === WebSocket.OPEN) {
@@ -660,6 +862,7 @@ export function registerLiveMultiSurveyHandlers(mainWindow: BrowserWindow): void
                   totalConnected: session.clients.size,
                   aggregatedPreview,
                   answer: perAnswer,
+                  roomId: session.participation?.roomId,
                 });
                 emitRoster(mainWindow, session);
                 return;

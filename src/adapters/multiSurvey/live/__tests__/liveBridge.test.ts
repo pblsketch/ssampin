@@ -11,12 +11,16 @@ import type {
   SingleChoiceQuestion,
   ScaleQuestion,
   TextQuestion,
+  WordCloudQuestion,
+  QnaQuestion,
 } from '@domain/entities/multiSurvey/Question';
 import {
   mapQuestionsForLiveHTML,
   mapStudentAnswerToDomain,
   buildResponseFromLiveAnswer,
+  isSupportedQuestionType,
   OX_OPTIONS,
+  UNSUPPORTED_QUESTION_NOTICE,
 } from '../liveBridge';
 
 const base = { text: '문항', timerSeconds: 20, score: 10 } as const;
@@ -191,5 +195,115 @@ describe('buildResponseFromLiveAnswer', () => {
     expect(
       buildResponseFromLiveAnswer({ question: ox, studentId: 's', payload: { scale: 3 }, now }),
     ).toBeNull();
+  });
+});
+
+// ──────────────────────────────────────────────
+// 의견 수집 2종 + 알 수 없는 유형 관용 처리
+// ──────────────────────────────────────────────
+
+describe('의견 수집 2종 매핑', () => {
+  const wordcloud: WordCloudQuestion = {
+    ...base,
+    id: 'q-wc',
+    type: 'wordcloud',
+    score: 0,
+    maxWords: 3,
+    maxWordLength: 10,
+  };
+  const qna: QnaQuestion = {
+    ...base,
+    id: 'q-qna',
+    type: 'qna',
+    score: 0,
+    maxLength: 100,
+  };
+
+  it('워드클라우드는 글쓰기 입력으로 내려가고 안내 문구가 붙는다', () => {
+    const [mapped] = mapQuestionsForLiveHTML([wordcloud]);
+    expect(mapped?.type).toBe('text');
+    expect(mapped?.question).toContain('쉼표로 구분해 최대 3개');
+    expect(mapped?.maxLength).toBe(36);
+  });
+
+  it('질문 받기는 글쓰기 입력으로 내려간다', () => {
+    const [mapped] = mapQuestionsForLiveHTML([qna]);
+    expect(mapped).toMatchObject({ type: 'text', question: '문항', maxLength: 100 });
+  });
+
+  it('워드클라우드 응답은 쉼표로 나뉘어 단어 배열이 된다', () => {
+    expect(mapStudentAnswerToDomain(wordcloud, { text: '사과, 포도 ,바나나' })).toEqual([
+      '사과',
+      '포도',
+      '바나나',
+    ]);
+  });
+
+  it('워드클라우드 응답은 상한 개수까지만 받는다', () => {
+    expect(mapStudentAnswerToDomain(wordcloud, { text: '하나,둘,셋,넷' })).toEqual([
+      '하나',
+      '둘',
+      '셋',
+    ]);
+  });
+
+  it('워드클라우드 빈 응답은 무시한다', () => {
+    expect(mapStudentAnswerToDomain(wordcloud, { text: '  ,  ' })).toBeNull();
+    expect(mapStudentAnswerToDomain(wordcloud, {})).toBeNull();
+  });
+
+  it('질문 받기 응답은 앞뒤 공백을 없앤 문자열', () => {
+    expect(mapStudentAnswerToDomain(qna, { text: '  왜 그런가요?  ' })).toBe('왜 그런가요?');
+  });
+
+  it('정답·점수가 없으므로 응답의 정답 여부는 undefined, 점수는 0', () => {
+    const response = buildResponseFromLiveAnswer({
+      question: wordcloud,
+      studentId: 's1',
+      payload: { text: '사과' },
+      now: () => new Date('2026-09-18T10:00:00.000Z'),
+    });
+    expect(response).not.toBeNull();
+    expect(response?.isCorrect).toBeUndefined();
+    expect(response?.scoreEarned).toBe(0);
+    expect(response?.answer).toEqual(['사과']);
+  });
+});
+
+describe('알 수 없는 문항 유형', () => {
+  const unknown = { ...base, id: 'q-future', type: 'future-type' } as unknown as OXQuestion;
+  const qnaFixture: QnaQuestion = {
+    ...base,
+    id: 'q-qna-fixture',
+    type: 'qna',
+    score: 0,
+    maxLength: 100,
+  };
+
+  it('문항 개수를 유지한 채 안내 문항으로 대체한다 (인덱스 어긋남 방지)', () => {
+    const mapped = mapQuestionsForLiveHTML([ox, unknown, qnaFixture]);
+    expect(mapped).toHaveLength(3);
+    expect(mapped[1]).toMatchObject({
+      id: 'q-future',
+      type: 'text',
+      question: UNSUPPORTED_QUESTION_NOTICE,
+      required: false,
+    });
+    // 앞뒤 문항의 자리가 밀리지 않는다
+    expect(mapped[0]?.id).toBe('q-ox');
+    expect(mapped[2]?.id).toBe('q-qna-fixture');
+  });
+
+  it('응답은 만들지 않는다', () => {
+    expect(mapStudentAnswerToDomain(unknown, { text: '아무거나' })).toBeNull();
+    expect(
+      buildResponseFromLiveAnswer({ question: unknown, studentId: 's1', payload: { text: 'x' } }),
+    ).toBeNull();
+  });
+
+  it('지원 유형 판정은 11종만 참', () => {
+    expect(isSupportedQuestionType('wordcloud')).toBe(true);
+    expect(isSupportedQuestionType('qna')).toBe(true);
+    expect(isSupportedQuestionType('future-type')).toBe(false);
   });
 });

@@ -13,7 +13,7 @@
 import { memo, useEffect, useMemo, useState } from 'react';
 import type { MultiSurveyV2 } from '@domain/entities/multiSurvey/MultiSurveyV2';
 import type { LiveSession, LivePhase } from '@domain/entities/multiSurvey/LiveSession';
-import type { Question } from '@domain/entities/multiSurvey/Question';
+import { isOpinionType, type Question } from '@domain/entities/multiSurvey/Question';
 import type { Response } from '@domain/entities/multiSurvey/Response';
 import { isAutoAdvanceEnabled } from '@domain/rules/multiSurveyRules';
 import {
@@ -24,6 +24,8 @@ import { ConsoleHeader } from './ConsoleHeader';
 import { PhaseIndicator } from './PhaseIndicator';
 import { LobbyView } from './LobbyView';
 import { QuestionDisplay } from './QuestionDisplay';
+import { WordCloudLive } from './WordCloudLive';
+import { QnaList } from './QnaList';
 import { TimerBar } from './TimerBar';
 import { ResponseCounter } from './ResponseCounter';
 import { AnswerReveal } from './AnswerReveal';
@@ -31,10 +33,20 @@ import { RoundResultTable } from './RoundResultTable';
 import { Podium } from './Podium';
 import { SidePanelConsole } from './SidePanelConsole';
 import { useQuestionCountdown } from './useQuestionCountdown';
+import { ParticipationConsole } from '../../ParticipationConsole';
 
-interface TeacherConsoleProps {
+export interface TeacherConsoleProps {
+  readonly onReopen?: () => void;
+  readonly busy?: boolean;
+  readonly actionError?: string | null;
   /** 학생 입장 URL (QR/LobbyView 전달용) */
   readonly entryUrl: string;
+  /** 짧은 입장 코드 (없으면 코드 칸을 숨긴다) */
+  readonly entryCode?: string | null;
+  /** 코드를 기억하기 쉬운 이름으로 바꾸기. 성공 여부를 돌려준다. */
+  readonly onChangeEntryCode?: (nextCode: string) => Promise<boolean>;
+  /** 코드 변경 실패 사유 */
+  readonly entryCodeError?: string | null;
   /**
    * 다음 단계 진행 콜백 — 학생 페이지 IPC 동기화 포함 (LiveConsoleContainer 주입).
    * 미지정 시 store.nextPhase 만 호출 (학생 페이지 비동기화 — 테스트/프리뷰 전용).
@@ -54,6 +66,8 @@ interface TeacherConsoleProps {
   readonly onToggleFocusMode?: (active: boolean) => void;
   /** 작업 1: [교실 화면 열기] 버튼 콜백 (LiveConsoleContainer 주입) */
   readonly onOpenShareWindow?: () => void;
+  /** 교실 화면(별도 창) 닫기 콜백 (LiveConsoleContainer 주입) */
+  readonly onCloseShareWindow?: () => void;
 }
 
 function usePrefersReducedMotion(): boolean {
@@ -78,7 +92,13 @@ function currentResponses(live: LiveSession, question: Question | undefined): re
 }
 
 function TeacherConsoleImpl({
+  onReopen,
+  busy,
+  actionError,
   entryUrl,
+  entryCode = null,
+  onChangeEntryCode,
+  entryCodeError = null,
   onAdvance,
   onPause,
   onEnd,
@@ -90,6 +110,8 @@ function TeacherConsoleImpl({
 }: TeacherConsoleProps): JSX.Element {
   const live = useMultiSurveyV2Store((s) => s.liveSession);
   const survey = useMultiSurveyV2Store(selectActiveLiveSurvey);
+  const hideWord = useMultiSurveyV2Store((s) => s.hideWord);
+  const showWord = useMultiSurveyV2Store((s) => s.showWord);
   const reducedMotion = usePrefersReducedMotion();
 
   // DN-03: 최근 3초 이내 wave 보낸 학생 ID 집합 (pulse 표시용)
@@ -142,7 +164,43 @@ function TeacherConsoleImpl({
   }
 
   const responsesForQuestion = currentResponses(live, question);
+  if (survey.purpose)
+    return (
+      <ParticipationConsole
+        survey={survey}
+        live={live}
+        entryUrl={entryUrl}
+        entryCode={entryCode}
+        onChangeEntryCode={onChangeEntryCode}
+        entryCodeError={entryCodeError}
+        onAdvance={onAdvance}
+        onEnd={onEnd}
+        onExit={onExit}
+        onRestart={onRestart}
+        onOpenShareWindow={onOpenShareWindow}
+        onReopen={onReopen}
+        busy={busy}
+        actionError={actionError}
+      />
+    );
   const expectedCount = live.students.length;
+
+  // 의견 수집 문항(워드클라우드·질문 받기)의 실시간 표시.
+  // 문항이 그 유형일 때만 만들어지고, 아니면 null이라 다른 유형 흐름은 그대로다.
+  const hiddenWords = question ? (live.hiddenWordsByQuestion[question.id] ?? []) : [];
+  const opinionView: JSX.Element | null =
+    question?.type === 'wordcloud' ? (
+      <WordCloudLive
+        question={question}
+        responses={responsesForQuestion}
+        hiddenWords={hiddenWords}
+        onHideWord={(word) => hideWord(question.id, word)}
+        onShowWord={(word) => showWord(question.id, word)}
+      />
+    ) : question?.type === 'qna' ? (
+      <QnaList question={question} responses={responsesForQuestion} students={live.students} />
+    ) : null;
+
   const fadeStyle = reducedMotion
     ? undefined
     : { transition: 'opacity var(--sp-duration-slow) var(--sp-ease-out)' };
@@ -181,6 +239,9 @@ function TeacherConsoleImpl({
         {phase === 'lobby' && (
           <LobbyView
             entryUrl={entryUrl}
+            entryCode={entryCode}
+            onChangeEntryCode={onChangeEntryCode}
+            entryCodeError={entryCodeError}
             students={live.students}
             recentWaveStudentIds={recentWaveStudentIds}
           />
@@ -198,6 +259,7 @@ function TeacherConsoleImpl({
             {survey.responseOpts.autoAdvance && (
               <TimerBar totalSeconds={question.timerSeconds} remainingSeconds={remainingSeconds} />
             )}
+            {opinionView}
             <ResponseCounter
               responseCount={responsesForQuestion.length}
               expectedCount={expectedCount}
@@ -205,9 +267,21 @@ function TeacherConsoleImpl({
           </div>
         )}
 
-        {phase === 'revealed' && question && (
-          <AnswerReveal question={question} responses={responsesForQuestion} />
-        )}
+        {phase === 'revealed' &&
+          question &&
+          (isOpinionType(question.type) ? (
+            <div className="flex flex-col gap-6">
+              <QuestionDisplay
+                question={question}
+                questionIndex={live.currentQuestionIndex}
+                totalQuestions={survey.questions.length}
+                showTimer={false}
+              />
+              {opinionView}
+            </div>
+          ) : (
+            <AnswerReveal question={question} responses={responsesForQuestion} />
+          ))}
 
         {phase === 'round_result' && survey.displayOpts.showPerQuestionScore && (
           <RoundResultTable

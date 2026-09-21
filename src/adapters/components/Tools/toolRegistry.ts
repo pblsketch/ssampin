@@ -17,6 +17,7 @@ import { ToolWordCloud } from '@adapters/components/Tools/ToolWordCloud';
 import { ToolGrouping } from '@adapters/components/Tools/ToolGrouping';
 import { ToolChalkboard } from '@adapters/components/Tools/ToolChalkboard';
 import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/Tools/Discussion';
+import { PARTICIPATION_TOOL_NAME } from '@adapters/multiSurvey/participationBranding';
 
 /**
  * 듀얼 모드에서 사용 가능한 도구 식별자.
@@ -105,7 +106,7 @@ export const TOOL_REGISTRY = {
   },
   'tool-multi-survey': {
     id: 'tool-multi-survey',
-    name: '복합 유형 설문',
+    name: PARTICIPATION_TOOL_NAME,
     emoji: '📋',
     component: MultiSurveyToolEntry,
     prefersWide: true,

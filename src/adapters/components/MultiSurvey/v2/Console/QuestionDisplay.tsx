@@ -7,6 +7,7 @@
  */
 
 import { memo } from 'react';
+import { isQuizType } from '@domain/entities/multiSurvey/Question';
 import type {
   Question,
   SingleChoiceQuestion,
@@ -117,6 +118,37 @@ function renderBody(question: Question): JSX.Element | null {
           학생 화면에서 답을 입력하세요.
         </div>
       );
+    case 'wordcloud':
+      return (
+        <div
+          className="w-full rounded-lg border border-dashed border-sp-border bg-sp-card px-4 py-6 text-center font-sp-medium text-sp-text"
+          style={{ fontSize: 18 }}
+          aria-label="워드클라우드 입력 안내"
+        >
+          학생 화면에서 단어를 쉼표로 구분해 최대 {question.maxWords}개까지 적습니다.
+        </div>
+      );
+    case 'qna':
+      return (
+        <div
+          className="w-full rounded-lg border border-dashed border-sp-border bg-sp-card px-4 py-6 text-center font-sp-medium text-sp-text"
+          style={{ fontSize: 18 }}
+          aria-label="질문 받기 입력 안내"
+        >
+          학생 화면에서 궁금한 점을 적습니다. 교실 화면에는 이름이 나오지 않습니다.
+        </div>
+      );
+    default:
+      // 알 수 없는 유형 — 진행이 멈추지 않게 안내만 보여준다.
+      return (
+        <div
+          className="w-full rounded-lg border border-dashed border-sp-border bg-sp-card px-4 py-6 text-center font-sp-medium text-sp-muted"
+          style={{ fontSize: 18 }}
+          aria-label="지원하지 않는 문항 안내"
+        >
+          이 문항은 최신 버전의 쌤핀에서 볼 수 있어요.
+        </div>
+      );
   }
 }
 
@@ -136,9 +168,13 @@ function QuestionDisplayImpl({
           문항 {questionIndex + 1} / {totalQuestions}
         </span>
         <span className="font-sp-medium text-sp-text" style={{ fontSize: 16 }}>
-          {showTimer
-            ? `제한 시간 ${question.timerSeconds}초 · 배점 ${question.score}점`
-            : `배점 ${question.score}점`}
+          {isQuizType(question.type)
+            ? showTimer
+              ? `제한 시간 ${question.timerSeconds}초 · 배점 ${question.score}점`
+              : `배점 ${question.score}점`
+            : showTimer
+              ? `제한 시간 ${question.timerSeconds}초`
+              : '정답 없음'}
         </span>
       </header>
       <h2 className="font-sp-bold text-sp-text" style={{ fontSize: 32, lineHeight: 1.4 }}>

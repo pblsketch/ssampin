@@ -58,6 +58,17 @@ export interface StudentProfile {
  * - focusModeActive: DN-06 교사 집중 모드 실시간 상태 (WebSocket TOGGLE_FOCUS_MODE 동기화).
  */
 export interface LiveSession {
+  readonly votesByQuestion?: Readonly<
+    Record<string, readonly import('./ParticipationVote').ParticipationVote[]>
+  >;
+  readonly voteHistory?: readonly {
+    readonly questionId: string;
+    readonly attempt: number;
+    readonly votes: readonly import('./ParticipationVote').ParticipationVote[];
+  }[];
+  readonly responseHistory?: readonly Response[];
+  readonly attempt?: number;
+  readonly rankingVisible?: boolean;
   readonly id: string;
   readonly surveyId: string;
   /** "한 번 더" 재실행 회차. 기본 1 (DN-04) */
@@ -70,6 +81,13 @@ export interface LiveSession {
   readonly studentInteractions: readonly StudentInteraction[];
   /** 교사 집중 모드 활성 여부 (DN-06). WebSocket TOGGLE_FOCUS_MODE로 실시간 동기화 */
   readonly focusModeActive: boolean;
+  /**
+   * 교사가 화면에서 숨긴 단어 (문항 id → 정규화된 단어 키 목록).
+   *
+   * 워드클라우드 문항에서 장난 단어 하나 때문에 문항 전체를 못 쓰게 되는 것을 막는 장치다.
+   * **라이브 세션 메모리 전용** — 설문 본문에 저장하지 않으므로 다음 라이브에는 남지 않는다.
+   */
+  readonly hiddenWordsByQuestion: Readonly<Record<string, readonly string[]>>;
   readonly startedAt: string; // ISO 8601
   readonly endedAt?: string; // ISO 8601
 }

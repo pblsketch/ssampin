@@ -2,7 +2,8 @@
  * ShareLobbyScreen — 학생 입장 대기 화면.
  *
  * 구성: QR(256px) + 입장 URL 텍스트 + 학생 아바타 그리드.
- * entryCode 는 폐기 (2026-06-12) — QR+URL 전용.
+ * 입장 코드는 이 화면이 아니라 상단 ShareEntryCodeBar 가 보여 준다
+ *   (2026-06-12 "코드 폐기" 결정은 ADR-124 로 뒤집혔다 — 이 화면은 QR+URL 담당).
  * 학생 추가 시 fade-in (prefers-reduced-motion 시 즉시 표시).
  * sp-* 토큰: sp-bg / sp-card / sp-text / sp-accent
  */
@@ -87,7 +88,9 @@ function ShareLobbyScreenImpl({ entryUrl, students }: ShareLobbyScreenProps): JS
                 }}
                 aria-hidden
               >
-                {student.avatarKey.slice(0, 2).toUpperCase()}
+                {/* 참여교실은 아바타 글자를 따로 받지 않는다 — 별명 첫 글자를 쓴다.
+                    (예전에는 빈 파란 동그라미만 줄지어 있었다) */}
+                {student.avatarKey.slice(0, 2).toUpperCase() || student.nickname.slice(0, 1)}
               </div>
               <span className="font-sp-semibold text-sp-text" style={{ fontSize: 22 }}>
                 {student.nickname}

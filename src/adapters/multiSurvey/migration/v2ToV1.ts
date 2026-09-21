@@ -3,6 +3,8 @@
  *
  * 라운드트립 검증용 — lossy (v2-only opts 손실, v1 공유 필드 무손실).
  * quiz 타입(ox/multiple/short/blank/description)은 v1 역변환 불가 — throw.
+ * 의견 수집 2종(wordcloud/qna)은 v1에 대응 유형이 없어 '주관식(text)'으로 근사 변환한다
+ * (문구 보존 우선 — throw 하지 않는다).
  */
 
 import type { MultiSurveyV2 } from '../../../domain/entities/multiSurvey/MultiSurveyV2.ts';
@@ -21,9 +23,9 @@ function reverseMapQuestion(q: MultiSurveyV2['questions'][number]): MultiSurveyQ
   }
 
   // q.type is now narrowed to 'single-choice' | 'multi-choice' | 'text' | 'scale'
-  const base: Pick<MultiSurveyQuestion, 'id' | 'type' | 'question' | 'required'> = {
+  //                            | 'wordcloud' | 'qna' (의견 수집 2종)
+  const base: Pick<MultiSurveyQuestion, 'id' | 'question' | 'required'> = {
     id: q.id,
-    type: q.type,
     question: q.text, // v2 text → v1 question
     required: true, // v1 had this but v2 dropped it; default true
   };
@@ -33,23 +35,47 @@ function reverseMapQuestion(q: MultiSurveyV2['questions'][number]): MultiSurveyQ
     case 'multi-choice': {
       return {
         ...base,
+        type: q.type,
         options: q.options,
       };
     }
     case 'text': {
       return {
         ...base,
+        type: 'text',
         ...(q.maxLength !== undefined ? { maxLength: q.maxLength } : {}),
       };
     }
     case 'scale': {
       return {
         ...base,
+        type: 'scale',
         scaleMin: q.scaleMin,
         scaleMax: q.scaleMax,
         ...(q.scaleMinLabel !== undefined ? { scaleMinLabel: q.scaleMinLabel } : {}),
         ...(q.scaleMaxLabel !== undefined ? { scaleMaxLabel: q.scaleMaxLabel } : {}),
       };
+    }
+    // 의견 수집 2종은 v1에 대응 유형이 없다. 질문 문구를 잃지 않는 쪽을 택해
+    // v1 '주관식(text)'으로 **근사 변환**한다. 표시 방식(단어 구름·익명 질문)은 v1에 없으므로
+    // 되돌린 뒤에는 그냥 주관식 문항으로 보인다 — 라운드트립 테스트에 이 사실을 고정해 둔다.
+    case 'wordcloud': {
+      return {
+        ...base,
+        type: 'text',
+        maxLength: q.maxWords * (q.maxWordLength + 2),
+      };
+    }
+    case 'qna': {
+      return {
+        ...base,
+        type: 'text',
+        maxLength: q.maxLength,
+      };
+    }
+    default: {
+      // 알 수 없는 유형 — 문구만 보존한 주관식으로 남긴다(변환 중단 대신).
+      return { ...base, type: 'text' };
     }
   }
 }

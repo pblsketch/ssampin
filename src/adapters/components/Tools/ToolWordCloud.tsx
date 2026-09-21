@@ -10,6 +10,7 @@ import { useBoardSessionStore } from '@adapters/stores/useBoardSessionStore';
 import { OrganizeView } from './WordCloud/OrganizeView';
 import { CopyLinkButton } from './CopyLinkButton';
 import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
+import { normalizeWord as normalizeWordRule, scaleFontSize } from '@domain/rules/wordCloudTally';
 
 interface ToolWordCloudProps {
   onBack: () => void;
@@ -48,7 +49,7 @@ interface WordEntry {
 }
 
 function normalizeWord(word: string): string {
-  return word.trim().replace(/\s+/g, ' ').toLowerCase();
+  return normalizeWordRule(word);
 }
 
 /* ───────────────── Create View ───────────────── */
@@ -372,10 +373,8 @@ function WordCloudDisplay({
   const minCount = displayWords.length > 0 ? Math.min(...displayWords.map((w) => w.count)) : 1;
   const maxCount = displayWords.length > 0 ? Math.max(...displayWords.map((w) => w.count)) : 1;
 
-  const getFontSize = (count: number): number => {
-    if (maxCount === minCount) return (MIN_FONT + MAX_FONT) / 2;
-    return MIN_FONT + ((count - minCount) / (maxCount - minCount)) * (MAX_FONT - MIN_FONT);
-  };
+  const getFontSize = (count: number): number =>
+    scaleFontSize(count, { minCount, maxCount, minFont: MIN_FONT, maxFont: MAX_FONT });
 
   if (displayWords.length === 0) {
     return (

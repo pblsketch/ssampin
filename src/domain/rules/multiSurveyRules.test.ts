@@ -9,7 +9,10 @@ import {
   isAnswerCorrect,
   isAutoAdvanceEnabled,
   normalizeHangulInitial,
+  validateSession,
 } from './multiSurveyRules';
+import { FORMAT_VERSION_V2 } from '../entities/multiSurvey/MultiSurveyV2';
+import type { MultiSurveyV2 } from '../entities/multiSurvey/MultiSurveyV2';
 
 // ──────────────────────────────────────────────
 // 테스트 픽스처
@@ -585,5 +588,91 @@ describe('calcSessionScore', () => {
     expect(result.random).toBe(3);
     expect(result.total).toBe(result.base + result.fastSolve + result.streak + result.random);
     expect(result.total).toBe(22);
+  });
+});
+
+// ──────────────────────────────────────────────
+// 의견 수집 2종 (wordcloud / qna)
+// ──────────────────────────────────────────────
+
+const wordCloudQuestion: Question = {
+  id: 'q-wc',
+  type: 'wordcloud',
+  text: '오늘 수업을 단어로 표현해 보세요.',
+  timerSeconds: 60,
+  score: 0,
+  maxWords: 3,
+  maxWordLength: 10,
+};
+
+const qnaQuestion: Question = {
+  id: 'q-qna',
+  type: 'qna',
+  text: '궁금한 점을 적어 주세요.',
+  timerSeconds: 60,
+  score: 0,
+  maxLength: 100,
+};
+
+function makeSession(questions: readonly Question[]): MultiSurveyV2 {
+  return {
+    id: 's-1',
+    formatVersion: FORMAT_VERSION_V2,
+    title: '테스트 설문',
+    createdAt: '2026-09-18T00:00:00.000Z',
+    updatedAt: '2026-09-18T00:00:00.000Z',
+    questions,
+    presentationOpts: {
+      showCumulativeScore: false,
+      revealExplanation: false,
+      allowReentry: true,
+    },
+    responseOpts: {
+      explicitSubmitButton: true,
+      autoAdvance: false,
+      fastSolveBonus: false,
+      streakBonus: false,
+      randomBonus: false,
+    },
+    displayOpts: { teacherFocusMode: false, showPerQuestionScore: false },
+  };
+}
+
+describe('validateSession — 의견 수집 2종', () => {
+  it('올바른 워드클라우드·질문 받기 문항은 통과한다', () => {
+    expect(validateSession(makeSession([wordCloudQuestion, qnaQuestion]))).toEqual({ ok: true });
+  });
+
+  it('워드클라우드 maxWords가 상한을 넘으면 오류', () => {
+    const result = validateSession(makeSession([{ ...wordCloudQuestion, maxWords: 6 }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(' ')).toContain('maxWords');
+  });
+
+  it('워드클라우드 maxWords가 0이면 오류', () => {
+    const result = validateSession(makeSession([{ ...wordCloudQuestion, maxWords: 0 }]));
+    expect(result.ok).toBe(false);
+  });
+
+  it('워드클라우드 maxWordLength가 0이면 오류', () => {
+    const result = validateSession(makeSession([{ ...wordCloudQuestion, maxWordLength: 0 }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(' ')).toContain('maxWordLength');
+  });
+
+  it('질문 받기 maxLength가 0이면 오류', () => {
+    const result = validateSession(makeSession([{ ...qnaQuestion, maxLength: 0 }]));
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.errors.join(' ')).toContain('maxLength');
+  });
+
+  it('알 수 없는 유형은 오류로 만들지 않는다 (관용 처리)', () => {
+    const unknown = { ...wordCloudQuestion, type: 'future-type' } as unknown as Question;
+    expect(validateSession(makeSession([unknown]))).toEqual({ ok: true });
+  });
+
+  it('정답 개념이 없으므로 정답 판정은 undefined', () => {
+    expect(isAnswerCorrect(wordCloudQuestion, ['사과'])).toBeUndefined();
+    expect(isAnswerCorrect(qnaQuestion, '질문입니다')).toBeUndefined();
   });
 });

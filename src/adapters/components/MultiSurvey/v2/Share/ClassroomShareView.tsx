@@ -6,7 +6,8 @@
  *      Zustand store liveSession이 null이므로 IPC 스냅샷으로 모든 데이터를 수신한다.
  *   2. store (직접 모드) — 테스트/스토리북/메인 창 내 프리뷰에서 사용.
  *
- * entryCode 는 폐기 (2026-06-12 결정) — QR+URL 전용.
+ * entryCode 는 되살렸다 (2026-06-12 "코드 폐기, QR+URL 전용" 결정을 뒤집음 — ADR-124).
+ *   상단 ShareEntryCodeBar 가 코드를 크게 보여 주고, 발급이 실패하면 코드 칸 없이 주소만 안내한다.
  * FALLBACK_ENTRY_URL: snapshot 없고 entryUrl prop도 없을 때만 사용.
  *
  * sp-* 토큰: sp-bg / sp-surface / sp-text / sp-accent / sp-highlight
@@ -28,6 +29,8 @@ import { ShareQuestionScreen } from './ShareQuestionScreen';
 import { ShareAnswerReveal } from './ShareAnswerReveal';
 import { ShareRoundResult } from './ShareRoundResult';
 import { SharePodium } from './SharePodium';
+import { ParticipationShare } from '../../ParticipationShare';
+import { buildShareSnapshot } from './shareSnapshot';
 
 interface ClassroomShareViewProps {
   /**
@@ -37,6 +40,8 @@ interface ClassroomShareViewProps {
   readonly snapshot?: ShareSnapshot;
   /** 학생 입장 URL (QR 인코딩 대상). snapshot.entryUrl 로 전달하거나 직접 지정. */
   readonly entryUrl?: string;
+  /** 짧은 입장 코드. snapshot.entryCode 로 전달하거나 직접 지정. 없으면 코드 칸을 숨긴다. */
+  readonly entryCode?: string | null;
   /** 외부에서 주입하는 남은 시간(초). 미지정 시 question.timerSeconds 기반 자체 카운트다운. */
   readonly remainingSeconds?: number;
 }
@@ -53,6 +58,7 @@ function shouldShowEntryBar(phase: LivePhase, allowReentry: boolean): boolean {
 function ClassroomShareViewImpl({
   snapshot,
   entryUrl: entryUrlProp,
+  entryCode: entryCodeProp,
   remainingSeconds: externalRemaining,
 }: ClassroomShareViewProps): JSX.Element {
   // store 모드 (snapshot 없을 때만 구독 — 별도 창에서는 null)
@@ -104,6 +110,12 @@ function ClassroomShareViewImpl({
     : (storeSurvey?.presentationOpts.allowReentry ?? false);
 
   const entryUrl = isSnapshotMode ? snapshot.entryUrl : (entryUrlProp ?? FALLBACK_ENTRY_URL);
+  const entryCode = isSnapshotMode ? snapshot.entryCode : (entryCodeProp ?? null);
+  const hiddenWords: readonly string[] = isSnapshotMode
+    ? snapshot.hiddenWords
+    : currentQuestion
+      ? (storeSession?.hiddenWordsByQuestion[currentQuestion.id] ?? [])
+      : [];
 
   // 자체 타이머 카운트다운 (외부 주입 없을 때)
   const [internalRemaining, setInternalRemaining] = useState<number>(0);
@@ -157,13 +169,25 @@ function ClassroomShareViewImpl({
   const studentsForResult = isSnapshotMode ? students : (storeSession?.students ?? []);
   // podium/end: 전체 응답 기반 포디움
   const responsesForPodium = isSnapshotMode ? allResponses : (storeSession?.responses ?? []);
+  const participationSnapshot = snapshot?.participation
+    ? snapshot
+    : !snapshot && storeSurvey?.purpose && storeSession
+      ? buildShareSnapshot(storeSession, storeSurvey, entryUrl, entryCode)
+      : null;
+  if (participationSnapshot) return <ParticipationShare snapshot={participationSnapshot} />;
 
   return (
     <main
       className="flex h-screen w-screen cursor-none flex-col bg-sp-bg text-sp-text"
       aria-label="교실 모니터 Share View"
     >
-      {showBar ? <ShareEntryCodeBar entryUrl={entryUrl} studentCount={students.length} /> : null}
+      {showBar ? (
+        <ShareEntryCodeBar
+          entryUrl={entryUrl}
+          entryCode={entryCode}
+          studentCount={students.length}
+        />
+      ) : null}
 
       <div className="flex flex-1 flex-col overflow-hidden">
         {phase === 'lobby' ? <ShareLobbyScreen entryUrl={entryUrl} students={students} /> : null}
@@ -176,6 +200,8 @@ function ClassroomShareViewImpl({
             remainingSeconds={remaining}
             answeredCount={responsesForCurrentQuestion.length}
             studentCount={students.length}
+            responses={responsesForCurrentQuestion}
+            hiddenWords={hiddenWords}
           />
         ) : null}
 

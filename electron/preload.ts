@@ -914,6 +914,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   // Live Multi Survey
   startLiveMultiSurvey: (data: {
+    participation?: import('../src/domain/entities/multiSurvey/ParticipationProtocol').ParticipationConfig;
     questions: Array<{
       id: string;
       type: 'single-choice' | 'multi-choice' | 'text' | 'scale';
@@ -930,6 +931,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }): Promise<{ port: number; localIPs: string[] }> =>
     ipcRenderer.invoke('live-multi-survey:start', data),
   stopLiveMultiSurvey: (): Promise<void> => ipcRenderer.invoke('live-multi-survey:stop'),
+  participationControl: (
+    command: import('../src/domain/entities/multiSurvey/ParticipationProtocol').ParticipationControl,
+  ): Promise<
+    import('../src/domain/entities/multiSurvey/ParticipationProtocol').ParticipationControlResult
+  > => ipcRenderer.invoke('live-multi-survey:participation-control', command),
   multiSurveyTunnelAvailable: (): Promise<boolean> =>
     ipcRenderer.invoke('live-multi-survey:tunnel-available'),
   multiSurveyTunnelInstall: (): Promise<void> =>

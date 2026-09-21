@@ -4,7 +4,8 @@
  * 검증 항목:
  *  - buildShareSnapshot 변환 정확성
  *  - JSON.stringify 라운드트립 (직렬화 안전)
- *  - entryCode 필드 미포함
+ *  - entryCode: 발급되면 실리고, 없으면 null (2026-06-12 폐기 결정을 되돌림)
+ *  - hiddenWords: 현재 문항에서 교사가 숨긴 단어
  *  - 모든 phase 6종 변환
  *  - currentQuestion이 없을 때 null 반환
  *  - responsesForCurrent 필터링 정확성
@@ -87,6 +88,7 @@ function makeLiveSession(overrides: Partial<LiveSession> = {}): LiveSession {
     responses: [],
     studentInteractions: [],
     focusModeActive: false,
+    hiddenWordsByQuestion: {},
     startedAt: '2026-06-12T00:00:00.000Z',
     ...overrides,
   };
@@ -184,10 +186,12 @@ describe('buildShareSnapshot', () => {
     expect(snap.entryUrl).toBe(ENTRY_URL);
   });
 
-  it('entryCode 필드가 스냅샷에 없다 (폐기 결정 2026-06-12)', () => {
+  it('코드를 주지 않으면 entryCode는 null이다 (발급 실패 시 주소만 안내)', () => {
     const live = makeLiveSession();
     const snap = buildShareSnapshot(live, survey, ENTRY_URL);
-    expect(snap).not.toHaveProperty('entryCode');
+    // 2026-06-12에는 코드를 아예 없앴지만, QR을 못 찍는 학생이 긴 주소를 타이핑해야 하는
+    // 문제가 있어 되살렸다. 다만 발급 실패는 여전히 정상 경로다 → null.
+    expect(snap.entryCode).toBeNull();
   });
 
   it('6가지 phase 모두 변환 가능하다', () => {
@@ -236,5 +240,59 @@ describe('buildShareSnapshot', () => {
         expect(opts.some((o) => o.isCorrect)).toBe(true);
       }
     }
+  });
+});
+
+// ──────────────────────────────────────────────
+// 입장 코드 · 숨긴 단어 (의견 수집 작업)
+// ──────────────────────────────────────────────
+
+describe('buildShareSnapshot — 입장 코드와 숨긴 단어', () => {
+  const ENTRY_URL = 'http://192.168.0.1:3000';
+  const wordCloudQuestion: Question = {
+    id: 'q-wc',
+    type: 'wordcloud',
+    text: '오늘 수업을 단어로',
+    timerSeconds: 60,
+    score: 0,
+    maxWords: 3,
+    maxWordLength: 10,
+  };
+
+  it('입장 코드가 스냅샷에 실린다', () => {
+    const snap = buildShareSnapshot(
+      makeLiveSession(),
+      makeSurvey([wordCloudQuestion]),
+      ENTRY_URL,
+      'ABC123',
+    );
+    expect(snap.entryCode).toBe('ABC123');
+  });
+
+  it('코드를 주지 않으면 null (발급 실패 → 주소만 안내)', () => {
+    const snap = buildShareSnapshot(makeLiveSession(), makeSurvey([wordCloudQuestion]), ENTRY_URL);
+    expect(snap.entryCode).toBeNull();
+  });
+
+  it('현재 문항의 숨긴 단어만 실린다', () => {
+    const live = makeLiveSession({
+      currentQuestionIndex: 0,
+      hiddenWordsByQuestion: { 'q-wc': ['바보'], 'q-other': ['멍청이'] },
+    });
+    const snap = buildShareSnapshot(live, makeSurvey([wordCloudQuestion]), ENTRY_URL);
+    expect(snap.hiddenWords).toEqual(['바보']);
+  });
+
+  it('숨긴 단어가 없으면 빈 배열', () => {
+    const snap = buildShareSnapshot(makeLiveSession(), makeSurvey([wordCloudQuestion]), ENTRY_URL);
+    expect(snap.hiddenWords).toEqual([]);
+  });
+
+  it('JSON 직렬화 후에도 두 필드가 유지된다 (별도 창으로 전달)', () => {
+    const live = makeLiveSession({ hiddenWordsByQuestion: { 'q-wc': ['바보'] } });
+    const snap = buildShareSnapshot(live, makeSurvey([wordCloudQuestion]), ENTRY_URL, 'CODE99');
+    const parsed = JSON.parse(JSON.stringify(snap)) as typeof snap;
+    expect(parsed.entryCode).toBe('CODE99');
+    expect(parsed.hiddenWords).toEqual(['바보']);
   });
 });

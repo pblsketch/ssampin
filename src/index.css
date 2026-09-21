@@ -1453,3 +1453,23 @@ select optgroup {
   background-color: var(--sp-card);
   color: var(--sp-text);
 }
+
+/* ─── 교실 화면: 개방형 응답 카드 등장 ───
+   MultiSurvey v2 공유 창(FloatingCards)에서 학생 응답이 하나씩 떠오르게 한다.
+   ⚠️ 동작 줄이기 설정은 위쪽 전역 규칙(@media prefers-reduced-motion)이 이미 무력화한다.
+   컴포넌트도 그 설정에서 기울기·지연을 빼므로 카드는 가만히 쌓인다. */
+@keyframes sp-floating-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.94) rotate(var(--sp-card-rotate, 0deg));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(var(--sp-card-rotate, 0deg));
+  }
+}
+
+.sp-floating-card {
+  transform: rotate(var(--sp-card-rotate, 0deg));
+  animation: sp-floating-card-in var(--sp-duration-slow, 400ms) var(--sp-ease-out, ease-out) both;
+}

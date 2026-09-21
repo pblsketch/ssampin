@@ -85,9 +85,8 @@ describe("v1 → v2 → v1' roundtrip", () => {
 
     expect(v1prime.questions).toHaveLength(V1_FIXTURE.questions.length);
     for (let i = 0; i < V1_FIXTURE.questions.length; i++) {
-       
       expect(v1prime.questions[i]!.id).toBe(V1_FIXTURE.questions[i]!.id);
-       
+
       expect(v1prime.questions[i]!.type).toBe(V1_FIXTURE.questions[i]!.type);
     }
   });
@@ -97,7 +96,6 @@ describe("v1 → v2 → v1' roundtrip", () => {
     const v1prime = migrateV2ToV1(v2);
 
     for (let i = 0; i < V1_FIXTURE.questions.length; i++) {
-       
       expect(v1prime.questions[i]!.question).toBe(V1_FIXTURE.questions[i]!.question);
     }
   });
@@ -237,6 +235,75 @@ describe('migrateV2ToV1 rejects quiz types', () => {
     };
 
     expect(() => migrateV2ToV1(v2WithQuiz)).toThrow('ox');
+  });
+});
+
+// ──────────────────────────────────────────────
+// 4-2. 의견 수집 2종 → v1 '주관식' 근사 변환 (throw 하지 않는다)
+// ──────────────────────────────────────────────
+
+describe('migrateV2ToV1 — 의견 수집 2종 근사 변환', () => {
+  function withQuestions(questions: MultiSurveyV2['questions']): MultiSurveyV2 {
+    return { ...migrateV1ToV2(V1_FIXTURE), questions };
+  }
+
+  it('워드클라우드는 주관식으로 바뀌고 문구가 보존된다', () => {
+    const v1 = migrateV2ToV1(
+      withQuestions([
+        {
+          id: 'q-wc',
+          type: 'wordcloud',
+          text: '오늘 수업을 단어로',
+          timerSeconds: 60,
+          score: 0,
+          maxWords: 3,
+          maxWordLength: 10,
+        },
+      ]),
+    );
+    expect(v1.questions[0]).toMatchObject({
+      id: 'q-wc',
+      type: 'text',
+      question: '오늘 수업을 단어로',
+    });
+  });
+
+  it('질문 받기는 주관식으로 바뀌고 글자 수 제한이 유지된다', () => {
+    const v1 = migrateV2ToV1(
+      withQuestions([
+        {
+          id: 'q-qna',
+          type: 'qna',
+          text: '궁금한 점',
+          timerSeconds: 60,
+          score: 0,
+          maxLength: 120,
+        },
+      ]),
+    );
+    expect(v1.questions[0]).toMatchObject({
+      id: 'q-qna',
+      type: 'text',
+      question: '궁금한 점',
+      maxLength: 120,
+    });
+  });
+
+  it('되돌린 뒤에는 단어 구름·익명 질문이라는 표시 방식이 남지 않는다 (알려진 손실)', () => {
+    const v1 = migrateV2ToV1(
+      withQuestions([
+        {
+          id: 'q-wc',
+          type: 'wordcloud',
+          text: '단어',
+          timerSeconds: 60,
+          score: 0,
+          maxWords: 3,
+          maxWordLength: 10,
+        },
+      ]),
+    );
+    expect(JSON.stringify(v1)).not.toContain('wordcloud');
   });
 });
 

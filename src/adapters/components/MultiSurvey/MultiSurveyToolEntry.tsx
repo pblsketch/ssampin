@@ -26,6 +26,7 @@ import { useToolTemplateStore } from '@adapters/stores/useToolTemplateStore';
 import { MigrationReportModal } from './v2/Migration/MigrationReportModal';
 import { MakerLayout } from './v2/Maker/MakerLayout';
 import { LiveConsoleContainer } from './v2/Console/LiveConsoleContainer';
+import { ParticipationClassroom } from './ParticipationClassroom';
 
 interface MultiSurveyToolEntryProps {
   /** V1 ToolMultiSurvey가 받는 onBack — 도구 목록으로 복귀 */
@@ -94,7 +95,16 @@ function useV1MultiSurveyData(): unknown[] {
   }, [loaded, templates]);
 }
 
-export function MultiSurveyToolEntry({
+export function MultiSurveyToolEntry(props: MultiSurveyToolEntryProps): JSX.Element {
+  return (
+    <ParticipationClassroom
+      {...props}
+      renderLegacy={(onBack) => <LegacyMultiSurveyToolEntry {...props} onBack={onBack} />}
+    />
+  );
+}
+
+function LegacyMultiSurveyToolEntry({
   onBack,
   isFullscreen,
 }: MultiSurveyToolEntryProps): JSX.Element {

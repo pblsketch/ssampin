@@ -17,6 +17,8 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
+import type { ParticipationResult } from '@domain/rules/participationRules';
+import { normalizeWord } from '@domain/rules/wordCloudTally';
 import type {
   MultiSurveyV2,
   PresentationOpts,
@@ -108,6 +110,10 @@ interface MultiSurveyV2StoreState {
 
   // ── 활성 라이브 세션 (단일) ──
   readonly liveSession: LiveSession | null;
+  readonly participationResults: readonly ParticipationResult[];
+  saveParticipationResult: () => void;
+  reopenDiscussion: () => void;
+  setRankingVisible: (visible: boolean) => void;
 
   /**
    * 문항별 open 진입 시각 (ISO 8601). persist 제외 — 메모리 전용.
@@ -149,9 +155,17 @@ interface MultiSurveyV2StoreState {
   appendStudent: (student: StudentProfile) => void;
   appendInteraction: (interaction: StudentInteraction) => void;
   setFocusModeActive: (active: boolean) => void;
+  /**
+   * 워드클라우드 문항에서 단어 하나를 화면에서 숨긴다 (교사 개입).
+   * 라이브 세션 메모리에만 남는다 — 설문 본문은 바뀌지 않는다.
+   */
+  hideWord: (questionId: string, word: string) => void;
+  /** 숨긴 단어를 되돌린다 */
+  showWord: (questionId: string, word: string) => void;
 }
 
 export interface CreateSessionInput {
+  readonly purpose?: 'quiz' | 'discussion' | 'activity';
   readonly title: string;
   /** ID 생성기 (테스트 주입용). 미지정 시 crypto.randomUUID */
   readonly idGen?: () => string;
@@ -159,7 +173,9 @@ export interface CreateSessionInput {
   readonly now?: () => Date;
 }
 
-export type UpdateSessionPatch = Partial<Pick<MultiSurveyV2, 'title' | 'questions'>>;
+export type UpdateSessionPatch = Partial<
+  Pick<MultiSurveyV2, 'title' | 'questions' | 'competitionMode'>
+>;
 
 // ────────────────────────────────────────────────
 // Store 구현
@@ -189,6 +205,7 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
       loaded: false,
       selectedSessionId: null,
       liveSession: null,
+      participationResults: [],
       questionOpenedAt: {},
 
       // ── Flag actions ──
@@ -213,6 +230,7 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
           id: idGen(),
           formatVersion: FORMAT_VERSION_V2,
           title: input.title,
+          ...(input.purpose ? { purpose: input.purpose, competitionMode: false } : {}),
           createdAt: iso,
           updatedAt: iso,
           questions: [],
@@ -292,6 +310,7 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
 
       // ── 라이브 phase 머신 ──
       startLive(sessionId) {
+        get().saveParticipationResult();
         const survey = get().sessions.find((s) => s.id === sessionId);
         if (!survey) {
           throw new Error(`startLive: session not found id=${sessionId}`);
@@ -300,12 +319,16 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
           id: defaultIdGen(),
           surveyId: sessionId,
           round: 1,
+          attempt: 1,
+          responseHistory: [],
+          rankingVisible: false,
           phase: 'lobby',
           currentQuestionIndex: 0,
           students: [],
           responses: [],
           studentInteractions: [],
           focusModeActive: survey.displayOpts.teacherFocusMode,
+          hiddenWordsByQuestion: {},
           startedAt: new Date().toISOString(),
         };
         set({ liveSession: live, questionOpenedAt: {} });
@@ -339,6 +362,8 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
           liveSession: {
             ...live,
             phase: next,
+            attempt: advancesQuestion ? 1 : live.attempt,
+            rankingVisible: false,
             currentQuestionIndex: newQuestionIndex,
             endedAt: next === 'end' ? new Date().toISOString() : live.endedAt,
           },
@@ -356,10 +381,68 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
             endedAt: new Date().toISOString(),
           },
         });
+        get().saveParticipationResult();
       },
 
       exitLive() {
+        get().saveParticipationResult();
         set({ liveSession: null, questionOpenedAt: {} });
+      },
+
+      saveParticipationResult() {
+        const state = get();
+        const live = state.liveSession;
+        const survey = state.sessions.find((s) => s.id === live?.surveyId);
+        if (!live || !survey?.purpose || live.phase === 'lobby') return;
+        const result: ParticipationResult = {
+          id: live.id,
+          survey,
+          live: {
+            ...live,
+            students: live.students.map((student) => ({ ...student, pin4: '' })),
+          },
+        };
+        set({
+          participationResults: [
+            ...state.participationResults.filter((r) => r.id !== live.id),
+            result,
+          ],
+        });
+      },
+
+      setRankingVisible(visible) {
+        const live = get().liveSession;
+        const survey = get().sessions.find((s) => s.id === live?.surveyId);
+        if (!live || !survey?.purpose || !survey.competitionMode) return;
+        set({ liveSession: { ...live, rankingVisible: visible } });
+      },
+
+      reopenDiscussion() {
+        const live = get().liveSession;
+        const survey = get().sessions.find((s) => s.id === live?.surveyId);
+        const question = survey?.questions[live?.currentQuestionIndex ?? -1];
+        if (!live || !survey?.purpose || live.phase !== 'revealed' || !question) return;
+        set({
+          liveSession: {
+            ...live,
+            phase: 'open',
+            attempt: (live.attempt ?? 1) + 1,
+            voteHistory: [
+              ...(live.voteHistory ?? []),
+              {
+                questionId: question.id,
+                attempt: live.attempt ?? 1,
+                votes: live.votesByQuestion?.[question.id] ?? [],
+              },
+            ],
+            votesByQuestion: { ...live.votesByQuestion, [question.id]: [] },
+            responseHistory: [
+              ...(live.responseHistory ?? []),
+              ...live.responses.filter((r) => r.questionId === question.id),
+            ],
+            responses: live.responses.filter((r) => r.questionId !== question.id),
+          },
+        });
       },
 
       appendResponse(response) {
@@ -370,6 +453,16 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
         const state = get();
         const activeSurvey = state.sessions.find((s) => s.id === live.surveyId);
         const question = activeSurvey?.questions.find((q) => q.id === response.questionId);
+        if (
+          activeSurvey?.purpose &&
+          (live.phase !== 'open' ||
+            question?.id !== activeSurvey.questions[live.currentQuestionIndex]?.id ||
+            (response.attempt ?? 1) !== (live.attempt ?? 1) ||
+            live.responses.some(
+              (r) => r.studentId === response.studentId && r.questionId === response.questionId,
+            ))
+        )
+          return;
 
         let enrichedResponse = response;
         if (activeSurvey && question) {
@@ -406,7 +499,15 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
             response,
             questionOpenedAt: openedAt,
             currentStreak,
-            opts: activeSurvey.responseOpts,
+            opts: activeSurvey.purpose
+              ? {
+                  ...activeSurvey.responseOpts,
+                  fastSolveBonus:
+                    !!activeSurvey.competitionMode && activeSurvey.responseOpts.fastSolveBonus,
+                  streakBonus: false,
+                  randomBonus: false,
+                }
+              : activeSurvey.responseOpts,
             rng,
           });
 
@@ -464,6 +565,41 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
           },
         });
       },
+
+      hideWord(questionId, word) {
+        const live = get().liveSession;
+        if (!live) return;
+        const key = normalizeWord(word);
+        if (key.length === 0) return;
+        const current = live.hiddenWordsByQuestion[questionId] ?? [];
+        if (current.includes(key)) return;
+        set({
+          liveSession: {
+            ...live,
+            hiddenWordsByQuestion: {
+              ...live.hiddenWordsByQuestion,
+              [questionId]: [...current, key],
+            },
+          },
+        });
+      },
+
+      showWord(questionId, word) {
+        const live = get().liveSession;
+        if (!live) return;
+        const key = normalizeWord(word);
+        const current = live.hiddenWordsByQuestion[questionId] ?? [];
+        if (!current.includes(key)) return;
+        set({
+          liveSession: {
+            ...live,
+            hiddenWordsByQuestion: {
+              ...live.hiddenWordsByQuestion,
+              [questionId]: current.filter((w) => w !== key),
+            },
+          },
+        });
+      },
     }),
     {
       name: PERSIST_KEY,
@@ -473,6 +609,7 @@ export const useMultiSurveyV2Store = create<MultiSurveyV2StoreState>()(
       partialize: (state) => ({
         realtimeToolV2Enabled: state.realtimeToolV2Enabled,
         sessions: state.sessions,
+        participationResults: state.participationResults,
         selectedSessionId: state.selectedSessionId,
       }),
     },

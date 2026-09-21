@@ -26,6 +26,7 @@ Claude Code·Codex·GJC는 새 버전·핫픽스 공개 작업에서 이 문서�
 ## 3. 챗봇 지식
 
 - `scripts/ingest-chatbot-qa.mjs`의 새 문답과 겹치는 옛 문답을 함께 검토한다. 원고 편집과 서버 ingest를 구분한다.
+- `scripts/ingest-chatbot-qa.mjs`에 `PENDING_RELEASE_QA`가 있으면 **출시 대기 원고**다. `{{RELEASE_VERSION}}`을 실제 버전으로 바꾸고 `QA_DOCUMENTS`에 펼쳐 넣은 뒤 ingest한다. 넣지 않으면 새 기능 문답이 서버에 올라가지 않고, 출시 전에 올리면 챗봇이 앱에 없는 화면을 안내한다.
 - 승인 뒤 기존 인증 경로로 ingest한다. 비밀값을 출력·문서·커밋에 남기지 않는다. 단순 ingest를 이유로 시크릿 교체나 함수 재배포까지 확대하지 않는다.
 - ingest 후 새 기능과 옛 절차가 충돌하는 실제 질문을 보내 답변을 확인한다. 요청 형식은 현재 챗봇 API를 확인하고, 한글 요청은 UTF-8로 보낸다. 업로드 성공만으로 통과하지 않는다.
 

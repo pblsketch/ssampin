@@ -8,6 +8,9 @@
 
 import { memo, useMemo } from 'react';
 import type { Question } from '@domain/entities/multiSurvey/Question';
+import type { Response } from '@domain/entities/multiSurvey/Response';
+import { FloatingCards } from './FloatingCards';
+import { ShareWordCloud } from './ShareWordCloud';
 
 interface ShareQuestionScreenProps {
   readonly question: Question;
@@ -21,6 +24,13 @@ interface ShareQuestionScreenProps {
   readonly answeredCount: number;
   /** 입장 학생 총 수 */
   readonly studentCount: number;
+  /**
+   * 현재 문항 응답 (워드클라우드·개방형 응답 표시용).
+   * 다른 유형에서는 쓰이지 않으므로 없어도 된다.
+   */
+  readonly responses?: readonly Response[];
+  /** 교사가 숨긴 단어(정규화된 키) — 워드클라우드에서만 의미 있다 */
+  readonly hiddenWords?: readonly string[];
 }
 
 function getOptionsForDisplay(question: Question): readonly { id: string; text: string }[] {
@@ -67,7 +77,37 @@ function getTypeLabel(type: Question['type']): string {
       return '주관식';
     case 'scale':
       return '척도';
+    case 'wordcloud':
+      return '단어 모으기';
+    case 'qna':
+      return '질문 받기';
+    default:
+      return '';
   }
+}
+
+/** 교실 화면에서 카드로 띄울 개방형 응답 유형 (퀴즈 단답형·빈칸은 정답 노출 위험으로 제외) */
+function usesFloatingCards(type: Question['type']): boolean {
+  return type === 'text' || type === 'description' || type === 'qna';
+}
+
+/** 응답에서 화면에 띄울 문구만 뽑는다 */
+function openEndedTexts(responses: readonly Response[]): readonly string[] {
+  const texts: string[] = [];
+  for (const r of responses) {
+    if (typeof r.answer === 'string' && r.answer.trim().length > 0) texts.push(r.answer.trim());
+  }
+  return texts;
+}
+
+/** 워드클라우드 응답을 단어 배열 묶음으로 바꾼다 */
+function wordListsOf(responses: readonly Response[]): readonly (readonly string[] | string)[] {
+  const lists: (readonly string[] | string)[] = [];
+  for (const r of responses) {
+    if (Array.isArray(r.answer)) lists.push(r.answer as readonly string[]);
+    else if (typeof r.answer === 'string') lists.push(r.answer);
+  }
+  return lists;
 }
 
 function ShareQuestionScreenImpl({
@@ -77,8 +117,12 @@ function ShareQuestionScreenImpl({
   remainingSeconds,
   answeredCount,
   studentCount,
+  responses = [],
+  hiddenWords = [],
 }: ShareQuestionScreenProps): JSX.Element {
   const options = useMemo(() => getOptionsForDisplay(question), [question]);
+  const cardTexts = useMemo(() => openEndedTexts(responses), [responses]);
+  const wordLists = useMemo(() => wordListsOf(responses), [responses]);
   const typeLabel = getTypeLabel(question.type);
   const isTextOnly =
     question.type === 'short' ||
@@ -130,7 +174,20 @@ function ShareQuestionScreenImpl({
 
       {/* 보기 또는 응답 안내 */}
       <div className="flex-1">
-        {isTextOnly ? (
+        {question.type === 'wordcloud' ? (
+          <ShareWordCloud
+            responses={wordLists}
+            hiddenWords={hiddenWords}
+            emptyLabel="아직 들어온 단어가 없어요."
+          />
+        ) : usesFloatingCards(question.type) ? (
+          <FloatingCards
+            texts={cardTexts}
+            emptyLabel={
+              question.type === 'qna' ? '아직 들어온 질문이 없어요.' : '아직 들어온 응답이 없어요.'
+            }
+          />
+        ) : isTextOnly ? (
           <div className="flex h-full items-center justify-center rounded-sp-xl border border-sp-border bg-sp-card p-10">
             <span className="font-sp-medium text-sp-muted" style={{ fontSize: 32 }}>
               학생 휴대전화에서 직접 입력

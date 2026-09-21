@@ -28,6 +28,8 @@ import { LiveSessionClient } from '@infrastructure/supabase/LiveSessionClient';
 import { TeacherConsole } from './TeacherConsole';
 import type { StudentInteraction } from '@domain/entities/multiSurvey/LiveSession';
 import { buildShareSnapshot } from '../Share/shareSnapshot';
+import { buildPersonalResults } from '@domain/rules/participationRules';
+import type { ParticipationControl } from '@domain/entities/multiSurvey/ParticipationProtocol';
 
 interface LiveConsoleContainerProps {
   /** 라이브 종료 후 메이커로 복귀 */
@@ -51,6 +53,14 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   const [status, setStatus] = useState<BootStatus>('starting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [entryUrl, setEntryUrl] = useState<string | null>(null);
+  /** 짧은 입장 코드. 발급 실패 시 null — 그때는 주소만 안내한다. */
+  const [entryCode, setEntryCode] = useState<string | null>(null);
+  /** 코드 변경에 필요한 원본 터널 주소 */
+  const tunnelUrlRef = useRef<string | null>(null);
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const actionBusy = useRef(false);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const clientRef = useRef(new LiveSessionClient());
   /** 라이브 중 survey 식별 안정화 — effect 의존성에서 객체 identity 제외 */
@@ -67,6 +77,8 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
     setStatus('starting');
     setErrorMessage(null);
     setEntryUrl(null);
+    setEntryCode(null);
+    tunnelUrlRef.current = null;
 
     const boot = async (): Promise<void> => {
       const api = window.electronAPI;
@@ -81,6 +93,16 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
         const info = await api.startLiveMultiSurvey({
           questions: mapQuestionsForLiveHTML(activeSurvey.questions),
           stepMode: true,
+          ...(activeSurvey.purpose
+            ? {
+                participation: {
+                  roomId: liveId,
+                  title: activeSurvey.title,
+                  purpose: activeSurvey.purpose,
+                  competitionMode: !!activeSurvey.competitionMode,
+                },
+              }
+            : {}),
         });
         if (cancelled) return;
         if (info.localIPs.length === 0) {
@@ -105,9 +127,12 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
         const result = await window.electronAPI?.multiSurveyTunnelStart?.();
         if (result && !cancelled) {
           setEntryUrl(result.tunnelUrl);
+          tunnelUrlRef.current = result.tunnelUrl;
           const session = await clientRef.current.registerSession(result.tunnelUrl);
           if (session && !cancelled) {
             setEntryUrl(session.shortUrl);
+            // 코드를 따로 보관한다 — 대기실·교실 화면에서 주소와 분리해 크게 보여준다.
+            setEntryCode(session.code);
           }
         }
       } catch {
@@ -145,10 +170,28 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
     if (unsubRoster) unsubs.push(unsubRoster);
 
     const unsubAnswered = api.onLiveMultiSurveyStudentAnswered?.((data) => {
+      if (data.votes) {
+        const store = useMultiSurveyV2Store.getState();
+        const live = store.liveSession;
+        const q = store.sessions.find((s) => s.id === live?.surveyId)?.questions[
+          data.questionIndex
+        ];
+        if (live && q && data.roomId === live.id) {
+          useMultiSurveyV2Store.setState({
+            liveSession: {
+              ...live,
+              votesByQuestion: { ...live.votesByQuestion, [q.id]: data.votes },
+            },
+          });
+          useMultiSurveyV2Store.getState().saveParticipationResult();
+        }
+        return;
+      }
       if (!data.answer) return;
       const state = useMultiSurveyV2Store.getState();
       const live = state.liveSession;
       if (!live) return;
+      if (data.roomId && data.roomId !== live.id) return;
       const activeSurvey = state.sessions.find((s) => s.id === live.surveyId);
       const question = activeSurvey?.questions[data.questionIndex];
       if (!question) return;
@@ -178,12 +221,105 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   }, [liveId, appendStudent, appendResponse, appendInteraction]);
 
   // ── phase 전이: 학생 페이지 IPC 동기화 + store nextPhase ──
+  const runParticipationAction = useCallback(async (kind: 'advance' | 'reopen' | 'end') => {
+    if (actionBusy.current) return;
+    const store = useMultiSurveyV2Store.getState();
+    const live = store.liveSession;
+    const active = store.sessions.find((s) => s.id === live?.surveyId);
+    const control = window.electronAPI?.participationControl;
+    if (!live || !active?.purpose || !control) return;
+    actionBusy.current = true;
+    setBusy(true);
+    setActionError(null);
+    const command = (action: ParticipationControl['action']) =>
+      control({
+        roomId: live.id,
+        questionIndex: live.currentQuestionIndex,
+        attempt: live.attempt ?? 1,
+        action,
+      });
+    try {
+      if (kind === 'reopen') {
+        await command('reopen');
+        store.reopenDiscussion();
+      } else if (kind === 'end') {
+        if (live.phase === 'open') {
+          const closed = await command('close');
+          const question = active.questions[live.currentQuestionIndex];
+          if (question)
+            for (const item of closed.answers) {
+              const response = buildResponseFromLiveAnswer({
+                question,
+                studentId: item.studentId,
+                payload: item.answer,
+              });
+              if (response) store.appendResponse(response);
+            }
+        }
+        const updated = useMultiSurveyV2Store.getState().liveSession;
+        if (updated && live.phase !== 'lobby')
+          await control({
+            roomId: live.id,
+            questionIndex: live.currentQuestionIndex,
+            attempt: live.attempt ?? 1,
+            action: 'publish',
+            results: buildPersonalResults({ ...updated, phase: 'revealed' }, active),
+          });
+        await command('end');
+        store.endLive();
+      } else if (live.phase === 'lobby') {
+        await command('activate');
+        store.nextPhase();
+      } else if (live.phase === 'open') {
+        const closed = await command('close');
+        const question = active.questions[live.currentQuestionIndex];
+        if (question)
+          for (const item of closed.answers) {
+            const response = buildResponseFromLiveAnswer({
+              question,
+              studentId: item.studentId,
+              payload: item.answer,
+            });
+            if (response) store.appendResponse(response);
+          }
+        const updated = useMultiSurveyV2Store.getState().liveSession;
+        if (!updated) return;
+        await control({
+          roomId: live.id,
+          questionIndex: live.currentQuestionIndex,
+          attempt: live.attempt ?? 1,
+          action: 'publish',
+          results: buildPersonalResults({ ...updated, phase: 'revealed' }, active),
+        });
+        store.nextPhase();
+        store.saveParticipationResult();
+      } else if (live.phase === 'revealed') {
+        await command('advance');
+        store.nextPhase();
+        store.saveParticipationResult();
+      } else if (live.phase === 'podium') {
+        store.endLive();
+      }
+    } catch (error) {
+      setActionError(
+        error instanceof Error ? error.message : '진행 상태를 바꾸지 못했어요. 다시 시도해 주세요.',
+      );
+    } finally {
+      actionBusy.current = false;
+      setBusy(false);
+    }
+  }, []);
+
   const handleAdvance = useCallback(() => {
     const state = useMultiSurveyV2Store.getState();
     const live = state.liveSession;
     if (!live) return;
     const activeSurvey = state.sessions.find((s) => s.id === live.surveyId);
     if (!activeSurvey) return;
+    if (activeSurvey.purpose) {
+      void runParticipationAction('advance');
+      return;
+    }
     const isLast = live.currentQuestionIndex >= activeSurvey.questions.length - 1;
     const api = window.electronAPI;
 
@@ -213,14 +349,18 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
         break;
     }
     nextPhase();
-  }, [nextPhase]);
+  }, [nextPhase, runParticipationAction]);
 
   // ── 세션 종료 (헤더/사이드 패널 "세션 종료") ──
   const handleEnd = useCallback(() => {
+    if (surveyRef.current?.purpose) {
+      void runParticipationAction('end');
+      return;
+    }
     void window.electronAPI?.liveMultiSurveyEndSession?.();
     void window.electronAPI?.stopLiveMultiSurvey?.();
     endLive();
-  }, [endLive]);
+  }, [endLive, runParticipationAction]);
 
   // ── DN-06: 집중 모드 토글 ──
   const handleToggleFocusMode = useCallback(
@@ -237,9 +377,11 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   const liveSessionForSnapshot = useMultiSurveyV2Store((s) => s.liveSession);
   const surveyForSnapshot = useMultiSurveyV2Store(selectActiveLiveSurvey);
   const entryUrlRef = useRef<string>('');
-  // entryUrl state를 ref로 동기화 (effect 의존성 없이 최신값 참조)
+  const entryCodeRef = useRef<string | null>(null);
+  // entryUrl/entryCode state를 ref로 동기화 (effect 의존성 없이 최신값 참조)
   useEffect(() => {
     entryUrlRef.current = entryUrl ?? '';
+    entryCodeRef.current = entryCode;
   });
   useEffect(() => {
     if (!liveSessionForSnapshot || !surveyForSnapshot) return;
@@ -247,13 +389,47 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
       liveSessionForSnapshot,
       surveyForSnapshot,
       entryUrlRef.current,
+      entryCodeRef.current,
     );
     window.electronAPI?.sendMultiSurveyShareSnapshot?.(snapshot);
-  }, [liveSessionForSnapshot, surveyForSnapshot]);
+  }, [liveSessionForSnapshot, surveyForSnapshot, entryCode, entryUrl]);
 
   // ── 작업 1: [교실 화면 열기] 버튼 핸들러 ──
-  const handleOpenShareWindow = useCallback(() => {
-    void window.electronAPI?.openMultiSurveyShareWindow?.(entryUrlRef.current);
+  // 창을 연 직후 지금 상태를 한 번 더 보낸다 — 대기 화면에서 열면
+  // 다음 변화(학생 입장 등)까지 아무 일도 없어 빈 화면처럼 보이기 때문이다.
+  const handleOpenShareWindow = useCallback(async () => {
+    await window.electronAPI?.openMultiSurveyShareWindow?.(entryUrlRef.current);
+    const state = useMultiSurveyV2Store.getState();
+    const live = state.liveSession;
+    const active = live ? state.sessions.find((s) => s.id === live.surveyId) : undefined;
+    if (!live || !active) return;
+    window.electronAPI?.sendMultiSurveyShareSnapshot?.(
+      buildShareSnapshot(live, active, entryUrlRef.current, entryCodeRef.current),
+    );
+  }, []);
+
+  const handleCloseShareWindow = useCallback(() => {
+    void window.electronAPI?.closeMultiSurveyShareWindow?.();
+  }, []);
+
+  // ── 입장 코드를 기억하기 쉬운 이름으로 바꾸기 ──
+  // 검증은 기존 규칙(validateCustomCode)을 그대로 쓴다 — 새 규칙을 만들지 않는다.
+  const handleChangeEntryCode = useCallback(async (nextCode: string): Promise<boolean> => {
+    const tunnelUrl = tunnelUrlRef.current;
+    if (!tunnelUrl) {
+      setCodeError('인터넷으로 참여하는 주소가 아직 없어서 코드를 바꿀 수 없어요.');
+      return false;
+    }
+    try {
+      const result = await clientRef.current.setCustomCode(tunnelUrl, nextCode);
+      setEntryUrl(result.shortUrl);
+      setEntryCode(result.code);
+      setCodeError(null);
+      return true;
+    } catch (e) {
+      setCodeError(e instanceof Error ? e.message : '코드를 바꾸지 못했어요.');
+      return false;
+    }
   }, []);
 
   // ── "다시 하기" — 같은 설문으로 새 라이브 세션 재기동 ──
@@ -312,14 +488,25 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
 
   return (
     <TeacherConsole
+      busy={busy}
+      actionError={actionError}
+      onReopen={() => {
+        void runParticipationAction('reopen');
+      }}
       entryUrl={entryUrl ?? ''}
+      entryCode={entryCode}
+      onChangeEntryCode={handleChangeEntryCode}
+      entryCodeError={codeError}
       onAdvance={handleAdvance}
       onEnd={handleEnd}
       onRestart={handleRestart}
       onExit={onExit}
       focusModeActive={focusModeActive}
       onToggleFocusMode={handleToggleFocusMode}
-      onOpenShareWindow={handleOpenShareWindow}
+      onOpenShareWindow={() => {
+        void handleOpenShareWindow();
+      }}
+      onCloseShareWindow={handleCloseShareWindow}
     />
   );
 }
