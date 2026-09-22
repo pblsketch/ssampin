@@ -358,3 +358,58 @@ describe('빠른 학생 기록 — 시작 목록', () => {
     await waitFor(() => expect(screen.getByText(/기록이 저장될 곳을 직접 골라/)).toBeTruthy());
   });
 });
+
+describe('반 카드의 칸에서 바로 쓰기 (ADR-135 — ADR-122 결정 2의 유일한 예외)', () => {
+  it('학생·저장 위치가 정해진 채 글쓰기 단계로 바로 열리고, 그 수업반으로 저장한 뒤 창을 닫는다', async () => {
+    useQuickAddStore.setState({
+      studentRecordFocus: {
+        classId: 'c1',
+        direct: { contextKind: 'teaching', contextId: 'c1', studentRef: '2' },
+      },
+    });
+    const onClose = vi.fn();
+    render(<QuickAddStudentRecordForm onClose={onClose} />);
+    expect(screen.queryByText(/기록이 저장될 곳을 직접 골라/)).toBeNull();
+    fireEvent.change(screen.getByPlaceholderText(/본 대로 적어/), {
+      target: { value: '발표 순서를 먼저 정리했다' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '기록하기' }));
+
+    await waitFor(() => expect(addObservation).toHaveBeenCalledTimes(1));
+    expect(addHomeroomRecord).not.toHaveBeenCalled();
+    expect(addObservation.mock.calls[0]![0]).toMatchObject({ studentId: '2', classId: 'c1' });
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('담임반 카드의 칸이면 담임 누가기록으로 저장한다', async () => {
+    useQuickAddStore.setState({
+      studentRecordFocus: {
+        direct: { contextKind: 'homeroom', contextId: 'homeroom', studentRef: 's1' },
+      },
+    });
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    fireEvent.change(screen.getByPlaceholderText(/본 대로 적어/), {
+      target: { value: '친구를 도왔다' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '기록하기' }));
+    await waitFor(() => expect(addHomeroomRecord).toHaveBeenCalledTimes(1));
+    expect(addHomeroomRecord.mock.calls[0]![0]).toMatchObject({ studentId: 's1' });
+  });
+
+  it('칸의 학생을 찾지 못하면(그 사이 전출 등) 저장하지 않고 학생 찾기로 남는다', () => {
+    useQuickAddStore.setState({
+      studentRecordFocus: {
+        direct: { contextKind: 'teaching', contextId: 'c1', studentRef: '99' },
+      },
+    });
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    expect(screen.getByLabelText('학생 찾기')).toBeTruthy();
+    expect(screen.queryByPlaceholderText(/본 대로 적어/)).toBeNull();
+  });
+
+  it('칩으로 들어온 기존 경로는 여전히 저장 위치를 고르게 한다', () => {
+    useQuickAddStore.setState({ studentRecordFocus: { studentIdentity: '2-3|1|김한결' } });
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    expect(screen.queryByPlaceholderText(/본 대로 적어/)).toBeNull();
+  });
+});

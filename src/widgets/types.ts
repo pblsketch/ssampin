@@ -83,6 +83,11 @@ export interface WidgetInstance {
 export interface DashboardConfig {
   widgets: WidgetInstance[];
   lastModified: string;
+  /**
+   * '학생 빠른 기록' 카드를 한 번 붙여 드렸는가(ADR-135 — 관찰 기록 잔디가 이 카드에 산다).
+   * 한 번 처리한 뒤에는 다시 붙이지 않는다 — 선생님이 빼면 그대로 둔다.
+   */
+  studentRecordsOffered?: boolean;
 }
 
 /** 프리셋 키 */

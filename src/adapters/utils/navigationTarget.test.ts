@@ -5,7 +5,7 @@
  * 특히 모르는 fragment 를 그대로 PageId 로 넘기면 존재하지 않는 페이지가 되어 빈 화면이 된다.
  */
 import { describe, it, expect } from 'vitest';
-import { parseNavigationTarget } from './navigationTarget';
+import { buildQuickRecordDirectTarget, parseNavigationTarget } from './navigationTarget';
 
 describe('parseNavigationTarget', () => {
   it('fragment 가 없으면 그대로 페이지로 본다', () => {
@@ -90,5 +90,36 @@ describe('parseNavigationTarget', () => {
       expect(t.page).toBe('class-management');
       expect(t.studentRecordIntent).toBeNull();
     });
+  });
+});
+
+describe('칸에서 바로 쓰기 이동 문자열 (ADR-135)', () => {
+  it('학생·저장 위치를 싣고 왕복한다 — 특수문자도 안전', () => {
+    const raw = buildQuickRecordDirectTarget({
+      contextKind: 'teaching',
+      contextId: 'class:1/가',
+      studentRef: '2-3-15',
+    });
+    expect(parseNavigationTarget(raw)).toEqual({
+      page: 'dashboard',
+      settingsTab: null,
+      timetableIntent: null,
+      studentRecordIntent: {
+        kind: 'quick-record-direct',
+        contextKind: 'teaching',
+        contextId: 'class:1/가',
+        studentRef: '2-3-15',
+      },
+    });
+  });
+
+  it('모양이 틀리면 의도를 만들지 않는다 — 옛 빠른 기록 의도로 새지 않는다', () => {
+    expect(
+      parseNavigationTarget('dashboard#quick-student-record-direct:bogus:c1:1').studentRecordIntent,
+    ).toBeNull();
+    expect(
+      parseNavigationTarget('dashboard#quick-student-record-direct:teaching:c1')
+        .studentRecordIntent,
+    ).toBeNull();
   });
 });

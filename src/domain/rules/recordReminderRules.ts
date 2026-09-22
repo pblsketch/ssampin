@@ -7,6 +7,12 @@ import type {
   ReminderStudent,
   ReminderTarget,
 } from '../entities/RecordReminder';
+import {
+  addDaysExcludingVacation,
+  daysBetweenExcludingVacation,
+  EMPTY_SCHOOL_CALENDAR,
+  type SchoolCalendarDays,
+} from './schoolCalendarDays';
 
 /**
  * 학생 관찰 기록 알림 — 순수 도메인 규칙.
@@ -76,16 +82,23 @@ function toMinutes(hhmm: string): number | null {
 /**
  * 마지막 기록 후 경과 일수. 기록 전무면 `Number.POSITIVE_INFINITY`.
  * (같은 날 기록은 0.)
+ *
+ * 학사일정이 있으면 **방학 날은 세지 않는다**(ADR-135) — 개학 첫날 거의 모든 학생이 한꺼번에
+ * 공백으로 잡히지 않게 하기 위해서다. 학사일정이 없으면 달력 날짜 그대로다.
  */
 export function daysSinceLastRecord(
   provider: LastRecordDateProvider,
   studentId: string,
   now: Date,
+  cal: SchoolCalendarDays = EMPTY_SCHOOL_CALENDAR,
 ): number {
   const last = provider(studentId);
   if (!last) return Number.POSITIVE_INFINITY;
   const lastDate = parseDateStr(last);
   if (!lastDate) return Number.POSITIVE_INFINITY;
+  if (cal.vacationDays.size > 0) {
+    return daysBetweenExcludingVacation(last, formatDateStr(now), cal);
+  }
   return Math.max(0, daysBetween(lastDate, now));
 }
 
@@ -101,6 +114,7 @@ export function rankStalestStudents(
   provider: LastRecordDateProvider,
   config: Pick<ReminderSettings, 'excludedStudentIds' | 'focusedStudentIds'>,
   now: Date,
+  cal: SchoolCalendarDays = EMPTY_SCHOOL_CALENDAR,
 ): RankedStudent[] {
   const excluded = new Set(config.excludedStudentIds);
   const focused = new Set(config.focusedStudentIds);
@@ -109,7 +123,7 @@ export function rankStalestStudents(
     .map((student) => ({
       student,
       lastRecordDate: provider(student.id),
-      daysSinceLastRecord: daysSinceLastRecord(provider, student.id, now),
+      daysSinceLastRecord: daysSinceLastRecord(provider, student.id, now, cal),
     }))
     .sort((a, b) => {
       if (a.daysSinceLastRecord !== b.daysSinceLastRecord) {
@@ -151,8 +165,9 @@ export function pickDueStudents(
   config: ReminderSettings,
   cursor: number,
   now: Date,
+  cal: SchoolCalendarDays = EMPTY_SCHOOL_CALENDAR,
 ): RankedStudent[] {
-  const ranked = rankStalestStudents(students, provider, config, now).filter(
+  const ranked = rankStalestStudents(students, provider, config, now, cal).filter(
     (r) => r.daysSinceLastRecord >= effectiveStaleDays(r.student.id, config),
   );
   const rotated = applyRotation(ranked, cursor);
@@ -276,6 +291,7 @@ function isEligibleWeekday(date: Date, weekdays: readonly number[]): boolean {
  * @param cursor     로테이션 커서
  * @param now        기준 시각(주입)
  * @param idFactory  reminderId 생성기(주입 — 결정론 테스트 용이)
+ * @param cal        학사일정(방학 날은 공백 날수에 넣지 않는다). 없으면 달력 날짜 그대로.
  */
 export function buildForwardSchedule(
   students: readonly ReminderStudent[],
@@ -285,6 +301,7 @@ export function buildForwardSchedule(
   cursor: number,
   now: Date,
   idFactory: (studentId: string, dateStr: string) => string,
+  cal: SchoolCalendarDays = EMPTY_SCHOOL_CALENDAR,
 ): ReminderScheduleItem[] {
   const time = toMinutes(config.time);
   if (time === null) return [];
@@ -314,7 +331,10 @@ export function buildForwardSchedule(
       dueDate = now;
     } else {
       const lastDate = parseDateStr(last);
-      dueDate = lastDate ? addDays(lastDate, stale) : now;
+      // 방학 날은 세지 않는다 — 학사일정이 없으면 달력 날짜 그대로(addDays 와 같다).
+      dueDate = lastDate
+        ? (parseDateStr(addDaysExcludingVacation(last, stale, cal)) ?? addDays(lastDate, stale))
+        : now;
     }
 
     // horizon 안에서 dueDate 이후(그리고 오늘 이후)의 첫 유효 발화 시각을 찾는다.

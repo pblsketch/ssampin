@@ -23,6 +23,11 @@ import { useTeachingClassStore } from './useTeachingClassStore';
 import { useSettingsStore } from './useSettingsStore';
 import { useObservationAttachmentStore } from './useObservationAttachmentStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import {
+  markLocalObservationAdd,
+  recordLocalObservationAdd,
+} from '@adapters/stores/observationCheerSignal';
+import { isCountedHomeroomRecord } from '@domain/rules/observationEntries';
 
 /** 카테고리 색상 → Tailwind 클래스 매핑 */
 export const RECORD_COLOR_MAP: Record<
@@ -323,7 +328,12 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
             }
           : {}),
       };
+      // ADR-135 — 이 컴퓨터에서 추가한 관찰 기록 표시는 쓰기 전에, 오늘 첫 기록 응원은 성공한 뒤에
+      // (출결은 관찰이 아니다).
+      const counted = isCountedHomeroomRecord(newRecord);
+      if (counted) markLocalObservationAdd(newRecord.id);
       await manageRecords.add(newRecord);
+      if (counted) recordLocalObservationAdd(newRecord.id);
       set((state) => ({ records: [...state.records, newRecord] }));
       trackEventSafely('record_observation_save', {
         context: 'homeroom',
@@ -345,7 +355,12 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
         ...(params.tags && params.tags.length > 0 ? { tags: [...params.tags] } : {}),
         ...(params.method ? { method: params.method } : {}),
       };
+      // ADR-135 — 이 컴퓨터에서 추가한 관찰 기록 표시는 쓰기 전에, 오늘 첫 기록 응원은 성공한 뒤에
+      // (출결은 관찰이 아니다).
+      const counted = isCountedHomeroomRecord(newRecord);
+      if (counted) markLocalObservationAdd(newRecord.id);
       await manageRecords.add(newRecord);
+      if (counted) recordLocalObservationAdd(newRecord.id);
       set((state) => ({ records: [...state.records, newRecord] }));
       trackEventSafely('record_observation_save', {
         context: 'homeroom',

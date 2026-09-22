@@ -14,6 +14,21 @@ export interface QuickAddStudentRecordFocus {
    * 학생만 미리 골라 둘 뿐, 저장 위치는 여전히 다음 화면에서 직접 고른다.
    */
   readonly studentIdentity?: string;
+  /**
+   * 반 카드의 학생 칸을 눌렀을 때(ADR-135) — 학생과 **저장 위치가 이미 정해진 채** 글쓰기로 연다.
+   * ADR-122 결정 2("들어온 화면으로 저장 위치를 정하지 않는다")의 유일한 예외다 — 특정 반 카드의
+   * 칸을 누른 것 자체가 저장 위치를 고른 행동이기 때문이다. 저장에 성공하면 창을 닫는다.
+   */
+  readonly direct?: QuickRecordDirectTarget;
+}
+
+/** 칸에서 바로 쓰기의 대상 — `QuickRecordContext` 의 (kind, contextId, studentRef)와 같은 뜻. */
+export interface QuickRecordDirectTarget {
+  readonly contextKind: 'homeroom' | 'teaching';
+  /** 담임은 `'homeroom'`, 교과는 `TeachingClass.id` */
+  readonly contextId: string;
+  /** 담임은 `Student.id`, 교과는 `studentKey` */
+  readonly studentRef: string;
 }
 
 interface QuickAddState {

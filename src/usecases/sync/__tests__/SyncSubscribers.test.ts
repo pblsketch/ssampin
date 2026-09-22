@@ -98,9 +98,10 @@ describe('syncRegistry 구조적 정합성', () => {
     ).toEqual([]);
   });
 
-  it('(g) 등록된 37개 도메인이 정적/동적 성격과 맞는 전략을 가져야 한다', () => {
+  it('(g) 등록된 38개 도메인이 정적/동적 성격과 맞는 전략을 가져야 한다', () => {
     // 37 = 36 + record-ai-drafts(ADR-085, 구독 AI 초안 판 목록 — record-drafts 와 같은 snapshot 전략).
-    expect(SYNC_REGISTRY).toHaveLength(37);
+    // 38 = 37 + observation-laps(ADR-135, 관찰 기록 '한 바퀴' 끝 지점 — 병합형).
+    expect(SYNC_REGISTRY).toHaveLength(38);
 
     const staticStrategies = new Set(['snapshot', 'record-merge']);
     const invalid = SYNC_REGISTRY.filter((domain) =>
@@ -119,7 +120,7 @@ describe('syncRegistry 구조적 정합성', () => {
         .sort();
 
     expect(byStrategy('record-merge')).toEqual(
-      ['attendance', 'observations', 'student-records'].sort(),
+      ['attendance', 'observation-laps', 'observations', 'student-records'].sort(),
     );
     expect(byStrategy('dynamic-json')).toEqual(['note-body']);
     expect(byStrategy('binary')).toEqual(['obs-attachment-binary', 'student-photo-binary'].sort());

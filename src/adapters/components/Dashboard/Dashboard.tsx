@@ -7,6 +7,10 @@ import { WidgetGrid } from '@widgets/components/WidgetGrid';
 import { WidgetSettingsPanel } from '@widgets/components/WidgetSettingsPanel';
 import { ReminderDashboardBadge } from '@adapters/components/Reminder/ReminderDashboardBadge';
 import { CoolImportBanner } from '@adapters/components/CoolMessenger/CoolImportBanner';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { isStudentActive } from '@domain/rules/studentActivity';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 
 interface DashboardProps {
   onNavigate?: (page: string) => void;
@@ -23,6 +27,26 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     void loadMessage();
     loadConfig();
   }, [loadMessage, loadConfig]);
+
+  // ADR-135 — 관찰 기록 잔디가 사는 '학생 빠른 기록' 카드를 교과·부장 선생님께도 한 번 붙여 드린다.
+  // 명렬을 다 불러온 뒤에만 판단한다(불러오기 전이면 명렬이 없다고 잘못 보고 표시만 남긴다).
+  const configLoaded = useDashboardConfig((s) => s.loaded);
+  const offerStudentRecordsCardOnce = useDashboardConfig((s) => s.offerStudentRecordsCardOnce);
+  const students = useStudentStore((s) => s.students);
+  const studentsLoaded = useStudentStore((s) => s.loaded);
+  const classes = useTeachingClassStore((s) => s.classes);
+  const classesLoaded = useTeachingClassStore((s) => s.loaded);
+  useEffect(() => {
+    void useStudentStore.getState().load();
+    void useTeachingClassStore.getState().load();
+  }, []);
+  useEffect(() => {
+    if (!configLoaded || !studentsLoaded || !classesLoaded) return;
+    const hasRoster =
+      students.some(isStudentActive) ||
+      filterActiveClasses(classes).some((c) => c.students.some(isStudentActive));
+    offerStudentRecordsCardOnce(hasRoster);
+  }, [configLoaded, studentsLoaded, classesLoaded, students, classes, offerStudentRecordsCardOnce]);
 
   const handleOpenWidgetPanel = useCallback(() => {
     setPanelMode('widgets');

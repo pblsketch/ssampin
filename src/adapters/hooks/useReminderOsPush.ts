@@ -11,10 +11,22 @@ import {
   isReminderSnoozed,
 } from '@adapters/stores/useRecordReminderStore';
 import { useReminderFireStore } from '@adapters/stores/useReminderFireStore';
+import { useSchoolCalendarDays } from '@adapters/hooks/useObservationCheerContext';
+import {
+  homeroomEntries,
+  lastObservationDateByRef,
+  subjectCard,
+  subjectEntries,
+} from '@domain/rules/observationEntries';
+import { activeExclusionKeys, subjectExclusionKey } from '@domain/rules/reminderExclusion';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import type { LastRecordDateProvider, ReminderStudent } from '@domain/entities/RecordReminder';
 import { isStudentActive } from '@domain/rules/studentActivity';
-import { buildForwardSchedule, daysSinceLastRecord } from '@domain/rules/recordReminderRules';
+import {
+  buildForwardSchedule,
+  daysSinceLastRecord,
+  formatDateStr,
+} from '@domain/rules/recordReminderRules';
 import { parseMinutes } from '@domain/rules/periodRules';
 import { findMatchingClass } from '@domain/rules/matchingRules';
 import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
@@ -55,6 +67,8 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
   const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
   const firedKeys = useReminderFireStore((s) => s.firedKeys);
   const fireLoaded = useReminderFireStore((s) => s.loaded);
+  // ADR-135 — 방학 날은 공백 날수에 넣지 않는다(학사일정이 없으면 예전 그대로).
+  const calendar = useSchoolCalendarDays();
 
   // 발화 장부 최초 로드.
   useEffect(() => {
@@ -104,17 +118,18 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
     const now = new Date();
     const fired = new Set(firedKeys);
     const items: OsScheduleItem[] = [];
+    const todayIso = formatDateStr(now);
+    // ADR-135 — '당분간 빼기'한 학생은 윈도우 알림 예약에서도 뺀다.
+    const excludedKeys = activeExclusionKeys(rr, todayIso);
 
     // ── 담임반: 각 후보의 다음 발화 시각 forward 스케줄 ──
     if (rr.targets.includes('homeroom')) {
-      const lastById = new Map<string, string>();
-      for (const rec of records) {
-        const prev = lastById.get(rec.studentId);
-        if (prev === undefined || rec.date > prev) lastById.set(rec.studentId, rec.date);
-      }
+      // ADR-135 — 출결 기록은 관찰로 세지 않는다(잔디의 종·인앱 알림과 같은 기준).
+      const lastById = lastObservationDateByRef(homeroomEntries(records), todayIso);
       const provider: LastRecordDateProvider = (id) => lastById.get(id) ?? null;
       const roster: ReminderStudent[] = students
         .filter(isStudentActive)
+        .filter((s) => !excludedKeys.has(s.id))
         .map((s) => ({ id: s.id, name: s.name }));
       for (const it of buildForwardSchedule(
         roster,
@@ -124,6 +139,7 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
         cursor,
         now,
         (sid, date) => `${sid}:${date}`,
+        calendar,
       )) {
         items.push({
           reminderId: it.reminderId,
@@ -144,13 +160,8 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
       const today = `${y}-${String(mo + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       const daySlots = useScheduleStore.getState().getEffectiveTeacherSchedule(today);
 
-      // 관찰 마지막 기록일 맵: `${classId}:${studentKey}` → date.
-      const obsLast = new Map<string, string>();
-      for (const rec of observationRecords) {
-        const k = `${rec.classId}:${rec.studentId}`;
-        const prev = obsLast.get(k);
-        if (prev === undefined || rec.date > prev) obsLast.set(k, rec.date);
-      }
+      // 관찰 마지막 기록일 맵: 카드별(`subject:${classId}`) → studentKey → date.
+      const obsEntries = subjectEntries(observationRecords);
 
       for (let i = 0; i < daySlots.length; i++) {
         const slot = daySlots[i];
@@ -167,10 +178,18 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
         const dedup = `subject:${cls.id}:${today}`;
         if (fired.has(dedup)) continue; // 하루 한 번(그 반)
 
-        const provider: LastRecordDateProvider = (sKey) => obsLast.get(`${cls.id}:${sKey}`) ?? null;
+        const card = subjectCard(cls.id);
+        const obsLast = lastObservationDateByRef(
+          obsEntries.filter((e) => e.card === card),
+          today,
+        );
+        const provider: LastRecordDateProvider = (sKey) => obsLast.get(sKey) ?? null;
         const dueCount = cls.students
           .filter(isStudentActive)
-          .filter((s) => daysSinceLastRecord(provider, studentKey(s), now) >= rr.staleDays).length;
+          .filter((s) => !excludedKeys.has(subjectExclusionKey(cls.id, studentKey(s))))
+          .filter(
+            (s) => daysSinceLastRecord(provider, studentKey(s), now, calendar) >= rr.staleDays,
+          ).length;
         if (dueCount === 0) continue;
 
         items.push({
@@ -197,6 +216,7 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
     firedKeys,
     pausedUntil,
     snoozeUntil,
+    calendar,
   ]);
 
   // 데이터/설정 변화 시 재계산·재-push (발화 장부 로드 후).

@@ -349,6 +349,17 @@ export const SYNC_REGISTRY: SyncDomain[] = [
       await useObservationStore.getState().load(true);
     },
   },
+  // 27-1. observation-laps ─ 관찰 기록 '한 바퀴' 끝 지점(ADR-135).
+  //   끝 지점은 더 뒤로만 바뀌고 지우지 않으므로 병합이 늘 안전하다(교환·멱등).
+  //   설정 파일에 넣지 않은 이유: 앱이 저절로 쓰는 값이라 설정 충돌을 부른다.
+  {
+    fileName: 'observation-laps',
+    strategy: 'record-merge',
+    reload: async () => {
+      const { useLapMarkStore } = await import('@adapters/stores/useLapMarkStore');
+      await useLapMarkStore.getState().load(true);
+    },
+  },
   // 28. record-drafts ─ AI 브릿지 생기부 초안 (영역별 write-back 수신)
   {
     fileName: 'record-drafts',
@@ -500,6 +511,7 @@ export const SYNC_FILE_KEYS = {
   studentRecords: 'student-records',
   attendance: 'attendance',
   observations: 'observations',
+  observationLaps: 'observation-laps',
   curriculumProgress: 'curriculum-progress',
   // 근거·주제도 '읽기→변형→통째 쓰기' 구조라 같은 직렬화가 필요하다. 동기화 reload 와
   // 사용자 저장이 겹치면 나중 쓰기가 앞 쓰기를 삼킨다(계획 §5.2).

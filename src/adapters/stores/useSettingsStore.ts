@@ -11,6 +11,8 @@ import type {
 import { resolveStartupMode } from '@domain/entities/Settings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
+import { withExclusion, withoutExclusion } from '@domain/rules/reminderExclusion';
+import { toLocalDateString } from '@shared/utils/localDate';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
 import { detectLunchFromPeriods, getDefaultLunchTime } from '@domain/rules/periodRules';
@@ -282,6 +284,13 @@ interface SettingsState {
   setShortcut: (commandId: string, combo: string, enabled?: boolean) => Promise<void>;
   toggleGlobalShortcuts: (enabled: boolean) => Promise<void>;
   resetShortcuts: () => Promise<void>;
+  /**
+   * '당분간 빼기'(ADR-135) — 누르는 즉시 저장한다(설정 화면의 [저장]을 기다리지 않는다).
+   * key 형식은 `domain/rules/reminderExclusion.ts` 가 정한다. 같은 key 는 기간만 바뀐다.
+   */
+  setReminderExclusion: (key: string, until: string) => Promise<void>;
+  /** 다시 넣기 — 옛 `excludedStudentIds` 에 있던 학생도 함께 뺀다. 즉시 저장. */
+  removeReminderExclusion: (key: string) => Promise<void>;
 }
 
 /**
@@ -574,6 +583,26 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     };
     set({ settings: next });
     await settingsRepository.saveSettings(next);
+  },
+
+  setReminderExclusion: async (key, until) => {
+    const rr = get().settings.recordReminder ?? DEFAULT_REMINDER_SETTINGS;
+    const today = toLocalDateString(new Date());
+    await get().update({
+      recordReminder: { ...rr, exclusions: withExclusion(rr.exclusions, key, until, today) },
+    });
+  },
+
+  removeReminderExclusion: async (key) => {
+    const rr = get().settings.recordReminder ?? DEFAULT_REMINDER_SETTINGS;
+    const today = toLocalDateString(new Date());
+    await get().update({
+      recordReminder: {
+        ...rr,
+        exclusions: withoutExclusion(rr.exclusions, key, today),
+        excludedStudentIds: rr.excludedStudentIds.filter((id) => id !== key),
+      },
+    });
   },
 
   completeOnboarding: async (patch) => {

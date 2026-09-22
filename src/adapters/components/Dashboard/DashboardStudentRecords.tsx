@@ -10,7 +10,7 @@
  * ★학생 칩에는 오늘 기록의 **종류**만 붙인다. 누적 건수·미기록 경고·순위는 넣지 않는다 —
  * 기록량으로 학생을 줄 세우지 않기로 한 결정이다.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type KeyboardEvent } from 'react';
 import { useStudentRecordsStore, RECORD_COLOR_MAP } from '@adapters/stores/useStudentRecordsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
@@ -42,6 +42,9 @@ import {
   requestStudentRecordNavigation,
 } from './studentRecordNavigation';
 import { StudentRecordsEditor } from '../Homeroom/Records/StudentRecordsEditor';
+import { useObservationCheerAvailable } from '@adapters/hooks/useObservationCheer';
+import { CheerPinLine } from './ObservationCheer/CheerPinLine';
+import { ObservationCheerTab } from './ObservationCheer/ObservationCheerTab';
 
 function todayString(): string {
   return toLocalDateString(new Date());
@@ -112,11 +115,86 @@ export function DashboardStudentRecords({ isCompactMode = true }: DashboardStude
   return <DashboardStudentRecordsCompact />;
 }
 
+type ExpandedTab = 'grass' | 'homeroom';
+
+const EXPANDED_TABS: readonly { id: ExpandedTab; label: string }[] = [
+  { id: 'grass', label: '잔디' },
+  { id: 'homeroom', label: '담임 기록' },
+];
+
 /**
- * 카드를 눌러 크게 열었을 때. 담임 명렬이 있으면 기존 담임 기록 편집기를 그대로 쓴다.
- * ★담임이 아닌 선생님에게 빈 담임 화면을 강제하지 않는다 — 그쪽은 수업 기록으로 안내한다.
+ * 카드를 눌러 크게 열었을 때.
+ *
+ * 응원·잔디가 켜져 있으면 [잔디](기본)·[담임 기록] 두 탭을 둔다(ADR-135). 꺼져 있거나 명렬이 하나도
+ * 없으면 예전처럼 담임 기록 화면만 보인다.
  */
 function ExpandedStudentRecords(): JSX.Element {
+  const cheerAvailable = useObservationCheerAvailable();
+  const loadClasses = useTeachingClassStore((s) => s.load);
+  const [tab, setTab] = useState<ExpandedTab>('grass');
+
+  useEffect(() => {
+    void loadClasses();
+  }, [loadClasses]);
+
+  if (!cheerAvailable) return <HomeroomRecordsPanel />;
+
+  const onTabKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    const next: ExpandedTab = tab === 'grass' ? 'homeroom' : 'grass';
+    setTab(next);
+    document.getElementById(`student-records-tab-${next}`)?.focus();
+  };
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <div
+        role="tablist"
+        aria-label="학생 빠른 기록 보기"
+        onKeyDown={onTabKeyDown}
+        className="mb-3 flex shrink-0 gap-1"
+      >
+        {EXPANDED_TABS.map((t) => (
+          <button
+            key={t.id}
+            id={`student-records-tab-${t.id}`}
+            type="button"
+            role="tab"
+            aria-selected={tab === t.id}
+            // 패널은 고른 탭 것만 그린다 — 없는 요소를 가리키지 않게 고른 탭에만 단다.
+            aria-controls={tab === t.id ? `student-records-panel-${t.id}` : undefined}
+            tabIndex={tab === t.id ? 0 : -1}
+            onClick={() => setTab(t.id)}
+            className={`rounded-lg px-3 py-1 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-sp-accent ${
+              tab === t.id
+                ? 'bg-sp-accent text-sp-accent-fg'
+                : 'text-sp-muted hover:bg-sp-surface hover:text-sp-text'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <div
+        role="tabpanel"
+        id={`student-records-panel-${tab}`}
+        aria-labelledby={`student-records-tab-${tab}`}
+        // 잔디 탭만 자기 안에서 스크롤한다 — 탭 줄이 함께 밀려 올라가지 않게. 담임 기록 편집기는
+        // 예전처럼 자기 배치를 그대로 쓴다.
+        className={`min-h-0 flex-1 ${tab === 'grass' ? 'overflow-y-auto' : ''}`}
+      >
+        {tab === 'grass' ? <ObservationCheerTab /> : <HomeroomRecordsPanel />}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * [담임 기록] — 담임 명렬이 있으면 기존 담임 기록 편집기를 그대로 쓴다.
+ * ★담임이 아닌 선생님에게 빈 담임 화면을 강제하지 않는다 — 그쪽은 수업 기록으로 안내한다.
+ */
+function HomeroomRecordsPanel(): JSX.Element {
   const { students, loaded, load } = useStudentStore();
 
   useEffect(() => {
@@ -172,6 +250,7 @@ function DashboardStudentRecordsCompact() {
   const teacherSchedule = useScheduleStore((s) => s.teacherSchedule);
   const overrides = useScheduleStore((s) => s.overrides);
   const settings = useSettingsStore((s) => s.settings);
+  const cheerAvailable = useObservationCheerAvailable();
 
   useEffect(() => {
     void load();
@@ -426,6 +505,7 @@ function DashboardStudentRecordsCompact() {
 
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
+      {cheerAvailable && <CheerPinLine />}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">
           <span>👩‍🏫</span>학생 빠른 기록

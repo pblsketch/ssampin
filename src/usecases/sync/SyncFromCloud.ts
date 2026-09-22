@@ -16,6 +16,8 @@ import type {
 import { TRACKED_GROUP_FIELDS, TRACKED_GROUPS } from '@domain/entities/StudentRecord';
 import type { AttendanceData, AttendanceRecord } from '@domain/entities/Attendance';
 import type { ObservationData, ObservationRecord } from '@domain/entities/Observation';
+import type { LapMarkData } from '@domain/entities/ObservationLap';
+import { mergeLapMarkLists } from '@domain/rules/observationLaps';
 import type { RecordCategoryItem } from '@domain/valueObjects/RecordCategory';
 import { attendanceRecordKey } from '@domain/entities/Attendance';
 import { deriveDocumentSubmitted } from '@domain/rules/attendanceDocumentPolicy';
@@ -497,6 +499,14 @@ export function mergeCategories(
     if (!seen.has(l.id)) merged.push(l);
   }
   return merged;
+}
+
+/**
+ * 관찰 기록 '한 바퀴' 끝 지점(ADR-135) 병합 — (카드, 학기)마다 끝 지점은 더 뒤, 바퀴 수는 더 큰 값.
+ * 끝 지점은 지우지 않고 뒤로만 가므로 어느 쪽이 최신이든 합치기만 하면 된다(교환·멱등).
+ */
+export function mergeLapMarkData(local: LapMarkData | null, remote: LapMarkData): LapMarkData {
+  return { records: mergeLapMarkLists(local?.records, remote?.records) };
 }
 
 /**
@@ -1171,6 +1181,30 @@ export class SyncFromCloud {
               );
               continue;
             }
+            // 한 바퀴 끝 지점(ADR-135)은 합치기만 하면 되는 값이라 충돌 창으로 올리지 않는다.
+            // 통째 선택("이 기기 것")으로 가면 모든 기기의 끝난 바퀴가 풀린다.
+            if (filename === SYNC_FILE_KEYS.observationLaps) {
+              const remoteData = (await this.downloadVerifiedJson(
+                filename,
+                remoteInfo,
+                remoteFiles,
+                true,
+              )) as LapMarkData;
+              const merged = await mergeAndWriteLocked(
+                this.storage,
+                filename,
+                remoteData,
+                (local) => mergeLapMarkData(local, remoteData),
+              );
+              updatedFiles[filename] = await this.convergeMergedFile(
+                folder.id,
+                filename,
+                merged,
+                remoteInfo,
+              );
+              downloaded.push(filename);
+              continue;
+            }
             conflicts.push({
               filename,
               localModified: 'content-mismatch',
@@ -1198,7 +1232,8 @@ export class SyncFromCloud {
       const isRecordMergeFile =
         filename === SYNC_FILE_KEYS.studentRecords ||
         filename === SYNC_FILE_KEYS.attendance ||
-        filename === SYNC_FILE_KEYS.observations;
+        filename === SYNC_FILE_KEYS.observations ||
+        filename === SYNC_FILE_KEYS.observationLaps;
 
       // 스냅샷 파일은 장부 시각이 아니라 실제 B/L/R 내용으로 원격 단독 변경과 동시 변경을 가른다.
       if (localInfo && localInfo.checksum !== remoteInfo.checksum && !isRecordMergeFile) {
@@ -1416,6 +1451,27 @@ export class SyncFromCloud {
           continue;
         }
 
+        // 관찰 기록 '한 바퀴' 끝 지점도 항상 병합 — 뒤로만 가는 값이라 합치면 끝난다.
+        if (filename === SYNC_FILE_KEYS.observationLaps) {
+          const remoteData = (await this.downloadVerifiedJson(
+            filename,
+            remoteInfo,
+            remoteFiles,
+            true,
+          )) as LapMarkData;
+          const merged = await mergeAndWriteLocked(this.storage, filename, remoteData, (local) =>
+            mergeLapMarkData(local, remoteData),
+          );
+          updatedFiles[filename] = await this.convergeMergedFile(
+            folder.id,
+            filename,
+            merged,
+            remoteInfo,
+          );
+          downloaded.push(filename);
+          continue;
+        }
+
         if (this.conflictPolicy === 'latest') {
           if (remoteIsNewer) {
             // 리모트가 최신 → 다운로드
@@ -1461,7 +1517,8 @@ export class SyncFromCloud {
         if (
           filename !== 'student-records' &&
           filename !== 'attendance' &&
-          filename !== 'observations'
+          filename !== 'observations' &&
+          filename !== SYNC_FILE_KEYS.observationLaps
         ) {
           const localData = await this.storage.read<unknown>(filename);
           if (localData !== null) {
@@ -1515,6 +1572,21 @@ export class SyncFromCloud {
             remoteData,
             (local) =>
               mergeAttendance(local, remoteData, true, currentTerm, lastClosedTerm, lastClosedAt),
+            ' (first download)',
+          );
+          downloadedFileInfo = await this.convergeMergedFile(
+            folder.id,
+            filename,
+            merged,
+            remoteInfo,
+          );
+        } else if (filename === SYNC_FILE_KEYS.observationLaps) {
+          const remoteData = JSON.parse(content) as LapMarkData;
+          const merged = await mergeAndWriteLocked(
+            this.storage,
+            filename,
+            remoteData,
+            (local) => mergeLapMarkData(local, remoteData),
             ' (first download)',
           );
           downloadedFileInfo = await this.convergeMergedFile(

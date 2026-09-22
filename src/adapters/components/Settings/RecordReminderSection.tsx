@@ -15,10 +15,15 @@ import type {
   ReminderSettings,
   ReminderTarget,
 } from '@domain/entities/RecordReminder';
-import { DEFAULT_REMINDER_SETTINGS, REMINDER_PRESETS } from '@domain/entities/RecordReminder';
+import {
+  DEFAULT_REMINDER_SETTINGS,
+  REMINDER_PRESETS,
+  isObservationCheerEnabled,
+} from '@domain/entities/RecordReminder';
 import { SettingsSection } from './shared/SettingsSection';
 import { Toggle } from './shared/Toggle';
 import { useRecordReminderStore, isReminderPaused } from '@adapters/stores/useRecordReminderStore';
+import { ExclusionListSection } from './ExclusionListSection';
 
 interface Props {
   draft: Settings;
@@ -131,6 +136,29 @@ export function RecordReminderSection({ draft, patch }: Props) {
           <Toggle checked={rr.enabled} onChange={(v) => patchRR({ enabled: v })} />
         </div>
       </SettingsSection>
+
+      {/* ADR-135 — 응원·잔디와 제외 학생은 알림을 꺼 둬도 쓰인다. 흐리게 막는 묶음 밖에 둔다. */}
+      <SettingsSection
+        icon="park"
+        iconColor="bg-sp-surface text-sp-accent"
+        title="응원·잔디"
+        description="기록이 쌓인 모습을 보여 주고, 핀이 응원해요."
+      >
+        <div className="flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-sm font-medium text-sp-text">응원·잔디 표시</span>
+            <span className="text-xs text-sp-muted">
+              학생별 기록 수나 순위는 보여 주지 않아요. 선생님이 쌓아 온 기록만 응원해요.
+            </span>
+          </div>
+          <Toggle
+            checked={isObservationCheerEnabled(rr)}
+            onChange={(v) => patchRR({ cheerEnabled: v })}
+          />
+        </div>
+      </SettingsSection>
+
+      <ExclusionListSection />
 
       {/* 나머지 설정 — 마스터 스위치가 꺼져 있으면 흐리게 비활성 표시 */}
       <div
@@ -471,17 +499,17 @@ export function RecordReminderSection({ draft, patch }: Props) {
           />
         </SettingsSection>
 
-        {/* 제외/관심 학생 (추후 지원) */}
+        {/* 관심 학생 (추후 지원) — 빼기는 위 '제외 학생'으로 옮겼다(ADR-135) */}
         <SettingsSection
           icon="person_search"
           iconColor="bg-sp-surface text-sp-muted"
-          title="제외/관심 학생"
+          title="관심 학생"
         >
           <div className="flex items-center justify-between p-3 rounded-lg bg-sp-surface/60">
             <div className="flex flex-col">
               <span className="text-sm font-medium text-sp-text">학생별 설정</span>
               <span className="text-xs text-sp-muted">
-                특정 학생을 알림에서 빼거나, 더 자주 챙길 관심 학생으로 지정할 수 있어요.
+                더 자주 챙길 관심 학생으로 지정할 수 있어요.
               </span>
             </div>
             <button

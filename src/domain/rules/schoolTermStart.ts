@@ -52,6 +52,33 @@ export function previousTerm(term: string): string | null {
   return parsed.semester === 2 ? `${parsed.year}-1` : `${parsed.year - 1}-2`;
 }
 
+/** 다음 학기 라벨('2026-1'→'2026-2', '2026-2'→'2027-1'). 형식이 아니면 null. */
+export function nextTerm(term: string): string | null {
+  const parsed = parseTerm(term);
+  if (parsed === null) return null;
+  return parsed.semester === 1 ? `${parsed.year}-2` : `${parsed.year + 1}-1`;
+}
+
+/**
+ * 그 학기의 마지막 날('YYYY-MM-DD') = 다음 학기 시작일(`resolveTermStartDate`)의 전날.
+ *
+ * ★등록한 학기 종료일(`useTermRange`)과 일부러 다르다. 그 값은 학교가 날짜를 등록하기 전까지
+ *   null 이라, 관찰 기록 응원(학기 잔디·'이번 학기 끝까지' 빼기)처럼 늘 끝이 필요한 곳에 못 쓴다.
+ */
+export function termEndDate(
+  term: string,
+  termStartDates: TermStartDates | undefined,
+): string | null {
+  const next = nextTerm(term);
+  if (next === null) return null;
+  const nextStart = resolveTermStartDate(next, termStartDates);
+  if (nextStart === null) return null;
+  const d = new Date(`${nextStart}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setDate(d.getDate() - 1);
+  return toLocalIsoDate(d);
+}
+
 /**
  * 개학일 등록이 없을 때 쓰는 명목 시작일(1학기 3/1, 2학기 8/1). 형식이 아니면 null.
  *

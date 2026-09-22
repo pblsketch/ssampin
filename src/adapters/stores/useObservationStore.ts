@@ -7,6 +7,10 @@ import { generateUUID } from '@infrastructure/utils/uuid';
 import { normalizeSlots } from '@domain/rules/observationSlots';
 import { trackEventSafely } from '@adapters/analytics/trackEventSafely';
 import { useObservationAttachmentStore } from './useObservationAttachmentStore';
+import {
+  markLocalObservationAdd,
+  recordLocalObservationAdd,
+} from '@adapters/stores/observationCheerSignal';
 
 interface ObservationState {
   records: readonly ObservationRecord[];
@@ -99,7 +103,10 @@ export const useObservationStore = create<ObservationState>((set, get) => {
       };
       // ★저장이 성공한 **뒤에** 게시한다. 먼저 게시하면 저장이 실패해도 화면에는 남고,
       //   다음 통째 저장이 그 유령을 파일에 굳힌다(계획 §5.1-1).
+      // ADR-135 — 이 컴퓨터에서 추가한 관찰 기록 표시는 쓰기 전에, 오늘 첫 기록 응원은 성공한 뒤에.
+      markLocalObservationAdd(record.id);
       await manage.add(record);
+      recordLocalObservationAdd(record.id);
       set((s) => ({ records: [...s.records, record] }));
       trackEventSafely('record_observation_save', {
         context: 'teaching',

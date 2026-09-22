@@ -73,6 +73,7 @@ import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer, useToastStore } from '@adapters/components/common/Toast';
+import { ObservationCheerHost } from '@adapters/components/Dashboard/ObservationCheer/ObservationCheerHost';
 import { UpdateNotification } from '@adapters/components/common/UpdateNotification';
 import { ModalCoordinator } from '@adapters/components/common/ModalCoordinator';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
@@ -121,6 +122,7 @@ import { useMealStore } from '@adapters/stores/useMealStore';
 import { useStickerStore } from '@adapters/stores/useStickerStore';
 import { useRubricStore } from '@adapters/stores/useRubricStore';
 import { useObservationAttachmentStore } from '@adapters/stores/useObservationAttachmentStore';
+import { useLapMarkStore } from '@adapters/stores/useLapMarkStore';
 import { PinGuard } from '@adapters/components/common/PinGuard';
 import { useAutoSync } from '@adapters/hooks/useAutoSync';
 import { useTasksAutoSync } from '@adapters/hooks/useTasksAutoSync';
@@ -1205,6 +1207,8 @@ function MainApp() {
       rubrics: (cb) => useRubricStore.subscribe(cb),
       // 관찰 첨부 메타 — obs-attachment-binary(동적)는 subscribeExcluded:true이므로 제외.
       'observation-attachments': (cb) => useObservationAttachmentStore.subscribe(cb),
+      // 관찰 기록 '한 바퀴' 끝 지점(ADR-135).
+      'observation-laps': (cb) => useLapMarkStore.subscribe(cb),
     };
 
     const unsubscribers: Array<() => void> = [];
@@ -1399,6 +1403,8 @@ function MainApp() {
         <AssistDockContainer />
         <ModalCoordinator />
         <ToastContainer />
+        {/* ADR-135 — 한 바퀴 끝 지점 저장·응원 토스트. 메인 창에만 둔다(위젯 창은 읽기만). */}
+        <ObservationCheerHost />
         <Onboarding />
         {/*
           첫 실행 안내(온보딩)가 떠 있는 동안에는 앱이 먼저 말을 걸지 않는다.

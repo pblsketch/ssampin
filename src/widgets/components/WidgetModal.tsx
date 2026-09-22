@@ -24,6 +24,8 @@ import { createPortal } from 'react-dom';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 import { DashboardPinGuard } from '@adapters/components/Dashboard/DashboardPinGuard';
 import { useDesktopWidgetContextStore } from '@adapters/stores/useDesktopWidgetContextStore';
+import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
+import { closeTopOverlayMenu } from '@adapters/utils/overlayMenuStack';
 import { useFocusTrap } from '../utils/useFocusTrap';
 import { PIN_FEATURE_MAP } from '../utils/pinFeatureMap';
 import type { WidgetDefinition } from '../types';
@@ -172,8 +174,13 @@ export function WidgetModal({
     },
   });
 
+  // 이 모달 위에 빠른 기록 창이 떠 있는 동안에는(반 카드의 칸에서 바로 쓰기 — ADR-135)
+  // 포커스 가두기와 Esc 를 양보한다. 안 그러면 빠른 기록 창에서 Tab 이 뒤로 빨려 들어가고,
+  // Esc 가 빠른 기록 창이 아니라 이 모달을 닫아 쓰던 글과 함께 카드가 사라진다.
+  const quickAddOpen = useQuickAddStore((s) => s.isOpen);
+
   // Focus trap — head이면서 열려 있을 때만 활성화.
-  useFocusTrap(modalRef, isOpen && isHead);
+  useFocusTrap(modalRef, isOpen && isHead && !quickAddOpen);
 
   // 마운트 직후 모달 본체에 명시적 focus + window.focus().
   // 위젯 모드(Electron 데스크톱 위젯 BrowserWindow)에서 카드 클릭 시 본문에 focus 가 안 가서
@@ -197,11 +204,13 @@ export function WidgetModal({
   // ESC 키 처리. document + window 양쪽에 capture 단계로 등록 — 위젯 모드에서
   // 어떤 노드에 focus 가 있어도 잡히도록 강화.
   useEffect(() => {
-    if (!isOpen || !isHead) return;
+    if (!isOpen || !isHead || quickAddOpen) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') {
         e.preventDefault();
         e.stopPropagation();
+        // 이 창 위에 칸 메뉴 같은 작은 메뉴가 떠 있으면 그것만 닫는다(ADR-135).
+        if (closeTopOverlayMenu()) return;
         saveAndClose();
       }
     }
@@ -212,7 +221,7 @@ export function WidgetModal({
       window.removeEventListener('keydown', onKeyDown, true);
     };
     // saveAndClose는 props 캡처라 의존성 추가 시 매 렌더 재구독. props 변화 잡기 위해 의도.
-  }, [isOpen, isHead, saveAndClose]);
+  }, [isOpen, isHead, saveAndClose, quickAddOpen]);
 
   useEffect(() => {
     if (!isOpen || !isHead || !isDesktopWidget) return;
@@ -283,6 +292,7 @@ export function WidgetModal({
     if (!api?.requestModalEscape || !api.onModalEscape || !api.releaseModalEscape) return;
     void api.requestModalEscape();
     const unsub = api.onModalEscape(() => {
+      if (closeTopOverlayMenu()) return;
       saveAndCloseRef.current();
     });
     return () => {

@@ -37,6 +37,13 @@ import { countUnclassified } from '@domain/rules/threadSuggest';
 import { teachingStudentRef } from '@domain/entities/RecordDraft';
 import { useRecordEvidenceStore } from '@adapters/stores/useRecordEvidenceStore';
 import { useInquiryThreadStore } from '@adapters/stores/useInquiryThreadStore';
+import { useSchoolCalendarDays } from '@adapters/hooks/useObservationCheerContext';
+import {
+  homeroomEntries,
+  lastObservationDateByRef,
+  subjectEntries,
+} from '@domain/rules/observationEntries';
+import { activeExclusionKeys, subjectExclusionKey } from '@domain/rules/reminderExclusion';
 
 /**
  * 학생 관찰 기록 알림 — 인앱 오케스트레이션 훅(P2·P4).
@@ -101,6 +108,8 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
   const evidenceRecords = useRecordEvidenceStore((s) => s.records);
   const inquiryThreads = useInquiryThreadStore((s) => s.records);
   const threadIdSet = useMemo(() => new Set(inquiryThreads.map((t) => t.id)), [inquiryThreads]);
+  // ADR-135 — 방학 날은 공백 날수에 넣지 않는다(학사일정이 없으면 예전 그대로).
+  const calendar = useSchoolCalendarDays();
 
   const subjectEnabled = rr.enabled && rr.targets.includes('subject');
 
@@ -144,19 +153,20 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     let homeroomItems: ReminderPromptItem[] = [];
     let subjectItems: ReminderPromptItem[] = [];
 
+    // ADR-135 — '당분간 빼기'한 학생은 팝업·미기록 수·수업 직후 알림 어디서도 부르지 않는다.
+    const excludedKeys = activeExclusionKeys(rr, today);
+
     // ── 담임반 (StudentRecord, 상시 공백감지) ──
     if (rr.targets.includes('homeroom')) {
-      const lastById = new Map<string, string>();
-      for (const rec of records) {
-        const prev = lastById.get(rec.studentId);
-        if (prev === undefined || rec.date > prev) lastById.set(rec.studentId, rec.date);
-      }
+      // ADR-135 — 출결 기록은 관찰로 세지 않는다(잔디의 종과 같은 기준).
+      const lastById = lastObservationDateByRef(homeroomEntries(records), today);
       const provider: LastRecordDateProvider = (id) => lastById.get(id) ?? null;
       const roster: ReminderStudent[] = students
         .filter(isStudentActive)
+        .filter((s) => !excludedKeys.has(s.id))
         .map((s) => ({ id: s.id, name: s.name }));
       missing += roster.filter(
-        (s) => daysSinceLastRecord(provider, s.id, now) >= rr.staleDays,
+        (s) => daysSinceLastRecord(provider, s.id, now, calendar) >= rr.staleDays,
       ).length;
 
       if (active) {
@@ -165,7 +175,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
             !skipSet.has(studentDedupKey(s.id, today)) &&
             !isStudentSnoozed(studentSnoozes, s.id, nowMs),
         );
-        const due = pickDueStudents(candidates, provider, rr, cursor, now);
+        const due = pickDueStudents(candidates, provider, rr, cursor, now, calendar);
         homeroomItems = due.map((r, i) => ({
           key: r.student.id,
           studentId: r.student.id,
@@ -199,16 +209,15 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
       const daySlots = useScheduleStore.getState().getEffectiveTeacherSchedule(today);
       const finished = detectJustFinishedClass(daySlots, classes, periodTimes ?? [], now);
       if (finished) {
-        // 관찰 마지막 기록일 맵 (해당 수업반).
-        const obsLast = new Map<string, string>();
-        for (const rec of observationRecords) {
-          if (rec.classId !== finished.id) continue;
-          const prev = obsLast.get(rec.studentId);
-          if (prev === undefined || rec.date > prev) obsLast.set(rec.studentId, rec.date);
-        }
+        // 관찰 마지막 기록일 맵 (해당 수업반) — 잔디와 같은 규칙(오늘 뒤 날짜 기록은 세지 않음).
+        const obsLast = lastObservationDateByRef(
+          subjectEntries(observationRecords.filter((rec) => rec.classId === finished.id)),
+          today,
+        );
         const obsProvider: LastRecordDateProvider = (sKey) => obsLast.get(sKey) ?? null;
         const roster: ReminderStudent[] = finished.students
           .filter(isStudentActive)
+          .filter((s) => !excludedKeys.has(subjectExclusionKey(finished.id, studentKey(s))))
           .map((s) => ({ id: studentKey(s), name: s.name }));
         const keyOf = (sid: string) => `subject:${finished.id}:${sid}`;
         const candidates = roster.filter(
@@ -216,7 +225,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
             !skipSet.has(studentDedupKey(keyOf(s.id), today)) &&
             !isStudentSnoozed(studentSnoozes, keyOf(s.id), nowMs),
         );
-        const due = pickDueStudents(candidates, obsProvider, rr, cursor, now);
+        const due = pickDueStudents(candidates, obsProvider, rr, cursor, now, calendar);
         subjectItems = due.map((r) => ({
           key: keyOf(r.student.id),
           studentId: r.student.id,
@@ -257,6 +266,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     tick,
     evidenceRecords,
     threadIdSet,
+    calendar,
   ]);
 
   const saveObservation = async (item: ReminderPromptItem, payload: ReminderSavePayload) => {

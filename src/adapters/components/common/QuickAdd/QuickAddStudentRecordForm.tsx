@@ -77,6 +77,12 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
   const [originClassId, setOriginClassId] = useState<string | null>(focus?.classId ?? null);
   /** 대시보드 칩으로 들어온 학생을 한 번만 미리 골라 둔다. 저장 위치는 여전히 다음 화면에서 고른다. */
   const preselectedRef = useRef(focus?.studentIdentity ?? null);
+  /**
+   * 반 카드의 칸에서 들어왔는가(ADR-135) — 학생과 저장 위치가 이미 정해져 있어 글쓰기로 바로 간다.
+   * ADR-122 결정 2의 유일한 예외다. 저장에 성공하면 목록으로 돌아가지 않고 창을 닫는다.
+   */
+  const directRef = useRef(focus?.direct ?? null);
+  const directModeRef = useRef(focus?.direct != null);
 
   useEffect(() => {
     void loadStudents();
@@ -87,7 +93,7 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
 
   // 단축키로 열면 검색창에 바로 커서를 둔다(명세 "단축키").
   useEffect(() => {
-    if (preselectedRef.current !== null) return;
+    if (preselectedRef.current !== null || directRef.current !== null) return;
     const timer = window.setTimeout(() => searchRef.current?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -135,6 +141,29 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
     preselectedRef.current = null;
     setSelectedIds([wanted]);
     setStep('context');
+  }, [candidates]);
+
+  // 칸에서 들어온 학생 — 명단이 로드된 뒤 (저장 위치, 학생)이 맞는 후보를 찾아 글쓰기로 바로 간다.
+  // 못 찾으면(그 사이 전출 등) 조용히 보통 흐름(학생 찾기)으로 남는다 — 엉뚱한 곳에 저장하지 않는다.
+  useEffect(() => {
+    const wanted = directRef.current;
+    if (wanted === null) return;
+    const kind = wanted.contextKind;
+    const match = candidates.find((c) =>
+      c.contexts.some(
+        (ctx) =>
+          ctx.kind === kind &&
+          ctx.contextId === wanted.contextId &&
+          ctx.studentRef === wanted.studentRef,
+      ),
+    );
+    if (match === undefined) return;
+    directRef.current = null;
+    preselectedRef.current = null;
+    setSelectedIds([match.identity]);
+    setContextKey(`${kind}:${wanted.contextId}`);
+    setStep('compose');
+    window.setTimeout(() => contentRef.current?.focus(), 0);
   }, [candidates]);
 
   const sharedContexts = useMemo(() => sharedQuickRecordContexts(selected), [selected]);
@@ -262,7 +291,7 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
         'success',
       );
 
-      if (closeAfter) {
+      if (closeAfter || directModeRef.current) {
         onClose();
         return;
       }

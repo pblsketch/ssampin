@@ -1,11 +1,14 @@
 import { create } from 'zustand';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import { CheerPin } from '@adapters/components/Dashboard/ObservationCheer/CheerPin';
 
 interface ToastData {
   id: string;
   message: string;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'cheer';
   action?: { label: string; onClick: () => void };
+  /** 'cheer' 토스트의 핀 동작(ADR-135) — 첫 기록은 손 흔들기, 한 바퀴는 만세. */
+  pinState?: 'wave' | 'celebrate';
 }
 
 interface ToastState {
@@ -28,6 +31,11 @@ interface ToastState {
     durationMs?: number,
   ) => void;
   dismiss: (id: string) => void;
+  /**
+   * 관찰 기록 응원(ADR-135) — 핀이 짧게 말을 건다. 단추 없이 4초.
+   * 일반 `show` 의 인자 순서를 바꾸지 않으려고 따로 둔다.
+   */
+  showCheer: (message: string, pinState: 'wave' | 'celebrate') => void;
 }
 
 const dismissTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -46,6 +54,17 @@ export const useToastStore = create<ToastState>((set) => ({
         toasts: state.toasts.filter((t) => t.id !== id),
       }));
     }, ms);
+    dismissTimers.set(id, timer);
+  },
+  showCheer: (message, pinState) => {
+    const id = generateUUID();
+    set((state) => ({
+      toasts: [...state.toasts, { id, message, type: 'cheer', pinState }],
+    }));
+    const timer = setTimeout(() => {
+      dismissTimers.delete(id);
+      set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
+    }, 4000);
     dismissTimers.set(id, timer);
   },
   dismiss: (id) => {
@@ -95,11 +114,15 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
         isInfo ? 'bg-slate-50 border-slate-300' : 'bg-sp-card border-sp-border'
       }`}
     >
-      <span
-        className={`material-symbols-outlined ${COLOR_MAP[toast.type]} text-white p-1 rounded-lg text-sm`}
-      >
-        {ICON_MAP[toast.type]}
-      </span>
+      {toast.type === 'cheer' ? (
+        <CheerPin state={toast.pinState ?? 'wave'} size={28} />
+      ) : (
+        <span
+          className={`material-symbols-outlined ${COLOR_MAP[toast.type]} text-white p-1 rounded-lg text-sm`}
+        >
+          {ICON_MAP[toast.type]}
+        </span>
+      )}
       <span className={`text-sm flex-1 ${isInfo ? 'text-slate-900' : 'text-sp-text'}`}>
         {toast.message}
       </span>

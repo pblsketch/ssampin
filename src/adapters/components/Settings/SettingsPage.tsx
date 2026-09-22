@@ -5,6 +5,7 @@ import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { Settings } from '@domain/entities/Settings';
 import { diffSettingsKeys } from '@domain/services/diffSettingsKeys';
+import { withLatestExclusions } from '@domain/rules/reminderExclusion';
 import { SettingsLayout } from './SettingsLayout';
 
 export type SettingsTabId =
@@ -81,12 +82,20 @@ export function SettingsPage({ initialTab }: SettingsPageProps = {}) {
     setSaving(true);
     // ★저장하기 **전에** 견준다 — update() 뒤에는 스토어 값이 이미 바뀌어 차이가 사라진다.
     //   담는 것은 달라진 **항목 이름**뿐이고 값은 담지 않는다(diffSettingsKeys 주석 참조).
+    // ADR-135 — '당분간 빼기' 목록은 누르는 즉시 저장되는 값이라 초안의 옛 목록으로 덮지 않는다.
+    const toSave: Settings =
+      draft.recordReminder === undefined
+        ? draft
+        : {
+            ...draft,
+            recordReminder: withLatestExclusions(draft.recordReminder, settings.recordReminder),
+          };
     const changedKeys = diffSettingsKeys(
       settings as unknown as Record<string, unknown>,
-      draft as unknown as Record<string, unknown>,
+      toSave as unknown as Record<string, unknown>,
     );
     try {
-      await update(draft);
+      await update(toSave);
       showToast('설정이 저장되었습니다.', 'success');
       track('settings_change', { section: activeTab, key: 'save', keys: changedKeys });
 

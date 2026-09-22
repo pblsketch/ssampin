@@ -95,7 +95,7 @@ const RESTORE_LABEL_BY_REASON: Readonly<Record<LessonDayExclusionReason, string>
  * `termEndFromSchedule`이 학기 종료일 후보로 올려, 이 파일 머리말이 피하려던 자기 모순이
  * 그대로 되살아난다. 그래서 위치가 아니라 **포함**으로 본다.
  */
-function isCeremonyEvent(title: string): boolean {
+export function isCeremonyEvent(title: string): boolean {
   const n = title.replace(/\s+/g, '');
   return n.includes('방학식') || n.includes('종업식');
 }

@@ -11,8 +11,25 @@ import type { TimetableInitialIntent } from '@adapters/components/Timetable/Time
  */
 export type StudentRecordIntent =
   | { readonly kind: 'quick-record'; readonly classId: string | null }
+  | {
+      /** 반 카드의 칸에서 바로 쓰기(ADR-135) — 학생·저장 위치가 정해진 채 글쓰기로 연다. */
+      readonly kind: 'quick-record-direct';
+      readonly contextKind: 'homeroom' | 'teaching';
+      readonly contextId: string;
+      readonly studentRef: string;
+    }
   | { readonly kind: 'homeroom-attendance' }
   | { readonly kind: 'class-attendance'; readonly classId: string };
+
+/** 칸에서 바로 쓰기(ADR-135) 이동 문자열 — 해석 규칙과 한 파일에 둔다(왕복이 어긋나지 않게). */
+export function buildQuickRecordDirectTarget(target: {
+  readonly contextKind: 'homeroom' | 'teaching';
+  readonly contextId: string;
+  readonly studentRef: string;
+}): string {
+  const enc = encodeURIComponent;
+  return `dashboard#quick-student-record-direct:${target.contextKind}:${enc(target.contextId)}:${enc(target.studentRef)}`;
+}
 
 export interface NavigationTarget {
   readonly page: PageId;
@@ -53,6 +70,40 @@ export function parseNavigationTarget(raw: string): NavigationTarget {
   }
   if (base === 'timetable' && fragment === 'sync-review') {
     return { page: 'timetable', ...EMPTY, timetableIntent: 'sync-review' };
+  }
+
+  // 'dashboard#quick-student-record-direct:<homeroom|teaching>:<맥락 id>:<학생 ref>' — 칸에서 바로 쓰기.
+  // ★아래 'quick-student-record' 접두 검사보다 먼저 봐야 한다(그 접두로도 시작하기 때문).
+  // 잘못된 모양이면 의도를 만들지 않는다 — 엉뚱한 학생 기록 창을 여는 것보다 대시보드가 낫다.
+  if (base === 'dashboard' && fragment.startsWith('quick-student-record-direct:')) {
+    const parts = fragment.slice('quick-student-record-direct:'.length).split(':');
+    const [kind, contextId, studentRef] = parts.map((p) => {
+      try {
+        return decodeURIComponent(p);
+      } catch {
+        return '';
+      }
+    });
+    if (
+      parts.length === 3 &&
+      (kind === 'homeroom' || kind === 'teaching') &&
+      contextId !== undefined &&
+      contextId.length > 0 &&
+      studentRef !== undefined &&
+      studentRef.length > 0
+    ) {
+      return {
+        page: 'dashboard',
+        ...EMPTY,
+        studentRecordIntent: {
+          kind: 'quick-record-direct',
+          contextKind: kind,
+          contextId,
+          studentRef,
+        },
+      };
+    }
+    return { page: 'dashboard', ...EMPTY };
   }
 
   // 'dashboard#quick-student-record' / '...:<수업반 id>' — 빠른 학생 기록 창 열기.

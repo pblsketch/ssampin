@@ -53,10 +53,33 @@ export interface ReminderSettings {
   readonly osToastEnabled: boolean;
   /** 알림 대상 (담임반/수업반). */
   readonly targets: readonly ReminderTarget[];
-  /** 알림에서 제외할 학생 id. */
+  /**
+   * 알림에서 제외할 학생 id — 기간 없는 옛 형식. 설정 화면이 없어 사실상 늘 비어 있었다.
+   * 값이 있으면 기간 없는 '당분간 빼기'로 읽는다. 새 빼기는 `exclusions` 에 쓴다.
+   */
   readonly excludedStudentIds: readonly string[];
+  /**
+   * '당분간 빼기' 목록(ADR-135). 한 바퀴와 기록 알림 둘 다에서 빠진다.
+   * 없으면 빈 목록으로 본다(옛 설정 호환).
+   */
+  readonly exclusions?: readonly ReminderExclusion[];
+  /**
+   * 관찰 기록 응원·잔디 켜기(ADR-135). 없으면 **켜짐**으로 본다 — 알림(`enabled`)과 따로다.
+   */
+  readonly cheerEnabled?: boolean;
   /** 더 자주 챙길 관심 학생 id (공백 임계를 절반으로 낮춰 우선 노출). */
   readonly focusedStudentIds: readonly string[];
+}
+
+/**
+ * '당분간 빼기' 한 건. `key` 형식이 반 범위를 정한다 — 누른 카드의 반에서만 빠진다.
+ * - 담임반: `Student.id`
+ * - 수업반: `subject:${classId}:${studentKey}`
+ */
+export interface ReminderExclusion {
+  readonly key: string;
+  /** 이 날짜(YYYY-MM-DD, 로컬)까지 빠져 있다. 이 날이 지나면 저절로 다시 들어온다. */
+  readonly until: string;
 }
 
 /** 리마인더 대상이 되는 학생의 최소 형태. */
@@ -126,7 +149,19 @@ export const DEFAULT_REMINDER_SETTINGS: ReminderSettings = {
   targets: ['homeroom'],
   excludedStudentIds: [],
   focusedStudentIds: [],
+  exclusions: [],
+  cheerEnabled: true, // ADR-135 — 응원·잔디는 처음부터 켜짐(알림과 따로)
 };
+
+/**
+ * 응원·잔디가 켜져 있는가 — 값이 없는 옛 설정도 **켜짐**으로 본다(ADR-135).
+ * 알림 사용(`enabled`)과는 상관없다.
+ */
+export function isObservationCheerEnabled(
+  rr: Pick<ReminderSettings, 'cheerEnabled'> | undefined,
+): boolean {
+  return rr?.cheerEnabled !== false;
+}
 
 /**
  * 강도 프리셋 → 설정 오버라이드. 직접설정('custom')은 오버라이드 없음.

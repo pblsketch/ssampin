@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { DashboardConfig, WidgetInstance } from './types';
 import { WIDGET_DEFINITIONS } from './registry';
 import { WIDGET_PRESETS, getPresetKey } from './presets';
+import { applyStudentRecordsOffer } from './studentRecordsOffer';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 
 const STORAGE_KEY = 'ssampin-dashboard-config';
@@ -31,9 +32,7 @@ function createConfigFromPreset(widgetIds: readonly string[]): DashboardConfig {
   const widgets: WidgetInstance[] = WIDGET_DEFINITIONS.map((def, idx) => ({
     widgetId: def.id,
     visible: widgetIds.includes(def.id),
-    order: widgetIds.includes(def.id)
-      ? widgetIds.indexOf(def.id)
-      : 100 + idx,
+    order: widgetIds.includes(def.id) ? widgetIds.indexOf(def.id) : 100 + idx,
     colSpan: Math.min(def.defaultSize.w, 4) as 1 | 2 | 3 | 4,
     rowSpan: def.defaultSize.h,
   }));
@@ -41,6 +40,9 @@ function createConfigFromPreset(widgetIds: readonly string[]): DashboardConfig {
   return {
     widgets,
     lastModified: new Date().toISOString(),
+    // 기본 구성에는 이미 '학생 빠른 기록' 카드가 있다 — [기본 구성으로 되돌리기] 뒤 선생님이 카드를
+    // 빼도 다음 실행에서 다시 붙이지 않게 '한 번 붙였다' 표시를 함께 둔다(ADR-135 결정 12).
+    studentRecordsOffered: true,
   };
 }
 
@@ -68,11 +70,26 @@ interface DashboardConfigState {
 
   /** visible 위젯 목록 (order 순) */
   getVisibleWidgets: () => WidgetInstance[];
+
+  /**
+   * '학생 빠른 기록' 카드를 한 번 붙여 드린다(ADR-135). 명렬을 다 불러온 뒤에만 부를 것 —
+   * 불러오기 전에 부르면 명렬이 없다고 잘못 판단해 표시만 남기고 끝난다.
+   */
+  offerStudentRecordsCardOnce: (hasRoster: boolean) => void;
 }
 
 export const useDashboardConfig = create<DashboardConfigState>((set, get) => ({
   config: null,
   loaded: false,
+
+  offerStudentRecordsCardOnce: (hasRoster) => {
+    const { config } = get();
+    if (!config) return;
+    const { config: next, changed } = applyStudentRecordsOffer(config, hasRoster);
+    if (!changed) return;
+    saveToStorage(next);
+    set({ config: next });
+  },
 
   load: () => {
     if (get().loaded) return;
@@ -102,7 +119,7 @@ export const useDashboardConfig = create<DashboardConfigState>((set, get) => ({
         const def = WIDGET_DEFINITIONS.find((d) => d.id === w.widgetId);
         return {
           ...w,
-          colSpan: w.colSpan || (def ? Math.min(def.defaultSize.w, 4) : 1) as 1 | 2 | 3 | 4,
+          colSpan: w.colSpan || ((def ? Math.min(def.defaultSize.w, 4) : 1) as 1 | 2 | 3 | 4),
           rowSpan: w.rowSpan || (def?.defaultSize.h ?? 3),
         };
       });
@@ -218,8 +235,6 @@ export const useDashboardConfig = create<DashboardConfigState>((set, get) => ({
     const { config } = get();
     if (!config) return [];
 
-    return [...config.widgets]
-      .filter((w) => w.visible)
-      .sort((a, b) => a.order - b.order);
+    return [...config.widgets].filter((w) => w.visible).sort((a, b) => a.order - b.order);
   },
 }));

@@ -61,6 +61,7 @@ import type { IRecordMapProposalRepository } from '@domain/repositories/IRecordM
 import type { IRecordMapApplicationPort } from '@domain/ports/IRecordMapApplicationPort';
 import type { IRecordAiDraftRepository } from '@domain/repositories/IRecordAiDraftRepository';
 import type { IReminderFireRepository } from '@domain/repositories/IReminderFireRepository';
+import type { ILapMarkRepository } from '@domain/repositories/ILapMarkRepository';
 import type { IFormTemplateRepository } from '@domain/repositories/IFormTemplateRepository';
 import type { INotebookRepository } from '@domain/repositories/INotebookRepository';
 import type { IWallBoardRepository } from '@domain/repositories/IWallBoardRepository';
@@ -148,6 +149,7 @@ import { RecoverRecordMapApplications } from '@usecases/recordMap/RecoverRecordM
 import { setDataOperationRecoveryBarrier } from '@usecases/shared/dataOperationMutex';
 import { JsonRecordAiDraftRepository } from '@adapters/repositories/JsonRecordAiDraftRepository';
 import { JsonReminderFireRepository } from '@adapters/repositories/JsonReminderFireRepository';
+import { JsonLapMarkRepository } from '@adapters/repositories/JsonLapMarkRepository';
 import { JsonFormTemplateRepository } from '@adapters/repositories/JsonFormTemplateRepository';
 import { JsonNotebookRepository } from '@adapters/repositories/JsonNotebookRepository';
 import { JsonWallBoardRepository } from '@adapters/repositories/JsonWallBoardRepository';
@@ -344,6 +346,9 @@ export async function recoverRecordMapApplicationsAtStartup(): Promise<void> {
 export const reminderFireRepository: IReminderFireRepository = new JsonReminderFireRepository(
   storage,
 );
+
+// === 관찰 기록 '한 바퀴' 끝 지점 (ADR-135, 동기화 병합형 'observation-laps') ===
+export const lapMarkRepository: ILapMarkRepository = new JsonLapMarkRepository(storage);
 
 export const noteRepository: INotebookRepository = new JsonNotebookRepository(storage);
 

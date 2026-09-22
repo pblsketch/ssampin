@@ -11,16 +11,43 @@
  * `applyStudentRecordIntent` 가 푼다. 규칙은 `parseNavigationTarget` 한 곳에만 있다.
  */
 import { useDesktopWidgetContextStore } from '@adapters/stores/useDesktopWidgetContextStore';
-import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
+import { useQuickAddStore, type QuickRecordDirectTarget } from '@adapters/stores/useQuickAddStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { requestHomeroomTab } from '../Homeroom/homeroomTabIntent';
 import { requestClassManagementTab } from '../ClassManagement/classManagementTabIntent';
-import type { StudentRecordIntent } from '@adapters/utils/navigationTarget';
+import {
+  buildQuickRecordDirectTarget,
+  type StudentRecordIntent,
+} from '@adapters/utils/navigationTarget';
 
 /** 빠른 학생 기록 열기 — 수업반에서 시작하면 그 명단으로 좁힌다. */
 export function quickRecordTarget(classId?: string | null): string {
   return classId ? `dashboard#quick-student-record:${classId}` : 'dashboard#quick-student-record';
+}
+
+/** 반 카드의 칸에서 바로 쓰기(ADR-135) — 창을 건너도 같은 상태로 열리게 이동 문자열에 싣는다. */
+export function quickRecordDirectTarget(target: QuickRecordDirectTarget): string {
+  return buildQuickRecordDirectTarget(target);
+}
+
+/**
+ * 칸에서 바로 쓰기. 메인 창이면 빠른 기록 창을 그 자리에서 열고, 바탕화면 위젯 창이면 메인 창을
+ * 띄워 같은 상태로 연다(위젯 창에는 빠른 기록 모달이 없다).
+ */
+export function openQuickRecordDirect(target: QuickRecordDirectTarget): void {
+  if (useDesktopWidgetContextStore.getState().isDesktopWidget) {
+    requestStudentRecordNavigation(quickRecordDirectTarget(target));
+    return;
+  }
+  useQuickAddStore.getState().open('student-record', directFocus(target));
+}
+
+function directFocus(target: QuickRecordDirectTarget) {
+  return {
+    ...(target.contextKind === 'teaching' ? { classId: target.contextId } : {}),
+    direct: target,
+  };
 }
 
 export const HOMEROOM_ATTENDANCE_TARGET = 'homeroom#attendance';
@@ -49,6 +76,17 @@ export function requestStudentRecordNavigation(target: string): void {
  * 저장 규칙은 그 화면이 그대로 갖는다.
  */
 export function applyStudentRecordIntent(intent: StudentRecordIntent): void {
+  if (intent.kind === 'quick-record-direct') {
+    useQuickAddStore.getState().open(
+      'student-record',
+      directFocus({
+        contextKind: intent.contextKind,
+        contextId: intent.contextId,
+        studentRef: intent.studentRef,
+      }),
+    );
+    return;
+  }
   if (intent.kind === 'quick-record') {
     useQuickAddStore
       .getState()
