@@ -29,7 +29,13 @@ interface ToolCard {
   externalUrl?: string;
   /** 'BETA' 등 상태 배지 표시 */
   badge?: string;
-  /** true 이면 릴리즈 빌드에서 그리드에 노출되지 않음 (dev 모드에서만 보임) */
+  /**
+   * true 이면 릴리즈 빌드에서 그리드에 노출되지 않음 (dev 모드에서만 보임).
+   *
+   * ADR-133 에서 **퀴즈·설문·토론과 겹치는 도구**를 내리는 데에도 쓴다.
+   * 지우지 않고 숨기는 이유 — 선생님이 그 도구로 만든 템플릿·지난 결과가 그대로 남아 있고,
+   * 되돌리기가 한 줄이면 되기 때문이다.
+   */
   hidden?: boolean;
 }
 
@@ -43,8 +49,21 @@ export const TOOLS: ToolCard[] = [
   { id: 'tool-coin', emoji: '🪙', name: '동전', description: '앞? 뒤?' },
   { id: 'tool-qrcode', emoji: '🔗', name: 'QR코드', description: '링크를 순식간에 공유' },
   { id: 'tool-work-symbols', emoji: '🤫', name: '활동 기호', description: '수업 모드를 한눈에' },
-  { id: 'tool-poll', emoji: '📊', name: '객관식 설문', description: '의견을 모아봐요' },
-  { id: 'tool-survey', emoji: '📝', name: '주관식 설문', description: '자유롭게 의견을 들어봐요' },
+  // ADR-133: 퀴즈·설문·토론이 같은 일을 하므로 목록에서 내렸다(코드·자료·경로는 그대로).
+  {
+    id: 'tool-poll',
+    emoji: '📊',
+    name: '객관식 설문',
+    description: '의견을 모아봐요',
+    hidden: true,
+  },
+  {
+    id: 'tool-survey',
+    emoji: '📝',
+    name: '주관식 설문',
+    description: '자유롭게 의견을 들어봐요',
+    hidden: true,
+  },
   {
     id: 'tool-multi-survey',
     emoji: '📋',
@@ -68,6 +87,7 @@ export const TOOLS: ToolCard[] = [
     emoji: '☁️',
     name: '워드클라우드 브레인스토밍',
     description: '떠오르는 단어를 모아봐요',
+    hidden: true, // ADR-133
   },
   { id: 'tool-seat-picker', emoji: '🪑', name: '자리 뽑기', description: '내 손으로 뽑는 내 자리' },
   { id: 'tool-grouping', emoji: '👥', name: '모둠 편성기', description: '조건에 맞게 모둠을 편성' },
@@ -82,12 +102,14 @@ export const TOOLS: ToolCard[] = [
     emoji: '📏',
     name: '가치수직선 토론',
     description: '입장을 수직선 위에 표현',
+    hidden: true, // ADR-133
   },
   {
     id: 'tool-traffic-discussion',
     emoji: '🚦',
     name: '신호등 토론',
     description: '찬성·보류·반대 의사 표현',
+    hidden: true, // ADR-133
   },
   { id: 'tool-chalkboard', emoji: '🖍️', name: '칠판', description: '분필로 판서하기' },
   {
@@ -272,22 +294,21 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
   // 프로덕션 빌드에서는 hidden: true 도구는 '전체 보기'에서도 제외.
   const isDev = import.meta.env.DEV;
 
+  /**
+   * 이 앱이 아는 도구 전부(= 목록·정리하기가 함께 쓰는 바탕).
+   *
+   * 내린 도구를 여기 한 곳에서 거른다. 예전에는 `integrated` 라는 id 목록이 이 안에 따로
+   * 박혀 있어서 **목록에서는 사라졌는데 [정리하기]에는 그대로 남아** 있었다(ADR-133).
+   */
+  const catalogTools = useMemo(() => (isDev ? TOOLS : TOOLS.filter((t) => !t.hidden)), [isDev]);
+
   const visibleTools = useMemo(() => {
-    const integrated = new Set([
-      'tool-poll',
-      'tool-survey',
-      'tool-wordcloud',
-      'tool-valueline',
-      'tool-traffic-discussion',
-    ]);
-    const base = (isDev ? TOOLS : TOOLS.filter((t) => !t.hidden)).filter(
-      (t) => !integrated.has(t.id),
-    );
+    const base = catalogTools;
     if (view === 'all') return base;
     const sorted = sortByOrder(base, toolsOrder);
     const hidden = new Set(hiddenTools ?? []);
     return sorted.filter((t) => !hidden.has(t.id));
-  }, [view, toolsOrder, hiddenTools, isDev]);
+  }, [view, toolsOrder, hiddenTools, catalogTools]);
 
   if (openApp) {
     return <MiniAppRunner app={openApp} onBack={() => setOpenApp(null)} isFullscreen={false} />;
@@ -424,7 +445,7 @@ export function ToolsGrid({ onNavigate }: ToolsGridProps) {
 
       {organizing && (
         <ToolsOrganizerModal
-          initialOrder={sortByOrder(TOOLS, toolsOrder).map((t) => t.id)}
+          initialOrder={sortByOrder(catalogTools, toolsOrder).map((t) => t.id)}
           initialHidden={hiddenTools ?? []}
           onClose={() => setOrganizing(false)}
           onSave={async (nextOrder, nextHidden) => {

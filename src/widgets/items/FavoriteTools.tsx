@@ -146,7 +146,8 @@ function FavoriteToolsExpandedEditor({
     .map((id) => getToolDefinition(id))
     .filter((t): t is ToolDefinition => t !== undefined);
 
-  const availableTools = TOOL_DEFINITIONS.filter((t) => !picked.includes(t.id));
+  // ADR-133 으로 내린 도구는 **새로 담을 수 없게** 한다. 이미 담아 둔 것은 그대로 열린다.
+  const availableTools = TOOL_DEFINITIONS.filter((t) => !t.hidden && !picked.includes(t.id));
 
   const moveUp = (index: number) => {
     if (index === 0) return;
@@ -313,7 +314,7 @@ function FavoriteToolPicker({
         className="grid grid-cols-4 gap-1.5 overflow-y-auto"
         style={{ maxHeight: 'calc(100% - 60px)' }}
       >
-        {TOOL_DEFINITIONS.map((tool) => {
+        {TOOL_DEFINITIONS.filter((tool) => !tool.hidden).map((tool) => {
           const isSelected = picked.includes(tool.id);
           return (
             <button

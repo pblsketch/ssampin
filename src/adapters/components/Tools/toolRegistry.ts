@@ -62,6 +62,11 @@ export interface ToolMeta {
   }>;
   /** 넓이 확보가 유리한 도구(점수판·설문 등)는 기본 분할 시 넓은 쪽에 자동 배치 힌트. */
   readonly prefersWide?: boolean;
+  /**
+   * true 이면 **고르는 목록에서 뺀다.** 등록 자체는 남겨 둔다 —
+   * 이미 그 도구를 띄워 둔 분할 화면·별도 창이 빈 칸으로 바뀌지 않게 한다(ADR-133).
+   */
+  readonly hidden?: boolean;
 }
 
 export const TOOL_REGISTRY = {
@@ -96,6 +101,7 @@ export const TOOL_REGISTRY = {
     emoji: '📊',
     component: ToolPoll,
     prefersWide: true,
+    hidden: true, // ADR-133
   },
   'tool-survey': {
     id: 'tool-survey',
@@ -103,6 +109,7 @@ export const TOOL_REGISTRY = {
     emoji: '📝',
     component: ToolSurvey,
     prefersWide: true,
+    hidden: true, // ADR-133
   },
   'tool-multi-survey': {
     id: 'tool-multi-survey',
@@ -117,6 +124,7 @@ export const TOOL_REGISTRY = {
     emoji: '☁️',
     component: ToolWordCloud,
     prefersWide: true,
+    hidden: true, // ADR-133
   },
   'tool-grouping': {
     id: 'tool-grouping',
@@ -131,6 +139,7 @@ export const TOOL_REGISTRY = {
     emoji: '📏',
     component: ToolValueLine,
     prefersWide: true,
+    hidden: true, // ADR-133
   },
   'tool-traffic-discussion': {
     id: 'tool-traffic-discussion',
@@ -138,6 +147,7 @@ export const TOOL_REGISTRY = {
     emoji: '🚦',
     component: ToolTrafficLightDiscussion,
     prefersWide: true,
+    hidden: true, // ADR-133
   },
   'tool-chalkboard': {
     id: 'tool-chalkboard',

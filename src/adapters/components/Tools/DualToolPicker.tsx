@@ -21,7 +21,8 @@ export function DualToolPicker({
   onCloseSlot,
   headerHint,
 }: DualToolPickerProps) {
-  const available = DUAL_TOOL_LIST.filter((t) => !exclude.includes(t.id));
+  // ADR-133 으로 내린 도구는 고르는 목록에서 뺀다. 이미 띄워 둔 것은 그대로 돈다.
+  const available = DUAL_TOOL_LIST.filter((t) => !t.hidden && !exclude.includes(t.id));
 
   return (
     <div className="h-full flex flex-col">

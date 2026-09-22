@@ -6,6 +6,11 @@ export interface ToolDefinition {
   readonly icon: string;
   readonly color: string;
   readonly externalUrl?: string;
+  /**
+   * true 이면 **고르는 목록에서 빼되** `getToolDefinition` 은 그대로 찾아 준다 —
+   * 이미 즐겨찾기에 담아 둔 선생님의 위젯이 어느 날 갑자기 비지 않게 한다(ADR-133).
+   */
+  readonly hidden?: boolean;
 }
 
 export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
@@ -25,9 +30,16 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     name: '워드클라우드',
     icon: '☁️',
     color: 'bg-indigo-500/20 text-indigo-600',
+    hidden: true, // ADR-133
   },
   { id: 'tool-dice', name: '주사위', icon: '🎲', color: 'bg-orange-500/20 text-orange-600' },
-  { id: 'tool-poll', name: '객관식 설문', icon: '📊', color: 'bg-teal-500/20 text-teal-600' },
+  {
+    id: 'tool-poll',
+    name: '객관식 설문',
+    icon: '📊',
+    color: 'bg-teal-500/20 text-teal-600',
+    hidden: true,
+  },
   { id: 'tool-scoreboard', name: '점수판', icon: '📋', color: 'bg-red-500/20 text-red-600' },
   {
     id: 'tool-traffic-light',
@@ -35,7 +47,13 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     icon: '🚦',
     color: 'bg-emerald-500/20 text-emerald-600',
   },
-  { id: 'tool-survey', name: '주관식 설문', icon: '📝', color: 'bg-violet-500/20 text-violet-600' },
+  {
+    id: 'tool-survey',
+    name: '주관식 설문',
+    icon: '📝',
+    color: 'bg-violet-500/20 text-violet-600',
+    hidden: true,
+  },
   {
     id: 'tool-multi-survey',
     name: PARTICIPATION_TOOL_NAME,
@@ -56,12 +74,14 @@ export const TOOL_DEFINITIONS: readonly ToolDefinition[] = [
     name: '가치수직선 토론',
     icon: '📏',
     color: 'bg-lime-500/20 text-lime-600',
+    hidden: true, // ADR-133
   },
   {
     id: 'tool-traffic-discussion',
     name: '신호등 토론',
     icon: '🚦',
     color: 'bg-fuchsia-500/20 text-fuchsia-600',
+    hidden: true, // ADR-133
   },
   { id: 'tool-chalkboard', name: '칠판', icon: '🖍️', color: 'bg-stone-500/20 text-stone-600' },
   {
