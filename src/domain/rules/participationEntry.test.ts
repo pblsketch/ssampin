@@ -57,6 +57,17 @@ describe('학생 입장 주소', () => {
     expect(warning).toContain('데이터');
   });
 
+  it('기다리지 않고 내려간 경우에는 "만들지 못했어요"라고 하지 않는다', () => {
+    const chosen = entryAccessWarning('local', 'chosen');
+    expect(chosen).not.toBeNull();
+    // 아직 만드는 중인데 실패했다고 하면 선생님이 될 일을 포기한 것처럼 읽는다.
+    expect(chosen).not.toContain('만들지 못했어요');
+    expect(chosen).toContain('기다리지 않고');
+    // 한계 설명은 두 경우 모두 같아야 한다.
+    expect(chosen).toContain('같은 Wi-Fi');
+    expect(chosen).toContain('데이터');
+  });
+
   it('인터넷 주소에는 경고를 붙이지 않는다 — 없는 걱정을 만들지 않는다', () => {
     expect(entryAccessWarning('internet')).toBeNull();
     expect(entryAccessWarning('preparing')).toBeNull();

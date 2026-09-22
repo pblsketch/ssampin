@@ -18,6 +18,11 @@ import type { MultiSurveyQuestion } from '@domain/entities/MultiSurvey';
 import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 import { Modal } from '@adapters/components/common/Modal';
 import { IconButton } from '@adapters/components/common/IconButton';
+import {
+  entryAccessWarning,
+  ENTRY_PREPARING_HINT,
+  type EntryAccessKind,
+} from '@domain/rules/participationEntry';
 
 // ─────────────────────────────────────────────────────────
 // 타입 정의
@@ -151,9 +156,27 @@ function StudentInviteModal({
 }: StudentInviteModalProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  /** 선생님이 기다리지 않고 같은 Wi-Fi 주소로 내려가기를 고른 상태 */
+  const [localChosen, setLocalChosen] = useState(false);
 
-  // 인터넷(터널) 연결이 실패해도 같은 Wi-Fi 주소로는 참여할 수 있으므로 QR을 그 주소로 만든다.
-  const qrUrl = displayUrl || localUrl || '';
+  /**
+   * 지금 안내하는 주소의 종류 (ADR-132 와 같은 규칙 — `domain/rules/participationEntry.ts`).
+   *
+   * ⚠️ 예전에는 `displayUrl || localUrl` 이라 **인터넷 주소를 기다리는 동안 같은 Wi-Fi 주소와
+   * 그 QR이 먼저** 떴다. 그 주소는 교사 컴퓨터와 같은 Wi-Fi에 붙은 기기에서만 열리는데,
+   * 선생님은 그걸 모르고 불러 준다. 준비 중에는 **아무 주소도 내놓지 않는다.**
+   */
+  const entryKind: EntryAccessKind =
+    localChosen && localUrl
+      ? 'local'
+      : displayUrl
+        ? 'internet'
+        : !tunnelLoading && localUrl
+          ? 'local'
+          : 'preparing';
+  const qrUrl =
+    entryKind === 'internet' ? displayUrl : entryKind === 'local' ? (localUrl ?? '') : '';
+  const localWarning = entryAccessWarning(entryKind, localChosen ? 'chosen' : 'failed');
 
   // Escape 키로 닫기 (모달이 열려 있고 활성 슬롯일 때만)
   useToolKeydown(
@@ -191,20 +214,28 @@ function StudentInviteModal({
         <div className="flex items-start justify-between mb-4">
           <div>
             <h3 className="text-xl font-bold text-sp-text">학생 초대하기</h3>
-            <p className="text-sm text-sp-muted mt-0.5">QR을 스캔하거나 아래 주소로 접속하세요</p>
+            <p className="text-sm text-sp-muted mt-0.5">
+              {entryKind === 'preparing'
+                ? '주소가 만들어지면 QR과 함께 보여 드릴게요'
+                : 'QR을 스캔하거나 아래 주소로 접속하세요'}
+            </p>
           </div>
           <IconButton icon="close" label="닫기" variant="ghost" size="md" onClick={onClose} />
         </div>
 
-        {/* QR 코드 */}
+        {/* QR 코드 — 준비 중에는 그리지 않는다. 빈 QR·엉뚱한 주소를 찍게 하지 않기 위해서다. */}
         <div className="bg-white rounded-xl p-4 flex items-center justify-center mb-4">
-          {tunnelLoading && !qrUrl ? (
-            <div className="w-[280px] h-[280px] flex items-center justify-center text-gray-500 text-sm">
-              <span className="animate-spin mr-2">⏳</span>
-              QR 준비 중...
-            </div>
-          ) : qrUrl ? (
+          {qrUrl ? (
             <canvas ref={canvasRef} />
+          ) : tunnelLoading ? (
+            <div
+              className="w-[280px] h-[280px] flex flex-col items-center justify-center gap-2 text-gray-500 text-sm text-center px-6"
+              role="status"
+            >
+              <span className="animate-spin">⏳</span>
+              <span className="font-bold">인터넷 참여 주소를 준비하고 있어요</span>
+              <span className="text-xs">{ENTRY_PREPARING_HINT}</span>
+            </div>
           ) : (
             <div className="w-[280px] h-[280px] flex items-center justify-center text-gray-500 text-sm text-center px-4">
               접속 주소를 생성할 수 없습니다.
@@ -214,21 +245,40 @@ function StudentInviteModal({
           )}
         </div>
 
+        {/* 기다리기 싫은 선생님을 위한 길 — 누르면 같은 Wi-Fi 주소로 내려간다(경고와 함께). */}
+        {entryKind === 'preparing' && localUrl && (
+          <button
+            type="button"
+            onClick={() => setLocalChosen(true)}
+            className="mb-4 w-full rounded-lg border border-sp-border px-3 py-2 text-xs text-sp-muted hover:border-sp-accent hover:text-sp-text transition-colors"
+          >
+            기다리지 않고 같은 Wi-Fi 주소로 시작하기
+          </button>
+        )}
+
         {/* 인터넷(터널) 연결 실패 안내 — 실패해도 같은 Wi-Fi 주소로는 참여할 수 있다 */}
         {tunnelError && !displayUrl && (
           <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
             <p className="text-xs text-red-400">{tunnelError}</p>
-            <p className="text-xs text-sp-muted mt-1">
-              {localUrl
-                ? '대신 학생과 같은 Wi-Fi에 연결하면 아래 주소로 참여할 수 있습니다.'
-                : 'Wi-Fi 연결을 확인한 뒤 다시 시작해 주세요.'}
-            </p>
+            {/* 같은 Wi-Fi 안내는 아래 경고가 이미 말한다 — 두 번 적지 않는다. */}
+            {!localWarning && (
+              <p className="text-xs text-sp-muted mt-1">
+                Wi-Fi 연결을 확인한 뒤 다시 시작해 주세요.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* 같은 Wi-Fi 주소의 한계 — 주소를 불러 주기 **전에** 읽어야 하는 문장이다. */}
+        {localWarning && (
+          <div className="mb-4 rounded-lg border border-sp-highlight px-3 py-2" role="alert">
+            <p className="text-xs text-sp-highlight">{localWarning}</p>
           </div>
         )}
 
         {/* 주소 정보 */}
         <div className="space-y-3">
-          {shortUrl && (
+          {entryKind === 'internet' && shortUrl && (
             <div>
               <p className="text-xs text-sp-muted mb-1">짧은 주소</p>
               <div className="flex items-center gap-2 bg-sp-bg border border-sp-border rounded-lg px-3 py-2">
@@ -246,7 +296,7 @@ function StudentInviteModal({
             </div>
           )}
 
-          {fullUrl && fullUrl !== shortUrl && (
+          {entryKind === 'internet' && fullUrl && fullUrl !== shortUrl && (
             <div>
               <p className="text-xs text-sp-muted mb-1">전체 주소</p>
               <div className="flex items-center gap-2 bg-sp-bg border border-sp-border rounded-lg px-3 py-2">
@@ -262,7 +312,7 @@ function StudentInviteModal({
             </div>
           )}
 
-          {!displayUrl && localUrl && (
+          {entryKind === 'local' && localUrl && (
             <div>
               <p className="text-xs text-sp-muted mb-1">같은 Wi-Fi 직접 접속</p>
               <div className="flex items-center gap-2 bg-sp-bg border border-sp-border rounded-lg px-3 py-2">

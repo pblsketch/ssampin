@@ -50,18 +50,35 @@ export function entryAccessLabel(kind: EntryAccessKind): string {
   }
 }
 
+/** 같은 Wi-Fi 주소를 쓰게 된 까닭 */
+export type LocalEntryReason =
+  /** 인터넷 주소를 만들지 못했다 */
+  | 'failed'
+  /** 선생님이 기다리지 않기로 했다 */
+  | 'chosen';
+
 /**
  * 이 주소의 한계를 말해 주는 경고. 없으면 null.
  * 선생님이 주소를 불러 주기 **전에** 읽어야 하는 문장이다.
+ *
+ * 까닭에 따라 첫 문장이 갈린다 — 기다리지 않기로 한 선생님에게 "만들지 못했어요"라고 하면
+ * **되지도 않을 일을 포기한 것처럼** 들린다(사실 아직 만드는 중이다).
  */
-export function entryAccessWarning(kind: EntryAccessKind): string | null {
+export function entryAccessWarning(
+  kind: EntryAccessKind,
+  reason: LocalEntryReason = 'failed',
+): string | null {
+  const limit =
+    '이 주소는 선생님 컴퓨터와 같은 Wi-Fi에 연결한 기기에서만 열려요. 휴대전화 데이터를 쓰는 학생은 들어올 수 없어요.';
   switch (kind) {
     case 'preparing':
       return null;
     case 'internet':
       return null;
     case 'local':
-      return '인터넷 참여 주소를 만들지 못했어요. 이 주소는 선생님 컴퓨터와 같은 Wi-Fi에 연결한 기기에서만 열려요. 휴대전화 데이터를 쓰는 학생은 들어올 수 없어요.';
+      return reason === 'chosen'
+        ? `인터넷 참여 주소를 기다리지 않고 시작했어요. ${limit}`
+        : `인터넷 참여 주소를 만들지 못했어요. ${limit}`;
   }
 }
 

@@ -30,7 +30,7 @@ import type { StudentInteraction } from '@domain/entities/multiSurvey/LiveSessio
 import { buildShareSnapshot } from '../Share/shareSnapshot';
 import { buildPersonalResults } from '@domain/rules/participationRules';
 import type { ParticipationControl } from '@domain/entities/multiSurvey/ParticipationProtocol';
-import type { EntryAccessKind } from '@domain/rules/participationEntry';
+import type { EntryAccessKind, LocalEntryReason } from '@domain/rules/participationEntry';
 
 interface LiveConsoleContainerProps {
   /** 라이브 종료 후 메이커로 복귀 */
@@ -61,6 +61,8 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
    * 인터넷 주소가 준비될 때까지는 `preparing` 이라 학생을 부르지 않는다.
    */
   const [entryKind, setEntryKind] = useState<EntryAccessKind>('preparing');
+  /** 같은 Wi-Fi 주소를 쓰게 된 까닭 — 경고 문장의 첫 줄이 갈린다 */
+  const [entryLocalReason, setEntryLocalReason] = useState<LocalEntryReason>('failed');
   /** 같은 Wi-Fi 주소. 인터넷 주소가 끝내 실패했을 때만 꺼내 쓴다. */
   const localUrlRef = useRef<string | null>(null);
   /** 터널을 기다리는 중에 선생님이 먼저 넘어갔는가 — 뒤늦게 붙어도 덮어쓰지 않는다. */
@@ -83,13 +85,14 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
    * 같은 Wi-Fi 주소로 내려간다 — 인터넷 주소가 실패했거나 선생님이 기다리지 않기로 했을 때.
    * 한 번 내려가면 뒤늦게 터널이 붙어도 주소를 바꾸지 않는다(이미 불러 줬을 수 있다).
    */
-  const switchToLocalEntry = useCallback(() => {
+  const switchToLocalEntry = useCallback((reason: LocalEntryReason) => {
     const local = localUrlRef.current;
     if (!local) return;
     localChosenRef.current = true;
     setEntryUrl(local);
     setEntryCode(null);
     setEntryKind('local');
+    setEntryLocalReason(reason);
   }, []);
 
   // ── 학생 접속 서버 기동/정리 (liveId 단위 — StrictMode 이중 mount 시 stop→재기동으로 안전) ──
@@ -104,6 +107,7 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
     setEntryUrl(null);
     setEntryCode(null);
     setEntryKind('preparing');
+    setEntryLocalReason('failed');
     localUrlRef.current = null;
     localChosenRef.current = false;
     tunnelUrlRef.current = null;
@@ -168,7 +172,7 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
         setEntryKind('internet');
       } catch {
         // 인터넷 주소를 못 만들었다. 이때만 같은 Wi-Fi 주소를 경고와 함께 내놓는다.
-        if (!cancelled && !localChosenRef.current) switchToLocalEntry();
+        if (!cancelled && !localChosenRef.current) switchToLocalEntry('failed');
         return;
       }
 
@@ -586,7 +590,8 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
       entryUrl={entryUrl ?? ''}
       entryCode={entryCode}
       entryKind={entryKind}
-      onUseLocalEntry={localUrlRef.current ? switchToLocalEntry : undefined}
+      entryLocalReason={entryLocalReason}
+      onUseLocalEntry={localUrlRef.current ? () => switchToLocalEntry('chosen') : undefined}
       onChangeEntryCode={handleChangeEntryCode}
       entryCodeError={codeError}
       onAdvance={handleAdvance}

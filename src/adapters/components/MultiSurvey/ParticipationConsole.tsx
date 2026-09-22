@@ -46,6 +46,7 @@ export function ParticipationConsole(
     entryUrl,
     entryCode,
     entryKind = 'internet',
+    entryLocalReason = 'failed',
     onUseLocalEntry,
     onChangeEntryCode,
     entryCodeError,
@@ -151,12 +152,12 @@ export function ParticipationConsole(
                     : 'QR을 찍거나 참여 주소와 코드로 들어오세요.'}{' '}
                 활동 중에는 쌤핀을 켜 두세요.
               </p>
-              {entryAccessWarning(entryKind) && (
+              {entryAccessWarning(entryKind, entryLocalReason) && (
                 <p
                   role="alert"
                   className="mb-4 rounded-xl border border-sp-highlight p-4 text-sp-highlight"
                 >
-                  {entryAccessWarning(entryKind)}
+                  {entryAccessWarning(entryKind, entryLocalReason)}
                 </p>
               )}
               <LobbyView
