@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { GoogleTask, GoogleTaskList } from '@domain/ports/IGoogleTasksPort';
 import type { Todo } from '@domain/entities/Todo';
 import { TODO_LOCAL_ONLY_FIELDS } from '@domain/entities/Todo';
+import { completedAtFromRemote } from '@domain/rules/todoCompletion';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface TasksSyncState {
@@ -433,10 +434,12 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
             if (ghosted) continue;
 
             const newId = generateUUID();
+            const remoteCompletedAt = completedAtFromRemote(remote);
             workMap.set(newId, {
               id: newId,
               text: remote.title,
               completed: remote.status === 'completed',
+              ...(remoteCompletedAt ? { completedAt: remoteCompletedAt } : {}),
               createdAt: stamp(),
               updatedAt: stamp(),
               lastSyncedAt: stamp(),
@@ -458,6 +461,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
                 ...local,
                 text: remote.title,
                 completed: remote.status === 'completed',
+                completedAt: completedAtFromRemote(remote, local),
                 ...(remote.due ? { dueDate: remote.due.substring(0, 10) } : { dueDate: undefined }),
                 ...(remote.notes ? { notes: remote.notes } : {}),
                 lastSyncedAt: stamp(),

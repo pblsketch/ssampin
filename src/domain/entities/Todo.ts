@@ -80,6 +80,14 @@ export interface Todo {
   readonly category?: string;
   readonly recurrence?: TodoRecurrence;
   readonly archivedAt?: string; // ISO 8601 — 아카이브 시각
+  /**
+   * 완료한 시각(ISO 8601) — "이번 주에 끝낸 일"처럼 **언제** 끝냈는지 세려고 둔다.
+   *
+   * 화면·모바일·구글 할 일 동기화·AI 연결 어디서 완료하든 **저장소가 저장할 때 찍는다**
+   * (`stampTodoCompletions`). 완료하는 길마다 챙기게 두면 한 곳은 반드시 빠진다.
+   * 이 칸이 생기기 전에 끝낸 일은 비어 있다 — 언제 끝냈는지 모르니 지어내지 않는다.
+   */
+  readonly completedAt?: string;
   readonly subTasks?: readonly SubTask[];
   readonly sortOrder?: number; // 수동 정렬 순서
 
