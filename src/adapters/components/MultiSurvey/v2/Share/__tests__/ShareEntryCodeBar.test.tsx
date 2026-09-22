@@ -79,6 +79,32 @@ describe('교실 화면 입장 배너', () => {
     expect(screen.getByLabelText(`입장 주소 ${LAN}`)).toBeTruthy();
   });
 
+  it('주소를 준비하는 중에는 빈 주소 칸도 QR도 그리지 않는다', () => {
+    render(<ShareEntryCodeBar entryUrl="" studentCount={0} showQr entryKind="preparing" />);
+    expect(screen.queryByLabelText('학생 입장 QR 코드')).toBeNull();
+    expect(screen.queryByLabelText('입장 주소 ')).toBeNull();
+    expect(toCanvas).not.toHaveBeenCalled();
+    expect(screen.getByRole('status')).toBeTruthy();
+  });
+
+  it('같은 Wi-Fi 주소일 때는 그 한계를 화면에 적는다', () => {
+    render(<ShareEntryCodeBar entryUrl={LAN} studentCount={2} showQr entryKind="local" />);
+    expect(screen.getByLabelText(`입장 주소 ${LAN}`)).toBeTruthy();
+    expect(screen.getByText(/같은 Wi-Fi/)).toBeTruthy();
+  });
+
+  it('인터넷 주소에는 군더더기 안내를 붙이지 않는다', () => {
+    render(
+      <ShareEntryCodeBar
+        entryUrl="https://ssampin.app/s/HAPPY7"
+        studentCount={2}
+        showQr
+        entryKind="internet"
+      />,
+    );
+    expect(screen.queryByText(/같은 Wi-Fi/)).toBeNull();
+  });
+
   it('주소를 잘라 보여 줘도 QR과 읽어 주는 이름에는 원본이 그대로 들어간다', () => {
     const long = `https://example.com/${'a'.repeat(80)}`;
     render(<ShareEntryCodeBar entryUrl={long} studentCount={0} showQr />);

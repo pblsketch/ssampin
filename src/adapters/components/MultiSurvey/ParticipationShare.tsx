@@ -62,11 +62,16 @@ export function ParticipationShare({ snapshot }: { snapshot: ShareSnapshot }) {
         studentCount={total}
         // 대기 화면 본문에 이미 큰 QR이 있다 — 같은 화면에 둘을 두지 않는다.
         showQr={snapshot.phase !== 'lobby'}
+        entryKind={snapshot.entryKind}
       />
       {snapshot.phase === 'lobby' ? (
         <>
           <h1 className="px-8 pt-8 text-center text-5xl font-bold leading-tight">{data.title}</h1>
-          <ShareLobbyScreen entryUrl={snapshot.entryUrl} students={snapshot.students} />
+          <ShareLobbyScreen
+            entryUrl={snapshot.entryUrl}
+            students={snapshot.students}
+            entryKind={snapshot.entryKind}
+          />
         </>
       ) : (
         <div

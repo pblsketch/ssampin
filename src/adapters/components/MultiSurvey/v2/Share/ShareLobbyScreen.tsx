@@ -11,55 +11,92 @@
 import { memo, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
 import type { StudentProfile } from '@domain/entities/multiSurvey/LiveSession';
+import {
+  entryAccessClassroomNote,
+  entryAccessLabel,
+  type EntryAccessKind,
+} from '@domain/rules/participationEntry';
 
 interface ShareLobbyScreenProps {
   /** 학생 입장 URL (QR 인코딩 대상) */
   readonly entryUrl: string;
   readonly students: readonly StudentProfile[];
+  /** 지금 안내하는 주소의 종류 (설계: domain/rules/participationEntry.ts) */
+  readonly entryKind?: EntryAccessKind;
 }
 
-function ShareLobbyScreenImpl({ entryUrl, students }: ShareLobbyScreenProps): JSX.Element {
+function ShareLobbyScreenImpl({
+  entryUrl,
+  students,
+  entryKind = 'internet',
+}: ShareLobbyScreenProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // 주소가 아직 없으면 QR을 그리지 않는다 — 빈 주소를 넘기면 그리기가 실패할 뿐 아니라,
+  // 어쩌다 그려져도 학생은 아무 데도 못 가는 QR을 찍게 된다.
+  const preparing = entryKind === 'preparing' || entryUrl.length === 0;
+  const note = entryAccessClassroomNote(entryKind);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || preparing) return;
     void QRCode.toCanvas(canvas, entryUrl, {
       width: 256,
       margin: 1,
       errorCorrectionLevel: 'M',
       color: { dark: '#000000', light: '#ffffff' },
     });
-  }, [entryUrl]);
+  }, [entryUrl, preparing]);
 
   return (
     <section
       className="flex h-full w-full flex-col items-center gap-12 bg-sp-bg px-16 py-12 text-sp-text"
       aria-label="입장 대기 화면"
     >
-      <div className="flex w-full items-center justify-center gap-16">
-        {/* QR */}
-        <div className="flex flex-col items-center gap-4 rounded-xl bg-sp-card p-8 shadow-sp-md">
-          <canvas ref={canvasRef} width={256} height={256} aria-label="학생 입장 QR 코드" />
-          <span className="font-sp-medium text-sp-text" style={{ fontSize: 24 }}>
-            휴대전화로 QR을 찍어 입장
+      {preparing ? (
+        <div
+          className="flex w-full flex-col items-center justify-center gap-6 rounded-xl bg-sp-card px-16 py-20"
+          role="status"
+          aria-live="polite"
+        >
+          <span className="font-sp-bold text-sp-text" style={{ fontSize: 44 }}>
+            {entryAccessLabel('preparing')}
+          </span>
+          <span className="font-sp-medium text-sp-muted" style={{ fontSize: 30 }}>
+            {note}
           </span>
         </div>
+      ) : (
+        <div className="flex w-full flex-col items-center gap-6">
+          <div className="flex w-full items-center justify-center gap-16">
+            {/* QR */}
+            <div className="flex flex-col items-center gap-4 rounded-xl bg-sp-card p-8 shadow-sp-md">
+              <canvas ref={canvasRef} width={256} height={256} aria-label="학생 입장 QR 코드" />
+              <span className="font-sp-medium text-sp-text" style={{ fontSize: 24 }}>
+                휴대전화로 QR을 찍어 입장
+              </span>
+            </div>
 
-        {/* 입장 URL */}
-        <div className="flex flex-col items-center gap-4">
-          <span className="font-sp-medium text-sp-text" style={{ fontSize: 32 }}>
-            또는 아래 주소로 접속
-          </span>
-          <span
-            className="font-sp-bold text-sp-accent"
-            style={{ fontSize: 36, wordBreak: 'break-all', maxWidth: 560, textAlign: 'center' }}
-            aria-label={`입장 주소 ${entryUrl}`}
-          >
-            {entryUrl}
-          </span>
+            {/* 입장 URL */}
+            <div className="flex flex-col items-center gap-4">
+              <span className="font-sp-medium text-sp-text" style={{ fontSize: 32 }}>
+                또는 아래 주소로 접속
+              </span>
+              <span
+                className="font-sp-bold text-sp-accent"
+                style={{ fontSize: 36, wordBreak: 'break-all', maxWidth: 560, textAlign: 'center' }}
+                aria-label={`입장 주소 ${entryUrl}`}
+              >
+                {entryUrl}
+              </span>
+            </div>
+          </div>
+          {note && (
+            <span className="font-sp-semibold text-sp-warning" style={{ fontSize: 28 }}>
+              {note}
+            </span>
+          )}
         </div>
-      </div>
+      )}
 
       {/* 학생 아바타 그리드 */}
       <div className="flex w-full flex-1 flex-col items-center gap-6">

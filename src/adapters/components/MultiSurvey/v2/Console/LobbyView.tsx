@@ -16,6 +16,7 @@ import QRCode from 'qrcode';
 import type { StudentProfile } from '@domain/entities/multiSurvey/LiveSession';
 import { StudentAvatarGrid } from './StudentAvatarGrid';
 import { CopyLinkButton } from '@adapters/components/Tools/CopyLinkButton';
+import { entryAccessLabel, type EntryAccessKind } from '@domain/rules/participationEntry';
 
 interface LobbyViewProps {
   readonly entryUrl: string;
@@ -28,6 +29,10 @@ interface LobbyViewProps {
   readonly students: readonly StudentProfile[];
   /** DN-03: 최근 wave 보낸 학생 ID 집합 (pulse 표시용) */
   readonly recentWaveStudentIds?: ReadonlySet<string>;
+  /** 지금 안내하는 주소의 종류 (설계: domain/rules/participationEntry.ts) */
+  readonly entryKind?: EntryAccessKind;
+  /** 기다리지 않고 같은 Wi-Fi 주소로 내려간다 */
+  readonly onUseLocalEntry?: () => void;
 }
 
 function LobbyViewImpl({
@@ -37,6 +42,8 @@ function LobbyViewImpl({
   entryCodeError = null,
   students,
   recentWaveStudentIds,
+  entryKind = 'internet',
+  onUseLocalEntry,
 }: LobbyViewProps): JSX.Element {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -59,6 +66,11 @@ function LobbyViewImpl({
 
   useEffect(() => {
     let cancelled = false;
+    // 주소가 아직 없으면(준비 중) QR을 만들지 않는다 — 빈 QR은 찍으면 아무 데도 안 간다.
+    if (!entryUrl) {
+      setQrDataUrl(null);
+      return;
+    }
     QRCode.toDataURL(entryUrl, { width: 240, margin: 1 })
       .then((url) => {
         if (!cancelled) setQrDataUrl(url);
@@ -78,27 +90,58 @@ function LobbyViewImpl({
         aria-label="입장 안내"
       >
         <span className="font-sp-bold text-sp-text" style={{ fontSize: 32 }}>
-          학생 입장 대기 중
+          {entryAccessLabel(entryKind)}
         </span>
-        <div
-          className="flex h-[280px] w-[280px] items-center justify-center rounded-xl border border-sp-border bg-sp-card"
-          role="img"
-          aria-label="입장 QR 코드"
-        >
-          {qrDataUrl ? (
-            <img src={qrDataUrl} alt="입장 QR 코드" width={240} height={240} />
-          ) : (
-            <canvas ref={canvasRef} width={240} height={240} aria-hidden="true" />
-          )}
-        </div>
-        <div
-          className="w-full break-all rounded-lg border border-sp-border bg-sp-card px-4 py-3 text-center font-sp-medium text-sp-accent"
-          style={{ fontSize: 20 }}
-          aria-label="입장 주소"
-        >
-          {entryUrl}
-        </div>
-        <CopyLinkButton url={entryUrl} ariaLabel="학생 참여 링크 복사" />
+
+        {entryKind === 'preparing' ? (
+          /* 아직 주소가 없다. 빈 QR·빈 주소 칸을 보여 주면 선생님이 그걸 불러 준다. */
+          <div
+            className="flex h-[280px] w-[280px] flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-sp-border px-6 text-center"
+            role="status"
+            aria-live="polite"
+          >
+            <div
+              className="h-8 w-8 rounded-full border-2 border-sp-border border-t-sp-accent animate-spin motion-reduce:animate-none"
+              aria-hidden="true"
+            />
+            <span className="font-sp-medium text-sp-muted" style={{ fontSize: 16 }}>
+              주소가 만들어지면 QR이 나타나요
+            </span>
+          </div>
+        ) : (
+          <>
+            <div
+              className="flex h-[280px] w-[280px] items-center justify-center rounded-xl border border-sp-border bg-sp-card"
+              role="img"
+              aria-label="입장 QR 코드"
+            >
+              {qrDataUrl ? (
+                <img src={qrDataUrl} alt="입장 QR 코드" width={240} height={240} />
+              ) : (
+                <canvas ref={canvasRef} width={240} height={240} aria-hidden="true" />
+              )}
+            </div>
+            <div
+              className="w-full break-all rounded-lg border border-sp-border bg-sp-card px-4 py-3 text-center font-sp-medium text-sp-accent"
+              style={{ fontSize: 20 }}
+              aria-label="입장 주소"
+            >
+              {entryUrl}
+            </div>
+            <CopyLinkButton url={entryUrl} ariaLabel="학생 참여 링크 복사" />
+          </>
+        )}
+
+        {entryKind === 'preparing' && onUseLocalEntry && (
+          <button
+            type="button"
+            onClick={onUseLocalEntry}
+            className="rounded-lg border border-sp-border px-4 py-2 font-sp-medium text-sp-muted hover:border-sp-accent hover:text-sp-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sp-accent"
+            style={{ fontSize: 15 }}
+          >
+            기다리지 않고 같은 Wi-Fi 주소로 시작하기
+          </button>
+        )}
 
         {entryCode !== null && entryCode.length > 0 && (
           <div className="flex w-full flex-col items-center gap-2">

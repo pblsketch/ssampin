@@ -30,6 +30,7 @@ import type { StudentInteraction } from '@domain/entities/multiSurvey/LiveSessio
 import { buildShareSnapshot } from '../Share/shareSnapshot';
 import { buildPersonalResults } from '@domain/rules/participationRules';
 import type { ParticipationControl } from '@domain/entities/multiSurvey/ParticipationProtocol';
+import type { EntryAccessKind } from '@domain/rules/participationEntry';
 
 interface LiveConsoleContainerProps {
   /** 라이브 종료 후 메이커로 복귀 */
@@ -55,6 +56,15 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   const [entryUrl, setEntryUrl] = useState<string | null>(null);
   /** 짧은 입장 코드. 발급 실패 시 null — 그때는 주소만 안내한다. */
   const [entryCode, setEntryCode] = useState<string | null>(null);
+  /**
+   * 지금 어떤 주소를 안내하고 있는가 (설계: domain/rules/participationEntry.ts).
+   * 인터넷 주소가 준비될 때까지는 `preparing` 이라 학생을 부르지 않는다.
+   */
+  const [entryKind, setEntryKind] = useState<EntryAccessKind>('preparing');
+  /** 같은 Wi-Fi 주소. 인터넷 주소가 끝내 실패했을 때만 꺼내 쓴다. */
+  const localUrlRef = useRef<string | null>(null);
+  /** 터널을 기다리는 중에 선생님이 먼저 넘어갔는가 — 뒤늦게 붙어도 덮어쓰지 않는다. */
+  const localChosenRef = useRef(false);
   /** 코드 변경에 필요한 원본 터널 주소 */
   const tunnelUrlRef = useRef<string | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
@@ -69,6 +79,19 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   const surveyRef = useRef(survey);
   surveyRef.current = survey;
 
+  /**
+   * 같은 Wi-Fi 주소로 내려간다 — 인터넷 주소가 실패했거나 선생님이 기다리지 않기로 했을 때.
+   * 한 번 내려가면 뒤늦게 터널이 붙어도 주소를 바꾸지 않는다(이미 불러 줬을 수 있다).
+   */
+  const switchToLocalEntry = useCallback(() => {
+    const local = localUrlRef.current;
+    if (!local) return;
+    localChosenRef.current = true;
+    setEntryUrl(local);
+    setEntryCode(null);
+    setEntryKind('local');
+  }, []);
+
   // ── 학생 접속 서버 기동/정리 (liveId 단위 — StrictMode 이중 mount 시 stop→재기동으로 안전) ──
   useEffect(() => {
     if (!liveId) return;
@@ -80,6 +103,9 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
     setErrorMessage(null);
     setEntryUrl(null);
     setEntryCode(null);
+    setEntryKind('preparing');
+    localUrlRef.current = null;
+    localChosenRef.current = false;
     tunnelUrlRef.current = null;
 
     const boot = async (): Promise<void> => {
@@ -112,7 +138,10 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
           setErrorMessage('Wi-Fi에 연결되어 있지 않습니다. 학생들과 같은 네트워크에 연결해주세요.');
           return;
         }
-        setEntryUrl(`http://${info.localIPs[0]}:${info.port}`);
+        // ⚠️ 같은 Wi-Fi 주소를 **바로 띄우지 않는다.** 30명이 한 Wi-Fi에 붙어 있을 때만
+        // 쓸모가 있어서, 먼저 보여 주면 선생님이 되지도 않을 주소를 불러 준다.
+        // 인터넷 주소가 끝내 실패했을 때만 꺼낸다(`switchToLocalEntry`).
+        localUrlRef.current = `http://${info.localIPs[0]}:${info.port}`;
         setStatus('ready');
       } catch {
         if (!cancelled) {
@@ -122,23 +151,38 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
         return;
       }
 
-      // 터널 + 짧은 주소 — 베스트에포트 (실패해도 로컬 Wi-Fi URL로 계속)
+      // ① 인터넷 참여 주소(터널). 이것이 **정식 경로**다.
+      let tunnelUrl: string;
       try {
         const available = await window.electronAPI?.multiSurveyTunnelAvailable?.();
         if (!available) await window.electronAPI?.multiSurveyTunnelInstall?.();
         const result = await window.electronAPI?.multiSurveyTunnelStart?.();
-        if (result && !cancelled) {
-          setEntryUrl(result.tunnelUrl);
-          tunnelUrlRef.current = result.tunnelUrl;
-          const session = await clientRef.current.registerSession(result.tunnelUrl);
-          if (session && !cancelled) {
-            setEntryUrl(session.shortUrl);
-            // 코드를 따로 보관한다 — 대기실·교실 화면에서 주소와 분리해 크게 보여준다.
-            setEntryCode(session.code);
-          }
+        if (!result) throw new Error('터널 주소를 받지 못했습니다.');
+        if (cancelled) return;
+        // 선생님이 기다리지 않고 같은 Wi-Fi 로 이미 시작했으면 주소를 바꾸지 않는다 —
+        // 이미 불러 준 주소가 화면에서 갈아치워지면 학생이 헷갈린다.
+        if (localChosenRef.current) return;
+        tunnelUrl = result.tunnelUrl;
+        tunnelUrlRef.current = result.tunnelUrl;
+        setEntryUrl(result.tunnelUrl);
+        setEntryKind('internet');
+      } catch {
+        // 인터넷 주소를 못 만들었다. 이때만 같은 Wi-Fi 주소를 경고와 함께 내놓는다.
+        if (!cancelled && !localChosenRef.current) switchToLocalEntry();
+        return;
+      }
+
+      // ② 짧은 주소·코드는 **덤**이다. 여기서 실패해도 터널 주소로 수업은 열린다 —
+      //    같은 Wi-Fi 주소로 내려가면 오히려 못 들어오는 학생이 생긴다.
+      try {
+        const session = await clientRef.current.registerSession(tunnelUrl);
+        if (session && !cancelled && !localChosenRef.current) {
+          setEntryUrl(session.shortUrl);
+          // 코드를 따로 보관한다 — 대기실·교실 화면에서 주소와 분리해 크게 보여준다.
+          setEntryCode(session.code);
         }
       } catch {
-        // 로컬 URL 폴백 유지 — 별도 안내 불필요 (QR이 로컬 URL을 가리킴)
+        /* 터널 주소를 그대로 안내한다 */
       }
     };
     void boot();
@@ -148,7 +192,7 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
       // liveId 교체("다시 하기")·언마운트 양쪽 모두 서버 정리 (중복 호출 안전 — main이 세션 부재 시 no-op)
       void window.electronAPI?.stopLiveMultiSurvey?.();
     };
-  }, [liveId]);
+  }, [liveId, switchToLocalEntry]);
 
   // ── IPC 이벤트 → store 동기화 ──
   useEffect(() => {
@@ -402,10 +446,12 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
   const surveyForSnapshot = useMultiSurveyV2Store(selectActiveLiveSurvey);
   const entryUrlRef = useRef<string>('');
   const entryCodeRef = useRef<string | null>(null);
-  // entryUrl/entryCode state를 ref로 동기화 (effect 의존성 없이 최신값 참조)
+  const entryKindRef = useRef<EntryAccessKind>('preparing');
+  // entryUrl/entryCode/entryKind state를 ref로 동기화 (effect 의존성 없이 최신값 참조)
   useEffect(() => {
     entryUrlRef.current = entryUrl ?? '';
     entryCodeRef.current = entryCode;
+    entryKindRef.current = entryKind;
   });
   useEffect(() => {
     if (!liveSessionForSnapshot || !surveyForSnapshot) return;
@@ -414,9 +460,12 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
       surveyForSnapshot,
       entryUrlRef.current,
       entryCodeRef.current,
+      entryKindRef.current,
     );
     window.electronAPI?.sendMultiSurveyShareSnapshot?.(snapshot);
-  }, [liveSessionForSnapshot, surveyForSnapshot, entryCode, entryUrl]);
+    // entryKind 도 의존성에 넣는다 — 주소가 준비 중에서 인터넷으로 바뀔 때
+    // 주소 문자열만 보고 있으면 교실 화면이 '준비 중'에 멈춘다.
+  }, [liveSessionForSnapshot, surveyForSnapshot, entryCode, entryUrl, entryKind]);
 
   // ── 작업 1: [교실 화면 열기] 버튼 핸들러 ──
   // 창을 연 직후 지금 상태를 한 번 더 보낸다 — 대기 화면에서 열면
@@ -429,7 +478,13 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
     const active = live ? state.sessions.find((s) => s.id === live.surveyId) : undefined;
     if (!live || !active) return;
     window.electronAPI?.sendMultiSurveyShareSnapshot?.(
-      buildShareSnapshot(live, active, entryUrlRef.current, entryCodeRef.current),
+      buildShareSnapshot(
+        live,
+        active,
+        entryUrlRef.current,
+        entryCodeRef.current,
+        entryKindRef.current,
+      ),
     );
   }, []);
 
@@ -530,6 +585,8 @@ export function LiveConsoleContainer({ onExit }: LiveConsoleContainerProps): JSX
       }}
       entryUrl={entryUrl ?? ''}
       entryCode={entryCode}
+      entryKind={entryKind}
+      onUseLocalEntry={localUrlRef.current ? switchToLocalEntry : undefined}
       onChangeEntryCode={handleChangeEntryCode}
       entryCodeError={codeError}
       onAdvance={handleAdvance}

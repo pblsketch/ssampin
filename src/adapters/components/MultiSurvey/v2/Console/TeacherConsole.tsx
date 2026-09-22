@@ -43,6 +43,10 @@ export interface TeacherConsoleProps {
   readonly entryUrl: string;
   /** 짧은 입장 코드 (없으면 코드 칸을 숨긴다) */
   readonly entryCode?: string | null;
+  /** 지금 안내하는 주소의 종류 — 준비 중 / 인터넷 / 같은 Wi-Fi */
+  readonly entryKind?: import('@domain/rules/participationEntry').EntryAccessKind;
+  /** 기다리지 않고 같은 Wi-Fi 주소로 내려간다 (준비 중일 때만 의미 있다) */
+  readonly onUseLocalEntry?: () => void;
   /** 코드를 기억하기 쉬운 이름으로 바꾸기. 성공 여부를 돌려준다. */
   readonly onChangeEntryCode?: (nextCode: string) => Promise<boolean>;
   /** 코드 변경 실패 사유 */
@@ -105,6 +109,8 @@ function TeacherConsoleImpl({
   actionError,
   entryUrl,
   entryCode = null,
+  entryKind = 'internet',
+  onUseLocalEntry,
   onChangeEntryCode,
   entryCodeError = null,
   onAdvance,
@@ -184,6 +190,8 @@ function TeacherConsoleImpl({
         live={live}
         entryUrl={entryUrl}
         entryCode={entryCode}
+        entryKind={entryKind}
+        onUseLocalEntry={onUseLocalEntry}
         onChangeEntryCode={onChangeEntryCode}
         entryCodeError={entryCodeError}
         onAdvance={onAdvance}

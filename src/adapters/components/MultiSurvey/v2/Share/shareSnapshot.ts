@@ -26,6 +26,7 @@ import {
   mayShowResults,
   participationStage,
 } from '@domain/rules/participationStage';
+import type { EntryAccessKind } from '@domain/rules/participationEntry';
 
 /**
  * 교실 화면 창으로 보내기 전에 **정답을 도려낸다.**
@@ -95,6 +96,12 @@ export interface ShareSnapshot {
    */
   readonly entryCode: string | null;
   /**
+   * 지금 안내하는 주소의 종류. 교실 화면도 이걸 알아야 한다 —
+   * 아직 주소가 없는데 빈 칸을 띄우거나, 같은 Wi-Fi 주소를 인터넷 주소인 양
+   * 보여 주면 학생이 못 들어온다. (설계: domain/rules/participationEntry.ts)
+   */
+  readonly entryKind: EntryAccessKind;
+  /**
    * 현재 문항에서 교사가 숨긴 단어(정규화된 키).
    * 워드클라우드 문항에서만 의미가 있다.
    */
@@ -111,6 +118,7 @@ export function buildShareSnapshot(
   survey: MultiSurveyV2,
   entryUrl: string,
   entryCode: string | null = null,
+  entryKind: EntryAccessKind = 'internet',
 ): ShareSnapshot {
   const question = survey.questions[liveSession.currentQuestionIndex] ?? null;
   const stage = participationStage(liveSession);
@@ -187,6 +195,7 @@ export function buildShareSnapshot(
     allowReentry: survey.presentationOpts.allowReentry,
     entryUrl,
     entryCode,
+    entryKind,
     hiddenWords: question ? (liveSession.hiddenWordsByQuestion[question.id] ?? []) : [],
   };
 }

@@ -20,6 +20,11 @@
 
 import { memo, useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
+import {
+  entryAccessClassroomNote,
+  entryAccessLabel,
+  type EntryAccessKind,
+} from '@domain/rules/participationEntry';
 
 interface ShareEntryCodeBarProps {
   /** 학생 입장 URL */
@@ -33,6 +38,11 @@ interface ShareEntryCodeBarProps {
    * (같은 화면에 QR이 둘이면 어느 것을 찍어야 하는지 헷갈린다).
    */
   readonly showQr?: boolean;
+  /**
+   * 지금 안내하는 주소의 종류. 아직 인터넷 주소를 만드는 중이면(`preparing`)
+   * **주소 칸도 QR도 그리지 않는다** — 빈 칸이 뜨면 학생이 그걸 찍는다.
+   */
+  readonly entryKind?: EntryAccessKind;
 }
 
 /** 주소를 읽기 쉽게 — 타이핑할 사람에게 필요 없는 `http://` 는 작게 앞에 붙인다. */
@@ -47,8 +57,11 @@ function ShareEntryCodeBarImpl({
   entryCode = null,
   studentCount,
   showQr = true,
+  entryKind = 'internet',
 }: ShareEntryCodeBarProps): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const preparing = entryKind === 'preparing' || entryUrl.length === 0;
+  const note = entryAccessClassroomNote(entryKind);
   const hasCode = entryCode !== null && entryCode.length > 0;
   const { scheme, rest } = splitUrl(entryUrl);
   // 주소가 길면 표시용으로 자른다. QR과 aria-label 에는 원본이 그대로 들어간다.
@@ -56,7 +69,7 @@ function ShareEntryCodeBarImpl({
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas || !entryUrl) return;
+    if (!canvas || !entryUrl || preparing) return;
     // ⚠️ `showQr` 를 의존성에 반드시 넣는다.
     // 대기 화면에서는 캔버스를 그리지 않다가 활동이 시작되면 다시 붙는데, 그때 주소는 그대로다.
     // 주소만 보고 있으면 효과가 다시 돌지 않아 **빈 캔버스**가 남는다(실제로 그랬다).
@@ -67,7 +80,7 @@ function ShareEntryCodeBarImpl({
       // 밝은 바탕에 어두운 모듈이라야 찍힌다 — 테마와 무관하게 고정한다.
       color: { dark: '#000000', light: '#ffffff' },
     });
-  }, [entryUrl, showQr]);
+  }, [entryUrl, showQr, preparing]);
 
   return (
     <header
@@ -76,7 +89,7 @@ function ShareEntryCodeBarImpl({
       aria-label="입장 안내 배너"
     >
       <div className="flex min-w-0 items-center gap-6">
-        {showQr && (
+        {showQr && !preparing && (
           <canvas
             ref={canvasRef}
             width={88}
@@ -87,36 +100,51 @@ function ShareEntryCodeBarImpl({
         )}
         <div className="flex min-w-0 flex-col gap-1">
           <span className="font-sp-medium text-sp-muted" style={{ fontSize: 20 }}>
-            {showQr ? 'QR을 찍거나 주소를 입력해 들어오세요' : '참여 주소'}
+            {preparing
+              ? entryAccessLabel('preparing')
+              : showQr
+                ? 'QR을 찍거나 주소를 입력해 들어오세요'
+                : '참여 주소'}
           </span>
-          <div className="flex min-w-0 items-baseline gap-5">
-            <span
-              className="min-w-0 truncate font-sp-bold text-sp-accent"
-              style={{ fontSize: 30 }}
-              aria-label={`입장 주소 ${entryUrl}`}
-            >
-              {scheme && (
-                <span className="font-sp-medium text-sp-muted" style={{ fontSize: 20 }}>
-                  {scheme}
+          {preparing ? (
+            <span className="font-sp-bold text-sp-muted" style={{ fontSize: 26 }} role="status">
+              {note}
+            </span>
+          ) : (
+            <div className="flex min-w-0 items-baseline gap-5">
+              <span
+                className="min-w-0 truncate font-sp-bold text-sp-accent"
+                style={{ fontSize: 30 }}
+                aria-label={`입장 주소 ${entryUrl}`}
+              >
+                {scheme && (
+                  <span className="font-sp-medium text-sp-muted" style={{ fontSize: 20 }}>
+                    {scheme}
+                  </span>
+                )}
+                <span className="font-mono tabular-nums">{displayRest}</span>
+              </span>
+              {hasCode && (
+                <span className="flex shrink-0 items-baseline gap-3">
+                  <span className="font-sp-medium text-sp-muted" style={{ fontSize: 22 }}>
+                    코드
+                  </span>
+                  <span
+                    className="rounded-full border-2 border-sp-accent px-5 py-1 font-mono font-sp-bold tracking-widest text-sp-accent"
+                    style={{ fontSize: 34 }}
+                    aria-label={`입장 코드 ${entryCode}`}
+                  >
+                    {entryCode}
+                  </span>
                 </span>
               )}
-              <span className="font-mono tabular-nums">{displayRest}</span>
+            </div>
+          )}
+          {!preparing && note && (
+            <span className="font-sp-medium text-sp-warning" style={{ fontSize: 20 }}>
+              {note}
             </span>
-            {hasCode && (
-              <span className="flex shrink-0 items-baseline gap-3">
-                <span className="font-sp-medium text-sp-muted" style={{ fontSize: 22 }}>
-                  코드
-                </span>
-                <span
-                  className="rounded-full border-2 border-sp-accent px-5 py-1 font-mono font-sp-bold tracking-widest text-sp-accent"
-                  style={{ fontSize: 34 }}
-                  aria-label={`입장 코드 ${entryCode}`}
-                >
-                  {entryCode}
-                </span>
-              </span>
-            )}
-          </div>
+          )}
         </div>
       </div>
       <div

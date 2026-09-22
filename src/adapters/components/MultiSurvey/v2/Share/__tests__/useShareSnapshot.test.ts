@@ -32,6 +32,7 @@ function makeSnapshot(phase: ShareSnapshot['phase'] = 'lobby'): ShareSnapshot {
     allowReentry: false,
     entryUrl: 'http://192.168.0.1:3000',
     entryCode: null,
+    entryKind: 'internet',
     hiddenWords: [],
   };
 }

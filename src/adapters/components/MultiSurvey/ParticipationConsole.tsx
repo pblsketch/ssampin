@@ -22,6 +22,11 @@ import {
   stageActions,
   stageLabel,
 } from '@domain/rules/participationStage';
+import {
+  canInviteStudents,
+  ENTRY_PREPARING_HINT,
+  entryAccessWarning,
+} from '@domain/rules/participationEntry';
 import { LobbyView } from './v2/Console/LobbyView';
 import { ParticipationResults } from './ParticipationResults';
 import { ParticipationRoundCompare } from './ParticipationRoundCompare';
@@ -40,6 +45,8 @@ export function ParticipationConsole(
     live,
     entryUrl,
     entryCode,
+    entryKind = 'internet',
+    onUseLocalEntry,
     onChangeEntryCode,
     entryCodeError,
     onAdvance,
@@ -136,14 +143,27 @@ export function ParticipationConsole(
           {stage === 'lobby' ? (
             <>
               <p className="mb-4 text-sm text-sp-muted">
-                {entryUrl.startsWith('http://')
-                  ? '같은 Wi-Fi에 연결한 학생이 참여할 수 있어요. 인터넷 주소를 준비하지 못한 경우에도 사용할 수 있습니다.'
-                  : 'QR을 찍거나 참여 주소와 코드로 들어오세요.'}{' '}
+                {entryKind === 'preparing'
+                  ? ENTRY_PREPARING_HINT
+                  : entryKind === 'local'
+                    ? // 같은 Wi-Fi 주소에는 짧은 코드가 없다 — 없는 것을 안내하지 않는다.
+                      'QR을 찍거나 참여 주소로 들어오세요.'
+                    : 'QR을 찍거나 참여 주소와 코드로 들어오세요.'}{' '}
                 활동 중에는 쌤핀을 켜 두세요.
               </p>
+              {entryAccessWarning(entryKind) && (
+                <p
+                  role="alert"
+                  className="mb-4 rounded-xl border border-sp-highlight p-4 text-sp-highlight"
+                >
+                  {entryAccessWarning(entryKind)}
+                </p>
+              )}
               <LobbyView
                 entryUrl={entryUrl}
                 entryCode={entryCode}
+                entryKind={entryKind}
+                onUseLocalEntry={onUseLocalEntry}
                 onChangeEntryCode={onChangeEntryCode}
                 entryCodeError={entryCodeError}
                 students={live.students}
@@ -266,7 +286,11 @@ export function ParticipationConsole(
               stage === 'collecting' ? 'bg-sp-success' : 'bg-sp-border'
             }`}
           />
-          <span className="font-bold">{stageLabel(stage)}</span>
+          <span className="font-bold">
+            {stage === 'lobby' && entryKind === 'preparing'
+              ? '참여 주소 준비 중'
+              : stageLabel(stage)}
+          </span>
           {stage === 'closed' && (
             <span className="text-sp-muted">· 아직 학생에게 공개하지 않았어요</span>
           )}
@@ -280,7 +304,17 @@ export function ParticipationConsole(
             <button className={participationButton} onClick={onExit}>
               초대 취소 · 편집 화면으로
             </button>
-            <button disabled={busy || !entryUrl} className={primaryButton} onClick={onAdvance}>
+            <button
+              disabled={
+                busy ||
+                !canInviteStudents({ kind: entryKind, url: entryUrl, code: entryCode ?? null })
+              }
+              className={primaryButton}
+              onClick={onAdvance}
+              title={
+                entryKind === 'preparing' ? '참여 주소가 준비되면 시작할 수 있어요.' : undefined
+              }
+            >
               활동 시작
             </button>
           </>

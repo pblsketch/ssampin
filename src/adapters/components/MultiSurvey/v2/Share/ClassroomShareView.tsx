@@ -111,6 +111,8 @@ function ClassroomShareViewImpl({
 
   const entryUrl = isSnapshotMode ? snapshot.entryUrl : (entryUrlProp ?? FALLBACK_ENTRY_URL);
   const entryCode = isSnapshotMode ? snapshot.entryCode : (entryCodeProp ?? null);
+  // 스냅샷이 없는 경로(개발·브라우저)는 주소를 직접 받으므로 인터넷 주소로 본다.
+  const entryKind = isSnapshotMode ? snapshot.entryKind : 'internet';
   const hiddenWords: readonly string[] = isSnapshotMode
     ? snapshot.hiddenWords
     : currentQuestion
@@ -186,11 +188,14 @@ function ClassroomShareViewImpl({
           entryUrl={entryUrl}
           entryCode={entryCode}
           studentCount={students.length}
+          entryKind={entryKind}
         />
       ) : null}
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        {phase === 'lobby' ? <ShareLobbyScreen entryUrl={entryUrl} students={students} /> : null}
+        {phase === 'lobby' ? (
+          <ShareLobbyScreen entryUrl={entryUrl} students={students} entryKind={entryKind} />
+        ) : null}
 
         {phase === 'open' && currentQuestion ? (
           <ShareQuestionScreen
