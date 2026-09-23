@@ -10,6 +10,7 @@ import { allSlotsForContext, countSlots } from '@domain/rules/observationSlots';
 import { mixedRecordToDisplay, type DisplayRecord } from '@adapters/presentation/displayRecord';
 import { RecordDetailModal } from '@adapters/components/common/records/RecordDetailModal';
 import { useCurrentTermStartIso } from '@adapters/hooks/useCurrentTerm';
+import { TermFlowSection } from '@adapters/components/Dashboard/ObservationCheer/TermFlowSection';
 
 type PeriodFilter = 'all' | 'semester' | 'month' | 'week' | 'custom';
 
@@ -248,6 +249,8 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
 
   return (
     <div className="space-y-4">
+      {/* ADR-137 — 반 흐름: 기간 선택과 상관없이 이번 학기(응원·잔디를 끄면 없다) */}
+      <TermFlowSection kind="teaching" classId={classId} />
       {/* 기간 필터 */}
       <div className="flex items-center gap-1 flex-wrap">
         {[

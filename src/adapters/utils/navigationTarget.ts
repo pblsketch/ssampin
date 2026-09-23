@@ -19,7 +19,14 @@ export type StudentRecordIntent =
       readonly studentRef: string;
     }
   | { readonly kind: 'homeroom-attendance' }
-  | { readonly kind: 'class-attendance'; readonly classId: string };
+  | { readonly kind: 'class-attendance'; readonly classId: string }
+  /** 한 주 정리·학기 돌아보기 창(ADR-137) — 바탕화면 위젯 창에서 누르면 메인 창에서 연다. */
+  | { readonly kind: 'observation-panel'; readonly panel: 'weekly' | 'retrospect' };
+
+/** 한 주 정리·학기 돌아보기 창 이동 문자열 — 해석 규칙과 한 파일에 둔다. */
+export function buildObservationPanelTarget(panel: 'weekly' | 'retrospect'): string {
+  return `dashboard#observation-panel:${panel}`;
+}
 
 /** 칸에서 바로 쓰기(ADR-135) 이동 문자열 — 해석 규칙과 한 파일에 둔다(왕복이 어긋나지 않게). */
 export function buildQuickRecordDirectTarget(target: {
@@ -101,6 +108,19 @@ export function parseNavigationTarget(raw: string): NavigationTarget {
           contextId,
           studentRef,
         },
+      };
+    }
+    return { page: 'dashboard', ...EMPTY };
+  }
+
+  // 'dashboard#observation-panel:<weekly|retrospect>' — 한 주 정리·학기 돌아보기 창.
+  if (base === 'dashboard' && fragment.startsWith('observation-panel:')) {
+    const panel = fragment.slice('observation-panel:'.length);
+    if (panel === 'weekly' || panel === 'retrospect') {
+      return {
+        page: 'dashboard',
+        ...EMPTY,
+        studentRecordIntent: { kind: 'observation-panel', panel },
       };
     }
     return { page: 'dashboard', ...EMPTY };

@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { flushAllDrafts } from '@adapters/components/RecordDraft/draftFlushRegistry';
 import {
   goesToEvidenceScreen,
@@ -9,8 +9,13 @@ import { ClassRecordInputView } from './ClassRecordInputView';
 import { ClassRecordStatsView } from './ClassRecordStatsView';
 import { ClassRecordSearchView } from './ClassRecordSearchView';
 import { ClassRecordDraftView } from './ClassRecordDraftView';
+import {
+  CLASS_RECORD_OPEN_VIEW_EVENT,
+  consumePendingClassRecordView,
+  type ClassRecordView,
+} from './classRecordViewIntent';
 
-type RecordViewMode = 'input' | 'stats' | 'search' | 'draft';
+type RecordViewMode = ClassRecordView;
 
 const VIEW_TABS: { id: RecordViewMode; icon: string; label: string }[] = [
   { id: 'input', icon: '✏️', label: '입력' },
@@ -35,7 +40,21 @@ export function ClassRecordTab({
   onGoToSeatingTab,
   onRequestCompactClassList,
 }: ClassRecordTabProps) {
-  const [viewMode, setViewMode] = useState<RecordViewMode>('input');
+  // 학기 돌아보기의 [초안 쓰러 가기](ADR-137)처럼 밖에서 보기를 정해 들어올 수 있다.
+  const [viewMode, setViewMode] = useState<RecordViewMode>(
+    () => consumePendingClassRecordView() ?? 'input',
+  );
+  useEffect(() => {
+    const handler = (e: Event): void => {
+      const detail = (e as CustomEvent<string>).detail;
+      consumePendingClassRecordView();
+      if (detail === 'input' || detail === 'stats' || detail === 'search' || detail === 'draft') {
+        setViewMode(detail);
+      }
+    };
+    window.addEventListener(CLASS_RECORD_OPEN_VIEW_EVENT, handler);
+    return () => window.removeEventListener(CLASS_RECORD_OPEN_VIEW_EVENT, handler);
+  }, []);
   /**
    * 화면 왕복 요청(계획 §4.3). 교과 맥락의 주인은 이 탭이다 - 입력과 보드가 서로를 직접
    * 부르지 않고 여기를 거친다. 그래야 이동 보호(dirty guard·초안 flush)를 한 자리에서 건다.

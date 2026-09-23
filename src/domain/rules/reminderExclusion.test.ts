@@ -92,22 +92,25 @@ describe('빼기·다시 넣기 목록 바꾸기', () => {
   });
 });
 
-describe('설정 화면 [저장] — 즉시 저장된 빼기 목록을 덮지 않는다', () => {
+describe('설정 화면 [저장] — 즉시 저장된 빼기·관심 목록을 덮지 않는다', () => {
   const draft = {
     enabled: true,
     exclusions: [{ key: 'old', until: '2026-10-01' }],
     excludedStudentIds: ['legacy'],
+    focusedStudentIds: ['old-focus'],
   };
 
   it('지금 저장된 목록을 쓰고, 다른 값은 초안 그대로', () => {
     const merged = withLatestExclusions(draft, {
       exclusions: [{ key: 'new', until: '2026-10-05' }],
       excludedStudentIds: [],
+      focusedStudentIds: ['subject:c1:5'],
     });
     expect(merged).toEqual({
       enabled: true,
       exclusions: [{ key: 'new', until: '2026-10-05' }],
       excludedStudentIds: [],
+      focusedStudentIds: ['subject:c1:5'],
     });
   });
 

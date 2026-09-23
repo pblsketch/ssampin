@@ -31,6 +31,17 @@ export function teachingClassTitle(name: string, subject: string): string {
   return `${n} ${s}`;
 }
 
+/**
+ * 칩처럼 좁은 자리에 붙이는 짧은 반 이름 — '3학년 2반'·'3-2' → '3-2반', '2반' → '2반'.
+ * 모양을 모르면 이름 그대로. 과목은 붙이지 않는다(전체 이름은 이름표·스크린리더에 둔다).
+ */
+export function shortClassName(name: string): string {
+  const n = name.trim();
+  const gradeClass = /(\d+)\s*학년\s*(\d+)\s*반/.exec(n) ?? /^(\d+)\s*-\s*(\d+)$/.exec(n);
+  if (gradeClass) return `${gradeClass[1]}-${gradeClass[2]}반`;
+  return n;
+}
+
 export function homeroomTiles(students: readonly Student[]): CardTile[] {
   return numberActiveRoster(students)
     .map((e) => ({

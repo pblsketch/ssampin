@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import type { Student } from '../entities/Student';
 import type { TeachingClassStudent } from '../entities/TeachingClass';
-import { homeroomTiles, subjectTiles, teachingClassTitle } from './observationCardRoster';
+import {
+  homeroomTiles,
+  shortClassName,
+  subjectTiles,
+  teachingClassTitle,
+} from './observationCardRoster';
 
 describe('담임반 칸', () => {
   it('번호순, 재학 중인 학생만, 배열 위치가 아니라 명렬표 번호', () => {
@@ -66,5 +71,12 @@ describe('수업반 카드 이름', () => {
     expect(teachingClassTitle('선택 문학', '문학')).toBe('선택 문학');
     expect(teachingClassTitle('2-3', ' ')).toBe('2-3');
     expect(teachingClassTitle('', '국어')).toBe('국어');
+  });
+
+  it('칩에 붙이는 짧은 반 이름', () => {
+    expect(shortClassName('3학년 2반')).toBe('3-2반');
+    expect(shortClassName('3-2')).toBe('3-2반');
+    expect(shortClassName(' 2반 ')).toBe('2반');
+    expect(shortClassName('선택 문학')).toBe('선택 문학');
   });
 });

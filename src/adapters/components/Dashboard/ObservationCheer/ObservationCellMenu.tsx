@@ -1,5 +1,7 @@
 /**
  * 반 카드 칸 메뉴 — [당분간 빼기 ▸ 2주 / 한 달 / 이번 학기 끝까지] 또는 [다시 넣기](ADR-135).
+ * 빠지지 않은 칸에는 맨 위에 [관심 학생으로]/[관심 학생 풀기](ADR-137). 빠진 칸은 [다시 넣기]만 —
+ * 빠져 있는 동안은 관심 효과가 없다(빼기가 이긴다).
  *
  * ★문서 끝(`document.body`)에 띄운다. 유리 모드의 확장 창은 흐림 효과 때문에 그 안의 `fixed`
  *   위치를 가둔다(사이드바 모달 사고와 같은 원인). 위치는 누른 '⋯' 단추 기준으로 화면 안에 맞춘다.
@@ -30,6 +32,9 @@ interface ObservationCellMenuProps {
   readonly excludedUntil: string | null;
   readonly onExclude: (period: ExclusionPeriod) => void;
   readonly onReturn: () => void;
+  /** 관심 학생인가(빠진 칸이면 무시) */
+  readonly focused: boolean;
+  readonly onToggleFocus: () => void;
   readonly onClose: () => void;
 }
 
@@ -46,6 +51,8 @@ export function ObservationCellMenu({
   excludedUntil,
   onExclude,
   onReturn,
+  focused,
+  onToggleFocus,
   onClose,
 }: ObservationCellMenuProps): JSX.Element {
   const menuRef = useRef<HTMLDivElement>(null);
@@ -131,6 +138,10 @@ export function ObservationCellMenu({
         </>
       ) : (
         <>
+          <button type="button" role="menuitem" className={itemClass} onClick={onToggleFocus}>
+            {focused ? '관심 학생 풀기' : '관심 학생으로'}
+          </button>
+          <div role="separator" className="my-1 border-t border-sp-border" />
           <p className="px-3 pb-1 pt-1.5 text-caption text-sp-muted">당분간 빼기</p>
           {PERIODS.map((p) => (
             <button

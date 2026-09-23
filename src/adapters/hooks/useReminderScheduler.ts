@@ -14,7 +14,10 @@ import {
 } from '@adapters/stores/useRecordReminderStore';
 import { computeSnoozeUntil } from '@domain/rules/reminderSnoozeTimes';
 import type { SnoozeWhen } from '@domain/rules/reminderSnoozeTimes';
-import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
+import {
+  DEFAULT_REMINDER_SETTINGS,
+  isObservationCheerEnabled,
+} from '@domain/entities/RecordReminder';
 import type {
   LastRecordDateProvider,
   ReminderStudent,
@@ -27,6 +30,7 @@ import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   pickDueStudents,
   daysSinceLastRecord,
+  effectiveStaleDays,
   formatDateStr,
   studentDedupKey,
   resolveSlotPromptText,
@@ -44,6 +48,8 @@ import {
   subjectEntries,
 } from '@domain/rules/observationEntries';
 import { activeExclusionKeys, subjectExclusionKey } from '@domain/rules/reminderExclusion';
+import { scopedReminderConfig } from '@domain/rules/observationFocus';
+import { isRestingToday, useObservationDayStore } from '@adapters/stores/useObservationDayStore';
 
 /**
  * 학생 관찰 기록 알림 — 인앱 오케스트레이션 훅(P2·P4).
@@ -103,6 +109,8 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
   const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
   const skippedKeys = useRecordReminderStore((s) => s.skippedKeys);
   const studentSnoozes = useRecordReminderStore((s) => s.studentSnoozes);
+  // ADR-137 — '오늘은 쉴게요'는 기록 알림 창을 그날 조용히 한다(기존 일시정지 값과 따로).
+  const restDay = useObservationDayStore((s) => s.restDay);
   // 주제(탐구 흐름)로 아직 안 묶은 근거 건수를 문구에 덧붙이기 위한 재료.
   // ★선정에는 쓰지 않는다 — 문구만 바꾼다(ADR-072 결정 6).
   const evidenceRecords = useRecordEvidenceStore((s) => s.records);
@@ -147,7 +155,9 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     const paused = isReminderPaused(pausedUntil, nowMs);
     const snoozed = isReminderSnoozed(snoozeUntil, nowMs);
     const skipSet = new Set(skippedKeys);
-    const active = !paused && !snoozed;
+    // 쉬기는 응원·잔디의 단추라, 응원·잔디를 끄면(단추·[다시 켜기]가 사라지면) 함께 풀린다.
+    const resting = isObservationCheerEnabled(rr) && isRestingToday(restDay, today);
+    const active = !paused && !snoozed && !resting;
 
     let missing = 0;
     let homeroomItems: ReminderPromptItem[] = [];
@@ -165,8 +175,13 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
         .filter(isStudentActive)
         .filter((s) => !excludedKeys.has(s.id))
         .map((s) => ({ id: s.id, name: s.name }));
+      // ADR-137 — 관심 학생은 반 범위 key 라, 그 반 범위로 좁힌 설정으로 문턱(절반)을 잰다.
+      // 오늘 챙길 학생·윈도우 알림 예약·미기록 수가 모두 같은 문턱을 쓴다.
+      const homeroomCfg = scopedReminderConfig(rr, { kind: 'homeroom' });
       missing += roster.filter(
-        (s) => daysSinceLastRecord(provider, s.id, now, calendar) >= rr.staleDays,
+        (s) =>
+          daysSinceLastRecord(provider, s.id, now, calendar) >=
+          effectiveStaleDays(s.id, homeroomCfg),
       ).length;
 
       if (active) {
@@ -175,7 +190,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
             !skipSet.has(studentDedupKey(s.id, today)) &&
             !isStudentSnoozed(studentSnoozes, s.id, nowMs),
         );
-        const due = pickDueStudents(candidates, provider, rr, cursor, now, calendar);
+        const due = pickDueStudents(candidates, provider, homeroomCfg, cursor, now, calendar);
         homeroomItems = due.map((r, i) => ({
           key: r.student.id,
           studentId: r.student.id,
@@ -225,7 +240,8 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
             !skipSet.has(studentDedupKey(keyOf(s.id), today)) &&
             !isStudentSnoozed(studentSnoozes, keyOf(s.id), nowMs),
         );
-        const due = pickDueStudents(candidates, obsProvider, rr, cursor, now, calendar);
+        const subjectCfg = scopedReminderConfig(rr, { kind: 'subject', classId: finished.id });
+        const due = pickDueStudents(candidates, obsProvider, subjectCfg, cursor, now, calendar);
         subjectItems = due.map((r) => ({
           key: keyOf(r.student.id),
           studentId: r.student.id,
@@ -263,6 +279,7 @@ export function useReminderScheduler(): UseReminderSchedulerResult {
     pausedUntil,
     skippedKeys,
     studentSnoozes,
+    restDay,
     tick,
     evidenceRecords,
     threadIdSet,

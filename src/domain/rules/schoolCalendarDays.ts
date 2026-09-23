@@ -15,6 +15,19 @@ export interface SchoolCalendarDays {
   readonly vacationDays: ReadonlySet<string>;
   readonly examDays: ReadonlySet<string>;
   readonly holidayDays: ReadonlySet<string>;
+  /**
+   * 학기마다 '정규 수업 종료일' 뒤 구간(2·3차, spec §0). 이 구간에 시작하는 주는 쉬는 주다 —
+   * 겨울방학 뒤 2월에 잠깐 등교하는 주가 연속을 끊지 않게 한다. 없으면 빈 목록으로 본다.
+   */
+  readonly termTails?: readonly TermTail[];
+}
+
+/** 정규 수업 종료일(`after`) 다음 날부터 학기 마지막 날(`until`)까지. */
+export interface TermTail {
+  /** 정규 수업 종료일 'YYYY-MM-DD' — 이날은 들지 않는다. */
+  readonly after: string;
+  /** 학기 마지막 날 'YYYY-MM-DD'(포함). */
+  readonly until: string;
 }
 
 export const EMPTY_SCHOOL_CALENDAR: SchoolCalendarDays = {
@@ -154,8 +167,17 @@ export function weekStartOf(date: string): string {
   return formatLocal(d);
 }
 
+/** 그 주(월요일 시작)가 어느 학기의 정규 수업 종료일 뒤에 시작하는가. */
+export function isAfterRegularTermEnd(weekStart: string, cal: SchoolCalendarDays): boolean {
+  for (const tail of cal.termTails ?? []) {
+    if (weekStart > tail.after && weekStart <= tail.until) return true;
+  }
+  return false;
+}
+
 /** 쉬는 주인가 — weekStart 는 월요일. */
 export function isRestWeek(weekStart: string, cal: SchoolCalendarDays): boolean {
+  if (isAfterRegularTermEnd(weekStart, cal)) return true;
   let allWeekdaysHoliday = true;
   for (let i = 0; i < 7; i++) {
     const day = addDaysIso(weekStart, i);

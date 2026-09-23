@@ -13,7 +13,6 @@ import type { ObservationRecord } from '@domain/entities/Observation';
 import {
   HOMEROOM_CARD,
   homeroomEntries,
-  lastObservationDateByRef,
   subjectCard,
   subjectEntries,
   type ObservationEntry,
@@ -30,8 +29,8 @@ import {
   homeroomExclusionKey,
   subjectExclusionKey,
 } from '@domain/rules/reminderExclusion';
-import { daysSinceLastRecord, maskName } from '@domain/rules/recordReminderRules';
-import type { SchoolCalendarDays } from '@domain/rules/schoolCalendarDays';
+import { maskName } from '@domain/rules/recordReminderRules';
+import { isFocusedKey } from '@domain/rules/observationFocus';
 
 export type LapCellState = 'filled' | 'empty' | 'excluded';
 
@@ -42,12 +41,14 @@ export interface LapCellViewModel {
   /** 이름 표시 설정을 적용한 이름('표시 안 함'이면 빈 문자열) */
   readonly displayName: string;
   readonly state: LapCellState;
-  /** 빈칸에만 — 기록 알림이 부를 학생 */
+  /** 빈칸에만 — 오늘 챙길 학생(ADR-137). 1차의 "오래 기록 안 한 빈칸 모두"는 없어졌다. */
   readonly bell: boolean;
   /** 빼기 key(누른 카드의 반 범위) */
   readonly exclusionKey: string;
   /** 빠져 있으면 다시 들어오는 날 */
   readonly excludedUntil: string | null;
+  /** 관심 학생인가(ADR-137) — 칸 메뉴의 [관심 학생으로]/[풀기]에만 쓴다. 칸에는 그리지 않는다. */
+  readonly focused: boolean;
 }
 
 export interface LapCardViewModel {
@@ -62,6 +63,8 @@ export interface LapCardViewModel {
   /** 구성원 수(재학 중·빠지지 않은 학생) */
   readonly memberCount: number;
   readonly remaining: number;
+  /** 이번 학기에 끝낸 바퀴 수(저장 + 계산) — 학기 돌아보기에서 처음 보인다(ADR-137). */
+  readonly completedLaps: number;
   readonly justFinished: boolean;
   /** 계산상 새로 끝난 바퀴(저장 여부는 바퀴 훅이 정한다) */
   readonly newMark: LapMark | null;
@@ -74,14 +77,15 @@ export interface BuildLapCardsInput {
   readonly homeroomRecords: readonly StudentRecord[];
   readonly observationRecords: readonly ObservationRecord[];
   readonly reminder: ReminderSettings;
-  /** 기록 알림 '전체 일시정지' 중인가 */
-  readonly reminderPaused: boolean;
+  /**
+   * 카드마다 오늘 챙길 학생 ref(ADR-137) — 종은 이 학생의 빈칸에만 붙는다. 보이는 조건
+   * (알림 켜짐·알림 요일·등교일·일시정지·쉬는 날·응원 켜짐)이 안 맞으면 빈 맵을 넘긴다.
+   */
+  readonly todayStudentRefs: ReadonlyMap<string, ReadonlySet<string>>;
   readonly marks: readonly LapMark[];
   readonly term: string;
   readonly termStart: string;
   readonly today: string;
-  readonly now: Date;
-  readonly calendar: SchoolCalendarDays;
 }
 
 function nameFor(name: string, exposure: NameExposure): string {
@@ -97,7 +101,6 @@ function buildCard(
     tiles: readonly CardTile[];
     entries: readonly ObservationEntry[];
     keyOf: (ref: string) => string;
-    bellTarget: 'homeroom' | 'subject';
     mixed: boolean;
   },
   input: BuildLapCardsInput,
@@ -116,8 +119,7 @@ function buildCard(
   });
 
   const rr = input.reminder;
-  const bellsOn = rr.enabled && !input.reminderPaused && rr.targets.includes(base.bellTarget);
-  const lastByRef = bellsOn ? lastObservationDateByRef(base.entries, input.today) : null;
+  const todayRefs = input.todayStudentRefs.get(base.card);
 
   const cells = base.tiles.map((tile): LapCellViewModel => {
     const key = base.keyOf(tile.ref);
@@ -128,12 +130,7 @@ function buildCard(
       state = lap.recordedBeforeBoundaryRefs.has(tile.ref) ? 'filled' : 'empty';
     else state = lap.filledRefs.has(tile.ref) ? 'filled' : 'empty';
 
-    const bell =
-      state === 'empty' &&
-      !lap.justFinished &&
-      lastByRef !== null &&
-      daysSinceLastRecord((r) => lastByRef.get(r) ?? null, tile.ref, input.now, input.calendar) >=
-        rr.staleDays;
+    const bell = state === 'empty' && !lap.justFinished && todayRefs?.has(tile.ref) === true;
 
     return {
       ref: tile.ref,
@@ -143,6 +140,7 @@ function buildCard(
       bell,
       exclusionKey: key,
       excludedUntil: isExcluded ? (untilByKey.get(key) ?? null) : null,
+      focused: isFocusedKey(rr, key),
     };
   });
 
@@ -155,6 +153,7 @@ function buildCard(
     cells,
     memberCount: memberRefs.length,
     remaining: lap.remaining,
+    completedLaps: lap.completedLaps,
     justFinished: lap.justFinished,
     newMark: lap.newMark,
     newBoundaryRecordId: lap.newBoundaryRecordId,
@@ -183,7 +182,6 @@ export function buildLapCards(input: BuildLapCardsInput): LapCardViewModel[] {
             tiles,
             entries: homeroomEntries(input.homeroomRecords),
             keyOf: homeroomExclusionKey,
-            bellTarget: 'homeroom',
             mixed: false,
           },
           input,
@@ -209,7 +207,6 @@ export function buildLapCards(input: BuildLapCardsInput): LapCardViewModel[] {
           tiles,
           entries: obs.filter((e) => e.card === card),
           keyOf: (ref) => subjectExclusionKey(cls.id, ref),
-          bellTarget: 'subject',
           mixed: tiles.some((t) => t.label.includes('-')),
         },
         input,

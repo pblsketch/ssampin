@@ -183,6 +183,8 @@ export interface AddRecordWithTagsParams {
   /** 미지정 시 카테고리별 중립 sentinel로 합성(비출결 전용). */
   subcategory?: string;
   method?: CounselingMethod;
+  /** 담임 장면(ADR-137) — 빠른 기록의 담임 장면 칩. 비었으면 저장하지 않는다(옛 모양 그대로). */
+  slots?: readonly string[];
 }
 
 export interface UpdateAttendanceRecordParams {
@@ -354,6 +356,7 @@ export const useStudentRecordsStore = create<StudentRecordsState>((set, get) => 
         createdAt: new Date().toISOString(),
         ...(params.tags && params.tags.length > 0 ? { tags: [...params.tags] } : {}),
         ...(params.method ? { method: params.method } : {}),
+        ...(params.slots && params.slots.length > 0 ? { slots: [...params.slots] } : {}),
       };
       // ADR-135 — 이 컴퓨터에서 추가한 관찰 기록 표시는 쓰기 전에, 오늘 첫 기록 응원은 성공한 뒤에
       // (출결은 관찰이 아니다).

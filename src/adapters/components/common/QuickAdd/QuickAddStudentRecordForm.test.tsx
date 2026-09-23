@@ -17,6 +17,7 @@ const addObservation = vi.fn();
 const showToast = vi.fn();
 
 const state = {
+  settings: { className: '3', grade: '2' } as Record<string, unknown>,
   students: [] as Student[],
   classes: [] as TeachingClass[],
   homeroomRecords: [] as {
@@ -75,7 +76,7 @@ vi.mock('@adapters/stores/useObservationStore', () => ({
 }));
 
 vi.mock('@adapters/stores/useSettingsStore', () => ({
-  useSettingsStore: selectorHook(() => ({ settings: { className: '3', grade: '2' } })),
+  useSettingsStore: selectorHook(() => ({ settings: state.settings })),
 }));
 
 vi.mock('@adapters/components/common/Toast', () => ({
@@ -114,6 +115,7 @@ beforeEach(() => {
   addObservation.mockReset().mockResolvedValue('obs-1');
   showToast.mockReset();
   useQuickAddStore.setState({ studentRecordFocus: null });
+  state.settings = { className: '3', grade: '2' };
   state.students = [student('s1', '김한결', 1), student('s2', '이서준', 2)];
   state.classes = [
     teachingClass('c1', '2-3', '국어', [
@@ -411,5 +413,96 @@ describe('반 카드의 칸에서 바로 쓰기 (ADR-135 — ADR-122 결정 2의
     useQuickAddStore.setState({ studentRecordFocus: { studentIdentity: '2-3|1|김한결' } });
     render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
     expect(screen.queryByPlaceholderText(/본 대로 적어/)).toBeNull();
+  });
+});
+
+describe('담임 장면 칩·질문 한 줄 (ADR-137)', () => {
+  function toHomeroomCompose(): void {
+    pickStudent('김한결');
+    fireEvent.click(screen.getByRole('button', { name: /담임 · 2-3/ }));
+  }
+
+  it('담임 맥락에 장면 칩이 있고, 고른 장면이 담임 기록의 장면으로 저장된다', async () => {
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    toHomeroomCompose();
+    const group = screen.getByRole('group', { name: '이 순간' });
+    expect(group.querySelectorAll('button')).toHaveLength(6);
+    fireEvent.click(screen.getByRole('button', { name: '학급 역할' }));
+    fireEvent.change(screen.getByPlaceholderText(/본 대로 적어/), {
+      target: { value: '청소 당번을 바꿔 맡았다' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '기록하기' }));
+    await waitFor(() => expect(addHomeroomRecord).toHaveBeenCalledTimes(1));
+    expect(addHomeroomRecord.mock.calls[0]![0]).toMatchObject({
+      category: 'life',
+      slots: ['학급 역할'],
+    });
+  });
+
+  it('장면을 고르지 않아도 저장된다(장면 없음)', async () => {
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    toHomeroomCompose();
+    fireEvent.change(screen.getByPlaceholderText(/본 대로 적어/), { target: { value: '모습' } });
+    fireEvent.click(screen.getByRole('button', { name: '기록하기' }));
+    await waitFor(() => expect(addHomeroomRecord).toHaveBeenCalledTimes(1));
+    expect(addHomeroomRecord.mock.calls[0]![0]).toMatchObject({ slots: [] });
+  });
+
+  it('선생님이 더한 담임 장면도 칩으로 나온다', () => {
+    state.settings = { ...state.settings, homeroomRecordSlots: ['봉사'] };
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    toHomeroomCompose();
+    expect(screen.getByRole('button', { name: '봉사' })).toBeTruthy();
+  });
+
+  it('여러 명 담임 기록에도 같은 장면이 저장된다', async () => {
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: '여러 명 기록' }));
+    pickStudent('김한결');
+    pickStudent('이서준');
+    fireEvent.click(screen.getByRole('button', { name: '기록 위치 고르기' }));
+    fireEvent.click(screen.getByRole('button', { name: /담임 · 2-3/ }));
+    fireEvent.click(screen.getByRole('button', { name: '진로' }));
+    fireEvent.change(screen.getByPlaceholderText(/본 대로 적어/), {
+      target: { value: '진로 탐색' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '2명에게 기록하기' }));
+    await waitFor(() => expect(addHomeroomRecord).toHaveBeenCalledTimes(2));
+    expect(addHomeroomRecord.mock.calls.map((c) => (c[0] as { slots: string[] }).slots)).toEqual([
+      ['진로'],
+      ['진로'],
+    ]);
+    // 여러 명이면 질문 한 줄이 없다
+    expect(screen.queryByText(/학생이 .*있었나요\?/)).toBeNull();
+  });
+
+  it('한 명이면 이번 학기 빈 장면을 묻는 한 줄이 나오고, 누르면 그 장면이 골라진다', () => {
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    toHomeroomCompose();
+    const question = screen.getByRole('button', { name: /김한결 학생/ });
+    fireEvent.click(question);
+    const pressed = Array.from(
+      screen
+        .getByRole('group', { name: '이 순간' })
+        .querySelectorAll('button[aria-pressed="true"]'),
+    );
+    expect(pressed).toHaveLength(1);
+  });
+
+  it('교과 맥락에서는 질문을 누르면 교과 장면(간단 분류)이 골라진다', () => {
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    pickStudent('김한결');
+    fireEvent.click(screen.getByRole('button', { name: /국어 · 2-3/ }));
+    fireEvent.click(screen.getByRole('button', { name: /김한결 학생/ }));
+    expect(screen.getAllByRole('button', { pressed: true })).toHaveLength(1);
+    expect(screen.queryByRole('group', { name: '이 순간' })).toBeNull();
+  });
+
+  it('응원·잔디를 끄면 질문 한 줄은 없지만 담임 장면 칩은 남는다', () => {
+    state.settings = { ...state.settings, recordReminder: { cheerEnabled: false } };
+    render(<QuickAddStudentRecordForm onClose={vi.fn()} />);
+    toHomeroomCompose();
+    expect(screen.queryByRole('button', { name: /김한결 학생/ })).toBeNull();
+    expect(screen.getByRole('group', { name: '이 순간' })).toBeTruthy();
   });
 });

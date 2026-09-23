@@ -2,7 +2,7 @@
  * ADR-135 — 설정 화면 '제외 학생' 행: 반 카드와 같은 번호, 이름 표시 설정, 기간이 지난 항목 정리.
  */
 import { describe, it, expect } from 'vitest';
-import { buildExclusionRows } from '../reminderExclusionRows';
+import { buildExclusionRows, buildFocusRows } from '../reminderExclusionRows';
 import type { Student } from '@domain/entities/Student';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 
@@ -96,5 +96,25 @@ describe('제외 학생 행', () => {
     });
     expect(rows.map((r) => r.missing)).toEqual([true, true]);
     expect(rows.map((r) => r.key).sort()).toEqual(['gone', 'subject:archived:1']);
+  });
+});
+
+describe('관심 학생 행 (ADR-137)', () => {
+  it('빼기와 같은 번호·순서, 기간 없음, 명렬에서 사라진 학생도 남긴다', () => {
+    const rows = buildFocusRows({
+      homeroomTitle: '2학년 1반',
+      students,
+      classes,
+      reminder: {
+        nameExposure: 'initial',
+        focusedStudentIds: ['subject:c1:2-3-5', 'a', 'gone', 'subject:zz:1'],
+      },
+    });
+    expect(rows.map((r) => [r.group, r.label, r.displayName, r.until, r.missing])).toEqual([
+      ['2학년 1반', '1', '김○○', null, false],
+      ['선택 국어', '3-5', '박○○', null, false],
+      ['2학년 1반', '', '', null, true],
+      ['', '', '', null, true],
+    ]);
   });
 });

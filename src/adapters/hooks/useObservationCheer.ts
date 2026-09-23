@@ -15,8 +15,9 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useLapMarkStore } from '@adapters/stores/useLapMarkStore';
-import { useRecordReminderStore, isReminderPaused } from '@adapters/stores/useRecordReminderStore';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { isRestingToday, useObservationDayStore } from '@adapters/stores/useObservationDayStore';
+import { toLocalDateString } from '@shared/utils/localDate';
 import {
   CHEER_EVENT,
   CHEER_STORAGE_KEY,
@@ -27,14 +28,13 @@ import {
   type CheerLineState,
 } from '@adapters/stores/observationCheerSignal';
 import {
+  useObservationCheerAvailable,
   useObservationTermWindow,
   useSchoolCalendarDays,
 } from '@adapters/hooks/useObservationCheerContext';
+import { useTodayStudentRefs } from '@adapters/hooks/useObservationDaily';
 import { buildLapCards, type LapCardViewModel } from '@adapters/hooks/observationLapCards';
-import {
-  DEFAULT_REMINDER_SETTINGS,
-  isObservationCheerEnabled,
-} from '@domain/entities/RecordReminder';
+import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import {
   HOMEROOM_CARD,
   homeroomEntries,
@@ -50,26 +50,14 @@ import {
   type CheerLine,
 } from '@domain/rules/observationStreak';
 import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
-import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   ZERO_RECORD_LINE,
   streakLine,
   termWeeksLine,
 } from '@adapters/components/Dashboard/ObservationCheer/cheerMessages';
 
-/** 응원·잔디를 보여 줄 수 있는가 — 켜져 있고 학생 명렬이 하나라도 있을 때(spec §10·§11). */
-export function useObservationCheerAvailable(): boolean {
-  const rr = useSettingsStore((s) => s.settings.recordReminder);
-  const students = useStudentStore((s) => s.students);
-  const classes = useTeachingClassStore((s) => s.classes);
-  return useMemo(() => {
-    if (!isObservationCheerEnabled(rr)) return false;
-    return (
-      students.some(isStudentActive) ||
-      filterActiveClasses(classes).some((c) => c.students.some(isStudentActive))
-    );
-  }, [rr, students, classes]);
-}
+/** 응원·잔디를 보여 줄 수 있는가 — 정본은 `useObservationCheerContext`(순환 가져오기를 피해 옮김). */
+export { useObservationCheerAvailable };
 
 function homeroomTitle(className: string | undefined): string {
   const name = className?.trim() ?? '';
@@ -84,9 +72,8 @@ export function useObservationLapCards(): readonly LapCardViewModel[] {
   const homeroomRecords = useStudentRecordsStore((s) => s.records);
   const observationRecords = useObservationStore((s) => s.records);
   const marks = useLapMarkStore((s) => s.marks);
-  const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
+  const todayStudentRefs = useTodayStudentRefs();
   const termWindow = useObservationTermWindow();
-  const calendar = useSchoolCalendarDays();
 
   useEffect(() => {
     void useLapMarkStore.getState().load();
@@ -102,13 +89,11 @@ export function useObservationLapCards(): readonly LapCardViewModel[] {
         homeroomRecords,
         observationRecords,
         reminder: rr,
-        reminderPaused: isReminderPaused(pausedUntil, Date.now()),
+        todayStudentRefs,
         marks,
         term: termWindow.term,
         termStart: termWindow.termStart,
         today: termWindow.today,
-        now: new Date(),
-        calendar,
       }),
     [
       students,
@@ -117,10 +102,9 @@ export function useObservationLapCards(): readonly LapCardViewModel[] {
       homeroomRecords,
       observationRecords,
       rr,
-      pausedUntil,
+      todayStudentRefs,
       marks,
       termWindow,
-      calendar,
     ],
   );
 }
@@ -204,12 +188,18 @@ export function useCheerLine(): {
   return { text: grass.lineText, pinState: 'idle' };
 }
 
-/** 저장한 창에서 응원 토스트를 띄운다. */
+/**
+ * 저장한 창에서 응원 토스트를 띄운다.
+ * '오늘은 쉴게요'를 누른 날은 띄우지 않는다(ADR-137) — 응원 자체(핀 줄 문구·한 번만 하는 표시)는
+ * 그대로 남아, 쉬기를 풀어도 지난 응원을 뒤늦게 띄우지 않는다.
+ */
 export function useObservationCheerToasts(): void {
   useEffect(() => {
     const onCheer = (e: Event): void => {
       const detail = (e as CustomEvent<CheerLineState>).detail;
       if (detail === undefined) return;
+      const restDay = useObservationDayStore.getState().restDay;
+      if (isRestingToday(restDay, toLocalDateString(new Date()))) return;
       useToastStore.getState().showCheer(detail.message, detail.pinState);
     };
     window.addEventListener(CHEER_EVENT, onCheer);

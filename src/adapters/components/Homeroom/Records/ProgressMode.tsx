@@ -35,6 +35,7 @@ import { RecordDetailModal } from '@adapters/components/common/records/RecordDet
 import { printHtmlDocument } from '@adapters/utils/printHtmlDocument';
 import { AttendanceStatusBanners } from './AttendanceStatusBanners';
 import { useToastStore } from '@adapters/components/common/Toast';
+import { TermFlowSection } from '@adapters/components/Dashboard/ObservationCheer/TermFlowSection';
 /* eslint-disable no-restricted-imports */
 import {
   exportNeisAttendanceToExcel,
@@ -1031,6 +1032,8 @@ function ProgressMode({ students, records, categories }: ModeProps) {
 
   return (
     <div className="flex-1 flex flex-col gap-4 min-h-0">
+      {/* ADR-137 — 반 흐름: 기간 선택과 상관없이 이번 학기(응원·잔디를 끄면 없다) */}
+      <TermFlowSection kind="homeroom" />
       {/* Summary cards - Feature 1: 5th card added */}
       <div className="grid grid-cols-5 gap-3">
         <SummaryCard

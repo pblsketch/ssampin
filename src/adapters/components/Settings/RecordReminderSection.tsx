@@ -24,6 +24,8 @@ import { SettingsSection } from './shared/SettingsSection';
 import { Toggle } from './shared/Toggle';
 import { useRecordReminderStore, isReminderPaused } from '@adapters/stores/useRecordReminderStore';
 import { ExclusionListSection } from './ExclusionListSection';
+import { FocusStudentListSection } from './FocusStudentListSection';
+import { todayStudentCaps } from '@domain/rules/todayStudents';
 
 interface Props {
   draft: Settings;
@@ -148,7 +150,9 @@ export function RecordReminderSection({ draft, patch }: Props) {
           <div className="flex flex-col">
             <span className="text-sm font-medium text-sp-text">응원·잔디 표시</span>
             <span className="text-xs text-sp-muted">
-              학생별 기록 수나 순위는 보여 주지 않아요. 선생님이 쌓아 온 기록만 응원해요.
+              끄면 핀 줄·응원·잔디 탭·오늘 챙길 학생·종·질문 한 줄·반 흐름·한 주 정리·학기
+              돌아보기가 모두 사라져요. 관심 학생·제외 학생 목록과 그 효과, 기록 알림 기준, 담임
+              장면 칩은 그대로 남아요.
             </span>
           </div>
           <Toggle
@@ -159,6 +163,7 @@ export function RecordReminderSection({ draft, patch }: Props) {
       </SettingsSection>
 
       <ExclusionListSection />
+      <FocusStudentListSection />
 
       {/* 나머지 설정 — 마스터 스위치가 꺼져 있으면 흐리게 비활성 표시 */}
       <div
@@ -196,6 +201,11 @@ export function RecordReminderSection({ draft, patch }: Props) {
               </button>
             ))}
           </div>
+          {/* ADR-137 — 오늘 챙길 학생 인원은 새 설정 없이 알림 강도를 따른다. */}
+          <p className="mt-2 text-center text-xs text-sp-muted">
+            오늘 챙길 학생 담임 {todayStudentCaps(rr).homeroom}명 · 수업반{' '}
+            {todayStudentCaps(rr).subject}명
+          </p>
 
           <div className="border-t border-sp-border/40 mt-4 pt-4 space-y-4">
             <div>
@@ -497,29 +507,6 @@ export function RecordReminderSection({ draft, patch }: Props) {
             policy={draft.attendanceDocumentPolicy ?? DEFAULT_ATTENDANCE_DOCUMENT_POLICY}
             onChange={(next) => patch({ attendanceDocumentPolicy: next })}
           />
-        </SettingsSection>
-
-        {/* 관심 학생 (추후 지원) — 빼기는 위 '제외 학생'으로 옮겼다(ADR-135) */}
-        <SettingsSection
-          icon="person_search"
-          iconColor="bg-sp-surface text-sp-muted"
-          title="관심 학생"
-        >
-          <div className="flex items-center justify-between p-3 rounded-lg bg-sp-surface/60">
-            <div className="flex flex-col">
-              <span className="text-sm font-medium text-sp-text">학생별 설정</span>
-              <span className="text-xs text-sp-muted">
-                더 자주 챙길 관심 학생으로 지정할 수 있어요.
-              </span>
-            </div>
-            <button
-              type="button"
-              disabled
-              className="shrink-0 px-3 py-1.5 rounded-lg border border-sp-border text-sp-muted text-xs font-medium opacity-50 cursor-not-allowed"
-            >
-              추후 지원
-            </button>
-          </div>
         </SettingsSection>
       </div>
     </div>

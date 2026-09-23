@@ -2,6 +2,7 @@
 /// <reference types="@testing-library/jest-dom" />
 /**
  * ADR-135 — 반 카드: 칸을 누르면 바로 쓰기, '⋯'로 빼기·다시 넣기(누르는 즉시 저장), Esc 는 메뉴만 닫는다.
+ * ADR-137 — '⋯'의 [관심 학생으로]/[관심 학생 풀기](즉시 저장, 칸에는 표시 없음).
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, cleanup, fireEvent, act } from '@testing-library/react';
@@ -27,6 +28,7 @@ function cell(over: Partial<LapCellViewModel>): LapCellViewModel {
     bell: false,
     exclusionKey: 'subject:c1:1',
     excludedUntil: null,
+    focused: false,
     ...over,
   };
 }
@@ -41,6 +43,7 @@ function card(cells: LapCellViewModel[], over: Partial<LapCardViewModel> = {}): 
     cells,
     memberCount: cells.filter((c) => c.state !== 'excluded').length,
     remaining: cells.filter((c) => c.state === 'empty').length,
+    completedLaps: 0,
     justFinished: false,
     newMark: null,
     newBoundaryRecordId: null,
@@ -50,12 +53,14 @@ function card(cells: LapCellViewModel[], over: Partial<LapCardViewModel> = {}): 
 
 const setReminderExclusion = vi.fn(async () => {});
 const removeReminderExclusion = vi.fn(async () => {});
+const setReminderFocus = vi.fn(async () => {});
 
 beforeEach(() => {
   openQuickRecordDirect.mockClear();
   setReminderExclusion.mockClear();
   removeReminderExclusion.mockClear();
-  useSettingsStore.setState({ setReminderExclusion, removeReminderExclusion });
+  setReminderFocus.mockClear();
+  useSettingsStore.setState({ setReminderExclusion, removeReminderExclusion, setReminderFocus });
 });
 
 afterEach(cleanup);
@@ -100,7 +105,7 @@ describe('칸 누르기', () => {
   it('종은 읽어 주는 이름에 담고, 머리글은 남은 수만 말한다', () => {
     renderCard(card([cell({ bell: true }), cell({ ref: '2', label: '2', state: 'filled' })]));
     expect(
-      screen.getByRole('button', { name: '1번 김가람, 아직 기록 전 · 한동안 비어 있어요' }),
+      screen.getByRole('button', { name: '1번 김가람, 아직 기록 전 · 오늘 챙길 학생' }),
     ).toBeInTheDocument();
     expect(screen.getByText('한 바퀴까지 1명')).toBeInTheDocument();
   });
@@ -181,6 +186,40 @@ describe('칸 메뉴', () => {
     fireEvent.mouseDown(trigger);
     fireEvent.click(trigger);
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
+  });
+
+  it('[관심 학생으로]는 그 반 key 로 바로 저장하고, 관심 학생이면 [관심 학생 풀기]', async () => {
+    const { useToastStore } = await import('@adapters/components/common/Toast');
+    const show = vi.fn();
+    useToastStore.setState({ show });
+    renderCard(card([cell({})]));
+    fireEvent.click(screen.getByRole('button', { name: '1번 칸 메뉴 열기' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: '관심 학생으로' }));
+    });
+    expect(setReminderFocus).toHaveBeenCalledWith('subject:c1:1', true);
+    expect(show).toHaveBeenCalledWith('관심 학생으로 지정했어요', 'success', undefined, 2500);
+    cleanup();
+
+    renderCard(card([cell({ focused: true })]));
+    fireEvent.click(screen.getByRole('button', { name: '1번 칸 메뉴 열기' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: '관심 학생 풀기' }));
+    });
+    expect(setReminderFocus).toHaveBeenCalledWith('subject:c1:1', false);
+  });
+
+  it('관심 학생 여부는 칸에 드러나지 않는다(교실 화면 대비)', () => {
+    const { container } = renderCard(card([cell({ focused: true })]));
+    expect(screen.getByRole('button', { name: '1번 김가람, 아직 기록 전' })).toBeInTheDocument();
+    expect(container.textContent).not.toContain('관심');
+  });
+
+  it('빠진 칸에는 관심 학생 항목이 없다(빼기가 이긴다)', () => {
+    renderCard(card([cell({ state: 'excluded', excludedUntil: '2026-10-06', focused: true })]));
+    fireEvent.click(screen.getByRole('button', { name: '1번 칸 메뉴 열기' }));
+    expect(screen.queryByRole('menuitem', { name: '관심 학생 풀기' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: '관심 학생으로' })).not.toBeInTheDocument();
   });
 
   it('저장에 실패하면 알린다', async () => {

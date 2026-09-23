@@ -17,8 +17,16 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useQuickAddStore } from '@adapters/stores/useQuickAddStore';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { VoiceTypingButton } from '@adapters/components/common/VoiceTypingButton';
-import { allSlotsForContext } from '@domain/rules/observationSlots';
+import { allSlotsForContext, normalizeSlots } from '@domain/rules/observationSlots';
 import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
+import { isObservationCheerEnabled } from '@domain/entities/RecordReminder';
+import { isCountedHomeroomRecord } from '@domain/rules/observationEntries';
+import {
+  emptyDefaultScenesThisTerm,
+  pickQuestionScene,
+  sceneQuestionText,
+} from '@domain/rules/observationQuestion';
+import { useObservationTermWindow } from '@adapters/hooks/useObservationCheerContext';
 import { toLocalDateString } from '@shared/utils/localDate';
 import {
   buildQuickRecordCandidates,
@@ -71,7 +79,10 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
   const [date, setDate] = useState(() => toLocalDateString(new Date()));
   const [content, setContent] = useState('');
   const [classification, setClassification] = useState('');
+  /** 담임 장면(ADR-137) — 담임 맥락의 갈래(상담·생활·기타)와 다른 축이라 따로 둔다. */
+  const [sceneSlot, setSceneSlot] = useState('');
   const [recentOpen, setRecentOpen] = useState(false);
+  const termWindow = useObservationTermWindow();
   const [saving, setSaving] = useState(false);
   /** 시작 목록 — 저장에 성공하면 여기로 돌아간다. null 이면 통합 검색이 시작 목록이다. */
   const [originClassId, setOriginClassId] = useState<string | null>(focus?.classId ?? null);
@@ -201,6 +212,46 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
       .map((c) => ({ value: c.id, label: c.name.replace(/\s*\(.*\)\s*$/, '') }));
   }, [activeContext, customSlots, homeroomCategories]);
 
+  /** 담임 장면 칩 — 담임 기록 입력 화면과 같은 목록(기본 6개 + 선생님이 더한 장면). */
+  const homeroomScenes = useMemo(
+    () => allSlotsForContext('homeroom', settings.homeroomRecordSlots ?? []),
+    [settings.homeroomRecordSlots],
+  );
+
+  /**
+   * 질문 한 줄(ADR-137) — 한 명 쓰기일 때, 이번 학기 그 카드에 아직 없는 기본 장면을 묻는다.
+   * 어느 장면을 물을지는 날짜와 학생으로 정해진다(날마다 돌아간다). 응원·잔디가 꺼져 있으면 없다.
+   */
+  const questionLine = useMemo(() => {
+    if (!isObservationCheerEnabled(settings.recordReminder)) return null;
+    if (activeContext === null || activeContext.members.length !== 1) return null;
+    const member = activeContext.members[0];
+    if (member === undefined) return null;
+    const context = activeContext.kind === 'homeroom' ? 'homeroom' : 'teaching';
+    const records =
+      activeContext.kind === 'homeroom'
+        ? homeroomRecords.filter(
+            (r) => r.studentId === member.studentRef && isCountedHomeroomRecord(r),
+          )
+        : observationRecords.filter(
+            (r) => r.studentId === member.studentRef && r.classId === activeContext.contextId,
+          );
+    const empty = emptyDefaultScenesThisTerm(
+      records,
+      context,
+      termWindow.termStart,
+      termWindow.today,
+    );
+    const scene = pickQuestionScene(
+      empty,
+      termWindow.today,
+      `${activeContext.kind}:${activeContext.contextId}:${member.studentRef}`,
+    );
+    if (scene === null) return null;
+    const text = sceneQuestionText(scene, member.name);
+    return text === null ? null : { scene, text };
+  }, [settings.recordReminder, activeContext, homeroomRecords, observationRecords, termWindow]);
+
   const toggleStudent = useCallback(
     (candidate: QuickRecordCandidate) => {
       setContextKey(null);
@@ -228,6 +279,7 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
   const chooseContext = useCallback((ctx: SharedQuickRecordContext) => {
     setContextKey(`${ctx.kind}:${ctx.contextId}`);
     setClassification('');
+    setSceneSlot('');
     setStep('compose');
     window.setTimeout(() => contentRef.current?.focus(), 0);
   }, []);
@@ -251,6 +303,11 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
               content: body,
               date,
               tags: [],
+              slots: normalizeSlots(
+                sceneSlot === '' ? [] : [sceneSlot],
+                'homeroom',
+                settings.homeroomRecordSlots ?? [],
+              ),
             });
           } else {
             await addObservation({
@@ -297,6 +354,7 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
       }
       setContent('');
       setClassification('');
+      setSceneSlot('');
       setSelectedIds([]);
       backToPick();
     },
@@ -304,6 +362,8 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
       activeContext,
       content,
       classification,
+      sceneSlot,
+      settings.homeroomRecordSlots,
       date,
       addHomeroomRecord,
       addObservation,
@@ -494,6 +554,23 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
         </p>
       </div>
 
+      {questionLine !== null && (
+        <button
+          type="button"
+          onClick={() =>
+            activeContext?.kind === 'homeroom'
+              ? setSceneSlot(questionLine.scene)
+              : setClassification(questionLine.scene)
+          }
+          className="flex w-full items-start gap-2 rounded-lg border border-dashed border-sp-border bg-sp-surface px-3 py-2 text-left text-sm text-sp-text transition-colors hover:border-sp-accent"
+        >
+          <span aria-hidden className="mt-0.5 text-sp-accent">
+            💬
+          </span>
+          <span>{questionLine.text}</span>
+        </button>
+      )}
+
       <label className="block">
         <span className="text-xs text-sp-muted">날짜</span>
         <input
@@ -540,6 +617,29 @@ export function QuickAddStudentRecordForm({ onClose }: Props): JSX.Element {
                 }`}
               >
                 {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {activeContext?.kind === 'homeroom' && (
+        <div>
+          <p className="mb-1.5 text-xs text-sp-muted">이 순간 · 고르지 않아도 저장됩니다</p>
+          <div className="flex flex-wrap gap-1.5" role="group" aria-label="이 순간">
+            {homeroomScenes.map((scene) => (
+              <button
+                key={scene}
+                type="button"
+                onClick={() => setSceneSlot(sceneSlot === scene ? '' : scene)}
+                aria-pressed={sceneSlot === scene}
+                className={`rounded-full px-2.5 py-1 text-xs transition-colors ${
+                  sceneSlot === scene
+                    ? 'bg-sp-accent text-sp-accent-fg'
+                    : 'bg-sp-surface text-sp-muted hover:text-sp-text'
+                }`}
+              >
+                {scene}
               </button>
             ))}
           </div>

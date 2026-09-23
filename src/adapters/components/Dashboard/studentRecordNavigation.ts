@@ -16,6 +16,7 @@ import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore'
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { requestHomeroomTab } from '../Homeroom/homeroomTabIntent';
 import { requestClassManagementTab } from '../ClassManagement/classManagementTabIntent';
+import { openObservationPanelKind } from './ObservationCheer/observationPanelNavigation';
 import {
   buildQuickRecordDirectTarget,
   type StudentRecordIntent,
@@ -96,6 +97,10 @@ export function applyStudentRecordIntent(intent: StudentRecordIntent): void {
   if (intent.kind === 'homeroom-attendance') {
     useStudentRecordsStore.getState().setViewMode('attendance');
     requestHomeroomTab('records');
+    return;
+  }
+  if (intent.kind === 'observation-panel') {
+    openObservationPanelKind(intent.panel);
     return;
   }
   useTeachingClassStore.getState().selectClass(intent.classId);

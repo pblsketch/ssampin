@@ -66,7 +66,35 @@ export function buildExclusionRows(input: BuildExclusionRowsInput): ExclusionRow
   for (const id of rr.excludedStudentIds ?? []) {
     if (!untilByKey.has(id)) untilByKey.set(id, null);
   }
+  return buildKeyedRows(untilByKey, input, rr.nameExposure);
+}
 
+export interface BuildFocusRowsInput {
+  readonly reminder: Pick<ReminderSettings, 'focusedStudentIds' | 'nameExposure'>;
+  readonly homeroomTitle: string;
+  readonly students: readonly Student[];
+  readonly classes: readonly TeachingClass[];
+}
+
+/**
+ * 설정 화면 '관심 학생' 목록의 행(ADR-137) — key 형식이 빼기와 같아 같은 조립을 쓴다.
+ * 관심 지정에는 기간이 없다(`until` 은 늘 null).
+ */
+export function buildFocusRows(input: BuildFocusRowsInput): ExclusionRow[] {
+  const keys = new Map<string, string | null>();
+  for (const key of input.reminder.focusedStudentIds ?? []) keys.set(key, null);
+  return buildKeyedRows(keys, input, input.reminder.nameExposure);
+}
+
+function buildKeyedRows(
+  untilByKey: ReadonlyMap<string, string | null>,
+  input: {
+    readonly homeroomTitle: string;
+    readonly students: readonly Student[];
+    readonly classes: readonly TeachingClass[];
+  },
+  exposure: NameExposure,
+): ExclusionRow[] {
   // 칸 순서(카드에 놓인 차례)도 함께 둔다 — 섞인 반은 번호가 아니라 학년·반·번호 차례다.
   const indexed = (tiles: readonly CardTile[]): Map<string, { tile: CardTile; index: number }> =>
     new Map(tiles.map((tile, index) => [tile.ref, { tile, index }]));
@@ -94,14 +122,14 @@ export function buildExclusionRows(input: BuildExclusionRowsInput): ExclusionRow
       const group = cls === undefined ? '' : teachingClassTitle(cls.name, cls.subject);
       const order = cls === undefined ? Number.MAX_SAFE_INTEGER : 1 + input.classes.indexOf(cls);
       rows.push({
-        row: tileRow(key, group, found?.tile, until, rr.nameExposure),
+        row: tileRow(key, group, found?.tile, until, exposure),
         order,
         sub: found?.index ?? 0,
       });
     } else {
       const found = homeroom.get(key);
       rows.push({
-        row: tileRow(key, input.homeroomTitle, found?.tile, until, rr.nameExposure),
+        row: tileRow(key, input.homeroomTitle, found?.tile, until, exposure),
         order: found === undefined ? Number.MAX_SAFE_INTEGER : 0,
         sub: found?.index ?? 0,
       });

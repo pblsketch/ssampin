@@ -33,7 +33,7 @@ function cellAriaLabel(cell: LapCellViewModel): string {
     cell.displayName.length > 0 ? `${cell.label}번 ${cell.displayName}` : `${cell.label}번 학생`;
   if (cell.state === 'excluded') return `${who}, 지금 빠져 있음`;
   if (cell.state === 'filled') return `${who}, 이번 바퀴 기록 완료`;
-  return cell.bell ? `${who}, 아직 기록 전 · 한동안 비어 있어요` : `${who}, 아직 기록 전`;
+  return cell.bell ? `${who}, 아직 기록 전 · 오늘 챙길 학생` : `${who}, 아직 기록 전`;
 }
 
 const CELL_STATE_CLASS: Record<LapCellViewModel['state'], string> = {
@@ -103,6 +103,22 @@ export function ClassLapCard({ card, today, termEnd }: ClassLapCardProps): JSX.E
 
   const putBack = (cell: LapCellViewModel): void => {
     void save(() => useSettingsStore.getState().removeReminderExclusion(cell.exclusionKey));
+  };
+
+  // 관심 학생은 칸 어디에도 표시가 없다(ADR-137 — TV 화면 대비). 눌렸는지 알 수 있게 짧게 알린다.
+  const toggleFocus = (cell: LapCellViewModel): void => {
+    const next = !cell.focused;
+    void save(async () => {
+      await useSettingsStore.getState().setReminderFocus(cell.exclusionKey, next);
+      useToastStore
+        .getState()
+        .show(
+          next ? '관심 학생으로 지정했어요' : '관심 학생 지정을 풀었어요',
+          'success',
+          undefined,
+          2500,
+        );
+    });
   };
 
   const openCell = (cell: LapCellViewModel, el: HTMLElement): void => {
@@ -193,6 +209,8 @@ export function ClassLapCard({ card, today, termEnd }: ClassLapCardProps): JSX.E
           excludedUntil={menuCell.excludedUntil}
           onExclude={(p) => exclude(menuCell, p)}
           onReturn={() => putBack(menuCell)}
+          focused={menuCell.focused}
+          onToggleFocus={() => toggleFocus(menuCell)}
           onClose={closeMenu}
         />
       )}

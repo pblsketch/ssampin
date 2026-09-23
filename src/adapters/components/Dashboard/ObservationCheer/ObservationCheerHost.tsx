@@ -10,9 +10,30 @@ import {
   useObservationCheerToasts,
   useObservationLapKeeper,
 } from '@adapters/hooks/useObservationCheer';
+import {
+  useObservationTalkEngine,
+  useTodayStudentsEngine,
+} from '@adapters/hooks/useObservationDaily';
+import { useObservationDaySync } from '@adapters/stores/useObservationDayStore';
+import { weeklyRecapHasContent } from './recapPieces';
 
 export function ObservationCheerHost(): null {
+  useObservationDaySync();
   useObservationLapKeeper();
   useObservationCheerToasts();
+  // ADR-137 — 오늘 챙길 학생은 메인 창·위젯 창 모두 고른다(이 컴퓨터 저장소에서 합쳐진다).
+  useTodayStudentsEngine();
+  return null;
+}
+
+/**
+ * 바탕화면 위젯 창에 한 번만 다는 보이지 않는 자리(ADR-137).
+ * 그날 상태를 따라가고, 오늘 챙길 학생을 고르고, 먼저 거는 말을 정한다(토스트 없음 — 핀 줄만).
+ * 한 바퀴 끝 지점 저장은 하지 않는다(메인 창만).
+ */
+export function ObservationWidgetHost(): null {
+  useObservationDaySync();
+  useTodayStudentsEngine();
+  useObservationTalkEngine('widget', undefined, weeklyRecapHasContent);
   return null;
 }

@@ -12,6 +12,7 @@ import { resolveStartupMode } from '@domain/entities/Settings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import { withExclusion, withoutExclusion } from '@domain/rules/reminderExclusion';
+import { withFocus, withoutFocus } from '@domain/rules/observationFocus';
 import { toLocalDateString } from '@shared/utils/localDate';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { settingsRepository } from '@adapters/di/container';
@@ -291,6 +292,8 @@ interface SettingsState {
   setReminderExclusion: (key: string, until: string) => Promise<void>;
   /** 다시 넣기 — 옛 `excludedStudentIds` 에 있던 학생도 함께 뺀다. 즉시 저장. */
   removeReminderExclusion: (key: string) => Promise<void>;
+  /** 관심 학생으로 / 풀기(ADR-137) — 반 범위 key. 즉시 저장, 풀 때까지 유지. */
+  setReminderFocus: (key: string, focused: boolean) => Promise<void>;
 }
 
 /**
@@ -601,6 +604,18 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
         ...rr,
         exclusions: withoutExclusion(rr.exclusions, key, today),
         excludedStudentIds: rr.excludedStudentIds.filter((id) => id !== key),
+      },
+    });
+  },
+
+  setReminderFocus: async (key, focused) => {
+    const rr = get().settings.recordReminder ?? DEFAULT_REMINDER_SETTINGS;
+    await get().update({
+      recordReminder: {
+        ...rr,
+        focusedStudentIds: focused
+          ? withFocus(rr.focusedStudentIds, key)
+          : withoutFocus(rr.focusedStudentIds, key),
       },
     });
   },

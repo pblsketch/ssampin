@@ -11,6 +11,7 @@ import {
 import { useObservationTermWindow } from '@adapters/hooks/useObservationCheerContext';
 import { MyGrassSection } from './MyGrassSection';
 import { ClassLapCard } from './ClassLapCard';
+import { requestObservationPanel } from './observationPanelNavigation';
 
 export function ObservationCheerTab(): JSX.Element {
   const grass = useMyGrass();
@@ -20,6 +21,29 @@ export function ObservationCheerTab(): JSX.Element {
 
   return (
     <div className="space-y-3">
+      {/* ADR-137 — 한 주 정리·학기 돌아보기는 언제든 여기서 연다(위젯 창이면 메인 창에서). */}
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => requestObservationPanel('weekly')}
+          className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-sp-border px-3 py-1.5 text-xs text-sp-text transition-colors hover:border-sp-accent"
+        >
+          <span aria-hidden className="material-symbols-outlined text-sm">
+            calendar_view_week
+          </span>
+          이번 주 정리
+        </button>
+        <button
+          type="button"
+          onClick={() => requestObservationPanel('retrospect')}
+          className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-sp-border px-3 py-1.5 text-xs text-sp-text transition-colors hover:border-sp-accent"
+        >
+          <span aria-hidden className="material-symbols-outlined text-sm">
+            auto_stories
+          </span>
+          이번 학기 돌아보기
+        </button>
+      </div>
       <MyGrassSection weeks={grass.weeks} lineText={cheer?.message ?? grass.lineText} />
       {cards.map((card) => (
         <ClassLapCard

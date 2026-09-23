@@ -19,12 +19,18 @@ import {
   subjectEntries,
 } from '@domain/rules/observationEntries';
 import { activeExclusionKeys, subjectExclusionKey } from '@domain/rules/reminderExclusion';
-import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
+import { scopedReminderConfig } from '@domain/rules/observationFocus';
+import { isRestingToday, useObservationDayStore } from '@adapters/stores/useObservationDayStore';
+import {
+  DEFAULT_REMINDER_SETTINGS,
+  isObservationCheerEnabled,
+} from '@domain/entities/RecordReminder';
 import type { LastRecordDateProvider, ReminderStudent } from '@domain/entities/RecordReminder';
 import { isStudentActive } from '@domain/rules/studentActivity';
 import {
   buildForwardSchedule,
   daysSinceLastRecord,
+  effectiveStaleDays,
   formatDateStr,
 } from '@domain/rules/recordReminderRules';
 import { parseMinutes } from '@domain/rules/periodRules';
@@ -38,6 +44,10 @@ interface OsScheduleItem {
   title: string;
   body: string;
   studentDedupKey: string;
+}
+
+function nextLocalMidnight(now: Date): number {
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1).getTime();
 }
 
 /**
@@ -67,6 +77,8 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
   const pausedUntil = useRecordReminderStore((s) => s.pausedUntil);
   const firedKeys = useReminderFireStore((s) => s.firedKeys);
   const fireLoaded = useReminderFireStore((s) => s.loaded);
+  // ADR-137 — '오늘은 쉴게요'는 그날 윈도우 알림을 조용히 한다(내일 예약은 그대로 둔다).
+  const restDay = useObservationDayStore((s) => s.restDay);
   // ADR-135 — 방학 날은 공백 날수에 넣지 않는다(학사일정이 없으면 예전 그대로).
   const calendar = useSchoolCalendarDays();
 
@@ -134,7 +146,8 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
       for (const it of buildForwardSchedule(
         roster,
         provider,
-        rr,
+        // 관심 학생 절반 문턱은 반 범위로 좁힌 설정으로 잰다(ADR-137).
+        scopedReminderConfig(rr, { kind: 'homeroom' }),
         fired,
         cursor,
         now,
@@ -184,11 +197,14 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
           today,
         );
         const provider: LastRecordDateProvider = (sKey) => obsLast.get(sKey) ?? null;
+        const subjectCfg = scopedReminderConfig(rr, { kind: 'subject', classId: cls.id });
         const dueCount = cls.students
           .filter(isStudentActive)
           .filter((s) => !excludedKeys.has(subjectExclusionKey(cls.id, studentKey(s))))
           .filter(
-            (s) => daysSinceLastRecord(provider, studentKey(s), now, calendar) >= rr.staleDays,
+            (s) =>
+              daysSinceLastRecord(provider, studentKey(s), now, calendar) >=
+              effectiveStaleDays(studentKey(s), subjectCfg),
           ).length;
         if (dueCount === 0) continue;
 
@@ -202,7 +218,13 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
       }
     }
 
-    api.scheduleReminders('record', items);
+    // 쉬는 날에는 오늘 자정 전 예약을 뺀다 — 이미 예약해 둔 그날 알림도 이 재예약으로 지워진다.
+    // 쉬기는 응원·잔디의 단추라, 응원·잔디를 끄면 함께 풀린다.
+    const scheduled =
+      isObservationCheerEnabled(rr) && isRestingToday(restDay, todayIso)
+        ? items.filter((it) => it.fireAt >= nextLocalMidnight(now))
+        : items;
+    api.scheduleReminders('record', scheduled);
   }, [
     rr,
     periodTimes,
@@ -216,6 +238,7 @@ export function useReminderOsPush(onToastClicked?: (reminderId: string) => void)
     firedKeys,
     pausedUntil,
     snoozeUntil,
+    restDay,
     calendar,
   ]);
 

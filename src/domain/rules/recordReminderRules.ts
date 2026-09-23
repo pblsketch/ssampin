@@ -146,8 +146,17 @@ export function applyRotation<T>(items: readonly T[], cursor: number): T[] {
   return [...items.slice(start), ...items.slice(0, start)];
 }
 
-/** 관심 학생은 공백 임계를 절반으로 낮춘다(더 자주 챙김). 최소 1일. */
-function effectiveStaleDays(studentId: string, config: ReminderSettings): number {
+/**
+ * 관심 학생은 공백 임계를 절반으로 낮춘다(더 자주 챙김). 최소 1일.
+ *
+ * ★`config` 는 그 반 범위로 좁힌 설정(`scopedReminderConfig`)을 넘긴다 — 관심 학생 key 는
+ *   반 범위라(수업반 = `subject:${classId}:${studentKey}`) 범위 없는 id 와 바로 대조되지 않는다.
+ *   오늘 챙길 학생·알림 창·윈도우 알림 예약·미기록 수가 모두 이 함수 하나를 쓴다(ADR-137).
+ */
+export function effectiveStaleDays(
+  studentId: string,
+  config: Pick<ReminderSettings, 'focusedStudentIds' | 'staleDays'>,
+): number {
   if (config.focusedStudentIds.includes(studentId)) {
     return Math.max(1, Math.floor(config.staleDays / 2));
   }

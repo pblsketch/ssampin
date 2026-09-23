@@ -7,8 +7,10 @@ interface ToastData {
   message: string;
   type: 'success' | 'error' | 'info' | 'cheer';
   action?: { label: string; onClick: () => void };
-  /** 'cheer' 토스트의 핀 동작(ADR-135) — 첫 기록은 손 흔들기, 한 바퀴는 만세. */
-  pinState?: 'wave' | 'celebrate';
+  /** 'cheer' 토스트의 핀 동작(ADR-135) — 첫 기록은 손 흔들기, 한 바퀴는 만세, 먼저 거는 말은 가만히. */
+  pinState?: 'idle' | 'wave' | 'celebrate';
+  /** 토스트 전체를 누르면 할 일(ADR-137 먼저 거는 말 — 한 주 정리·학기 돌아보기 열기). */
+  onClick?: () => void;
 }
 
 interface ToastState {
@@ -34,8 +36,13 @@ interface ToastState {
   /**
    * 관찰 기록 응원(ADR-135) — 핀이 짧게 말을 건다. 단추 없이 4초.
    * 일반 `show` 의 인자 순서를 바꾸지 않으려고 따로 둔다.
+   * 먼저 거는 말(ADR-137)은 `onClick` 을 넘긴다 — 토스트 전체가 눌리고 6초 남는다.
    */
-  showCheer: (message: string, pinState: 'wave' | 'celebrate') => void;
+  showCheer: (
+    message: string,
+    pinState: 'idle' | 'wave' | 'celebrate',
+    onClick?: () => void,
+  ) => void;
 }
 
 const dismissTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -56,15 +63,21 @@ export const useToastStore = create<ToastState>((set) => ({
     }, ms);
     dismissTimers.set(id, timer);
   },
-  showCheer: (message, pinState) => {
+  showCheer: (message, pinState, onClick) => {
     const id = generateUUID();
     set((state) => ({
-      toasts: [...state.toasts, { id, message, type: 'cheer', pinState }],
+      toasts: [
+        ...state.toasts,
+        { id, message, type: 'cheer', pinState, ...(onClick !== undefined ? { onClick } : {}) },
+      ],
     }));
-    const timer = setTimeout(() => {
-      dismissTimers.delete(id);
-      set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
-    }, 4000);
+    const timer = setTimeout(
+      () => {
+        dismissTimers.delete(id);
+        set((state) => ({ toasts: state.toasts.filter((t) => t.id !== id) }));
+      },
+      onClick !== undefined ? 6000 : 4000,
+    );
     dismissTimers.set(id, timer);
   },
   dismiss: (id) => {
@@ -106,26 +119,49 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
   // 떨어지는 보고가 있어 명시 라이트 카드 + 검정 계열 텍스트로 fix(사용자 환경 무관 일관).
   // success/error 토스트는 기존 dark 디자인 그대로 유지.
   const isInfo = toast.type === 'info';
+  const onClick = toast.onClick;
+  const icon =
+    toast.type === 'cheer' ? (
+      <CheerPin state={toast.pinState ?? 'wave'} size={28} />
+    ) : (
+      <span
+        className={`material-symbols-outlined ${COLOR_MAP[toast.type]} text-white p-1 rounded-lg text-sm`}
+      >
+        {ICON_MAP[toast.type]}
+      </span>
+    );
+  const message = (
+    <span className={`text-sm flex-1 ${isInfo ? 'text-slate-900' : 'text-sp-text'}`}>
+      {toast.message}
+    </span>
+  );
   return (
     <div
       role="alert"
       aria-live="polite"
       className={`animate-slide-in-right motion-reduce:animate-none flex items-center gap-3 border rounded-xl px-4 py-3 shadow-xl min-w-[320px] max-w-[400px] ${
         isInfo ? 'bg-slate-50 border-slate-300' : 'bg-sp-card border-sp-border'
-      }`}
+      } ${onClick !== undefined ? 'hover:border-sp-accent' : ''}`}
     >
-      {toast.type === 'cheer' ? (
-        <CheerPin state={toast.pinState ?? 'wave'} size={28} />
-      ) : (
-        <span
-          className={`material-symbols-outlined ${COLOR_MAP[toast.type]} text-white p-1 rounded-lg text-sm`}
+      {onClick !== undefined ? (
+        // 누를 수 있는 토스트(먼저 거는 말) — 핀과 문구가 한 단추다. 닫기 단추와 겹치지 않게 나란히 둔다.
+        <button
+          type="button"
+          onClick={() => {
+            onClick();
+            onDismiss();
+          }}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          {ICON_MAP[toast.type]}
-        </span>
+          {icon}
+          {message}
+        </button>
+      ) : (
+        <>
+          {icon}
+          {message}
+        </>
       )}
-      <span className={`text-sm flex-1 ${isInfo ? 'text-slate-900' : 'text-sp-text'}`}>
-        {toast.message}
-      </span>
       {toast.action && (
         <button
           onClick={toast.action.onClick}
@@ -138,6 +174,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
       )}
       <button
         onClick={onDismiss}
+        aria-label="닫기"
         className={`transition-colors ${
           isInfo ? 'text-slate-500 hover:text-slate-900' : 'text-sp-muted hover:text-sp-text'
         }`}

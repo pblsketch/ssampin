@@ -73,7 +73,11 @@ import { ToolValueLine, ToolTrafficLightDiscussion } from '@adapters/components/
 import { useAssignmentStore } from '@adapters/stores/useAssignmentStore';
 import { Onboarding } from '@adapters/components/Onboarding/Onboarding';
 import { ToastContainer, useToastStore } from '@adapters/components/common/Toast';
-import { ObservationCheerHost } from '@adapters/components/Dashboard/ObservationCheer/ObservationCheerHost';
+import {
+  ObservationCheerHost,
+  ObservationWidgetHost,
+} from '@adapters/components/Dashboard/ObservationCheer/ObservationCheerHost';
+import { ObservationTalkHost } from '@adapters/components/Dashboard/ObservationCheer/ObservationTalkHost';
 import { UpdateNotification } from '@adapters/components/common/UpdateNotification';
 import { ModalCoordinator } from '@adapters/components/common/ModalCoordinator';
 import { FeedbackModal } from '@adapters/components/common/FeedbackModal';
@@ -814,6 +818,8 @@ function WidgetApp() {
   return (
     <div className="h-screen w-screen bg-transparent">
       <Widget />
+      {/* ADR-137 — 오늘 챙길 학생·먼저 거는 말(핀 줄만, 토스트 없음) */}
+      <ObservationWidgetHost />
       {/* 하단 알림 스택 — 시간표 변동 결과가 업데이트 안내 위에 쌓인다(겹침 방지) */}
       <div className="fixed bottom-0 left-0 right-0 z-50 flex flex-col">
         <WidgetSyncBanner />
@@ -1425,6 +1431,8 @@ function MainApp() {
             <UpdateNotification />
             <EventPopup />
             <ReminderPopup />
+            {/* ADR-137 — 먼저 거는 말(하루 한 번)과 한 주 정리·학기 돌아보기 창 */}
+            <ObservationTalkHost />
             {driveConflicts.length > 0 && (
               <DriveSyncConflictModal
                 conflicts={driveConflicts}

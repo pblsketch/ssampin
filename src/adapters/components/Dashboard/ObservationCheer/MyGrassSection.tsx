@@ -6,7 +6,15 @@
  * ★주말 칸은 없다(연속 셈에는 들어간다). 학기 밖 날은 자리만 비워 둔다.
  */
 import { grassLevel } from '@domain/rules/observationStreak';
-import type { MyGrassDay, MyGrassView } from '@adapters/hooks/useObservationCheer';
+import type { MyGrassView } from '@adapters/hooks/useObservationCheer';
+
+/** 잔디 칸 하나(1차 내 잔디·학기 돌아보기 공용). */
+export interface GrassGridDay {
+  readonly date: string;
+  readonly count: number;
+  readonly future: boolean;
+  readonly inTerm: boolean;
+}
 
 const WEEKDAY_LABELS = ['월', '화', '수', '목', '금'] as const;
 
@@ -22,7 +30,7 @@ function dayLabel(iso: string): string {
   return `${m ?? ''}월 ${d ?? ''}일`;
 }
 
-function GrassCell({ day }: { readonly day: MyGrassDay }): JSX.Element {
+function GrassCell({ day }: { readonly day: GrassGridDay }): JSX.Element {
   if (!day.inTerm) return <span aria-hidden className="h-3.5 w-3.5" />;
   if (day.future) {
     return (
@@ -52,30 +60,40 @@ export function MyGrassSection({ weeks, lineText }: MyGrassSectionProps): JSX.El
   return (
     <section className="rounded-xl border border-sp-border bg-sp-card p-3" aria-label="내 기록">
       <h4 className="mb-2 text-sm font-sp-semibold text-sp-text">내 기록</h4>
-      <div className="flex gap-1.5">
-        <div aria-hidden className="flex shrink-0 flex-col gap-0.5">
-          {WEEKDAY_LABELS.map((w) => (
-            <span
-              key={w}
-              className="flex h-3.5 items-center text-[10px] leading-none text-sp-muted"
-            >
-              {w}
-            </span>
-          ))}
-        </div>
-        <div className="min-w-0 overflow-x-auto pb-1">
-          <div role="group" aria-label="이번 학기 평일 기록" className="flex gap-0.5">
-            {weeks.map((w) => (
-              <div key={w.weekStart} className="flex flex-col gap-0.5">
-                {w.days.map((d) => (
-                  <GrassCell key={d.date} day={d} />
-                ))}
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <GrassGrid weeks={weeks} label="이번 학기 평일 기록" />
       <p className="mt-2 text-sm font-medium text-sp-text">{lineText}</p>
     </section>
+  );
+}
+
+/** 잔디 그리드 — 요일 머리 + 주마다 한 줄(학기 돌아보기도 같은 그리드를 쓴다, ADR-137). */
+export function GrassGrid({
+  weeks,
+  label,
+}: {
+  readonly weeks: readonly { readonly weekStart: string; readonly days: readonly GrassGridDay[] }[];
+  readonly label: string;
+}): JSX.Element {
+  return (
+    <div className="flex gap-1.5">
+      <div aria-hidden className="flex shrink-0 flex-col gap-0.5">
+        {WEEKDAY_LABELS.map((w) => (
+          <span key={w} className="flex h-3.5 items-center text-[10px] leading-none text-sp-muted">
+            {w}
+          </span>
+        ))}
+      </div>
+      <div className="min-w-0 overflow-x-auto pb-1">
+        <div role="group" aria-label={label} className="flex gap-0.5">
+          {weeks.map((w) => (
+            <div key={w.weekStart} className="flex flex-col gap-0.5">
+              {w.days.map((d) => (
+                <GrassCell key={d.date} day={d} />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }

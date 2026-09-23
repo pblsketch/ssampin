@@ -81,18 +81,25 @@ export function withExclusion(
 }
 
 /**
- * 설정 화면 [저장] 직전 — 빼기 목록과 옛 `excludedStudentIds` 는 카드·위젯 창·설정 화면의
- * [다시 넣기]에서 **누르는 즉시** 저장되는 값이다. 화면을 연 뒤 바뀐 목록을 초안이 덮어쓰지 않게
- * 지금 저장된 값(`latest`)을 쓴다. 저장된 값이 없으면 초안 그대로.
+ * 설정 화면 [저장] 직전 — 빼기 목록·옛 `excludedStudentIds`·관심 학생(`focusedStudentIds`)은
+ * 카드·위젯 창·설정 화면의 [다시 넣기]·[관심 학생으로]·[풀기]에서 **누르는 즉시** 저장되는 값이다.
+ * 화면을 연 뒤 바뀐 목록을 초안이 덮어쓰지 않게 지금 저장된 값(`latest`)을 쓴다.
+ * 저장된 값이 없으면 초안 그대로.
  */
 export function withLatestExclusions<
-  T extends Pick<ReminderSettings, 'exclusions' | 'excludedStudentIds'>,
->(draft: T, latest: Pick<ReminderSettings, 'exclusions' | 'excludedStudentIds'> | undefined): T {
+  T extends Pick<ReminderSettings, 'exclusions' | 'excludedStudentIds' | 'focusedStudentIds'>,
+>(
+  draft: T,
+  latest:
+    | Pick<ReminderSettings, 'exclusions' | 'excludedStudentIds' | 'focusedStudentIds'>
+    | undefined,
+): T {
   if (latest === undefined) return draft;
   return {
     ...draft,
     exclusions: latest.exclusions ?? [],
     excludedStudentIds: latest.excludedStudentIds,
+    focusedStudentIds: latest.focusedStudentIds ?? [],
   };
 }
 

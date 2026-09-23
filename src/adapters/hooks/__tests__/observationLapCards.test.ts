@@ -1,10 +1,10 @@
 /**
  * ADR-135 — 반 카드 칸 상태 조립(칠함·빈칸·빠짐·종·막 끝난 모습).
+ * ADR-137 — 종은 오늘 챙길 학생의 빈칸에만 붙는다.
  */
 import { describe, it, expect } from 'vitest';
 import { buildLapCards, type BuildLapCardsInput } from '../observationLapCards';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
-import { EMPTY_SCHOOL_CALENDAR } from '@domain/rules/schoolCalendarDays';
 import type { Student } from '@domain/entities/Student';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { ObservationRecord } from '@domain/entities/Observation';
@@ -55,13 +55,11 @@ function input(over: Partial<BuildLapCardsInput>): BuildLapCardsInput {
     homeroomRecords: [],
     observationRecords: [],
     reminder: { ...DEFAULT_REMINDER_SETTINGS },
-    reminderPaused: false,
+    todayStudentRefs: new Map(),
     marks: [],
     term: '2026-2',
     termStart: '2026-08-18',
     today: '2026-09-23',
-    now: new Date(2026, 8, 23, 12, 0),
-    calendar: EMPTY_SCHOOL_CALENDAR,
     ...over,
   };
 }
@@ -128,62 +126,47 @@ describe('담임 카드 칸', () => {
   });
 });
 
-describe('종(기록 알림이 부를 학생)', () => {
-  const reminderOn = {
-    ...DEFAULT_REMINDER_SETTINGS,
-    enabled: true,
-    targets: ['homeroom' as const],
-    staleDays: 14,
-  };
+describe('종(오늘 챙길 학생의 빈칸에만 — ADR-137)', () => {
+  const today = (refs: string[]) => new Map([['homeroom', new Set(refs)]]);
 
-  it('알림이 켜져 있고 오래 기록하지 않은 빈칸에만 단다', () => {
+  it('오늘 챙길 학생이면서 이번 바퀴 빈칸인 칸에만 단다', () => {
     const [card] = buildLapCards(
       input({
-        reminder: reminderOn,
-        homeroomRecords: [hr('a', '2026-09-20'), hr('b', '2026-06-01')],
+        todayStudentRefs: today(['a', 'b']),
+        homeroomRecords: [hr('a', '2026-09-20')],
       }),
     );
-    // a: 칠해짐(종 없음) · b: 이번 학기 기록 없음 + 오래됨(종) · c: 기록 없음(종)
-    expect(card?.cells.map((c) => c.bell)).toEqual([false, true, true]);
+    // a: 오늘 챙길 학생이지만 칠해짐 · b: 오늘 챙길 학생 빈칸(종) · c: 빈칸이지만 오늘 학생 아님
+    expect(card?.cells.map((c) => c.bell)).toEqual([false, true, false]);
   });
 
-  it('알림이 꺼졌거나 일시정지 중이면 달지 않는다', () => {
-    const off = buildLapCards(input({ reminder: { ...reminderOn, enabled: false } }))[0];
-    const paused = buildLapCards(input({ reminder: reminderOn, reminderPaused: true }))[0];
-    expect(off?.cells.some((c) => c.bell)).toBe(false);
-    expect(paused?.cells.some((c) => c.bell)).toBe(false);
-  });
-
-  it('알림 대상이 아닌 카드에는 달지 않는다', () => {
-    const [card] = buildLapCards(input({ reminder: { ...reminderOn, targets: ['subject'] } }));
+  it('오늘 챙길 학생이 없으면(보이는 조건이 안 맞으면) 종도 없다', () => {
+    const [card] = buildLapCards(input({}));
     expect(card?.cells.some((c) => c.bell)).toBe(false);
   });
 
-  it('막 끝난 모습에서는 달지 않는다', () => {
+  it('다른 카드의 오늘 학생은 이 카드에 번지지 않는다', () => {
     const [card] = buildLapCards(
+      input({ todayStudentRefs: new Map([['subject:c1', new Set(['a'])]]) }),
+    );
+    expect(card?.cells.some((c) => c.bell)).toBe(false);
+  });
+
+  it('빠진 칸·막 끝난 모습에서는 달지 않는다', () => {
+    const [excluded] = buildLapCards(
       input({
-        reminder: reminderOn,
+        todayStudentRefs: today(['b']),
+        reminder: { ...DEFAULT_REMINDER_SETTINGS, exclusions: [{ key: 'b', until: '2026-10-01' }] },
+      }),
+    );
+    expect(excluded?.cells.find((c) => c.ref === 'b')?.bell).toBe(false);
+    const [finished] = buildLapCards(
+      input({
+        todayStudentRefs: today(['a', 'b', 'c']),
         homeroomRecords: [hr('a', '2026-09-01'), hr('b', '2026-09-02'), hr('c', '2026-09-03')],
       }),
     );
-    expect(card?.cells.some((c) => c.bell)).toBe(false);
-  });
-
-  it('방학 날은 공백 날수에 넣지 않는다', () => {
-    const vacationDays = new Set<string>();
-    for (let d = 2; d <= 20; d++) vacationDays.add(`2026-09-${String(d).padStart(2, '0')}`);
-    const [card] = buildLapCards(
-      input({
-        reminder: { ...reminderOn, staleDays: 5 },
-        homeroom: { title: '2학년 3반', students: [students[0]!, students[1]!] },
-        homeroomRecords: [hr('a', '2026-09-22'), hr('b', '2026-09-01')],
-        termStart: '2026-09-22',
-        calendar: { ...EMPTY_SCHOOL_CALENDAR, vacationDays },
-      }),
-    );
-    // b 는 이번 학기(9/22~) 기록이 없어 빈칸이지만, 방학을 빼면 공백 3일 → 종 없음
-    expect(card?.cells.find((c) => c.ref === 'b')?.state).toBe('empty');
-    expect(card?.cells.find((c) => c.ref === 'b')?.bell).toBe(false);
+    expect(finished?.cells.some((c) => c.bell)).toBe(false);
   });
 });
 

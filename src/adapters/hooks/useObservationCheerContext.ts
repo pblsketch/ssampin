@@ -12,6 +12,11 @@
 import { useEffect, useMemo } from 'react';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useStudentStore } from '@adapters/stores/useStudentStore';
+import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
+import { isObservationCheerEnabled } from '@domain/entities/RecordReminder';
+import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
+import { isStudentActive } from '@domain/rules/studentActivity';
 import { useCurrentTerm, useCurrentTermStartIso } from '@adapters/hooks/useCurrentTerm';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { classifyNeisEvent } from '@domain/entities/NeisSchedule';
@@ -21,7 +26,28 @@ import {
   type SchoolCalendarDays,
   type SchoolCalendarEvent,
 } from '@domain/rules/schoolCalendarDays';
-import { termEndDate, toLocalIsoDate } from '@domain/rules/schoolTermStart';
+import {
+  previousTerm,
+  termEndDate,
+  toLocalIsoDate,
+  type TermStartDates,
+} from '@domain/rules/schoolTermStart';
+import type { ScheduleEventLike } from '@domain/rules/termEndFromSchedule';
+import { buildTermTails, resolveRegularTermEnd } from '@domain/rules/regularTermEnd';
+
+/** 응원·잔디를 보여 줄 수 있는가 — 켜져 있고 학생 명렬이 하나라도 있을 때(1차 spec §10·§11). */
+export function useObservationCheerAvailable(): boolean {
+  const rr = useSettingsStore((s) => s.settings.recordReminder);
+  const students = useStudentStore((s) => s.students);
+  const classes = useTeachingClassStore((s) => s.classes);
+  return useMemo(() => {
+    if (!isObservationCheerEnabled(rr)) return false;
+    return (
+      students.some(isStudentActive) ||
+      filterActiveClasses(classes).some((c) => c.students.some(isStudentActive))
+    );
+  }, [rr, students, classes]);
+}
 
 /** 나이스 학교 일정만 골라 분류를 붙인다. */
 export function toSchoolCalendarEvents(events: readonly SchoolEvent[]): SchoolCalendarEvent[] {
@@ -49,21 +75,75 @@ export function toSchoolCalendarEvents(events: readonly SchoolEvent[]): SchoolCa
 export function buildSchoolCalendarFromEvents(
   events: readonly SchoolEvent[],
   today: Date,
+  terms?: TermTailInput,
 ): SchoolCalendarDays {
   const schoolEvents = toSchoolCalendarEvents(events);
-  if (schoolEvents.length === 0) return buildSchoolCalendarDays([], []);
+  if (schoolEvents.length === 0 && terms?.termEndDates === undefined) {
+    return buildSchoolCalendarDays([], []);
+  }
   const year = today.getFullYear();
   const holidays: string[] = [];
-  for (const y of [year - 1, year, year + 1]) {
-    for (const h of getKoreanHolidays(y)) holidays.push(h.date);
+  if (schoolEvents.length > 0) {
+    for (const y of [year - 1, year, year + 1]) {
+      for (const h of getKoreanHolidays(y)) holidays.push(h.date);
+    }
   }
-  return buildSchoolCalendarDays(schoolEvents, holidays);
+  const base = buildSchoolCalendarDays(schoolEvents, holidays);
+  if (terms === undefined) return base;
+  const termTails = buildTermTails(
+    recentTerms(terms.currentTerm).map((term) => ({
+      term,
+      lastDay: termEndDate(term, terms.termStartDates),
+    })),
+    terms.termEndDates,
+    toScheduleEventLikes(events),
+  );
+  return termTails.length > 0 ? { ...base, termTails } : base;
+}
+
+/**
+ * 2·3차(ADR-137) — 정규 수업 종료일 뒤 등교 주를 쉬는 주로 보려면 학기 정보가 필요하다.
+ * 연속 주는 학기를 넘어 이어지므로 이번 학기와 앞의 세 학기를 본다.
+ */
+export interface TermTailInput {
+  readonly currentTerm: string;
+  readonly termStartDates: TermStartDates | undefined;
+  readonly termEndDates: Readonly<Record<string, string>> | undefined;
+}
+
+function recentTerms(current: string): string[] {
+  const out = [current];
+  let t: string | null = current;
+  for (let i = 0; i < 3; i++) {
+    t = t === null ? null : previousTerm(t);
+    if (t === null) break;
+    out.push(t);
+  }
+  return out;
+}
+
+/** 방학식·종업식 후보를 찾을 나이스 학교 일정(숨긴 것 제외). */
+export function toScheduleEventLikes(events: readonly SchoolEvent[]): ScheduleEventLike[] {
+  const out: ScheduleEventLike[] = [];
+  for (const e of events) {
+    if (e.isHidden === true) continue;
+    if (e.source !== 'neis' && e.neis === undefined) continue;
+    out.push({
+      date: e.date,
+      title: e.title,
+      ...(e.neis?.eventName !== undefined ? { neisEventName: e.neis.eventName } : {}),
+    });
+  }
+  return out;
 }
 
 /** 화면·훅에서 쓰는 학사일정 날짜 집합. 일정이 아직 안 불러와졌으면 불러온다. */
 export function useSchoolCalendarDays(): SchoolCalendarDays {
   const events = useEventsStore((s) => s.events);
   const loaded = useEventsStore((s) => s.loaded);
+  const termStartDates = useSettingsStore((s) => s.settings.termStartDates);
+  const termEndDates = useSettingsStore((s) => s.settings.termEndDates);
+  const currentTerm = useCurrentTerm();
   const todayIso = toLocalIsoDate(new Date());
 
   useEffect(() => {
@@ -71,8 +151,33 @@ export function useSchoolCalendarDays(): SchoolCalendarDays {
   }, [loaded]);
 
   return useMemo(
-    () => buildSchoolCalendarFromEvents(events, new Date(`${todayIso}T00:00:00`)),
-    [events, todayIso],
+    () =>
+      buildSchoolCalendarFromEvents(events, new Date(`${todayIso}T00:00:00`), {
+        currentTerm,
+        termStartDates,
+        termEndDates,
+      }),
+    [events, todayIso, currentTerm, termStartDates, termEndDates],
+  );
+}
+
+/**
+ * 학사일정·설정을 다 불러왔는가 — 등교일 판정(오늘 챙길 학생·먼저 거는 말)은 이 뒤에만 한다.
+ * 불러오기 전에 판정하면 금요일 공휴일 주의 마지막 등교일을 금요일로 잘못 본다.
+ */
+export function useSchoolCalendarReady(): boolean {
+  const eventsLoaded = useEventsStore((s) => s.loaded);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
+  return eventsLoaded && settingsLoaded;
+}
+
+/** 그 학기의 정규 수업 종료일(등록값 → 학사일정 방학식·종업식 후보 → null). */
+export function useRegularTermEnd(term: string): string | null {
+  const events = useEventsStore((s) => s.events);
+  const termEndDates = useSettingsStore((s) => s.settings.termEndDates);
+  return useMemo(
+    () => resolveRegularTermEnd(term, termEndDates, toScheduleEventLikes(events)),
+    [term, termEndDates, events],
   );
 }
 
