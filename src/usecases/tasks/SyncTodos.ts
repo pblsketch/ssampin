@@ -6,13 +6,14 @@
  */
 import type { Todo } from '@domain/entities/Todo';
 import type { IGoogleTasksPort, GoogleTask } from '@domain/ports/IGoogleTasksPort';
+import { todoContentDiffers } from '@domain/rules/googleSourcedData';
 
 /** 동기화 결과 */
 export interface TasksSyncResult {
-  readonly pushed: number;    // 로컬 → Google 전송 수
-  readonly pulled: number;    // Google → 로컬 가져온 수
-  readonly updated: number;   // 양쪽 업데이트 수
-  readonly deleted: number;   // 삭제된 수
+  readonly pushed: number; // 로컬 → Google 전송 수
+  readonly pulled: number; // Google → 로컬 가져온 수
+  readonly updated: number; // 양쪽 업데이트 수
+  readonly deleted: number; // 삭제된 수
   readonly conflicts: number; // 충돌 수
 }
 
@@ -33,10 +34,7 @@ export class SyncTodos {
    * 로컬 Todo를 Google Tasks로 푸시
    * googleTaskId가 없으면 create, 있으면 update
    */
-  async pushToGoogle(
-    todos: readonly Todo[],
-    taskListId: string,
-  ): Promise<readonly Todo[]> {
+  async pushToGoogle(todos: readonly Todo[], taskListId: string): Promise<readonly Todo[]> {
     const accessToken = await this.getAccessToken();
     const updatedTodos: Todo[] = [];
 
@@ -48,20 +46,11 @@ export class SyncTodos {
 
       if (todo.googleTaskId) {
         // 기존 Task 업데이트
-        await this.tasksPort.updateTask(
-          accessToken,
-          taskListId,
-          todo.googleTaskId,
-          googleTask,
-        );
+        await this.tasksPort.updateTask(accessToken, taskListId, todo.googleTaskId, googleTask);
         updatedTodos.push(todo);
       } else {
         // 새 Task 생성
-        const created = await this.tasksPort.createTask(
-          accessToken,
-          taskListId,
-          googleTask,
-        );
+        const created = await this.tasksPort.createTask(accessToken, taskListId, googleTask);
         updatedTodos.push({
           ...todo,
           googleTaskId: created.id,
@@ -83,16 +72,10 @@ export class SyncTodos {
     lastSyncedAt?: string,
   ): Promise<{ todos: readonly Todo[]; hasChanges: boolean }> {
     const accessToken = await this.getAccessToken();
-    const remoteTasks = await this.tasksPort.listTasks(
-      accessToken,
-      taskListId,
-      lastSyncedAt,
-    );
+    const remoteTasks = await this.tasksPort.listTasks(accessToken, taskListId, lastSyncedAt);
 
     const todoMap = new Map(
-      existingTodos
-        .filter((t) => t.googleTaskId)
-        .map((t) => [t.googleTaskId!, t]),
+      existingTodos.filter((t) => t.googleTaskId).map((t) => [t.googleTaskId!, t]),
     );
 
     let hasChanges = false;
@@ -202,17 +185,20 @@ export class SyncTodos {
       createdAt: new Date().toISOString(),
       googleTaskId: task.id,
       googleTaskListId: taskListId,
+      origin: 'google',
     };
   }
 
   /** 기존 Todo에 Google Task 데이터 병합 */
   private mergeFromGoogle(existing: Todo, remote: GoogleTask): Todo {
-    return {
+    const merged: Todo = {
       ...existing,
       text: remote.title,
       completed: remote.status === 'completed',
       dueDate: remote.due ? remote.due.split('T')[0] : existing.dueDate,
       notes: remote.notes ?? existing.notes,
     };
+    // 구글 쪽 수정이 내용을 바꿨으면 구글에서 받은 자료다(ADR-136 D1)
+    return todoContentDiffers(existing, merged) ? { ...merged, origin: 'google' } : merged;
   }
 }

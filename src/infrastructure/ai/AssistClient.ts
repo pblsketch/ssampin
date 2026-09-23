@@ -96,6 +96,9 @@ export class AssistClient implements AssistPort {
           turns: payload.turns,
           toolResults: payload.toolResults,
           ...(payload.tools && payload.tools.length > 0 ? { tools: payload.tools } : {}),
+          // ★이 앱은 구글에서 받은 일정·할 일을 빼고 보낸다(ADR-136). 서버는 이 표시가 없는
+          //   옛 앱의 일정·할 일 결과를 받지 않는다. 서버가 이 키를 먼저 알아야 한다(모르는 키는 400).
+          googleDataExcluded: true,
         }),
         signal: AbortSignal.timeout(TIMEOUT_MS),
       });

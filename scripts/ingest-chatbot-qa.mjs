@@ -2550,7 +2550,7 @@ A: **v2.4.6에서 해결됐어요.** 둘은 같은 원인이었습니다.
     metadata: { source: 'system-qa', category: 'sync', title: 'Q: 확인되지 않은 앱 경고' },
   },
   {
-    content: `Q: Google 동기화는 안전한가요?\nA: 네, 쌤핀은 구글 OAuth 인증 심사를 공식 통과했어요. drive.file(쌤핀이 생성한 파일만 접근)과 calendar(캘린더 읽기/쓰기) 두 가지 권한만 사용하며, 다른 파일이나 이메일 등에는 접근하지 않아요.`,
+    content: `Q: Google 동기화는 안전한가요?\nA: 네, 쌤핀은 구글 OAuth 인증 심사를 공식 통과했어요. 쓰는 권한은 네 가지예요 — drive.file(쌤핀이 만든 파일만 접근), calendar(고른 캘린더의 일정 읽기/쓰기), tasks(구글 할 일 연동을 켰을 때만), userinfo.email(연결한 계정의 이메일 주소 확인). 다른 드라이브 파일이나 메일함(Gmail)에는 접근하지 않아요. 구글에서 가져온 일정·할 일은 쌤핀 AI로 보내지 않고, AI 학습에도 쓰지 않아요. 과제 수합·온라인 교무실을 쓰면 연결 정보가 서버에 암호화되어 보관되고, 연결을 해제하면 함께 지워져요.`,
     metadata: { source: 'system-qa', category: 'sync', title: 'Q: Google 동기화 안전성' },
   },
 

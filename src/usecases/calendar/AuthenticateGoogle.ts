@@ -1,12 +1,27 @@
 import type { IGoogleAuthPort, GoogleAuthTokens } from '@domain/ports/IGoogleAuthPort';
+import type { IServerTokenCustodyPort } from '@domain/ports/IServerTokenCustodyPort';
 import type { ICalendarSyncRepository } from '@domain/repositories/ICalendarSyncRepository';
 import { isTokenExpired } from '@domain/rules/calendarSyncRules';
+
+/**
+ * 연결 해제가 어디까지 끝났는가 — **조용히 삼키지 않는다**(ADR-136).
+ *
+ * 둘 중 하나라도 실패하면 선생님이 구글 계정 권한 페이지에서 한 번 더 해제해야 할 수 있다.
+ * 예전에는 구글 폐기 실패를 그냥 넘겨서, 서버와 구글 양쪽에 살아 있는 토큰이 남아도 몰랐다.
+ */
+export interface DisconnectOutcome {
+  /** 서버(과제 수합·온라인 교무실)에 맡긴 토큰을 지웠는가. 맡긴 것이 없어도 true */
+  readonly serverCleared: boolean;
+  /** 구글에 토큰 폐기를 알렸는가. 저장된 토큰이 없었으면 true */
+  readonly revoked: boolean;
+}
 
 /** 구글 캘린더 인증 유스케이스 */
 export class AuthenticateGoogle {
   constructor(
     private readonly authPort: IGoogleAuthPort,
     private readonly syncRepo: ICalendarSyncRepository,
+    private readonly serverTokens?: IServerTokenCustodyPort,
   ) {}
 
   /** OAuth 인증 URL 생성 */
@@ -92,17 +107,35 @@ export class AuthenticateGoogle {
     return tokens?.expiresAt ?? null;
   }
 
-  /** 연결 해제 (토큰 폐기 + 로컬 삭제) */
-  async disconnect(): Promise<void> {
+  /**
+   * 연결 해제 — **서버 보관분 삭제 → 구글 폐기 → 로컬 삭제** 순서(ADR-136 D4).
+   *
+   * ★순서가 중요하다. 서버 보관분을 지우려면 본인 확인(access token)이 필요한데, 구글에서
+   * 폐기한 뒤에는 그 토큰이 죽는다. 그래서 서버를 먼저 지운다.
+   * ★실패해도 로컬은 지운다 — 선생님이 "해제"를 눌렀다. 대신 무엇이 안 됐는지 돌려준다.
+   */
+  async disconnect(): Promise<DisconnectOutcome> {
     const tokens = await this.syncRepo.getAuthTokens();
+    let serverCleared = true;
+    let revoked = true;
     if (tokens) {
+      if (this.serverTokens) {
+        try {
+          await this.serverTokens.deleteMine(await this.getValidAccessToken());
+        } catch (err) {
+          console.warn('[AuthenticateGoogle] 서버 보관 토큰 삭제 실패:', err);
+          serverCleared = false;
+        }
+      }
       try {
         // refreshToken을 폐기하면 연관된 모든 accessToken도 무효화됨
         await this.authPort.revokeTokens(tokens.refreshToken);
-      } catch {
-        // 폐기 실패해도 로컬은 삭제
+      } catch (err) {
+        console.warn('[AuthenticateGoogle] 구글 토큰 폐기 실패:', err);
+        revoked = false;
       }
     }
     await this.syncRepo.deleteAuthTokens();
+    return { serverCleared, revoked };
   }
 }

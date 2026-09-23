@@ -50,6 +50,7 @@ export class AssignmentSupabaseClient {
     functionName: string,
     body: unknown,
     headers?: Record<string, string>,
+    timeoutMs?: number,
   ): Promise<T> {
     if (!this.baseUrl || !this.anonKey) {
       throw new Error('Supabase is not configured');
@@ -65,6 +66,7 @@ export class AssignmentSupabaseClient {
         ...headers,
       },
       body: JSON.stringify(body),
+      ...(timeoutMs === undefined ? {} : { signal: AbortSignal.timeout(timeoutMs) }),
     });
 
     if (!res.ok) {
@@ -185,5 +187,21 @@ export class AssignmentSupabaseClient {
     expiresAt: string;
   }): Promise<void> {
     await this.invoke<{ message: string; teacherId: string }>('save-teacher-token', tokens);
+  }
+
+  /**
+   * 서버가 맡아 둔 이 계정의 토큰을 지운다 — 과제 수합·온라인 교무실 둘 다 (ADR-136 D4).
+   *
+   * 연결 해제 도중에 부르므로 오래 기다리지 않는다(10초). 서버가 설정되지 않은 빌드는
+   * 애초에 맡길 곳이 없었으므로 지울 것도 없다.
+   */
+  async deleteServerTokens(googleAccessToken: string): Promise<void> {
+    if (!this.baseUrl || !this.anonKey) return;
+    await this.invoke<{ message: string }>(
+      'delete-google-tokens',
+      { accessToken: googleAccessToken },
+      undefined,
+      10_000,
+    );
   }
 }

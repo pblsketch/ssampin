@@ -28,7 +28,15 @@ export const LIMITS = {
 
 const INSTALL_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const ALLOWED_REQUEST_KEYS = new Set(['installId', 'turns', 'toolResults', 'tools', 'stream']);
+const ALLOWED_REQUEST_KEYS = new Set([
+  'installId',
+  'turns',
+  'toolResults',
+  'tools',
+  'stream',
+  // ADR-136 D3 — "구글에서 받은 일정·할 일을 이미 뺐다"는 새 앱의 표시
+  'googleDataExcluded',
+]);
 const ALLOWED_TURN_KEYS = new Set(['role', 'content']);
 const ALLOWED_TOOL_RESULT_KEYS = new Set(['tool', 'grade', 'data']);
 
@@ -89,6 +97,8 @@ export interface ValidatedAssistRequest {
   readonly toolResults: readonly ValidatedToolResult[];
   readonly tools: readonly ValidatedToolSchema[];
   readonly stream: boolean;
+  /** 새 앱이 구글에서 받은 일정·할 일을 뺀 뒤 보냈는가(ADR-136 D3). 옛 앱은 false */
+  readonly googleDataExcluded: boolean;
 }
 
 /** 검증 결과. `error` 는 사용자에게 그대로 보여도 되는 한국어 문구다. */
@@ -215,10 +225,57 @@ export function validateAssistRequest(body: unknown): ValidationResult {
   if (body.stream !== undefined && typeof body.stream !== 'boolean') {
     return { error: '요청 형식이 올바르지 않습니다' };
   }
+  if (body.googleDataExcluded !== undefined && typeof body.googleDataExcluded !== 'boolean') {
+    return { error: '요청 형식이 올바르지 않습니다' };
+  }
 
   return {
-    ok: { installId, turns, toolResults, tools, stream: body.stream === true },
+    ok: {
+      installId,
+      turns,
+      toolResults,
+      tools,
+      stream: body.stream === true,
+      googleDataExcluded: body.googleDataExcluded === true,
+    },
   };
+}
+
+/**
+ * 구글 자료가 섞였을 수 있는 도구 — 일정·할 일(ADR-136 D3).
+ *
+ * 옛 앱(v2.5.1 이하)은 구글 캘린더·할 일에서 가져온 항목을 가리지 않고 보냈다. 서버는 어느
+ * 항목이 구글 것인지 알 수 없으므로, 새 앱이 나온 뒤에는 옛 앱이 보낸 이 도구들의 결과를
+ * 통째로 받지 않고 업데이트를 안내한다.
+ */
+export const GOOGLE_MIXED_TOOLS: ReadonlySet<string> = new Set([
+  'get_events',
+  'get_my_todos',
+  'get_week_overview',
+]);
+
+/** 옛 앱의 일정·할 일 결과 대신 모델에게 주는 안내 */
+export const LEGACY_GOOGLE_NOTICE =
+  '이 버전의 쌤핀에서는 일정·할 일을 볼 수 없습니다. 쌤핀을 최신 버전으로 업데이트해 달라고 안내하세요.';
+
+/**
+ * 옛 앱이 보낸 일정·할 일 결과를 안내 한 줄로 바꾼다(ADR-136 D3).
+ *
+ * ★관문은 환경변수로 켠다(`gateOn`) — 새 앱이 나오기 **전에** 켜면 모든 선생님의 일정·할 일
+ *   질문이 막힌다. 새 버전 출시 뒤에 켠다.
+ * ★결과를 지우지 않고 바꾸는 이유: 지우면 모델이 "일정이 없다"고 사실과 다르게 답한다.
+ */
+export function dropLegacyGoogleMixedResults(
+  results: readonly ValidatedToolResult[],
+  googleDataExcluded: boolean,
+  gateOn: boolean,
+): readonly ValidatedToolResult[] {
+  if (!gateOn || googleDataExcluded) return results;
+  return results.map((r) =>
+    GOOGLE_MIXED_TOOLS.has(r.tool)
+      ? { tool: r.tool, grade: r.grade, data: { updateRequired: LEGACY_GOOGLE_NOTICE } }
+      : r,
+  );
 }
 
 /**

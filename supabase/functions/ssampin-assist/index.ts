@@ -35,6 +35,7 @@ import {
   AssistPromptNotConfiguredError,
   buildAssistSystemPrompt,
   buildToolResultsTurn,
+  dropLegacyGoogleMixedResults,
   validateAssistRequest,
   type ValidatedAssistRequest,
 } from '../_shared/assistRequest.ts';
@@ -138,7 +139,14 @@ serve(async (req: Request): Promise<Response> => {
       },
       ...validated.turns,
     ];
-    const resultsTurn = buildToolResultsTurn(validated.toolResults);
+    // ★옛 앱의 일정·할 일 결과는 구글 자료가 섞였을 수 있다(ADR-136 D3). 새 버전 출시 뒤
+    //   ASSIST_REQUIRE_GOOGLE_EXCLUSION=on 으로 켜면 그 결과 대신 업데이트 안내를 싣는다.
+    const toolResults = dropLegacyGoogleMixedResults(
+      validated.toolResults,
+      validated.googleDataExcluded,
+      Deno.env.get('ASSIST_REQUIRE_GOOGLE_EXCLUSION') === 'on',
+    );
+    const resultsTurn = buildToolResultsTurn(toolResults);
     if (resultsTurn) turns.push(resultsTurn);
 
     const options = {

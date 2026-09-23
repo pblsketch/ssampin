@@ -7,6 +7,7 @@ import {
   detectConflict,
   resolveConflictByLatest,
 } from '@domain/rules/calendarSyncRules';
+import { eventContentDiffers } from '@domain/rules/googleSourcedData';
 
 /** NEIS 학사일정이 주인인 일정인가 — 쌤핀이 구글로 올려 보낸 것. */
 function isNeisOwned(event: SchoolEvent): boolean {
@@ -23,6 +24,12 @@ function isNeisOwned(event: SchoolEvent): boolean {
  */
 function mergeKeepingIdentity(existing: SchoolEvent, incoming: SchoolEvent): SchoolEvent {
   const locallyOwned = !!existing.source && existing.source !== 'google';
+  // ★쌤핀 일정의 내용이 구글 쪽 수정으로 바뀌면 그때부터 구글에서 받은 자료다(ADR-136 D1).
+  //   한 번 붙은 표시는 떼지 않는다 — 구글이 준 내용이 여전히 남아 있을 수 있다.
+  //   올려 보낸 것이 그대로 되돌아온 메아리에는 붙이지 않는다(내용으로 비교).
+  const googleContentReceived =
+    locallyOwned &&
+    (existing.googleContentReceived === true || eventContentDiffers(existing, incoming));
   return {
     ...incoming,
     id: existing.id,
@@ -31,6 +38,7 @@ function mergeKeepingIdentity(existing: SchoolEvent, incoming: SchoolEvent): Sch
     sortOrder: existing.sortOrder,
     category: locallyOwned ? existing.category : incoming.category,
     source: locallyOwned ? existing.source : incoming.source,
+    ...(googleContentReceived ? { googleContentReceived: true } : {}),
     ...(existing.neis ? { neis: existing.neis } : {}),
   };
 }

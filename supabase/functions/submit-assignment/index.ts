@@ -104,6 +104,9 @@ async function refreshGoogleToken(
   });
 
   if (!res.ok) {
+    // 구글이 "이 refresh token 은 폐기됐다"고 답했다 — 되살릴 방법이 없다(ADR-136 D4).
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    if (body?.error === 'invalid_grant') throw new Error('INVALID_GRANT');
     throw new Error(`Token refresh failed: ${res.status}`);
   }
 
@@ -251,7 +254,17 @@ async function getValidAccessToken(
         .eq('teacher_id', teacherId);
 
       accessToken = newTokens.access_token;
-    } catch {
+    } catch (refreshErr) {
+      // ★폐기된 토큰은 바로 지운다(ADR-136 D4) — 쓸 수 없는 사본과 이메일을 서버에 남기지 않는다.
+      //   그사이 앱이 새 토큰을 올렸을 수 있으므로 **읽었던 그 토큰일 때만** 지운다.
+      if ((refreshErr as Error).message === 'INVALID_GRANT') {
+        await supabase
+          .from('teacher_tokens')
+          .delete()
+          .eq('teacher_id', teacherId)
+          .eq('encrypted_refresh_token', record.encrypted_refresh_token);
+        throw new Error('TOKEN_REFRESH_FAILED', { cause: refreshErr });
+      }
       // 경쟁 조건: 다른 인스턴스가 이미 갱신했을 수 있음 → DB 재조회
       const { data: retryRecord } = await supabase
         .from('teacher_tokens')
@@ -260,7 +273,7 @@ async function getValidAccessToken(
         .single();
 
       if (!retryRecord) {
-        throw new Error('TEACHER_TOKEN_NOT_FOUND');
+        throw new Error('TEACHER_TOKEN_NOT_FOUND', { cause: refreshErr });
       }
 
       const retry = retryRecord as TokenRecord;
@@ -268,7 +281,7 @@ async function getValidAccessToken(
 
       // 재조회한 토큰도 만료 → refresh_token이 무효화됨 (교사 재인증 필요)
       if (retryExpiresAt - Date.now() < TOKEN_REFRESH_BUFFER_MS) {
-        throw new Error('TOKEN_REFRESH_FAILED');
+        throw new Error('TOKEN_REFRESH_FAILED', { cause: refreshErr });
       }
 
       accessToken = await decrypt(
@@ -422,10 +435,9 @@ serve(async (req: Request) => {
         accessToken = await getValidAccessToken(supabase, assignment.teacher_id, encryptionKey);
       } catch (err) {
         const msg = (err as Error).message;
-        if (msg === 'TEACHER_TOKEN_NOT_FOUND') {
-          return errorResponse('교사 인증 정보를 찾을 수 없습니다', 500);
-        }
-        if (msg === 'TOKEN_REFRESH_FAILED') {
+        // ★토큰이 없는 것은 이제 흔한 일이다 — 선생님이 연결을 해제했거나 폐기·장기 미사용으로
+        //   서버가 지웠다(ADR-136 D4). 학생에게는 만료와 같은 안내를 준다(선생님이 할 일이 같다).
+        if (msg === 'TEACHER_TOKEN_NOT_FOUND' || msg === 'TOKEN_REFRESH_FAILED') {
           return errorResponse(
             '교사의 Google 인증이 만료되었습니다. 교사에게 쌤핀 앱에서 Google 계정을 다시 연결하도록 안내해주세요.',
             401,
@@ -472,7 +484,7 @@ serve(async (req: Request) => {
             driveFileId = await doDriveUpload(accessToken);
           } catch (retryErr) {
             const retryMsg = (retryErr as Error).message;
-            if (retryMsg === 'TOKEN_REFRESH_FAILED') {
+            if (retryMsg === 'TOKEN_REFRESH_FAILED' || retryMsg === 'TEACHER_TOKEN_NOT_FOUND') {
               return errorResponse(
                 '교사의 Google 인증이 만료되었습니다. 교사에게 쌤핀 앱에서 Google 계정을 다시 연결하도록 안내해주세요.',
                 401,

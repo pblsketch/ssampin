@@ -102,6 +102,13 @@ export interface Todo {
   readonly googleTaskListId?: string;
   /** Google Tasks의 notes (상세 메모) */
   readonly notes?: string;
+  /**
+   * 내용이 어디서 왔는가(ADR-136). 구글에서 받은 할 일은 쌤핀 AI 로 보내지 않는다.
+   * - 'ssampin': 쌤핀에서 만들었고 구글 쪽 수정이 들어온 적이 없다
+   * - 'google': 구글에서 가져왔거나, 구글 쪽에서 내용이 바뀌어 들어왔다
+   * - 없음: 이 표시가 생기기 전의 할 일 — 구글과 연결돼 있으면 구글 자료로 본다(D2)
+   */
+  readonly origin?: 'ssampin' | 'google';
 
   // === Google Tasks 동기화 메타데이터 (v2.0.2~) ===
   /**

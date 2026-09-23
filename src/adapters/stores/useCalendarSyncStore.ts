@@ -56,7 +56,7 @@ interface CalendarSyncState {
   conflicts: readonly { local: SchoolEvent; remote: GoogleCalendarEvent }[];
 
   // 동기화 설정
-  syncInterval: number;  // 분 단위
+  syncInterval: number; // 분 단위
   syncOnStart: boolean;
   syncOnFocus: boolean;
   autoResolveConflicts: boolean;
@@ -75,7 +75,10 @@ interface CalendarSyncState {
   startAuth: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
   cancelAuth: () => Promise<void>;
   completeAuth: (code: string, redirectUri: string, codeVerifier?: string) => Promise<void>;
-  startPKCEFallback: (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => Promise<void>;
+  startPKCEFallback: (
+    forceAccountSelect?: boolean,
+    additionalScopes?: readonly string[],
+  ) => Promise<void>;
   completePKCEAuth: (code: string) => Promise<void>;
   disconnect: () => Promise<void>;
   setError: (error: string | null) => void;
@@ -157,16 +160,27 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
 
   startAuth: async (forceAccountSelect?: boolean, additionalScopes?: readonly string[]) => {
     console.log('[CalendarSync] startAuth begin');
-    set({ isLoading: true, error: null, showFallbackSuggestion: false, fallbackSuggestionData: null });
+    set({
+      isLoading: true,
+      error: null,
+      showFallbackSuggestion: false,
+      fallbackSuggestionData: null,
+    });
     try {
       const api = window.electronAPI;
       if (!api?.startOAuth) {
-        throw new Error('구글 캘린더 연결은 데스크톱 앱에서만 가능합니다. Electron 모드로 실행해주세요.');
+        throw new Error(
+          '구글 캘린더 연결은 데스크톱 앱에서만 가능합니다. Electron 모드로 실행해주세요.',
+        );
       }
 
       const { authenticateGoogle } = await import('@adapters/di/container');
       const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
-      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
+      const authUrl = authenticateGoogle.getAuthUrl(
+        'http://127.0.0.1:0/callback',
+        shouldSelectAccount,
+        additionalScopes,
+      );
 
       let fallbackCleanup: (() => void) | null = null;
       if (api.onOAuthFallbackNeeded) {
@@ -228,7 +242,10 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   },
 
   completeAuth: async (code: string, redirectUri: string, codeVerifier?: string) => {
-    console.log('[CalendarSync] completeAuth start', { redirectUri, hasVerifier: Boolean(codeVerifier) });
+    console.log('[CalendarSync] completeAuth start', {
+      redirectUri,
+      hasVerifier: Boolean(codeVerifier),
+    });
     set({ isLoading: true, error: null });
     try {
       const { authenticateGoogle } = await import('@adapters/di/container');
@@ -275,7 +292,11 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
 
       const { authenticateGoogle } = await import('@adapters/di/container');
       const shouldSelectAccount = forceAccountSelect ?? !get().isConnected;
-      const authUrl = authenticateGoogle.getAuthUrl('http://127.0.0.1:0/callback', shouldSelectAccount, additionalScopes);
+      const authUrl = authenticateGoogle.getAuthUrl(
+        'http://127.0.0.1:0/callback',
+        shouldSelectAccount,
+        additionalScopes,
+      );
 
       // PKCE 시작: 브라우저에서 인증 URL 열기
       await api.startPKCEAuth(authUrl);
@@ -300,7 +321,9 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
 
       const code = extractAuthCode(codeOrUrl);
       if (!code) {
-        throw new Error('인증 코드를 찾지 못했습니다. 브라우저 주소창의 URL 또는 code= 값을 그대로 붙여넣어주세요.');
+        throw new Error(
+          '인증 코드를 찾지 못했습니다. 브라우저 주소창의 URL 또는 code= 값을 그대로 붙여넣어주세요.',
+        );
       }
 
       const { verifier, redirectUri } = await api.exchangePKCECode();
@@ -339,8 +362,13 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     try {
       const { authenticateGoogle, eventsRepository } = await import('@adapters/di/container');
 
-      // 1. 토큰 폐기 + 삭제
-      await authenticateGoogle.disconnect();
+      // 1. 서버 보관분 삭제 → 토큰 폐기 → 로컬 삭제 (순서는 유스케이스가 지킨다)
+      const outcome = await authenticateGoogle.disconnect();
+      if (!outcome.serverCleared || !outcome.revoked) {
+        const { useGoogleAccountStore, DISCONNECT_INCOMPLETE_NOTICE } =
+          await import('./useGoogleAccountStore');
+        useGoogleAccountStore.setState({ disconnectNotice: DISCONNECT_INCOMPLETE_NOTICE });
+      }
 
       // 2. 구글에서 동기화된 일정 삭제
       const evData = await eventsRepository.getEvents();
@@ -350,8 +378,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         );
         // 매핑에서 생성된 구글 캘린더 전용 카테고리도 정리
         const googleCalendarIds = new Set(
-          get().mappings
-            .filter((m) => m.googleCalendarId)
+          get()
+            .mappings.filter((m) => m.googleCalendarId)
             .map((m) => m.categoryId),
         );
         const cleanedCategories = (evData.categories ?? []).filter(
@@ -384,7 +412,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   setError: (error) => set({ error }),
   setOAuthError: (oauthError) => set({ oauthError }),
   setShowPKCEFallback: (showPKCEFallback) => set({ showPKCEFallback }),
-  setShowFallbackSuggestion: (show) => set({ showFallbackSuggestion: show, ...(!show && { fallbackSuggestionData: null }) }),
+  setShowFallbackSuggestion: (show) =>
+    set({ showFallbackSuggestion: show, ...(!show && { fallbackSuggestionData: null }) }),
   acceptFallback: async () => {
     // 1. 로컬 서버 OAuth 취소
     const api = window.electronAPI;
@@ -396,9 +425,10 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     // 3. PKCE 폴백 시작
     await get().startPKCEFallback();
   },
-  setSyncStatus: (status) => set((state) => ({
-    syncState: { ...state.syncState, status },
-  })),
+  setSyncStatus: (status) =>
+    set((state) => ({
+      syncState: { ...state.syncState, status },
+    })),
   setMappings: (mappings) => set({ mappings }),
   setSyncInterval: (syncInterval) => set({ syncInterval }),
   setSyncOnStart: (syncOnStart) => set({ syncOnStart }),
@@ -447,7 +477,11 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       } catch (err) {
         console.error('[CalendarSync] syncNow error:', err);
         set((s) => ({
-          syncState: { ...s.syncState, status: 'error', lastError: err instanceof Error ? err.message : 'Sync failed' },
+          syncState: {
+            ...s.syncState,
+            status: 'error',
+            lastError: err instanceof Error ? err.message : 'Sync failed',
+          },
         }));
       }
     })();
@@ -523,9 +557,9 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     if (!eventsState.loaded) {
       await eventsState.load();
     }
-    const hasNeisEvents = useEventsStore.getState().events.some(
-      (e) => e.category === 'neis-schedule',
-    );
+    const hasNeisEvents = useEventsStore
+      .getState()
+      .events.some((e) => e.category === 'neis-schedule');
     if (!hasNeisEvents) return;
 
     set({ showNeisSyncSuggestion: true });
@@ -564,7 +598,9 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       const { NEIS_SCHEDULE_CATEGORY } = await import('@domain/entities/NeisSchedule');
 
       // 1) 기존 매핑 확인 — 멱등 처리. 이미 있으면 syncEnabled를 켜기만 하고 그대로 사용.
-      const existingMapping = get().mappings.find((m) => m.categoryId === NEIS_SCHEDULE_CATEGORY.id);
+      const existingMapping = get().mappings.find(
+        (m) => m.categoryId === NEIS_SCHEDULE_CATEGORY.id,
+      );
 
       if (existingMapping && existingMapping.googleCalendarId) {
         console.log('[NeisSync] reusing existing mapping:', existingMapping.googleCalendarId);
@@ -605,17 +641,19 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       // 2) NEIS 이벤트 일괄 푸시
       const { useEventsStore } = await import('./useEventsStore');
       const { eventsRepository, syncToGoogle } = await import('@adapters/di/container');
-      const neisEvents = useEventsStore.getState().events.filter(
-        (e) => e.category === 'neis-schedule',
-      );
+      const neisEvents = useEventsStore
+        .getState()
+        .events.filter((e) => e.category === 'neis-schedule');
       console.log('[NeisSync] start pushing events, total:', neisEvents.length);
 
       if (neisEvents.length === 0) {
         const { useToastStore } = await import('@adapters/components/common/Toast');
-        useToastStore.getState().show(
-          'NEIS 학사일정이 없어요. 먼저 설정에서 학사일정 동기화를 켜고 일정을 가져와주세요.',
-          'info',
-        );
+        useToastStore
+          .getState()
+          .show(
+            'NEIS 학사일정이 없어요. 먼저 설정에서 학사일정 동기화를 켜고 일정을 가져와주세요.',
+            'info',
+          );
         set({ showNeisSyncSuggestion: false });
         return;
       }
@@ -625,13 +663,17 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       const { useNeisScheduleStore } = await import('./useNeisScheduleStore');
       const neisSettings = useNeisScheduleStore.getState().settings;
 
-      const toSync: SchoolEvent[] = [];   // create or update
+      const toSync: SchoolEvent[] = []; // create or update
       const toDelete: SchoolEvent[] = []; // 이미 푸시된 일정인데 사용자가 OFF로 변경
       let skippedCount = 0;
       for (const ev of neisEvents) {
         const should = ev.neis
           ? shouldSyncToGoogle(
-              { eventId: ev.neis.eventId, title: ev.title, subtractDayType: ev.neis.subtractDayType },
+              {
+                eventId: ev.neis.eventId,
+                title: ev.title,
+                subtractDayType: ev.neis.subtractDayType,
+              },
               neisSettings,
             )
           : false;
@@ -645,14 +687,20 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         }
       }
       const totalWork = toSync.length + toDelete.length;
-      console.log('[NeisSync] plan: sync', toSync.length, '+ delete', toDelete.length, '+ skip', skippedCount);
+      console.log(
+        '[NeisSync] plan: sync',
+        toSync.length,
+        '+ delete',
+        toDelete.length,
+        '+ skip',
+        skippedCount,
+      );
 
       if (totalWork === 0) {
         const { useToastStore } = await import('@adapters/components/common/Toast');
-        useToastStore.getState().show(
-          '동기화 대상 학사일정이 없어요. 그룹을 1개 이상 선택해주세요.',
-          'info',
-        );
+        useToastStore
+          .getState()
+          .show('동기화 대상 학사일정이 없어요. 그룹을 1개 이상 선택해주세요.', 'info');
         set({ showNeisSyncSuggestion: false });
         return;
       }
@@ -663,8 +711,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       let failCount = 0;
       let firstError: string | null = null;
       let abortReason: 'rate_limit' | 'auth' | null = null;
-      const updatedEvents: SchoolEvent[] = [];   // googleEventId 채워진 결과
-      const clearedIds = new Set<string>();      // 삭제 후 메타 제거할 이벤트 id
+      const updatedEvents: SchoolEvent[] = []; // googleEventId 채워진 결과
+      const clearedIds = new Set<string>(); // 삭제 후 메타 제거할 이벤트 id
 
       const handleApiError = (err: unknown, ev: SchoolEvent, op: string): boolean => {
         failCount += 1;
@@ -696,7 +744,9 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         progressIdx += 1;
         set({ neisSyncProgress: { current: progressIdx, total: totalWork } });
         if (progressIdx % 10 === 0 || progressIdx === totalWork) {
-          console.log(`[NeisSync] progress ${progressIdx}/${totalWork} (sync=${successCount}, del=${deletedCount}, fail=${failCount})`);
+          console.log(
+            `[NeisSync] progress ${progressIdx}/${totalWork} (sync=${successCount}, del=${deletedCount}, fail=${failCount})`,
+          );
         }
       };
 
@@ -722,7 +772,11 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
               updatedEvents.push(synced);
               successCount += 1;
             } else {
-              console.warn('[NeisSync] event returned without googleEventId (mapping miss?):', ev.id, ev.title);
+              console.warn(
+                '[NeisSync] event returned without googleEventId (mapping miss?):',
+                ev.id,
+                ev.title,
+              );
             }
           } catch (err) {
             if (handleApiError(err, ev, 'syncEvent')) break;
@@ -731,7 +785,16 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
           await new Promise((resolve) => setTimeout(resolve, 50));
         }
       }
-      console.log('[NeisSync] done — sync:', successCount, 'delete:', deletedCount, 'fail:', failCount, 'abort:', abortReason);
+      console.log(
+        '[NeisSync] done — sync:',
+        successCount,
+        'delete:',
+        deletedCount,
+        'fail:',
+        failCount,
+        'abort:',
+        abortReason,
+      );
 
       // STEP C — events 저장소 일괄 갱신: 성공한 것만 메타 반영, 삭제된 것은 메타 제거
       if (updatedEvents.length > 0 || clearedIds.size > 0) {
@@ -750,7 +813,12 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
               syncStatus: _sst,
               ...rest
             } = e;
-            void _gid; void _gcid; void _etag; void _gupd; void _lsa; void _sst;
+            void _gid;
+            void _gcid;
+            void _etag;
+            void _gupd;
+            void _lsa;
+            void _sst;
             return rest;
           }
           return e;
@@ -766,29 +834,29 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       // STEP D — 토스트
       const { useToastStore } = await import('@adapters/components/common/Toast');
       if (abortReason === 'rate_limit') {
-        useToastStore.getState().show(
-          `구글 캘린더 일일 사용량 한도가 초과돼 동기화가 중단됐어요. (추가 ${successCount}, 제거 ${deletedCount}) 내일 다시 시도해주세요.`,
-          'error',
-        );
+        useToastStore
+          .getState()
+          .show(
+            `구글 캘린더 일일 사용량 한도가 초과돼 동기화가 중단됐어요. (추가 ${successCount}, 제거 ${deletedCount}) 내일 다시 시도해주세요.`,
+            'error',
+          );
       } else if (abortReason === 'auth') {
-        useToastStore.getState().show(
-          '구글 인증이 만료됐어요. 설정 → 구글 계정에서 다시 로그인해주세요.',
-          'error',
-        );
+        useToastStore
+          .getState()
+          .show('구글 인증이 만료됐어요. 설정 → 구글 계정에서 다시 로그인해주세요.', 'error');
       } else if (failCount === 0) {
         const parts: string[] = [];
         if (successCount > 0) parts.push(`추가 ${successCount}건`);
         if (deletedCount > 0) parts.push(`제거 ${deletedCount}건`);
         if (parts.length === 0) parts.push('변경 없음');
-        useToastStore.getState().show(
-          `구글 캘린더 동기화 완료 — ${parts.join(', ')}.`,
-          'success',
-        );
+        useToastStore.getState().show(`구글 캘린더 동기화 완료 — ${parts.join(', ')}.`, 'success');
       } else {
-        useToastStore.getState().show(
-          `동기화 — 추가 ${successCount}, 제거 ${deletedCount}, 실패 ${failCount}${firstError ? `: ${firstError}` : ''}`,
-          failCount === totalWork ? 'error' : 'info',
-        );
+        useToastStore
+          .getState()
+          .show(
+            `동기화 — 추가 ${successCount}, 제거 ${deletedCount}, 실패 ${failCount}${firstError ? `: ${firstError}` : ''}`,
+            failCount === totalWork ? 'error' : 'info',
+          );
       }
 
       // STEP E — 본 호출에서 *새로* 만든 매핑이고 0건 성공 + rate_limit/auth 중단인 경우 매핑 롤백.
@@ -804,10 +872,12 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
     } catch (err) {
       console.error('[NeisSync] accept aborted:', err);
       const { useToastStore } = await import('@adapters/components/common/Toast');
-      useToastStore.getState().show(
-        `구글 캘린더 동기화 시작 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`,
-        'error',
-      );
+      useToastStore
+        .getState()
+        .show(
+          `구글 캘린더 동기화 시작 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`,
+          'error',
+        );
     } finally {
       set({ neisSyncInProgress: false, neisSyncProgress: { current: 0, total: 0 } });
       console.log('[NeisSync] accept end');
@@ -838,16 +908,21 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       // calendarId가 누락된 옛 이벤트를 위해 fallback이 필수다.
       const neisMapping = get().mappings.find((m) => m.categoryId === 'neis-schedule');
       const fallbackCalId =
-        neisMapping?.googleCalendarId
-        ?? allEvents.find((e) => e.category === 'neis-schedule' && e.googleCalendarId)?.googleCalendarId;
+        neisMapping?.googleCalendarId ??
+        allEvents.find((e) => e.category === 'neis-schedule' && e.googleCalendarId)
+          ?.googleCalendarId;
       let skippedNoCalId = 0;
 
       console.log(
         '[NeisSync] disconnect plan:',
-        'totalWithGoogleId=', neisWithGoogleId.length,
-        'withCalId=', neisWithGoogleId.filter((e) => e.googleCalendarId).length,
-        'needFallback=', neisWithGoogleId.filter((e) => !e.googleCalendarId).length,
-        'fallbackCalId=', fallbackCalId ?? '(none)',
+        'totalWithGoogleId=',
+        neisWithGoogleId.length,
+        'withCalId=',
+        neisWithGoogleId.filter((e) => e.googleCalendarId).length,
+        'needFallback=',
+        neisWithGoogleId.filter((e) => !e.googleCalendarId).length,
+        'fallbackCalId=',
+        fallbackCalId ?? '(none)',
       );
 
       // 1) 옵션: 구글 캘린더에서도 NEIS 이벤트 삭제
@@ -860,9 +935,9 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
           // calendarId 보강 — ev에 없으면 fallback 적용
           const ev = original.googleCalendarId
             ? original
-            : (fallbackCalId
+            : fallbackCalId
               ? { ...original, googleCalendarId: fallbackCalId }
-              : original);
+              : original;
 
           if (!ev.googleCalendarId) {
             // 캘린더 ID를 어디에서도 못 구하면 skip — 메타만 정리(STEP 2)
@@ -901,7 +976,9 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
           }
           set({ neisSyncProgress: { current: i + 1, total: neisWithGoogleId.length } });
           if ((i + 1) % 10 === 0 || i === neisWithGoogleId.length - 1) {
-            console.log(`[NeisSync] delete progress ${i + 1}/${neisWithGoogleId.length} (deleted=${deletedCount}, failed=${failedCount}, skipNoCal=${skippedNoCalId})`);
+            console.log(
+              `[NeisSync] delete progress ${i + 1}/${neisWithGoogleId.length} (deleted=${deletedCount}, failed=${failedCount}, skipNoCal=${skippedNoCalId})`,
+            );
           }
           if (i < neisWithGoogleId.length - 1) {
             await new Promise((resolve) => setTimeout(resolve, 50));
@@ -925,7 +1002,13 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
             source: _src,
             ...rest
           } = e;
-          void _gid; void _gcid; void _etag; void _gupd; void _lsa; void _sst; void _src;
+          void _gid;
+          void _gcid;
+          void _etag;
+          void _gupd;
+          void _lsa;
+          void _sst;
+          void _src;
           return rest;
         });
         const evData = await eventsRepository.getEvents();
@@ -939,47 +1022,57 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
 
       // 4) 토스트
       const { useToastStore } = await import('@adapters/components/common/Toast');
-      const skippedNote = skippedNoCalId > 0
-        ? ` (캘린더 정보 누락 ${skippedNoCalId}건은 구글에서 삭제 못 했어요 — 로컬 메타만 정리)`
-        : '';
+      const skippedNote =
+        skippedNoCalId > 0
+          ? ` (캘린더 정보 누락 ${skippedNoCalId}건은 구글에서 삭제 못 했어요 — 로컬 메타만 정리)`
+          : '';
       if (abortReason === 'rate_limit') {
         const remaining = neisWithGoogleId.length - deletedCount - failedCount - skippedNoCalId;
-        useToastStore.getState().show(
-          `구글 캘린더 일일 사용량 한도가 초과돼 일정 삭제가 중단됐어요. (${deletedCount}건 삭제, ${remaining}건 미처리)${skippedNote} 연동은 해제됐어요.`,
-          'error',
-        );
+        useToastStore
+          .getState()
+          .show(
+            `구글 캘린더 일일 사용량 한도가 초과돼 일정 삭제가 중단됐어요. (${deletedCount}건 삭제, ${remaining}건 미처리)${skippedNote} 연동은 해제됐어요.`,
+            'error',
+          );
       } else if (abortReason === 'auth') {
-        useToastStore.getState().show(
-          `구글 인증이 만료돼 일정 삭제가 중단됐어요.${skippedNote} 연동은 해제됐어요.`,
-          'error',
-        );
+        useToastStore
+          .getState()
+          .show(
+            `구글 인증이 만료돼 일정 삭제가 중단됐어요.${skippedNote} 연동은 해제됐어요.`,
+            'error',
+          );
       } else if (deleteRemoteEvents) {
         if (failedCount === 0 && skippedNoCalId === 0) {
-          useToastStore.getState().show(
-            `구글 캘린더 연동을 해제했어요. 학사일정 ${deletedCount}건이 구글 캘린더에서 삭제됐어요.`,
-            'success',
-          );
+          useToastStore
+            .getState()
+            .show(
+              `구글 캘린더 연동을 해제했어요. 학사일정 ${deletedCount}건이 구글 캘린더에서 삭제됐어요.`,
+              'success',
+            );
         } else {
-          useToastStore.getState().show(
-            `연동 해제 — ${deletedCount}건 삭제, ${failedCount}건 실패${skippedNote}${firstError ? `: ${firstError}` : ''}`,
-            'info',
-          );
+          useToastStore
+            .getState()
+            .show(
+              `연동 해제 — ${deletedCount}건 삭제, ${failedCount}건 실패${skippedNote}${firstError ? `: ${firstError}` : ''}`,
+              'info',
+            );
         }
       } else {
-        useToastStore.getState().show(
-          '구글 캘린더 연동을 해제했어요. 구글 캘린더의 학사일정은 그대로 유지됩니다.',
-          'success',
-        );
+        useToastStore
+          .getState()
+          .show(
+            '구글 캘린더 연동을 해제했어요. 구글 캘린더의 학사일정은 그대로 유지됩니다.',
+            'success',
+          );
       }
 
       console.log('[NeisSync] disconnect done');
     } catch (err) {
       console.error('[NeisSync] disconnect error:', err);
       const { useToastStore } = await import('@adapters/components/common/Toast');
-      useToastStore.getState().show(
-        `연동 해제 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`,
-        'error',
-      );
+      useToastStore
+        .getState()
+        .show(`연동 해제 실패: ${err instanceof Error ? err.message : '알 수 없는 오류'}`, 'error');
     } finally {
       set({ neisSyncInProgress: false, neisSyncProgress: { current: 0, total: 0 } });
     }

@@ -3,6 +3,7 @@ import type { GoogleTask, GoogleTaskList } from '@domain/ports/IGoogleTasksPort'
 import type { Todo } from '@domain/entities/Todo';
 import { TODO_LOCAL_ONLY_FIELDS } from '@domain/entities/Todo';
 import { completedAtFromRemote } from '@domain/rules/todoCompletion';
+import { todoContentDiffers } from '@domain/rules/googleSourcedData';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 interface TasksSyncState {
@@ -445,6 +446,8 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
               lastSyncedAt: stamp(),
               googleTaskId: remote.id,
               googleTaskListId: taskListId,
+              // 구글에서 받은 할 일 — 쌤핀 AI 로 보내지 않는다(ADR-136)
+              origin: 'google',
               ...(remote.due ? { dueDate: remote.due.substring(0, 10) } : {}),
               ...(remote.notes ? { notes: remote.notes } : {}),
             });
@@ -457,7 +460,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
             const remoteUpdated = timestamp(remote.updated);
             const localSynced = timestamp(local.lastSyncedAt);
             if (remoteUpdated > localSynced) {
-              workMap.set(local.id, {
+              const merged: Todo = {
                 ...local,
                 text: remote.title,
                 completed: remote.status === 'completed',
@@ -465,7 +468,13 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
                 ...(remote.due ? { dueDate: remote.due.substring(0, 10) } : { dueDate: undefined }),
                 ...(remote.notes ? { notes: remote.notes } : {}),
                 lastSyncedAt: stamp(),
-              });
+              };
+              // ★구글 쪽 수정이 내용을 바꿨으면 그때부터 구글에서 받은 자료다(ADR-136 D1).
+              //   올려 보낸 것이 그대로 되돌아온 메아리는 바뀐 것이 아니다.
+              workMap.set(
+                local.id,
+                todoContentDiffers(local, merged) ? { ...merged, origin: 'google' } : merged,
+              );
             }
           }
         }

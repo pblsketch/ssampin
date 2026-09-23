@@ -75,6 +75,30 @@ export const OWN_AI_NOTICE_VERSION = 1;
 export interface AssistCard {
   readonly tool: string;
   readonly data: ModelSafe<ToolResultShape>;
+  /**
+   * ★화면에만 그리는 목록 — **밖으로는 절대 나가지 않는다**(ADR-136).
+   * 구글에서 받은 일정·할 일이 여기 담긴다. 쌤핀 AI 는 무료 조건이라 보낸 내용이 학습에
+   * 쓰일 수 있고, 구글 규정은 그런 곳으로 구글 자료를 넘기는 것을 금지한다.
+   * 전송은 `{ tool, data }` 만 골라 싣는다 — 이 칸을 실어 보내는 코드를 만들지 않는다.
+   * 그래서 "카드와 모델이 같은 숫자를 본다"(P5)의 **의도된 예외**다.
+   */
+  readonly localOnly?: AssistLocalOnly;
+}
+
+/** 카드 아래 따로 묶어 보여 줄 구글 자료 한 줄 */
+export interface AssistLocalOnlyItem {
+  /** YYYY-MM-DD. 날짜가 있는 항목(일정)만 */
+  readonly date?: string;
+  readonly title: string;
+  /** 뒤에 작게 붙일 말(시각·기한 등) */
+  readonly tail?: string;
+  readonly done?: boolean;
+  readonly overdue?: boolean;
+}
+
+export interface AssistLocalOnly {
+  readonly kind: 'google';
+  readonly items: readonly AssistLocalOnlyItem[];
 }
 
 /** 화면에 그리는 한 덩어리. 숫자 카드가 먼저, AI 해설이 나중에 온다. */

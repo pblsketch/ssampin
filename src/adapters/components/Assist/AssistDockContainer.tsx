@@ -9,6 +9,10 @@
  * - 안 걸리는 질문 → 모델에게 도구 목록을 보여주고 고르게 한다(옵션 A, 2왕복).
  *   모델이 고른 도구는 `executeAssistTool` 이 로컬에서 실행하며 인자를 항상 불신한다.
  * 어느 갈래든 나가는 것은 재구성·가림을 거친 집계뿐이다.
+ *
+ * ★구글에서 받은 일정·할 일은 **밖으로 보내지 않는다**(ADR-136) — 원본도, 개수도.
+ * 쌤핀 AI 는 무료 조건이라 보낸 내용이 학습에 쓰일 수 있고, 구글 규정은 그런 곳으로
+ * 구글 자료를 넘기는 것을 금지한다. 선생님 화면에는 카드의 `localOnly` 로 따로 보여 준다.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
@@ -22,6 +26,14 @@ import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import type { TeacherPeriod } from '@domain/entities/Timetable';
 import type { ToolResultShape } from '@domain/services/sanitizeToolResult';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
+import type { AssistLocalOnly } from '@adapters/stores/useAssistStore';
+import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
+import {
+  isGoogleSourcedEvent,
+  isGoogleSourcedTodo,
+  splitGoogleSourced,
+} from '@domain/rules/googleSourcedData';
+import type { SchoolEvent } from '@domain/entities/SchoolEvent';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { studentKey } from '@domain/entities/TeachingClass';
@@ -122,13 +134,22 @@ function monthRange(): { periodFrom: string; periodTo: string; periodLabel: stri
 interface Card {
   readonly tool: string;
   readonly data: ModelSafe<ToolResultShape>;
+  /** 화면에만 그리는 구글 자료 — 밖으로 나가지 않는다(`AssistCard.localOnly`) */
+  readonly localOnly?: AssistLocalOnly;
 }
 
-/** 재구성을 거친 카드만 만든다. 여기가 그물 ②를 통과하는 유일한 통로다. */
-function toCard(toolId: string, raw: ToolResultShape): Card | null {
+/**
+ * 재구성을 거친 카드만 만든다. 여기가 그물 ②를 통과하는 유일한 통로다.
+ * `localOnly` 는 재구성을 거치지 않는다 — 밖으로 나가는 칸이 아니기 때문이다.
+ */
+function toCard(toolId: string, raw: ToolResultShape, localOnly?: AssistLocalOnly): Card | null {
   const tool = findAssistTool(toolId);
   if (!tool) return null;
-  return { tool: tool.id, data: sanitizeToolResult(tool, raw) };
+  return {
+    tool: tool.id,
+    data: sanitizeToolResult(tool, raw),
+    ...(localOnly === undefined ? {} : { localOnly }),
+  };
 }
 
 /** 의도 판정에 필요한 앱 데이터. 스토어 자체가 아니라 **읽은 값**만 넘긴다. */
@@ -151,6 +172,86 @@ export interface IntentSources {
     readonly subcategory: string;
     readonly date: string;
   }[];
+  /**
+   * ★구글에서 받은 일정·할 일 — **화면에만** 그린다(ADR-136).
+   * 위 `todos`·(실행기의) `events` 에서는 이미 빠져 있다. 여기 것은 카드의 `localOnly` 로만
+   * 붙고, 쌤핀 AI 로 나가는 `data` 에는 들어가지 않는다. 없으면(테스트·옛 경로) 구글 자료가 없는 것이다.
+   */
+  readonly google?: GoogleOnlySources;
+}
+
+export interface GoogleOnlySources {
+  /**
+   * 구글 계정이 연결돼 있는가 — 모델에게 "구글 항목은 빠져 있다"고만 알릴 때 쓴다.
+   * ★구글 자료가 **있는지·몇 건인지**는 알리지 않는다. 그것도 구글 자료에서 나온 값이다.
+   */
+  readonly linked: boolean;
+  readonly todos: readonly {
+    readonly text: string;
+    readonly dueDate?: string;
+    readonly completed: boolean;
+  }[];
+  readonly events: readonly SchoolEvent[];
+}
+
+/**
+ * 모델에게 주는 안내 한 칸. 구글 계정이 연결돼 있으면 **항상** 붙는다 — 구글 항목이 실제로
+ * 있는지와 무관하다(있는지 여부도 구글 자료에서 나온 값이라 보내지 않는다).
+ */
+function withGoogleNotice(raw: ToolResultShape, src: IntentSources): ToolResultShape {
+  return src.google?.linked === true ? { ...raw, googleItemsNotIncluded: true } : raw;
+}
+
+/** 구글 할 일을 화면용 줄로. 모델로 가는 `summarizeTodos` 와 같은 규칙(미완료만 등)을 쓴다. */
+function googleTodosLocalOnly(
+  src: IntentSources,
+  includeCompleted: boolean,
+): AssistLocalOnly | undefined {
+  const todos = src.google?.todos ?? [];
+  if (todos.length === 0) return undefined;
+  const { items } = summarizeTodos(todos, { today: todayKey(), includeCompleted });
+  if (items.length === 0) return undefined;
+  return {
+    kind: 'google',
+    items: items.map((t) => ({
+      title: t.title,
+      ...(t.due === null ? {} : { tail: `~${t.due.slice(5)}` }),
+      done: t.done,
+      overdue: t.overdue,
+    })),
+  };
+}
+
+/** 구글 일정을 화면용 줄로. 기간·반복 펼치기는 모델 쪽과 같은 `summarizeEvents` 를 쓴다. */
+function googleEventsLocalOnly(
+  src: IntentSources,
+  from: string,
+  to: string,
+): AssistLocalOnly | undefined {
+  const events = src.google?.events ?? [];
+  if (events.length === 0) return undefined;
+  const { items } = summarizeEvents(events, { from, to });
+  if (items.length === 0) return undefined;
+  return {
+    kind: 'google',
+    items: items.map((e) => ({
+      date: e.date,
+      title: e.title,
+      ...(e.time.length > 0 ? { tail: e.time } : {}),
+    })),
+  };
+}
+
+/** 한 주 요약용 — 그 주의 구글 일정과 구글 할 일 중 미완료 수를 한 묶음으로. */
+function googleWeekLocalOnly(
+  src: IntentSources,
+  from: string,
+  to: string,
+): AssistLocalOnly | undefined {
+  const events = googleEventsLocalOnly(src, from, to)?.items ?? [];
+  const undone = summarizeTodos(src.google?.todos ?? [], { today: todayKey() }).undone;
+  const items = undone > 0 ? [...events, { title: `미완료 할 일 ${undone}개` }] : events;
+  return items.length === 0 ? undefined : { kind: 'google', items };
 }
 
 /**
@@ -206,11 +307,14 @@ function buildRecordsStats(src: IntentSources, from: string, to: string): ToolRe
 
 /** 할 일. 완료분 포함 여부는 호출자가 정한다(정규식 경로는 미완료만). */
 function buildTodos(src: IntentSources, includeCompleted: boolean): ToolResultShape {
-  return summarizeTodos(src.todos, {
-    // ★오늘 날짜를 넘겨 기한 지남(overdue)을 앱이 계산한다. 모델은 오늘을 모른다.
-    today: todayKey(),
-    includeCompleted,
-  }) as unknown as ToolResultShape;
+  return withGoogleNotice(
+    summarizeTodos(src.todos, {
+      // ★오늘 날짜를 넘겨 기한 지남(overdue)을 앱이 계산한다. 모델은 오늘을 모른다.
+      today: todayKey(),
+      includeCompleted,
+    }) as unknown as ToolResultShape,
+    src,
+  );
 }
 
 /**
@@ -402,12 +506,14 @@ export function executeAssistTool(
     }
     case 'get_events': {
       const from = dateArg('from', today);
+      const to = dateArg('to', addDays(from, 6));
       return toCard(
         name,
-        summarizeEvents(src.events, {
-          from,
-          to: dateArg('to', addDays(from, 6)),
-        }) as unknown as ToolResultShape,
+        withGoogleNotice(
+          summarizeEvents(src.events, { from, to }) as unknown as ToolResultShape,
+          src,
+        ),
+        googleEventsLocalOnly(src, from, to),
       );
     }
     case 'get_ddays':
@@ -458,18 +564,23 @@ export function executeAssistTool(
       );
     case 'get_week_overview': {
       const from = dateArg('from', today);
+      const to = dateArg('to', addDays(from, 6));
       return toCard(
         name,
-        summarizeWeek({
-          from,
-          to: dateArg('to', addDays(from, 6)),
-          today,
-          meals: src.meals,
-          events: src.events,
-          ddays: src.ddays,
-          todos: src.todos,
-          getDaySchedule: src.getDaySchedule,
-        }) as unknown as ToolResultShape,
+        withGoogleNotice(
+          summarizeWeek({
+            from,
+            to,
+            today,
+            meals: src.meals,
+            events: src.events,
+            ddays: src.ddays,
+            todos: src.todos,
+            getDaySchedule: src.getDaySchedule,
+          }) as unknown as ToolResultShape,
+          src,
+        ),
+        googleWeekLocalOnly(src, from, to),
       );
     }
     // ── Phase 2: 집계로 커버하는 읽기 ──
@@ -537,7 +648,11 @@ export function executeAssistTool(
       );
     }
     case 'get_my_todos':
-      return toCard(name, buildTodos(src, boolArg('includeCompleted', false)));
+      return toCard(
+        name,
+        buildTodos(src, boolArg('includeCompleted', false)),
+        googleTodosLocalOnly(src, boolArg('includeCompleted', false)),
+      );
     default: {
       // 남은 것(학급 목록)은 인자가 없다 — 정규식 build 를 그대로 쓴다.
       const rule = INTENT_RULES.find((r) => r.tool === name);
@@ -556,7 +671,9 @@ export function buildCards(question: string, src: IntentSources): Card[] {
     //   스토어가 모델에게 도구 목록을 보여준다(2왕복). 여기서 억지로 만들면
     //   기간 도구는 영영 불리지 않는다.
     if (rule.steppedAsideWhen?.test(question) === true) continue;
-    const card = toCard(rule.tool, rule.build(question, src));
+    // 정규식 경로의 할 일은 "미완료만"이 기본값이다(`buildTodos(src, false)`) — 화면 쪽도 같게.
+    const localOnly = rule.tool === 'get_my_todos' ? googleTodosLocalOnly(src, false) : undefined;
+    const card = toCard(rule.tool, rule.build(question, src), localOnly);
     if (card) cards.push(card);
   }
   return cards;
@@ -696,6 +813,7 @@ export function AssistDockContainer() {
   const students = useStudentStore((s) => s.students);
   const classes = useTeachingClassStore((s) => s.classes);
   const todos = useTodoStore((s) => s.todos);
+  const googleLinked = useGoogleAccountStore((s) => s.isConnected);
   const records = useStudentRecordsStore((s) => s.records);
   const todayMeals = useMealStore((s) => s.todayMeals);
   const weekMeals = useMealStore((s) => s.weekMeals);
@@ -746,6 +864,14 @@ export function AssistDockContainer() {
     void useRubricStore.getState().load();
     void useSeatingStore.getState().load();
   }, [enabled]);
+
+  /**
+   * ★구글에서 받은 일정·할 일을 **여기서 가른다**(ADR-136). 조회 도구에는 가른 뒤의 것만
+   * 넘기고, 구글 것은 화면용(`google`)으로만 넘긴다. 쓰기 제안(`writeSources`)은 대상을 찾는
+   * 로컬 자료라 가르지 않는다 — 그 식별자·목록은 모델에게 나가지 않는다.
+   */
+  const todoSplit = useMemo(() => splitGoogleSourced(todos, isGoogleSourcedTodo), [todos]);
+  const eventSplit = useMemo(() => splitGoogleSourced(events, isGoogleSourcedEvent), [events]);
 
   // 오늘·이번 주 급식을 합치고 (날짜, 식사종류)로 중복 제거
   const meals = useMemo(() => {
@@ -1026,10 +1152,15 @@ export function AssistDockContainer() {
         const src: ExecutorSources = {
           students,
           classes,
-          todos,
+          todos: todoSplit.kept,
           records,
           meals,
-          events,
+          events: eventSplit.kept,
+          google: {
+            linked: googleLinked,
+            todos: todoSplit.google,
+            events: eventSplit.google,
+          },
           ddays,
           getDaySchedule,
           progress,
@@ -1069,8 +1200,9 @@ export function AssistDockContainer() {
       classAttendance,
       classes,
       ddays,
-      events,
+      eventSplit,
       getDaySchedule,
+      googleLinked,
       gradePlans,
       gradeScores,
       meals,
@@ -1083,7 +1215,7 @@ export function AssistDockContainer() {
       rubrics,
       seating,
       students,
-      todos,
+      todoSplit,
       track,
       writeSources,
     ],

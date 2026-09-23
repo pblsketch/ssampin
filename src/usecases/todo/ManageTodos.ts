@@ -2,6 +2,7 @@ import type { Todo, TodoCategory, TodosData, SubTask } from '@domain/entities/To
 import { TODO_LOCAL_ONLY_FIELDS } from '@domain/entities/Todo';
 import type { ITodoRepository } from '@domain/repositories/ITodoRepository';
 import { calculateNextDueDate } from '@domain/rules/todoRules';
+import { isGoogleSourcedTodo } from '@domain/rules/googleSourcedData';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
 /**
@@ -71,6 +72,8 @@ export class ManageTodos {
       ...todo,
       updatedAt: todo.updatedAt ?? now,
       pendingRemoteOp: todo.pendingRemoteOp ?? 'create',
+      // 선생님이 쌤핀에서 만든 할 일이다 — 구글에 올려도 쌤핀 AI 가 볼 수 있다(ADR-136)
+      origin: todo.origin ?? 'ssampin',
     };
 
     const data = await this.todoRepository.getTodos();
@@ -147,6 +150,8 @@ export class ManageTodos {
           createdAt: now,
           updatedAt: now,
           pendingRemoteOp: 'create', // 새 인스턴스는 원격에 신규 생성 필요
+          // 내용을 이어받으므로 출처도 이어받는다 — 구글에서 온 제목이면 새 것도 구글 자료다
+          origin: isGoogleSourcedTodo(target) ? 'google' : 'ssampin',
         };
 
         const updated = currentTodos.map((t) =>

@@ -9,7 +9,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 
-import type { AssistTurn } from '@adapters/stores/useAssistStore';
+import type { AssistLocalOnly, AssistTurn } from '@adapters/stores/useAssistStore';
 import { answererLabel, shortModelLabel } from './answererLabels';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import { toPlainAnswerText } from '@domain/rules/plainAnswerText';
@@ -171,8 +171,53 @@ function isListOfRecords(value: unknown): value is readonly ListItem[] {
   );
 }
 
+/**
+ * 구글에서 받은 일정·할 일 — **화면에만** 있고 AI 에게는 가지 않은 줄들(ADR-136).
+ *
+ * ★위 목록과 섞지 않는다. AI 답은 이 줄들을 모른 채 쓰였으므로, 한데 섞여 있으면
+ * "AI 가 왜 이 일정은 말 안 하지?"가 된다. 따로 묶고 **보내지 않았다는 사실을 글자로** 적는다.
+ */
+function LocalOnlyList({ localOnly }: { readonly localOnly: AssistLocalOnly }) {
+  return (
+    // 출처가 다른 자료라 같은 카드 안의 구분선이 아니라 칸으로 묶는다(ProposalCard 대상 칸과 같은 모양).
+    <div className="mt-2 rounded-lg bg-sp-bg p-2">
+      <p className="mb-1 flex flex-wrap items-baseline gap-x-1.5 text-xs">
+        <span className="font-sp-semibold text-sp-text">구글에서 가져온 항목</span>
+        <span className="text-sp-muted">· AI에게는 보내지 않았어요</span>
+      </p>
+      <ul className="flex flex-col gap-1">
+        {localOnly.items.map((item, index) => (
+          <li key={index} className="flex items-baseline gap-2 text-sm">
+            <span aria-hidden="true" className="shrink-0 text-sp-muted">
+              {item.done === true ? '✓' : '•'}
+            </span>
+            {item.date !== undefined && (
+              <span className="shrink-0 text-xs text-sp-muted">{item.date.slice(5)}</span>
+            )}
+            <span className="min-w-0 flex-1 break-words text-sp-text">{item.title}</span>
+            {item.tail !== undefined && (
+              <span className="shrink-0 text-xs text-sp-muted">{item.tail}</span>
+            )}
+            {item.overdue === true && (
+              <span className="shrink-0 text-xs font-sp-semibold text-sp-text">⚠ 지남</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** 숫자 카드 — 앱이 조회한 값. 모델을 거치지 않은 사실이다. */
-function DataCard({ tool, data }: { readonly tool: string; readonly data: ToolResultShape }) {
+function DataCard({
+  tool,
+  data,
+  localOnly,
+}: {
+  readonly tool: string;
+  readonly data: ToolResultShape;
+  readonly localOnly?: AssistLocalOnly;
+}) {
   const scalarEntries = Object.entries(data).filter(
     ([, v]) => typeof v === 'number' || typeof v === 'string',
   );
@@ -229,8 +274,12 @@ function DataCard({ tool, data }: { readonly tool: string; readonly data: ToolRe
         </ul>
       ))}
 
-      {scalarEntries.length === 0 && listEntries.length === 0 && (
+      {scalarEntries.length === 0 && listEntries.length === 0 && localOnly === undefined && (
         <p className="text-xs text-sp-muted">조회 결과가 없어요</p>
+      )}
+
+      {localOnly !== undefined && localOnly.items.length > 0 && (
+        <LocalOnlyList localOnly={localOnly} />
       )}
     </div>
   );
@@ -506,7 +555,12 @@ export function AssistThread({
           </div>
 
           {turn.cards.map((card, index) => (
-            <DataCard key={`${turn.id}-${index}`} tool={card.tool} data={card.data} />
+            <DataCard
+              key={`${turn.id}-${index}`}
+              tool={card.tool}
+              data={card.data}
+              {...(card.localOnly === undefined ? {} : { localOnly: card.localOnly })}
+            />
           ))}
 
           {/* ★"이름은 화면에 남고, 숫자만 밖으로 나간다"를 눈으로 확인시켜 주는 줄.

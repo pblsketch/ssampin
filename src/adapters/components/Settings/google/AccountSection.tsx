@@ -24,6 +24,8 @@ function formatRelative(isoString: string | null | undefined): string {
 export const AccountSection = forwardRef<HTMLDivElement>(function AccountSection(_props, ref) {
   const { isConnected, email, isLoading, startAuth, cancelAuth, startPKCEFallback, disconnect } =
     useGoogleAccountStore();
+  const disconnectNotice = useGoogleAccountStore((s) => s.disconnectNotice);
+  const clearDisconnectNotice = useGoogleAccountStore((s) => s.clearDisconnectNotice);
   const { mappings } = useCalendarSyncStore();
   const { settings } = useSettingsStore();
   const { isEnabled: tasksEnabled } = useTasksSyncStore();
@@ -42,6 +44,17 @@ export const AccountSection = forwardRef<HTMLDivElement>(function AccountSection
   const handleDisconnect = () => {
     void disconnect();
     setShowDisconnectConfirm(false);
+  };
+
+  // 연결 해제가 끝까지 안 됐을 때, 선생님이 구글 쪽에서 직접 해제하는 곳
+  const openGooglePermissions = () => {
+    const url = 'https://myaccount.google.com/permissions';
+    const api = window.electronAPI;
+    if (api?.openExternal) {
+      api.openExternal(url);
+    } else {
+      window.open(url, '_blank');
+    }
   };
 
   const openPrivacy = () => {
@@ -116,6 +129,35 @@ export const AccountSection = forwardRef<HTMLDivElement>(function AccountSection
         ) : (
           // === DISCONNECTED STATE ===
           <div className="space-y-4">
+            {/* ★연결 해제가 끝까지 안 됐으면 알린다(ADR-136) — 조용히 넘기면 서버·구글에
+                토큰이 살아 있어도 선생님은 모른다. 색 단독 금지: 아이콘·굵은 제목을 함께 쓴다. */}
+            {disconnectNotice !== null && (
+              <div
+                role="status"
+                className="rounded-xl border-l-2 border-l-sp-warning bg-sp-surface p-3"
+              >
+                <p className="flex items-center gap-1.5 text-sm font-sp-semibold text-sp-text">
+                  <span aria-hidden="true">⚠</span> 연결 해제를 끝까지 하지 못했어요
+                </p>
+                <p className="mt-1 text-sm text-sp-muted">{disconnectNotice}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={openGooglePermissions}
+                    className="rounded-lg border border-sp-border bg-sp-card px-3 py-1.5 text-sm text-sp-text hover:bg-sp-bg"
+                  >
+                    구글 계정 권한 페이지 열기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearDisconnectNotice}
+                    className="rounded-lg px-3 py-1.5 text-sm text-sp-muted hover:text-sp-text"
+                  >
+                    닫기
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex items-center gap-4 rounded-xl bg-amber-500/5 ring-1 ring-amber-500/20 p-4">
               <div className="w-12 h-12 rounded-full bg-amber-500/15 flex items-center justify-center shrink-0">
                 <span className="material-symbols-outlined text-amber-400 text-2xl">warning</span>
@@ -178,9 +220,21 @@ export const AccountSection = forwardRef<HTMLDivElement>(function AccountSection
                     cloud_sync
                   </span>
                   <span>
-                    <span className="text-sp-text font-medium">drive.appdata</span>
+                    <span className="text-sp-text font-medium">drive.file</span>
                     <span className="text-xs block">
-                      쌤핀 전용 폴더 백업 (다른 Drive 파일엔 접근하지 않음)
+                      쌤핀이 만든 파일만 (동기화 폴더·과제 제출 폴더·교무실 자료·서명 시트) — 다른
+                      Drive 파일엔 접근하지 않음
+                    </span>
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="material-symbols-outlined text-icon text-sp-muted mt-0.5">
+                    alternate_email
+                  </span>
+                  <span>
+                    <span className="text-sp-text font-medium">userinfo.email</span>
+                    <span className="text-xs block">
+                      연결한 계정 이메일 확인 (이름·사진은 받지 않음)
                     </span>
                   </span>
                 </li>

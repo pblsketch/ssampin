@@ -208,3 +208,45 @@ describe('SyncFromGoogle — 되돌아온 사본이 원본을 덮어쓰지 않�
     expect(saved.source).toBe('google');
   });
 });
+
+describe('SyncFromGoogle — 구글 쪽 수정이 들어온 쌤핀 일정 표시 (ADR-136 D1)', () => {
+  const mine: SchoolEvent = {
+    id: 'mine-1',
+    title: '대체휴일',
+    date: '2026-10-05',
+    category: 'school',
+    source: 'ssampin',
+    googleEventId: 'g1',
+    googleCalendarId: CAL_ID,
+    lastSyncedAt: '2026-08-20T00:00:00.000Z',
+  };
+
+  it('구글에서 내용이 바뀌어 들어오면 표시가 붙는다', async () => {
+    const { useCase, eventsRepo } = build(
+      [mine],
+      [googleMapping],
+      [gEvent({ summary: '대체휴일(구글에서 고침)' })],
+    );
+
+    await useCase.execute();
+
+    expect(eventsRepo.data.events[0]?.googleContentReceived).toBe(true);
+  });
+
+  it('올려 보낸 것이 그대로 되돌아온 메아리에는 붙지 않는다', async () => {
+    const { useCase, eventsRepo } = build([mine], [googleMapping], [gEvent()]);
+
+    await useCase.execute();
+
+    expect(eventsRepo.data.events[0]?.googleContentReceived).toBeUndefined();
+  });
+
+  it('한 번 붙은 표시는 다음 메아리에도 떨어지지 않는다', async () => {
+    const received: SchoolEvent = { ...mine, googleContentReceived: true };
+    const { useCase, eventsRepo } = build([received], [googleMapping], [gEvent()]);
+
+    await useCase.execute();
+
+    expect(eventsRepo.data.events[0]?.googleContentReceived).toBe(true);
+  });
+});

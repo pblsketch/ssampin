@@ -65,7 +65,8 @@ export const useMobileTodoStore = create<MobileTodoState>((set, get) => ({
   },
 
   addTodo: async (todo) => {
-    const todos = [...get().todos, todo];
+    // 선생님이 쌤핀에서 만든 할 일이다 — 구글에 올라가도 쌤핀 AI 가 볼 수 있다(ADR-136)
+    const todos = [...get().todos, { ...todo, origin: todo.origin ?? ('ssampin' as const) }];
     set({ todos });
     await todoRepository.saveTodos({ todos, categories: get().categories });
     useMobileDriveSyncStore.getState().triggerSaveSync();

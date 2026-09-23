@@ -148,6 +148,16 @@ export async function adminAccessToken(db: Db, departmentId: string): Promise<st
   if (!res.ok) {
     // refresh_token 이 무효화됐다 — 관리자가 다시 로그인해야 한다
     console.error('[staffroomDrive] 관리자 토큰 갱신 실패:', res.status);
+    // ★구글이 "폐기됐다"(invalid_grant)고 답했으면 그 사본을 바로 지운다(ADR-136 D4).
+    //   그사이 관리자가 새 토큰을 올렸을 수 있으므로 **읽었던 그 토큰일 때만** 지운다.
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    if (body?.error === 'invalid_grant') {
+      await db
+        .from('staffroom_admin_tokens')
+        .delete()
+        .eq('department_id', departmentId)
+        .eq('encrypted_refresh_token', row.encrypted_refresh_token);
+    }
     throw new AdminTokenError(ADMIN_TOKEN_BROKEN_MESSAGE, 'broken');
   }
 

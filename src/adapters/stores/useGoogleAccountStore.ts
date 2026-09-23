@@ -44,6 +44,11 @@ interface GoogleAccountState {
   email: string | null;
   isLoading: boolean;
   error: string | null;
+  /**
+   * 연결 해제가 끝까지 되지 않았을 때의 안내(ADR-136). 서버 보관분 삭제나 구글 폐기가
+   * 실패하면 채워진다 — 예전에는 조용히 넘겨서 양쪽에 토큰이 살아 있어도 몰랐다.
+   */
+  disconnectNotice: string | null;
 
   // OAuth 에러 (모달 표시용)
   oauthError: OAuthError | null;
@@ -65,6 +70,7 @@ interface GoogleAccountState {
   ) => Promise<void>;
   completePKCEAuth: (code: string) => Promise<void>;
   disconnect: () => Promise<void>;
+  clearDisconnectNotice: () => void;
   setError: (error: string | null) => void;
   setOAuthError: (error: OAuthError | null) => void;
   setShowPKCEFallback: (show: boolean) => void;
@@ -72,11 +78,20 @@ interface GoogleAccountState {
   acceptFallback: () => Promise<void>;
 }
 
+/**
+ * 연결 해제가 끝까지 되지 않았을 때 선생님께 드리는 안내.
+ * 구글 계정 권한 페이지에서 해제하면 구글 쪽 토큰이 죽고, 서버에 남은 사본도 쓸 수 없게 된다
+ * (쓸 수 없게 된 사본은 서버가 알아서 지운다 — ADR-136 D4).
+ */
+export const DISCONNECT_INCOMPLETE_NOTICE =
+  '연결은 해제했지만, 인터넷 연결 문제로 정리를 끝까지 하지 못했어요. 구글 계정 권한 페이지에서 쌤핀 연결을 한 번 더 해제해 주세요.';
+
 export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
   isConnected: false,
   email: null,
   isLoading: false,
   error: null,
+  disconnectNotice: null,
   oauthError: null,
   showPKCEFallback: false,
   showFallbackSuggestion: false,
@@ -323,8 +338,8 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
     try {
       const { authenticateGoogle, eventsRepository } = await import('@adapters/di/container');
 
-      // 1. 토큰 폐기 + 삭제
-      await authenticateGoogle.disconnect();
+      // 1. 서버 보관분 삭제 → 토큰 폐기 → 로컬 삭제 (순서는 유스케이스가 지킨다)
+      const outcome = await authenticateGoogle.disconnect();
 
       // 교차 참조: 캘린더 스토어에서 현재 매핑 조회 (구글 캘린더 전용 카테고리 정리용)
       const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
@@ -354,6 +369,8 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
         isConnected: false,
         email: null,
         isLoading: false,
+        disconnectNotice:
+          outcome.serverCleared && outcome.revoked ? null : DISCONNECT_INCOMPLETE_NOTICE,
       });
       // 4. 교차 참조: 캘린더 스토어 상태도 초기화 (mappings/syncState/googleCalendars/conflicts/isConnected)
       useCalendarSyncStore.setState({
@@ -371,6 +388,8 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
       });
     }
   },
+
+  clearDisconnectNotice: () => set({ disconnectNotice: null }),
 
   setError: (error) => set({ error }),
   setOAuthError: (oauthError) => set({ oauthError }),

@@ -79,6 +79,12 @@ verify_jwt = true
 [functions.save-teacher-token]
 verify_jwt = false
 
+# 연결 해제 때 서버가 맡은 선생님 토큰 삭제(과제 수합·온라인 교무실, ADR-136 D4).
+# Google access_token → userinfo 로 자체 인증. 앱이 anon key 를 Authorization 헤더로 보내므로
+# 게이트웨이 1차 필터를 켠다.
+[functions.delete-google-tokens]
+verify_jwt = true
+
 # 과제 생성 — Google access_token 검증으로 자체 인증.
 [functions.create-assignment]
 verify_jwt = false

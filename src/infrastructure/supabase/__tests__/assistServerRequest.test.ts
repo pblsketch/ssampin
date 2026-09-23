@@ -13,7 +13,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ALLOWED_GRADES,
   buildToolResultsTurn,
+  dropLegacyGoogleMixedResults,
   findServerPii,
+  LEGACY_GOOGLE_NOTICE,
   LIMITS,
   validateAssistRequest,
 } from '../../../../supabase/functions/_shared/assistRequest';
@@ -270,5 +272,38 @@ describe('buildToolResultsTurn', () => {
     expect(turn?.role).toBe('user');
     expect(turn?.content).toContain('count_students');
     expect(turn?.content).toContain('30');
+  });
+});
+
+describe('옛 앱의 일정·할 일 결과 (ADR-136 D3)', () => {
+  const results = [
+    { tool: 'get_events', grade: 1, data: { items: [{ title: '치과 예약' }] } },
+    { tool: 'get_meals', grade: 1, data: { items: [] } },
+  ];
+
+  it('새 앱의 표시(googleDataExcluded)를 받아들이고, 없으면 false 로 본다', () => {
+    const withFlag = validateAssistRequest(req({ googleDataExcluded: true }));
+    expect('ok' in withFlag && withFlag.ok.googleDataExcluded).toBe(true);
+    const without = validateAssistRequest(req());
+    expect('ok' in without && without.ok.googleDataExcluded).toBe(false);
+  });
+
+  it('표시가 불리언이 아니면 거절한다', () => {
+    expect('error' in validateAssistRequest(req({ googleDataExcluded: 'yes' }))).toBe(true);
+  });
+
+  it('관문이 꺼져 있으면(출시 전) 옛 앱 결과도 그대로 둔다', () => {
+    expect(dropLegacyGoogleMixedResults(results, false, false)).toEqual(results);
+  });
+
+  it('관문이 켜지면 옛 앱의 일정·할 일 결과는 업데이트 안내로 바뀐다 — 다른 도구는 그대로', () => {
+    const out = dropLegacyGoogleMixedResults(results, false, true);
+    expect(JSON.stringify(out)).not.toContain('치과 예약');
+    expect(out[0]?.data).toEqual({ updateRequired: LEGACY_GOOGLE_NOTICE });
+    expect(out[1]).toEqual(results[1]);
+  });
+
+  it('새 앱의 결과는 관문이 켜져도 그대로 둔다', () => {
+    expect(dropLegacyGoogleMixedResults(results, true, true)).toEqual(results);
   });
 });

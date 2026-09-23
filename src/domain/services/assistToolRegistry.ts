@@ -95,9 +95,13 @@ const READ_TOOLS: readonly AssistToolDef[] = [
     outbound: 'result',
     // ⚠️ 교사 본인 데이터라 1등급이지만, 제목은 선생님이 자유롭게 적는다.
     // "김지훈 상담 전화" 처럼 학생 실명이 들어갈 수 있어 전송 직전 관문이 필수다.
-    description: '교사 본인의 할 일 목록을 돌려준다. 제목은 자유 입력이라 별도 검사가 필요하다.',
+    description:
+      '교사 본인의 할 일 목록을 돌려준다. 제목은 자유 입력이라 별도 검사가 필요하다. ' +
+      'googleItemsNotIncluded 가 true 면 구글 할 일에서 가져온 항목은 빠져 있다(선생님 화면에만 표시).',
     // undone(미완료 건수)·overdue(기한 지남)는 앱이 계산한 집계/불리언이라 1등급 그대로다.
-    resultFields: ['items', 'undone'],
+    // ★googleItemsNotIncluded 는 구글 계정 연결 여부에서 나온 고정 안내다(ADR-136) —
+    //   구글 항목이 있는지·몇 건인지는 담지 않는다.
+    resultFields: ['items', 'undone', 'googleItemsNotIncluded'],
     nestedFields: { items: ['title', 'due', 'done', 'overdue'] },
     freeTextFields: ['title'],
     params: {
@@ -145,8 +149,10 @@ const READ_TOOLS: readonly AssistToolDef[] = [
     grade: 1,
     outbound: 'result',
     // 설명(description)은 보내지 않는다 — 상담 메모 등 긴 자유 글이 들어가는 자리다.
-    description: '기간의 일정을 돌려준다. 날짜·제목·시간·장소. 반복 일정은 날짜별로 펼쳐져 있다.',
-    resultFields: ['period', 'truncated', 'items'],
+    description:
+      '기간의 일정을 돌려준다. 날짜·제목·시간·장소. 반복 일정은 날짜별로 펼쳐져 있다. ' +
+      'googleItemsNotIncluded 가 true 면 구글 캘린더에서 가져온 일정은 빠져 있다(선생님 화면에만 표시).',
+    resultFields: ['period', 'truncated', 'items', 'googleItemsNotIncluded'],
     nestedFields: { items: ['date', 'title', 'time', 'location'] },
     freeTextFields: ['title', 'location'],
     params: {
@@ -412,8 +418,9 @@ const READ_TOOLS: readonly AssistToolDef[] = [
     outbound: 'result',
     // 다른 요약들의 조합이다. 새로 세지 않으므로 등급도 구성 요소를 따른다.
     description:
-      '한 주를 한눈에 — 날짜별 수업 교시 수·급식·일정·디데이와 미완료 할 일 수를 함께 돌려준다.',
-    resultFields: ['period', 'todoUndone', 'truncated', 'days'],
+      '한 주를 한눈에 — 날짜별 수업 교시 수·급식·일정·디데이와 미완료 할 일 수를 함께 돌려준다. ' +
+      'googleItemsNotIncluded 가 true 면 구글에서 가져온 일정·할 일은 빠져 있다(선생님 화면에만 표시).',
+    resultFields: ['period', 'todoUndone', 'truncated', 'days', 'googleItemsNotIncluded'],
     nestedFields: { days: ['date', 'day', 'lessons', 'meal', 'events', 'ddays'] },
     freeTextFields: ['meal', 'events', 'ddays'],
     params: {

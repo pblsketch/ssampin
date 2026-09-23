@@ -444,7 +444,11 @@ export const googleCalendarPort: IGoogleCalendarPort = googleCalendarApiClient;
 
 export const calendarSyncRepo: ICalendarSyncRepository = new GoogleCalendarSyncRepository(storage);
 
-export const authenticateGoogle = new AuthenticateGoogle(googleAuthPort, calendarSyncRepo);
+// ★연결 해제 때 서버(과제 수합·온라인 교무실)에 맡긴 토큰도 지운다(ADR-136 D4).
+//   클라이언트는 이 파일 아래쪽에서 만들어지므로 부르는 순간에 찾는다.
+export const authenticateGoogle = new AuthenticateGoogle(googleAuthPort, calendarSyncRepo, {
+  deleteMine: (googleAccessToken) => assignmentSupabaseClient.deleteServerTokens(googleAccessToken),
+});
 
 // 401 재시도를 위한 토큰 갱신 콜백 등록
 googleCalendarApiClient.setTokenRefreshCallback(() => authenticateGoogle.getValidAccessToken());

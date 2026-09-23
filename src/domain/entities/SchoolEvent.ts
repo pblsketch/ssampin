@@ -105,6 +105,12 @@ export interface SchoolEvent {
   readonly googleUpdatedAt?: string; // ISO 8601
   readonly etag?: string;
   readonly source?: 'ssampin' | 'google' | 'neis' | 'birthday';
+  /**
+   * 쌤핀에서 만든 일정인데 **구글 쪽에서 내용이 바뀌어 들어온 적이 있다**(ADR-136 D1).
+   * 그때부터 그 내용은 구글에서 받은 자료라 쌤핀 AI 로 보내지 않는다.
+   * `source` 는 그대로 둔다 — 카테고리·주인을 정하는 값이라 뒤집으면 다른 동작이 바뀐다.
+   */
+  readonly googleContentReceived?: boolean;
   readonly startTime?: string; // "HH:mm"
   readonly endTime?: string; // "HH:mm"
 
