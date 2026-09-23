@@ -5,7 +5,7 @@
  * 상담은 서버에서 오므로 가져오기를 흉내 낸다.
  */
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, screen, cleanup, fireEvent } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useStudentStore } from '@adapters/stores/useStudentStore';
@@ -21,11 +21,18 @@ import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import type { Todo } from '@domain/entities/Todo';
+import type { StudentRecord } from '@domain/entities/StudentRecord';
 import { fetchConsultationCount } from '@adapters/hooks/consultationRecapFetch';
 import { ObservationRecapModals } from './ObservationRecapModals';
+import { saveTermRecapPng } from './termRecapPng';
 
 vi.mock('@adapters/hooks/consultationRecapFetch', () => ({
   fetchConsultationCount: vi.fn(async () => 0),
+}));
+
+vi.mock('./termRecapPng', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./termRecapPng')>()),
+  saveTermRecapPng: vi.fn(async () => true),
 }));
 
 const noop = async (): Promise<void> => {};
@@ -176,5 +183,37 @@ describe('학기 돌아보기 — 숫자 한 줄·반별 줄·할 일 안내', (
     openTerm('2026-09-21');
     const week = screen.getByRole('region', { name: '이번 주' });
     expect(week).toHaveTextContent('끝낸 할 일 1개');
+  });
+});
+
+describe('학기 돌아보기 그림 — 숫자만 넘긴다', () => {
+  it('그림 저장에는 숫자와 학기 중간 여부만 간다 — 반별 줄·할 일 안내는 넘기지 않는다', async () => {
+    vi.mocked(fetchConsultationCount).mockResolvedValue(2);
+    useStudentRecordsStore.setState({
+      records: [
+        {
+          id: 'r1',
+          studentId: 'a',
+          category: 'life',
+          subcategory: '일반',
+          content: '내용',
+          date: '2026-09-22',
+          createdAt: '2026-09-22T01:00:00.000Z',
+        } as StudentRecord,
+      ],
+    });
+    useTeachingClassStore.setState({ progressEntries: [lesson('a', 'c1', '2026-09-02')] });
+    useTodoStore.setState({ todos: [doneTodo('t1', '2026-09-24')] });
+    useObservationPanelStore.setState({
+      panel: { kind: 'retrospect', term: '2026-2', includeWeek: null },
+    });
+    render(<ObservationRecapModals />);
+    await screen.findByText('수업 1차시 · 끝낸 할 일 1개 · 상담 2건');
+    fireEvent.click(screen.getByRole('button', { name: '그림으로 저장' }));
+    const arg = vi.mocked(saveTermRecapPng).mock.calls[0]?.[0];
+    expect(arg?.work).toEqual({
+      counts: { lessons: 1, todos: 1, consultations: 2 },
+      partialTodoTerm: true,
+    });
   });
 });

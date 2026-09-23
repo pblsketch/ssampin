@@ -133,6 +133,9 @@ function TermRecapModal({
           recordedWeeks: recap.recordedWeeks,
           lapTotal: recap.lapTotal,
           weeks: recap.grassWeeks,
+          // 숫자만 넘긴다 — 반별 줄·할 일 안내는 화면에만 있다(돌아보기 spec 3-4).
+          work:
+            work === null ? null : { counts: work.counts, partialTodoTerm: work.partialTodoTerm },
         },
         (message, onOpen) =>
           useToastStore
