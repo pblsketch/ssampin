@@ -92,8 +92,10 @@ describe('할 일 완료 시각 기록 시작일', () => {
     expect(readTodoCompletionSince()).toBe('2026-09-24');
   });
 
-  it('깨진 값은 없는 것으로 본다', () => {
+  it('깨진 값은 없는 것으로 보되 오늘로 덮지 않는다(덮으면 그 사이 끝낸 할 일이 조용히 빠진다)', () => {
     window.localStorage.setItem(TODO_COMPLETION_SINCE_KEY, 'garbage');
     expect(readTodoCompletionSince()).toBeNull();
+    markTodoCompletionSince('2026-10-01');
+    expect(window.localStorage.getItem(TODO_COMPLETION_SINCE_KEY)).toBe('garbage');
   });
 });

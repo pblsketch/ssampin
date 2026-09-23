@@ -4,7 +4,7 @@
  * 어느 창을 열지는 `useObservationPanelStore` 가 정한다(토스트·핀 줄·[잔디] 탭 단추·위젯 창에서 넘어온
  * 이동). 열 때마다 그때까지의 기록으로 다시 계산한다.
  */
-import { useCallback, useState } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { useObservationPanelStore } from '@adapters/stores/useObservationPanelStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -14,7 +14,12 @@ import {
   useWeekRecap,
   type TermChoice,
 } from '@adapters/hooks/useObservationRecap';
-import { useTermWork, useWeekWorkLine } from '@adapters/hooks/useRecapWorkCounts';
+import {
+  ConsultationSessionProvider,
+  createConsultationSession,
+  useTermWork,
+  useWeekWorkLine,
+} from '@adapters/hooks/useRecapWorkCounts';
 import type { RecapCard } from '@adapters/hooks/observationRecap';
 import { useObservationCheerAvailable } from '@adapters/hooks/useObservationCheerContext';
 import { addDaysIso } from '@domain/rules/schoolCalendarDays';
@@ -196,14 +201,28 @@ function TermRecapModal({
   );
 }
 
+/**
+ * 창이 열려 있는 동안의 상담 답 묶음 — 같은 일정·기간은 한 번만 묻는다(돌아보기 spec 2-3).
+ * 창이 닫히면 이 자리도 사라지므로 다음에 열 때 새로 묻는다.
+ */
+function ConsultationSessionScope({ children }: { readonly children: ReactNode }): JSX.Element {
+  const [session] = useState(createConsultationSession);
+  return <ConsultationSessionProvider value={session}>{children}</ConsultationSessionProvider>;
+}
+
 export function ObservationRecapModals(): JSX.Element | null {
   const panel = useObservationPanelStore((s) => s.panel);
   const available = useObservationCheerAvailable();
   const close = useCallback(() => useObservationPanelStore.getState().close(), []);
   if (panel === null || !available) return null;
   const moment = momentLine(panel.moment);
-  if (panel.kind === 'weekly') {
-    return <WeeklyRecapModal week={panel.week} moment={moment} onClose={close} />;
-  }
-  return <TermRecapModal includeWeek={panel.includeWeek} moment={moment} onClose={close} />;
+  return (
+    <ConsultationSessionScope>
+      {panel.kind === 'weekly' ? (
+        <WeeklyRecapModal week={panel.week} moment={moment} onClose={close} />
+      ) : (
+        <TermRecapModal includeWeek={panel.includeWeek} moment={moment} onClose={close} />
+      )}
+    </ConsultationSessionScope>
+  );
 }

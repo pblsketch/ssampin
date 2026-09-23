@@ -20,10 +20,14 @@ export function readTodoCompletionSince(): string | null {
   }
 }
 
-/** 값이 없으면 오늘로 적는다. 이미 있으면 그대로 둔다. */
+/**
+ * 값이 없으면 오늘로 적는다. 이미 있으면 그대로 둔다.
+ * ★깨진 값도 덮지 않는다 — 오늘로 덮으면 진짜 시작일부터 오늘까지 끝낸 할 일이 조용히 빠진다. 깨진 값은 읽을 때
+ *   null 이 되어 거르지 않고 날짜 없이 안내한다.
+ */
 export function markTodoCompletionSince(today: string = toLocalDateString()): void {
   try {
-    if (readTodoCompletionSince() !== null) return;
+    if (window.localStorage.getItem(KEY) !== null) return;
     window.localStorage.setItem(KEY, today);
   } catch {
     // 저장 공간이 막혀도 앱은 그대로 — 안내만 날짜 없이 나간다.

@@ -3,9 +3,10 @@
  *
  * - 수업·끝낸 할 일은 이 컴퓨터 자료라 창이 열리자마자 있다.
  * - 상담은 창을 열 때(학기 돌아보기는 그 학기를 처음 볼 때) 한 번 서버에 묻고, 답이 모두 오면 줄 끝에 붙는다.
- *   창이 열려 있는 동안 같은 기간은 다시 묻지 않는다. 창을 닫으면 아직 오지 않은 답은 버린다.
+ *   창이 열려 있는 동안 같은 기간·같은 일정은 다시 묻지 않는다(창 하나가 `ConsultationSession` 하나를 나눠 쓴다).
+ *   창을 닫으면 아직 오지 않은 답은 화면에 붙이지 않는다.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { readTodoCompletionSince } from '@adapters/utils/todoCompletionSince';
@@ -18,7 +19,11 @@ import {
   type WorkCounts,
 } from '@domain/rules/recapWorkCounts';
 import { toLocalDateString } from '@shared/utils/localDate';
-import { fetchConsultationCount } from './consultationRecapFetch';
+import {
+  createConsultationFetchCache,
+  fetchConsultationCount,
+  type ConsultationFetchCache,
+} from './consultationRecapFetch';
 import {
   classLessonCounts,
   localWorkCounts,
@@ -35,33 +40,50 @@ export function useWorkStoresLoaded(): void {
   }, []);
 }
 
+/** 창 하나가 열려 있는 동안의 상담 답 — 기간별 답과 일정별 답. 창을 새로 열면 새로 만든다. */
+export interface ConsultationSession {
+  readonly ranges: Map<string, Promise<number | null>>;
+  readonly fetch: ConsultationFetchCache;
+}
+
+export function createConsultationSession(): ConsultationSession {
+  return { ranges: new Map(), fetch: createConsultationFetchCache() };
+}
+
+const ConsultationSessionContext = createContext<ConsultationSession | null>(null);
+
+/** 정리 창이 감싸 둔다 — 안의 숫자 줄(학기·접힌 이번 주)이 같은 답을 나눠 쓴다. */
+export const ConsultationSessionProvider = ConsultationSessionContext.Provider;
+
 /**
- * 기간의 상담 예약 수 — 아직 안 왔거나 못 가져왔으면 null. 창이 열려 있는 동안 기간별로 한 번만 묻는다.
+ * 기간의 상담 예약 수 — 아직 안 왔거나 못 가져왔으면 null. 창이 열려 있는 동안 기간별로 한 번만 묻는다
+ * (다른 학기로 갔다가 돌아와도, 답이 오기 전에 떠났어도 다시 묻지 않는다).
  * @param range 오늘까지로 자른 기간. null 이면 묻지 않는다.
  */
 export function useConsultationCount(range: DateRange | null): number | null {
-  const cache = useRef(new Map<string, number | null>());
+  const shared = useContext(ConsultationSessionContext);
+  const own = useRef<ConsultationSession | null>(null);
+  const session = shared ?? (own.current ??= createConsultationSession());
   const key = range === null ? null : `${range.start}~${range.end}`;
   const [value, setValue] = useState<{ key: string; count: number | null } | null>(null);
 
   useEffect(() => {
     if (range === null || key === null) return;
-    if (cache.current.has(key)) {
-      setValue({ key, count: cache.current.get(key) ?? null });
-      return;
+    let asked = session.ranges.get(key);
+    if (asked === undefined) {
+      asked = fetchConsultationCount(range, session.fetch);
+      session.ranges.set(key, asked);
     }
     let cancelled = false;
-    void fetchConsultationCount(range).then((count) => {
-      if (cancelled) return;
-      cache.current.set(key, count);
-      setValue({ key, count });
+    void asked.then((count) => {
+      if (!cancelled) setValue({ key, count });
     });
     return () => {
       cancelled = true;
     };
     // range 는 key 로 대신한다(같은 기간이면 다시 묻지 않는다).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
+  }, [key, session]);
 
   return value !== null && value.key === key ? value.count : null;
 }

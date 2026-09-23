@@ -7,7 +7,7 @@
  * ★다른 작업(수업 진도·상담·할 일 조각, 학교 달력 순간)은 아래 목록에 조각 만드는 함수를 **더하기만**
  *   하면 된다. 틀(`RecapModalFrame`)·창은 고치지 않는다. 그 조각이 쓰는 자료는 함수 안에서 스토어를
  *   읽어도 된다(창을 열 때마다 다시 만든다).
- * ★관찰 밖 숫자 한 줄(`workCounts`·`termWorkCounts`, 돌아보기 spec 2·3)이 그렇게 더해졌다. 숫자는 창이
+ * ★관찰 밖 숫자 한 줄(두 창 모두 조각 `workCounts`, 돌아보기 spec 2·3)이 그렇게 더해졌다. 숫자는 창이
  *   훅(`useRecapWorkCounts`)으로 만들어 문맥에 넣는다 — 상담은 서버 답을 기다리므로 조각 안에서 부르지 않는다.
  */
 import { Fragment } from 'react';
@@ -312,7 +312,7 @@ const termWorkCountsPiece: TermPieceProvider = ({ work }) =>
   work === null || (work.line === null && work.byClass.length === 0)
     ? null
     : {
-        id: 'termWorkCounts',
+        id: 'workCounts',
         order: 5,
         title: null,
         render: () => (

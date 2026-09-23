@@ -29,6 +29,13 @@ import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
 import type { TalkOfDay } from '@domain/rules/proactiveTalk';
+import { fetchConsultationCount } from '../consultationRecapFetch';
+
+// 상담 예약이 서버에 잔뜩 있어도 알릴지 판단은 서버에 묻지 않는다(돌아보기 spec 2-4)
+vi.mock('../consultationRecapFetch', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../consultationRecapFetch')>()),
+  fetchConsultationCount: vi.fn(async () => 5),
+}));
 
 const noop = async (): Promise<void> => {};
 
@@ -247,6 +254,18 @@ describe('먼저 거는 말 엔진', () => {
     settle();
     expect(onToast).not.toHaveBeenCalled();
     expect(useObservationDayStore.getState().talk.decidedDate).toBeNull();
+  });
+
+  it('상담만 있는 주는 먼저 알리지 않는다 — 알릴지 판단은 서버에 묻지 않는다(돌아보기 spec 2-4)', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    vi.mocked(fetchConsultationCount).mockClear();
+    setup(FRIDAY);
+    const onToast = vi.fn();
+    render(<TalkEngine mode="main" onToast={onToast} hasContent={weeklyRecapHasContent} />);
+    settle();
+    expect(onToast).not.toHaveBeenCalled();
+    expect(useObservationDayStore.getState().talk.talk).toBeNull();
+    expect(fetchConsultationCount).not.toHaveBeenCalled();
   });
 
   it('앱을 켜자마자 기록 알림 창이 떠도 겹치지 않는다 — 창이 닫힌 뒤에 알린다', () => {

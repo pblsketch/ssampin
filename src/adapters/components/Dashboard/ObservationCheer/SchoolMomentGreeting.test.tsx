@@ -35,7 +35,8 @@ import { ObservationRecapModals } from './ObservationRecapModals';
 import { ieyo, momentGreeting, talkNotice } from './cheerMessages';
 import { panelForTalk } from './observationPanelNavigation';
 
-vi.mock('@adapters/hooks/consultationRecapFetch', () => ({
+vi.mock('@adapters/hooks/consultationRecapFetch', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@adapters/hooks/consultationRecapFetch')>()),
   fetchConsultationCount: vi.fn(async () => null),
 }));
 
@@ -322,5 +323,51 @@ describe('메인 창 — 앱이 그날 인사를 정하고 알린다', () => {
     expect(dialog).toHaveTextContent(SPORTS_DAY_LINE);
     expect(dialog).toHaveTextContent('끝낸 할 일 1개');
     expect(dialog).not.toHaveTextContent('이번 주는 조용했어요');
+  });
+});
+
+describe('인사 — 열어 봄과 핀 모습이 돌아오는 때', () => {
+  it('저절로 사라진 인사 토스트는 열어 봄이 아니다', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    vi.setSystemTime(new Date(2026, 9, 14, 9, 0));
+    render(
+      <>
+        <ObservationTalkHost />
+        <ToastContainer />
+      </>,
+    );
+    act(() => {
+      vi.advanceTimersByTime(TALK_SETTLE_MS);
+    });
+    act(() => {
+      vi.advanceTimersByTime(TALK_SETTLE_MS);
+    });
+    expect(screen.getByRole('button', { name: SPORTS_DAY_LINE })).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(30_000);
+    });
+    expect(screen.queryByRole('button', { name: SPORTS_DAY_LINE })).not.toBeInTheDocument();
+    expect(pendingTalk(useObservationDayStore.getState().talk, DAY)).not.toBeNull();
+  });
+
+  it('다음 날에는 인사도 그날 핀 모습도 없다', () => {
+    decide([{ kind: 'moment', key: DAY }]);
+    vi.setSystemTime(new Date(2026, 9, 15, 9, 0));
+    const { container } = render(<CheerPinLine />);
+    expect(screen.queryByText(SPORTS_DAY_LINE)).not.toBeInTheDocument();
+    expect(container.querySelector('[data-pin-look]')).toBeNull();
+  });
+
+  it('응원·잔디·돌아보기를 끄면 인사도 그날 핀 모습도 없다', () => {
+    decide([{ kind: 'moment', key: DAY }]);
+    useSettingsStore.setState({
+      settings: {
+        ...useSettingsStore.getState().settings,
+        recordReminder: { ...DEFAULT_REMINDER_SETTINGS, cheerEnabled: false },
+      },
+    });
+    const { container } = render(<CheerPinLine />);
+    expect(screen.queryByText(SPORTS_DAY_LINE)).not.toBeInTheDocument();
+    expect(container.querySelector('[data-pin-look]')).toBeNull();
   });
 });

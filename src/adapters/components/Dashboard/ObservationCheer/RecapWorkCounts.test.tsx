@@ -26,7 +26,8 @@ import { fetchConsultationCount } from '@adapters/hooks/consultationRecapFetch';
 import { ObservationRecapModals } from './ObservationRecapModals';
 import { saveTermRecapPng } from './termRecapPng';
 
-vi.mock('@adapters/hooks/consultationRecapFetch', () => ({
+vi.mock('@adapters/hooks/consultationRecapFetch', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@adapters/hooks/consultationRecapFetch')>()),
   fetchConsultationCount: vi.fn(async () => 0),
 }));
 
@@ -126,7 +127,10 @@ describe('한 주 정리 — 숫자 한 줄', () => {
     openWeek();
     expect(await screen.findByText('끝낸 할 일 1개 · 상담 3건')).toBeInTheDocument();
     // 오늘 뒤는 묻지 않는다 — 9월 21일부터 오늘(25일)까지
-    expect(fetchConsultationCount).toHaveBeenCalledWith({ start: '2026-09-21', end: '2026-09-25' });
+    expect(vi.mocked(fetchConsultationCount).mock.calls[0]?.[0]).toEqual({
+      start: '2026-09-21',
+      end: '2026-09-25',
+    });
   });
 
   it('상담을 가져오지 못하면(null) 상담 없이', async () => {
@@ -215,5 +219,40 @@ describe('학기 돌아보기 그림 — 숫자만 넘긴다', () => {
       counts: { lessons: 1, todos: 1, consultations: 2 },
       partialTodoTerm: true,
     });
+  });
+});
+
+describe('상담은 창이 열려 있는 동안 한 번만 묻는다(spec 2-3)', () => {
+  it('지난 학기로 갔다가 돌아와도 이번 학기를 다시 묻지 않는다', async () => {
+    vi.mocked(fetchConsultationCount).mockClear();
+    useObservationPanelStore.setState({
+      panel: { kind: 'retrospect', term: '2026-2', includeWeek: null },
+    });
+    render(<ObservationRecapModals />);
+    await Promise.resolve();
+    expect(fetchConsultationCount).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: '지난 학기' }));
+    await Promise.resolve();
+    expect(fetchConsultationCount).toHaveBeenCalledTimes(2);
+    fireEvent.click(screen.getByRole('button', { name: '이번 학기' }));
+    await Promise.resolve();
+    expect(fetchConsultationCount).toHaveBeenCalledTimes(2);
+  });
+
+  it("학기와 접힌 '이번 주'는 같은 일정 답 묶음을 나눠 쓴다 — 창을 다시 열면 새 묶음", () => {
+    vi.mocked(fetchConsultationCount).mockClear();
+    useObservationPanelStore.setState({
+      panel: { kind: 'retrospect', term: '2026-2', includeWeek: '2026-09-21' },
+    });
+    const { unmount } = render(<ObservationRecapModals />);
+    const calls = vi.mocked(fetchConsultationCount).mock.calls;
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.[1]).toBeDefined();
+    expect(calls[0]?.[1]).toBe(calls[1]?.[1]);
+    unmount();
+    useObservationPanelStore.setState({ panel: { kind: 'weekly', week: '2026-09-21' } });
+    render(<ObservationRecapModals />);
+    expect(calls).toHaveLength(3);
+    expect(calls[2]?.[1]).not.toBe(calls[0]?.[1]);
   });
 });

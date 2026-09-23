@@ -15,6 +15,7 @@ import {
   type WorkCounts,
 } from '@domain/rules/recapWorkCounts';
 import { addDaysIso } from '@domain/rules/schoolCalendarDays';
+import { filterActiveClasses, filterArchivedClasses } from '@domain/rules/teachingClassArchive';
 
 /** 월요일 시작 한 주(월~일). */
 export function weekDateRange(weekStart: string): DateRange {
@@ -57,10 +58,7 @@ export function classLessonCounts(
   const r = clampRangeToToday(range, today);
   if (r === null) return [];
   const byClass = completedLessonsByClass(entries, r);
-  const ordered = [
-    ...classes.filter((c) => c.archived !== true),
-    ...classes.filter((c) => c.archived === true),
-  ];
+  const ordered = [...filterActiveClasses(classes), ...filterArchivedClasses(classes)];
   const nameCount = new Map<string, number>();
   for (const c of ordered) nameCount.set(c.name, (nameCount.get(c.name) ?? 0) + 1);
   const out: ClassLessonCount[] = [];

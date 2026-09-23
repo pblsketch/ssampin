@@ -65,7 +65,7 @@ const workCountsPiece: WeeklyPieceProvider = ({ week }) => {
 
 ---
 
-## 2. 학기 돌아보기 — 숫자 줄 + 반별 수업 줄 (`termWorkCounts` 조각)
+## 2. 학기 돌아보기 — 숫자 줄 + 반별 수업 줄 (`workCounts` 조각)
 
 `termGrassPiece`(order 0, 제목 "학기 잔디") 바로 뒤, `scenePiece`(order 10) 앞에 둔다 — spec 3-2의 기본 위치.
 
@@ -74,7 +74,7 @@ const termWorkCountsPiece: TermPieceProvider = ({ recap, workCounts, byClass, pa
   const line = workCountLine(workCountItems(workCounts));
   if (line === null && byClass.size === 0) return null;
   return {
-    id: 'termWorkCounts',
+    id: 'workCounts', // spec §7 — 두 창 모두 같은 이름
     order: 5,
     title: null,
     render: () => (
