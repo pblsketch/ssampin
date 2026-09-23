@@ -15,6 +15,7 @@ Claude Code·Codex·GJC는 새 버전·핫픽스 공개 작업에서 이 문서�
 - `src/mobile/version.ts`의 MOBILE_APP_VERSION, `landing/src/config.ts`의 VERSION, `src/adapters/components/Layout/Sidebar.tsx`의 보이는 버전 문자열을 확인한다.
 - 모바일 SettingsPage/MorePage는 MOBILE_APP_VERSION을 가져온다. 별도 버전을 넣지 않는다. 앱 정보의 **APP_VERSION**과 랜딩 structuredData의 VERSION도 자동 반영되는지 확인한다.
 - 보류 기능·미배포 서버가 필요한 기능을 출시 범위에서 제외하거나 승인된 배포를 선행한다.
+- 학교 달력 인사의 **수능 날짜표**(`src/domain/rules/schoolMoments.ts`의 `SUNEUNG_DATES`)에 다음 해 수능일이 있는지 확인한다. 교육부가 발표하면 그 해 첫 출시에 한 줄 더한다. 표에 없는 해는 수능 인사가 조용히 빠진다(ADR-138).
 
 - 1·2단계 편집 후 `npm run check:release-prep`로 버전 6개 비교를 실행한다. 통과는 서버 배포·실기기 확인·출시 승인을 대신하지 않는다.
 
