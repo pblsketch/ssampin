@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ErrorBoundary } from '@adapters/components/common/ErrorBoundary';
 import { initAnalyticsIdentity } from '@adapters/hooks/useAnalytics';
+import { markTodoCompletionSince } from '@adapters/utils/todoCompletionSince';
 import { App } from './App';
 import './index.css';
 
@@ -12,6 +13,9 @@ import './index.css';
  * 예전에는 메인 창에서만 번호를 붙여, 위젯·아이콘 창의 기록이 전부 익명으로 쌓였다.
  */
 initAnalyticsIdentity();
+
+// 할 일 완료 시각을 이 컴퓨터에서 언제부터 적었는지 — 먼저 켜진 창이 한 번만 적는다(돌아보기 spec 3-3).
+markTodoCompletionSince();
 
 const rendererMode = new URLSearchParams(window.location.search).get('mode');
 

@@ -47,6 +47,20 @@ function homeroomTitle(className: string | undefined): string {
   return name.length > 0 ? `담임 · ${name}` : '담임반';
 }
 
+/**
+ * 고른 학기의 창(학기 시작일 ~ 다음 학기 시작 전날) — 학기 돌아보기의 관찰 조각과 숫자 한 줄이 같은 창을 쓴다.
+ * 형식이 아닌 학기면 null.
+ */
+export function useRecapTermRange(choice: TermChoice): { start: string; end: string } | null {
+  const currentTerm = useCurrentTerm();
+  const termStartDates = useSettingsStore((s) => s.settings.termStartDates);
+  const today = toLocalDateString(new Date());
+  const term = choice === 'current' ? currentTerm : previousTerm(currentTerm);
+  const start = term === null ? null : resolveTermStartDate(term, termStartDates);
+  const end = term === null ? null : (termEndDate(term, termStartDates) ?? today);
+  return useMemo(() => (start === null || end === null ? null : { start, end }), [start, end]);
+}
+
 /** 학기 돌아보기 — 이번 학기 / 지난 학기. 학기 창을 모르면 null. */
 export function useTermRecap(choice: TermChoice): TermRecap | null {
   const currentTerm = useCurrentTerm();

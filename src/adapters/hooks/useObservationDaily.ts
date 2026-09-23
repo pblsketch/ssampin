@@ -16,6 +16,10 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { readTodoCompletionSince } from '@adapters/utils/todoCompletionSince';
+import { workCountItems, workCountLine } from '@domain/rules/recapWorkCounts';
+import { localWorkCounts, weekDateRange } from './recapWorkData';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useRecordReminderStore, isReminderPaused } from '@adapters/stores/useRecordReminderStore';
 import { useModalCoordinatorStore } from '@adapters/stores/useModalCoordinatorStore';
@@ -438,7 +442,12 @@ function anyModalOpen(): boolean {
  * 한 주 정리에 보여 줄 것이 있는가 — 틀(조각 목록)이 판단한다(spec §8). 호스트가
  * `ObservationCheer/recapPieces` 의 판단을 넘긴다. 기본은 관찰 조각만 본다.
  */
-export type WeeklyHasContent = (weekStart: string, observation: WeekRecap | null) => boolean;
+export type WeeklyHasContent = (
+  weekStart: string,
+  observation: WeekRecap | null,
+  /** 이 컴퓨터 자료(수업·할 일)만으로 만든 숫자 한 줄 — 상담은 넣지 않는다(돌아보기 spec 2-4) */
+  workLine: string | null,
+) => boolean;
 
 const observationOnly: WeeklyHasContent = (_week, observation) => observation !== null;
 
@@ -471,6 +480,11 @@ export function useObservationTalkEngine(
   const observationsLoaded = useObservationStore((s) => s.loaded);
   const records = useStudentRecordsStore((s) => s.records);
   const observations = useObservationStore((s) => s.records);
+  // 관찰 밖 숫자(수업·할 일)도 '알릴지'를 바꾼다 — 다 불러오기 전에 정하면 할 일만 있는 주가 넘긴 주로 굳는다.
+  const todosLoaded = useTodoStore((s) => s.loaded);
+  const todos = useTodoStore((s) => s.todos);
+  const classesLoaded = useTeachingClassStore((s) => s.loaded);
+  const progressEntries = useTeachingClassStore((s) => s.progressEntries);
   const modalOpen = useModalCoordinatorStore((s) => s.entries.some((e) => e.isOpen));
   const calendar = useSchoolCalendarDays();
   const termWindow = useObservationTermWindow();
@@ -481,12 +495,15 @@ export function useObservationTalkEngine(
   useEffect(() => {
     if (!recordsLoaded) void useStudentRecordsStore.getState().load();
     if (!observationsLoaded) void useObservationStore.getState().load();
-  }, [recordsLoaded, observationsLoaded]);
+    if (!todosLoaded) void useTodoStore.getState().load();
+    if (!classesLoaded) void useTeachingClassStore.getState().load();
+  }, [recordsLoaded, observationsLoaded, todosLoaded, classesLoaded]);
 
   // 정하기 — 불러오기·보이기·쉬지 않음·(메인 창) 다른 창이 없음이 모두 맞을 때.
   useEffect(() => {
     void tick;
     if (!available || !ready || !visible || !recordsLoaded || !observationsLoaded) return;
+    if (!todosLoaded || !classesLoaded) return;
     if (isRestingToday(restDay, today)) return;
     // 켜 둔 채 자정을 넘긴 바탕화면 위젯 창은 늘 '보인다' — 선생님이 오기 전 새벽에 정하지 않는다.
     if (new Date().getHours() < TALK_EARLIEST_HOUR) return;
@@ -498,8 +515,15 @@ export function useObservationTalkEngine(
       const notifiedWeeks = new Set(
         talkState.notified.map((k) => weekOfNotifiedKey(k)).filter((w): w is string => w !== null),
       );
+      const since = readTodoCompletionSince();
       const hasContent = (w: string): boolean =>
-        weeklyHasContent(w, buildWeekRecap(w, today, entries, calendar));
+        weeklyHasContent(
+          w,
+          buildWeekRecap(w, today, entries, calendar),
+          workCountLine(
+            workCountItems(localWorkCounts(weekDateRange(w), today, todos, progressEntries, since)),
+          ),
+        );
       const candidates: TalkCandidate[] = [];
       const week = weeklyNoticeWeek(today, calendar, notifiedWeeks, hasContent);
       if (week !== null) candidates.push({ kind: 'weekly', key: week });
@@ -529,6 +553,8 @@ export function useObservationTalkEngine(
     visible,
     recordsLoaded,
     observationsLoaded,
+    todosLoaded,
+    classesLoaded,
     restDay,
     today,
     mode,
@@ -536,6 +562,8 @@ export function useObservationTalkEngine(
     talkState,
     records,
     observations,
+    todos,
+    progressEntries,
     calendar,
     regularEnd,
     termWindow.term,

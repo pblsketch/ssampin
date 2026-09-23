@@ -10,6 +10,7 @@ import { useStudentStore } from '@adapters/stores/useStudentStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useStudentRecordsStore } from '@adapters/stores/useStudentRecordsStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
+import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { useRecordReminderStore } from '@adapters/stores/useRecordReminderStore';
@@ -23,6 +24,7 @@ import {
   type WeeklyHasContent,
 } from '../useObservationDaily';
 import { weeklyPanelWeek } from '@adapters/components/Dashboard/ObservationCheer/observationPanelNavigation';
+import { weeklyRecapHasContent } from '@adapters/components/Dashboard/ObservationCheer/recapPieces';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
 import type { StudentRecord } from '@domain/entities/StudentRecord';
 import type { TeachingClass } from '@domain/entities/TeachingClass';
@@ -88,6 +90,7 @@ function setup(now: Date): void {
   useTeachingClassStore.setState({ classes: [cls], loaded: true, load: noop });
   useStudentRecordsStore.setState({ records: [], loaded: true, load: noop });
   useObservationStore.setState({ records: [], loaded: true, load: noop });
+  useTodoStore.setState({ todos: [], loaded: true, load: noop });
   useScheduleStore.setState({
     loaded: true,
     load: noop,
@@ -210,6 +213,40 @@ describe('먼저 거는 말 엔진', () => {
     rerender(<TalkEngine mode="main" onToast={onToast} />);
     settle();
     expect(onToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('관찰 기록이 없어도 그 주에 끝낸 할 일이 있으면 알린다(돌아보기 spec 2-4)', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    setup(FRIDAY);
+    useTodoStore.setState({
+      todos: [
+        {
+          id: 't1',
+          text: '공문 회신',
+          completed: true,
+          createdAt: '2026-09-01T00:00:00.000Z',
+          completedAt: new Date(2026, 8, 23, 15, 0).toISOString(),
+        },
+      ],
+    });
+    const onToast = vi.fn();
+    render(<TalkEngine mode="main" onToast={onToast} hasContent={weeklyRecapHasContent} />);
+    settle();
+    expect(onToast).toHaveBeenCalledTimes(1);
+    expect(onToast.mock.calls[0]?.[0]).toMatchObject({
+      main: { kind: 'weekly', key: '2026-09-21' },
+    });
+  });
+
+  it('할 일·진도를 다 불러오기 전에는 정하지 않는다(할 일만 있는 주가 넘긴 주로 굳지 않게)', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    setup(FRIDAY);
+    useTodoStore.setState({ loaded: false });
+    const onToast = vi.fn();
+    render(<TalkEngine mode="main" onToast={onToast} hasContent={weeklyRecapHasContent} />);
+    settle();
+    expect(onToast).not.toHaveBeenCalled();
+    expect(useObservationDayStore.getState().talk.decidedDate).toBeNull();
   });
 
   it('앱을 켜자마자 기록 알림 창이 떠도 겹치지 않는다 — 창이 닫힌 뒤에 알린다', () => {

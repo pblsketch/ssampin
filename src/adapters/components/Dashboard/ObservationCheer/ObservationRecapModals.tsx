@@ -8,7 +8,13 @@ import { useCallback, useState } from 'react';
 import { useObservationPanelStore } from '@adapters/stores/useObservationPanelStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useToastStore } from '@adapters/components/common/Toast';
-import { useTermRecap, useWeekRecap, type TermChoice } from '@adapters/hooks/useObservationRecap';
+import {
+  useRecapTermRange,
+  useTermRecap,
+  useWeekRecap,
+  type TermChoice,
+} from '@adapters/hooks/useObservationRecap';
+import { useTermWork, useWeekWorkLine } from '@adapters/hooks/useRecapWorkCounts';
 import type { RecapCard } from '@adapters/hooks/observationRecap';
 import { useObservationCheerAvailable } from '@adapters/hooks/useObservationCheerContext';
 import { addDaysIso } from '@domain/rules/schoolCalendarDays';
@@ -32,7 +38,8 @@ function WeeklyRecapModal({
   readonly onClose: () => void;
 }): JSX.Element {
   const observation = useWeekRecap(week);
-  const pieces = collectPieces(WEEKLY_RECAP_PIECES, { week, observation });
+  const workLine = useWeekWorkLine(week);
+  const pieces = collectPieces(WEEKLY_RECAP_PIECES, { week, observation, workLine });
   return (
     <RecapModalFrame
       onClose={onClose}
@@ -71,7 +78,11 @@ function TermRecapModal({
 }): JSX.Element {
   const [choice, setChoice] = useState<TermChoice>('current');
   const recap = useTermRecap(choice);
-  const thisWeek = useWeekRecap(choice === 'current' ? includeWeek : null);
+  const termRange = useRecapTermRange(choice);
+  const work = useTermWork(termRange);
+  const foldedWeek = choice === 'current' ? includeWeek : null;
+  const thisWeek = useWeekRecap(foldedWeek);
+  const thisWeekWorkLine = useWeekWorkLine(foldedWeek);
   const [saving, setSaving] = useState(false);
 
   const onGoDraft = useCallback(
@@ -83,7 +94,9 @@ function TermRecapModal({
   );
 
   const pieces =
-    recap === null ? [] : collectPieces(TERM_RECAP_PIECES, { recap, thisWeek, onGoDraft });
+    recap === null
+      ? []
+      : collectPieces(TERM_RECAP_PIECES, { recap, thisWeek, thisWeekWorkLine, work, onGoDraft });
 
   const exportPng = async (): Promise<void> => {
     if (recap === null || saving) return;

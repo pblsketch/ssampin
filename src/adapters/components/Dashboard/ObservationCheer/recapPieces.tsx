@@ -7,7 +7,11 @@
  * ★다른 작업(수업 진도·상담·할 일 조각, 학교 달력 순간)은 아래 목록에 조각 만드는 함수를 **더하기만**
  *   하면 된다. 틀(`RecapModalFrame`)·창은 고치지 않는다. 그 조각이 쓰는 자료는 함수 안에서 스토어를
  *   읽어도 된다(창을 열 때마다 다시 만든다).
+ * ★관찰 밖 숫자 한 줄(`workCounts`·`termWorkCounts`, 돌아보기 spec 2·3)이 그렇게 더해졌다. 숫자는 창이
+ *   훅(`useRecapWorkCounts`)으로 만들어 문맥에 넣는다 — 상담은 서버 답을 기다리므로 조각 안에서 부르지 않는다.
  */
+import { Fragment } from 'react';
+import type { TermWork } from '@adapters/hooks/useRecapWorkCounts';
 import type { RecapCard, TermRecap, WeekRecap } from '@adapters/hooks/observationRecap';
 import type { RecapPiece } from './RecapModalFrame';
 import { GrassGrid } from './MyGrassSection';
@@ -33,6 +37,8 @@ export interface WeeklyRecapContext {
   readonly week: string;
   /** 관찰 조각 — 그 주 기록이 없으면 null */
   readonly observation: WeekRecap | null;
+  /** 관찰 밖 숫자 한 줄("수업 N차시 · 끝낸 할 일 N개 · 상담 N건") — 셋 다 없으면 null */
+  readonly workLine: string | null;
 }
 
 export type WeeklyPieceProvider = (ctx: WeeklyRecapContext) => RecapPiece | null;
@@ -47,23 +53,45 @@ const observationWeekPiece: WeeklyPieceProvider = ({ observation }) =>
         render: () => <ObservationWeekRow recap={observation} />,
       };
 
+/** 숫자 한 줄 — 관찰 조각보다 한 단 낮은 곁줄이다(설계 recap-work-and-moments §1). */
+function WorkLine({ line }: { readonly line: string }): JSX.Element {
+  return <p className="text-sm text-sp-text">{line}</p>;
+}
+
+const workCountsWeekPiece: WeeklyPieceProvider = ({ workLine }) =>
+  workLine === null
+    ? null
+    : { id: 'workCounts', order: 10, title: null, render: () => <WorkLine line={workLine} /> };
+
 /** 한 주 정리 조각 목록 — 다른 작업은 여기에 더한다. */
-export const WEEKLY_RECAP_PIECES: readonly WeeklyPieceProvider[] = [observationWeekPiece];
+export const WEEKLY_RECAP_PIECES: readonly WeeklyPieceProvider[] = [
+  observationWeekPiece,
+  workCountsWeekPiece,
+];
 
 /**
  * 그 주 정리에 보여 줄 조각이 하나라도 있는가 — 먼저 거는 말이 '알릴지'를 이것으로 정한다(spec §8).
  * 조각을 더하면 알림 판단도 저절로 따라온다.
+ * @param workLine 이 컴퓨터 자료(수업·할 일)만으로 만든 숫자 줄. 상담은 넣지 않는다(돌아보기 spec 2-4).
  */
-export function weeklyRecapHasContent(week: string, observation: WeekRecap | null): boolean {
-  return collectPieces(WEEKLY_RECAP_PIECES, { week, observation }).length > 0;
+export function weeklyRecapHasContent(
+  week: string,
+  observation: WeekRecap | null,
+  workLine: string | null = null,
+): boolean {
+  return collectPieces(WEEKLY_RECAP_PIECES, { week, observation, workLine }).length > 0;
 }
 
 // ── 학기 돌아보기 ──
 
 export interface TermRecapContext {
   readonly recap: TermRecap;
-  /** 한 주 정리와 겹친 날에만 — '이번 주' 조각 */
+  /** 한 주 정리와 겹친 날에만 — '이번 주' 조각의 관찰 부분 */
   readonly thisWeek: WeekRecap | null;
+  /** 한 주 정리와 겹친 날에만 — '이번 주' 조각의 숫자 한 줄(돌아보기 spec 2-5) */
+  readonly thisWeekWorkLine: string | null;
+  /** 관찰 밖 숫자 한 줄·반별 줄·할 일 안내 */
+  readonly work: TermWork | null;
   readonly onGoDraft: (card: RecapCard) => void;
 }
 
@@ -244,19 +272,57 @@ const draftReadyPiece: TermPieceProvider = ({ recap, onGoDraft }) =>
         ),
       };
 
-const thisWeekPiece: TermPieceProvider = ({ thisWeek }) =>
-  thisWeek === null
+/**
+ * 학기 잔디 바로 뒤 — 숫자 한 줄, 반별 수업 줄(길면 줄바꿈, 자르지 않는다), 학기 중간부터 센 할 일 안내.
+ * 반별 줄은 화면에만 있다(그림에는 넣지 않는다).
+ */
+const termWorkCountsPiece: TermPieceProvider = ({ work }) =>
+  work === null || (work.line === null && work.byClass.length === 0)
+    ? null
+    : {
+        id: 'termWorkCounts',
+        order: 5,
+        title: null,
+        render: () => (
+          <div className="space-y-1">
+            {work.line !== null && <WorkLine line={work.line} />}
+            {work.byClass.length > 0 && (
+              <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-sp-muted">
+                {work.byClass.map((c, i) => (
+                  <Fragment key={c.classId}>
+                    {i > 0 && <span aria-hidden>·</span>}
+                    <span>
+                      {c.name} {c.count}
+                    </span>
+                  </Fragment>
+                ))}
+              </p>
+            )}
+            {work.todoNote !== null && <p className="text-xs text-sp-muted">{work.todoNote}</p>}
+          </div>
+        ),
+      };
+
+/** 한 주 정리와 겹친 날의 '이번 주' — 관찰(있으면)과 그 주 숫자 한 줄(있으면)을 한 조각에. */
+const thisWeekPiece: TermPieceProvider = ({ thisWeek, thisWeekWorkLine }) =>
+  thisWeek === null && thisWeekWorkLine === null
     ? null
     : {
         id: 'thisWeek',
         order: 30,
         title: '이번 주',
-        render: () => <ObservationWeekRow recap={thisWeek} />,
+        render: () => (
+          <div className="space-y-2">
+            {thisWeek !== null && <ObservationWeekRow recap={thisWeek} />}
+            {thisWeekWorkLine !== null && <WorkLine line={thisWeekWorkLine} />}
+          </div>
+        ),
       };
 
 /** 학기 돌아보기 조각 목록 — 다른 작업은 여기에 더한다. */
 export const TERM_RECAP_PIECES: readonly TermPieceProvider[] = [
   termGrassPiece,
+  termWorkCountsPiece,
   scenePiece,
   draftReadyPiece,
   thisWeekPiece,
