@@ -203,7 +203,7 @@ function TermRecapModal({
 
 /**
  * 창이 열려 있는 동안의 상담 답 묶음 — 같은 일정·기간은 한 번만 묻는다(돌아보기 spec 2-3).
- * 창이 닫히면 이 자리도 사라지므로 다음에 열 때 새로 묻는다.
+ * 창이 닫히거나 다른 창으로 바뀌면(닫지 않고 바로 다른 정리를 연 경우 — 위젯 창에서 여는 등) 새로 묻는다.
  */
 function ConsultationSessionScope({ children }: { readonly children: ReactNode }): JSX.Element {
   const [session] = useState(createConsultationSession);
@@ -217,7 +217,7 @@ export function ObservationRecapModals(): JSX.Element | null {
   if (panel === null || !available) return null;
   const moment = momentLine(panel.moment);
   return (
-    <ConsultationSessionScope>
+    <ConsultationSessionScope key={panel.kind === 'weekly' ? `w:${panel.week}` : `t:${panel.term}`}>
       {panel.kind === 'weekly' ? (
         <WeeklyRecapModal week={panel.week} moment={moment} onClose={close} />
       ) : (

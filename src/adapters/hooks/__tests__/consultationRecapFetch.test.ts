@@ -4,12 +4,13 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
+  CONSULTATION_CONCURRENCY,
   createConsultationFetchCache,
   fetchConsultationCount,
 } from '@adapters/hooks/consultationRecapFetch';
 
 const getDetail = vi.fn();
-const schedules = [
+const schedules: { id: string; adminKey: string; dates: { date: string }[] }[] = [
   { id: 'a', adminKey: 'ka', dates: [{ date: '2026-12-28' }] },
   { id: 'b', adminKey: 'kb', dates: [{ date: '2026-09-10' }, { date: '2026-12-29' }] },
 ];
@@ -74,5 +75,38 @@ describe('상담 수 가져오기', () => {
   it('기간 안 날짜가 있는 일정이 없으면 묻지 않고 0', async () => {
     expect(await fetchConsultationCount({ start: '2026-11-01', end: '2026-11-07' })).toBe(0);
     expect(getDetail).not.toHaveBeenCalled();
+  });
+});
+
+describe('학기와 접힌 이번 주가 동시에 물을 때', () => {
+  it('같은 일정은 한 번만 묻고, 창 하나에서 동시에 묻는 수는 제한을 넘지 않는다', async () => {
+    const extra = ['c', 'd', 'e', 'f'].map((id) => ({
+      id,
+      adminKey: `k${id}`,
+      dates: [{ date: '2026-12-28' }],
+    }));
+    schedules.push(...extra);
+    let inFlight = 0;
+    let peak = 0;
+    getDetail.mockImplementation(async () => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight -= 1;
+      return detail('2026-12-28', 1);
+    });
+    try {
+      const cache = createConsultationFetchCache();
+      const [term, week] = await Promise.all([
+        fetchConsultationCount({ start: '2026-08-18', end: '2026-12-30' }, cache),
+        fetchConsultationCount({ start: '2026-12-28', end: '2026-12-30' }, cache),
+      ]);
+      expect(term).toBe(6);
+      expect(week).toBe(6);
+      expect(getDetail).toHaveBeenCalledTimes(6);
+      expect(peak).toBeLessThanOrEqual(CONSULTATION_CONCURRENCY);
+    } finally {
+      schedules.splice(2);
+    }
   });
 });
