@@ -63,7 +63,7 @@ const draft = {
 describe("설정 '응원·잔디'·'제외 학생'", () => {
   it('알림을 꺼 둬도 흐리게 막히지 않는다', () => {
     render(<RecordReminderSection draft={draft} patch={vi.fn()} />);
-    const toggle = screen.getByText('응원·잔디 표시').closest('div.flex.items-center');
+    const toggle = screen.getByText('응원·잔디·돌아보기 표시').closest('div.flex.items-center');
     expect(toggle?.closest('[aria-disabled="true"]')).toBeNull();
     const row = screen.getByText('이나래').closest('li');
     expect(row?.closest('[aria-disabled="true"]')).toBeNull();
@@ -72,7 +72,7 @@ describe("설정 '응원·잔디'·'제외 학생'", () => {
   it('스위치를 끄면 초안에 cheerEnabled: false 로 담는다', () => {
     const patch = vi.fn();
     render(<RecordReminderSection draft={draft} patch={patch} />);
-    const section = screen.getByText('응원·잔디 표시').closest('div.flex.items-center');
+    const section = screen.getByText('응원·잔디·돌아보기 표시').closest('div.flex.items-center');
     const sw = section?.querySelector('[role="switch"]');
     expect(sw).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(sw as Element);

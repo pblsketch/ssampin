@@ -46,7 +46,7 @@ const input = {
 };
 
 describe('학기 돌아보기 그림', () => {
-  it('그리는 글자는 정해진 넷뿐이다', async () => {
+  it('숫자 줄이 없으면 그리는 글자는 넷이다', async () => {
     const { canvas, texts } = fakeCanvas();
     const blob = await renderTermRecapPng(input, () => canvas);
     expect(blob.type).toBe('image/png');

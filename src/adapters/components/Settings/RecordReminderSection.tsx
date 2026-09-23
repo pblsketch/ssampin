@@ -139,20 +139,21 @@ export function RecordReminderSection({ draft, patch }: Props) {
         </div>
       </SettingsSection>
 
-      {/* ADR-135 — 응원·잔디와 제외 학생은 알림을 꺼 둬도 쓰인다. 흐리게 막는 묶음 밖에 둔다. */}
+      {/* ADR-135 — 응원·잔디와 제외 학생은 알림을 꺼 둬도 쓰인다. 흐리게 막는 묶음 밖에 둔다.
+          ADR-138 — 돌아보기 숫자 줄·학교 달력 인사도 이 스위치 하나로 켜고 끈다(저장 칸 이름은 그대로). */}
       <SettingsSection
         icon="park"
         iconColor="bg-sp-surface text-sp-accent"
-        title="응원·잔디"
-        description="기록이 쌓인 모습을 보여 주고, 핀이 응원해요."
+        title="응원·잔디·돌아보기"
+        description="기록과 한 일이 쌓인 모습을 보여 주고, 핀이 응원하고 인사해요."
       >
         <div className="flex items-center justify-between">
           <div className="flex flex-col">
-            <span className="text-sm font-medium text-sp-text">응원·잔디 표시</span>
+            <span className="text-sm font-medium text-sp-text">응원·잔디·돌아보기 표시</span>
             <span className="text-xs text-sp-muted">
               끄면 핀 줄·응원·잔디 탭·오늘 챙길 학생·종·질문 한 줄·반 흐름·한 주 정리·학기
-              돌아보기가 모두 사라져요. 관심 학생·제외 학생 목록과 그 효과, 기록 알림 기준, 담임
-              장면 칩은 그대로 남아요.
+              돌아보기(수업·할 일·상담 숫자 포함)·학교 달력 인사와 그날 핀 모습이 모두 사라져요.
+              관심 학생·제외 학생 목록과 그 효과, 기록 알림 기준, 담임 장면 칩은 그대로 남아요.
             </span>
           </div>
           <Toggle
