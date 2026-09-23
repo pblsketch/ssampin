@@ -89,6 +89,16 @@ export function readDenialReason(body: string | undefined): ConsultationDenialRe
   return null;
 }
 
+/**
+ * 다시 물어도 같은 답이 나오는 거부인가 — 이 구글 계정으로는 이 일정을 열 수 없다(다른 계정의 일정·
+ * 예전 방식 기간이 끝난 옛 일정·맞지 않는 관리 키·옛 경로). 구글 연결이 안 된 것(`not_connected`)은
+ * 다시 연결하면 풀리므로 오래가는 거부가 아니다.
+ * 돌아보기 상담 수는 오래가는 거부를 받은 일정만 빼고 센다(ADR-138, 오너 결정 2026-09-23).
+ */
+export function isLastingDenial(reason: ConsultationDenialReason): boolean {
+  return reason !== 'not_connected';
+}
+
 /** 화면에서 사유별 안내를 고를 때 쓴다. 사유가 없으면 null. */
 export function accessDenialReasonOf(e: unknown): ConsultationDenialReason | null {
   return e instanceof ConsultationAccessError ? e.reason : null;

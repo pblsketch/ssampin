@@ -7,7 +7,8 @@
  *   기록하기 시작한 날보다 앞선 시각(구글 할 일이 준 옛 시각 등)은 세지 않는다 — 화면의
  *   "M월 D일부터 센 수예요" 안내와 숫자가 맞아야 한다.
  * - 상담은 서버에서 받은 예약을 **칸 날짜**로 센다. 일정 하나라도 못 가져오면 상담 항목을 통째로 뺀다
- *   (`combineConsultationCount` — 일부만 더한 수는 실제보다 적어 보인다).
+ *   (`combineConsultationCount` — 일부만 더한 수는 실제보다 적어 보인다). 단, 서버가 **영영** 열어 주지
+ *   않는 일정(다른 계정의 일정·기간이 끝난 옛 일정 등)은 그 일정만 빼고 센다 — 선생님도 볼 수 없는 일정이다.
  */
 import type { ProgressEntry } from '@domain/entities/CurriculumProgress';
 import type { ConsultationSchedule } from '@domain/entities/Consultation';
@@ -113,16 +114,28 @@ export function countConsultationBookings(
   return n;
 }
 
+/** 서버가 이 계정에는 영영 열어 주지 않는 일정 — 상담 수에서 그 일정만 뺀다(ADR-138). */
+export const CONSULTATION_UNREADABLE = 'unreadable';
+
+/** 일정 하나의 답: 받은 칸·예약, 잠깐 실패(null), 영영 열 수 없음. */
+export type ConsultationDetailResult =
+  | ConsultationDetailLike
+  | null
+  | typeof CONSULTATION_UNREADABLE;
+
 /**
- * 일정마다 받은 답(실패는 null)을 합친다 — **하나라도 실패하면 null**(상담 항목을 뺀다).
- * 성공한 일정만 더한 수는 실제보다 적어 보인다. 물을 일정이 없으면 0.
+ * 일정마다 받은 답을 합친다 — **잠깐 실패(null)가 하나라도 있으면 null**(상담 항목을 뺀다). 성공한 일정만
+ * 더한 수는 실제보다 적어 보인다. 영영 열 수 없는 일정은 그 일정만 빼고 센다. 물을 일정이 없으면 0.
  */
 export function combineConsultationCount(
-  details: readonly (ConsultationDetailLike | null)[],
+  details: readonly ConsultationDetailResult[],
   range: DateRange,
 ): number | null {
   if (details.some((d) => d === null)) return null;
-  return countConsultationBookings(details as readonly ConsultationDetailLike[], range);
+  const readable = details.filter(
+    (d): d is ConsultationDetailLike => d !== null && d !== CONSULTATION_UNREADABLE,
+  );
+  return countConsultationBookings(readable, range);
 }
 
 /**

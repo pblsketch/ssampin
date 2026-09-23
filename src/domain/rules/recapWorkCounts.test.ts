@@ -5,6 +5,7 @@ import type { Todo } from '@domain/entities/Todo';
 import {
   clampRangeToToday,
   combineConsultationCount,
+  CONSULTATION_UNREADABLE,
   completedLessonsByClass,
   countCompletedLessons,
   countCompletedTodos,
@@ -144,6 +145,12 @@ describe('상담 예약', () => {
 
   it('물을 일정이 없으면 0', () => {
     expect(combineConsultationCount([], WEEK)).toBe(0);
+  });
+
+  it('영영 열 수 없는 일정은 그 일정만 빼고 센다 — 잠깐 실패가 섞이면 여전히 전체를 뺀다', () => {
+    expect(combineConsultationCount([detailA, CONSULTATION_UNREADABLE, detailB], WEEK)).toBe(2);
+    expect(combineConsultationCount([CONSULTATION_UNREADABLE], WEEK)).toBe(0);
+    expect(combineConsultationCount([detailA, CONSULTATION_UNREADABLE, null], WEEK)).toBeNull();
   });
 });
 

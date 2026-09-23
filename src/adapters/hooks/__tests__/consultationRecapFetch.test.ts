@@ -8,6 +8,7 @@ import {
   createConsultationFetchCache,
   fetchConsultationCount,
 } from '@adapters/hooks/consultationRecapFetch';
+import { ConsultationAccessError } from '@domain/rules/consultationAccessReason';
 
 const getDetail = vi.fn();
 const schedules: { id: string; adminKey: string; dates: { date: string }[] }[] = [
@@ -70,6 +71,24 @@ describe('상담 수 가져오기', () => {
       await fetchConsultationCount({ start: '2026-12-28', end: '2026-12-30' }, cache),
     ).toBeNull();
     expect(getDetail).toHaveBeenCalledTimes(2);
+  });
+
+  it('서버가 영영 열어 주지 않는 일정(기간 끝난 옛 일정·다른 계정)은 그 일정만 빼고 센다', async () => {
+    for (const reason of ['legacy_closed', 'different_account', 'key_mismatch'] as const) {
+      getDetail.mockImplementation(async (id: string) => {
+        if (id === 'b') throw new ConsultationAccessError(reason, '거절');
+        return detail('2026-12-28', 2);
+      });
+      expect(await fetchConsultationCount({ start: '2026-12-28', end: '2026-12-30' })).toBe(2);
+    }
+  });
+
+  it('구글 연결이 끊긴 것은 잠깐 실패 — 상담 항목 전체를 뺀다', async () => {
+    getDetail.mockImplementation(async (id: string) => {
+      if (id === 'b') throw new ConsultationAccessError('not_connected', '연결 필요');
+      return detail('2026-12-28', 2);
+    });
+    expect(await fetchConsultationCount({ start: '2026-12-28', end: '2026-12-30' })).toBeNull();
   });
 
   it('기간 안 날짜가 있는 일정이 없으면 묻지 않고 0', async () => {
