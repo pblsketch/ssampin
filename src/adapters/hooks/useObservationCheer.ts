@@ -2,7 +2,7 @@
  * 관찰 기록 응원(ADR-135) — 화면·메인 창이 쓰는 훅 모음.
  *
  * - `useObservationLapCards`: 반 카드 뷰모델(칸 상태·머리글·종).
- * - `useMyGrass`: 내 잔디·연속 주 문구 종류.
+ * - `useMyGrass`: 내 잔디·위젯 카드 주 줄·연속 주 문구 종류.
  * - `useCheerLine`: 카드 핀 줄 — 오늘의 응원이 있으면 그것, 없으면 연속 주 문구.
  * - `useObservationLapKeeper`: **메인 창에만** 단다. 기록이 늘었을 때 새로 끝난 바퀴의 끝 지점을
  *   저장하고(이 컴퓨터에서 추가한 기록으로 끝났을 때만) 한 바퀴 응원을 한다.
@@ -47,7 +47,9 @@ import {
   grassDayCounts,
   pickCheerLine,
   termWeekdayColumns,
+  weekGrassStrip,
   type CheerLine,
+  type WeekStripCell,
 } from '@domain/rules/observationStreak';
 import { filterActiveClasses } from '@domain/rules/teachingClassArchive';
 import {
@@ -119,6 +121,8 @@ export interface MyGrassDay {
 
 export interface MyGrassView {
   readonly weeks: readonly { readonly weekStart: string; readonly days: readonly MyGrassDay[] }[];
+  /** 위젯 카드 주 줄 — 학기 시작 주부터 이번 주까지(ADR-137 결정 16) */
+  readonly strip: readonly WeekStripCell[];
   readonly line: CheerLine;
   readonly lineText: string;
 }
@@ -151,7 +155,8 @@ export function useMyGrass(): MyGrassView {
     const line = pickCheerLine(
       computeStreak(entries, termWindow.today, termWindow.termStart, calendar),
     );
-    return { weeks, line, lineText: cheerLineText(line) };
+    const strip = weekGrassStrip(counts, termWindow.termStart, termWindow.today, calendar);
+    return { weeks, strip, line, lineText: cheerLineText(line) };
   }, [homeroomRecords, observationRecords, termWindow, calendar]);
 }
 

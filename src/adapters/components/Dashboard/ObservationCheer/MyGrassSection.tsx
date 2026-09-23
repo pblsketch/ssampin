@@ -7,6 +7,7 @@
  */
 import { grassLevel } from '@domain/rules/observationStreak';
 import type { MyGrassView } from '@adapters/hooks/useObservationCheer';
+import { GRASS_LEVEL_CLASS } from './grassLevelClass';
 
 /** 잔디 칸 하나(1차 내 잔디·학기 돌아보기 공용). */
 export interface GrassGridDay {
@@ -17,13 +18,6 @@ export interface GrassGridDay {
 }
 
 const WEEKDAY_LABELS = ['월', '화', '수', '목', '금'] as const;
-
-const LEVEL_CLASS: Record<0 | 1 | 2 | 3, string> = {
-  0: 'border border-sp-border',
-  1: 'bg-sp-accent opacity-30',
-  2: 'bg-sp-accent opacity-70',
-  3: 'bg-sp-accent',
-};
 
 function dayLabel(iso: string): string {
   const [, m, d] = iso.split('-').map(Number);
@@ -45,7 +39,7 @@ function GrassCell({ day }: { readonly day: GrassGridDay }): JSX.Element {
     <span
       role="img"
       aria-label={`${dayLabel(day.date)} · 기록 ${day.count}명`}
-      className={`h-3.5 w-3.5 rounded-sm ${LEVEL_CLASS[grassLevel(day.count)]}`}
+      className={`h-3.5 w-3.5 rounded-sm ${GRASS_LEVEL_CLASS[grassLevel(day.count)]}`}
     />
   );
 }

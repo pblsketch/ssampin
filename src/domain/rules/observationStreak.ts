@@ -61,6 +61,86 @@ export function termWeekdayColumns(
   return cols;
 }
 
+/**
+ * 위젯 카드 주 줄 한 칸(ADR-137 결정 16) — 한 칸이 한 주다.
+ * - `level`: 기록이 있거나, 기록 없는 보통 주(0).
+ * - `rest`: 기록 없는 쉬는 주 — 비었다가 아니라 쉬었다로 그린다.
+ * - `pending`: 이번 주에 아직 기록이 없다 — 판단하지 않는다(연속 주와 같다).
+ */
+export type WeekStripCell =
+  | {
+      readonly weekStart: string;
+      readonly kind: 'level';
+      readonly level: 0 | 1 | 2 | 3;
+      /** 그 주 기록한 날 수(주말 포함) */
+      readonly recordedDays: number;
+    }
+  | { readonly weekStart: string; readonly kind: 'rest' }
+  | { readonly weekStart: string; readonly kind: 'pending' };
+
+/**
+ * 그 주 진하기 — 기록한 **날 수**가 등교일 가운데 얼마인가(학생 수가 아니다). 오너 결정 2026-09-24.
+ * 구간은 조정 가능한 기본값: 0 / 절반 미만 / 80% 미만 / 그 이상. 주말 기록으로 등교일보다 많아도 1로 본다.
+ */
+export function weekPresenceLevel(recordedDays: number, schoolDays: number): 0 | 1 | 2 | 3 {
+  if (recordedDays <= 0) return 0;
+  const ratio = recordedDays / Math.max(schoolDays, recordedDays);
+  if (ratio < 0.5) return 1;
+  if (ratio < 0.8) return 2;
+  return 3;
+}
+
+/**
+ * 학기 시작 주부터 이번 주까지 주 줄. 아직 오지 않은 주는 없고, 마지막 칸이 늘 이번 주다
+ * (학기 시작일을 잘못 넣어 60주를 넘으면 오래된 주를 버린다).
+ *
+ * `counts` 는 `grassDayCounts` 결과(학기 안·오늘까지). 등교일은 학기 안·오늘까지의 평일 가운데
+ * 휴일·방학 날을 뺀 날이다. **오늘은 기록했을 때만 센다** — 아침에 이번 주 칸이 옅어지지 않게.
+ * 기록 없는 지난주는 쉬는 주이거나 **등교일이 하루도 없으면**(예: 토요일에 시작한 학기의 첫 주) 쉬는 칸이다.
+ */
+const STRIP_MAX_WEEKS = 60;
+
+export function weekGrassStrip(
+  counts: ReadonlyMap<string, number>,
+  termStart: string,
+  today: string,
+  cal: SchoolCalendarDays,
+): WeekStripCell[] {
+  if (termStart > today) return [];
+  const cells: WeekStripCell[] = [];
+  const thisWeek = weekStartOf(today);
+  const oldest = addDaysIso(thisWeek, -7 * (STRIP_MAX_WEEKS - 1));
+  const first = weekStartOf(termStart);
+  let week = first > oldest ? first : oldest;
+  for (let i = 0; i < STRIP_MAX_WEEKS && week <= thisWeek; i++) {
+    let recordedDays = 0;
+    let schoolDays = 0;
+    for (let d = 0; d < 7; d++) {
+      const day = addDaysIso(week, d);
+      if (day < termStart || day > today) continue;
+      const recorded = (counts.get(day) ?? 0) > 0;
+      if (recorded) recordedDays++;
+      if (d >= 5 || cal.holidayDays.has(day) || cal.vacationDays.has(day)) continue;
+      if (day === today && !recorded) continue;
+      schoolDays++;
+    }
+    if (recordedDays === 0 && week === thisWeek) {
+      cells.push({ weekStart: week, kind: 'pending' });
+    } else if (recordedDays === 0 && (schoolDays === 0 || isRestWeek(week, cal))) {
+      cells.push({ weekStart: week, kind: 'rest' });
+    } else {
+      cells.push({
+        weekStart: week,
+        kind: 'level',
+        level: weekPresenceLevel(recordedDays, schoolDays),
+        recordedDays,
+      });
+    }
+    week = addDaysIso(week, 7);
+  }
+  return cells;
+}
+
 export interface StreakSummary {
   /** 끊기지 않은 구간 안의 기록한 주 수 */
   readonly streakWeeks: number;

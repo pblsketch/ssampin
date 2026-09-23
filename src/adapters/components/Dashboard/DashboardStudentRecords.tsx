@@ -44,6 +44,7 @@ import {
 import { StudentRecordsEditor } from '../Homeroom/Records/StudentRecordsEditor';
 import { useObservationCheerAvailable } from '@adapters/hooks/useObservationCheer';
 import { CheerPinLine } from './ObservationCheer/CheerPinLine';
+import { WeekGrassStrip } from './ObservationCheer/WeekGrassStrip';
 import { TodayFocusChipRow } from './ObservationCheer/TodayFocusChipRow';
 import { ObservationCheerTab } from './ObservationCheer/ObservationCheerTab';
 
@@ -507,6 +508,7 @@ function DashboardStudentRecordsCompact() {
   return (
     <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
       {cheerAvailable && <CheerPinLine />}
+      {cheerAvailable && <WeekGrassStrip />}
       {cheerAvailable && <TodayFocusChipRow />}
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-bold text-sp-text flex items-center gap-1.5">

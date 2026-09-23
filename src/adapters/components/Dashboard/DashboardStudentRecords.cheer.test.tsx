@@ -20,6 +20,7 @@ import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { useLapMarkStore } from '@adapters/stores/useLapMarkStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
 import { DEFAULT_REMINDER_SETTINGS } from '@domain/entities/RecordReminder';
+import type { StudentRecord } from '@domain/entities/StudentRecord';
 import { DashboardStudentRecords } from './DashboardStudentRecords';
 
 const noop = async (): Promise<void> => {};
@@ -29,6 +30,7 @@ function setCheer(enabled: boolean) {
     settings: {
       ...useSettingsStore.getState().settings,
       className: '2학년 3반',
+      termStartDates: { '2026-2': '2026-08-18' },
       recordReminder: { ...DEFAULT_REMINDER_SETTINGS, cheerEnabled: enabled },
     },
   });
@@ -81,5 +83,69 @@ describe('크게 연 학생 빠른 기록', () => {
     useStudentStore.setState({ students: [] });
     render(<DashboardStudentRecords isCompactMode={false} />);
     expect(screen.queryByRole('tablist')).not.toBeInTheDocument();
+  });
+});
+
+describe('작은 카드 — 주 줄 잔디(ADR-137 결정 16)', () => {
+  const STRIP = /이번 학기 주마다 기록한 날/;
+
+  function record(id: string, date: string): StudentRecord {
+    return {
+      id,
+      studentId: 'a',
+      category: 'life',
+      subcategory: '일반',
+      content: '내용',
+      date,
+      createdAt: `${date}T00:10:00.000Z`,
+    } as StudentRecord;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 8, 23, 9, 0)); // 수요일
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it('핀 줄 아래 학기 시작 주부터 이번 주까지 한 줄 — 칸마다 그 주 기록한 날', () => {
+    setCheer(true);
+    useStudentRecordsStore.setState({
+      records: [record('r1', '2026-09-01'), record('r2', '2026-09-02'), record('r3', '2026-09-21')],
+    });
+    render(<DashboardStudentRecords />);
+    const strip = screen.getByRole('img', { name: STRIP });
+    expect(strip).toHaveAccessibleName('이번 학기 주마다 기록한 날 — 6주 가운데 2주 기록');
+    const titles = [...strip.querySelectorAll('span')].map((c) => c.getAttribute('title'));
+    expect(titles).toEqual([
+      '8월 17일 주 · 기록 없음',
+      '8월 24일 주 · 기록 없음',
+      '8월 31일 주 · 2일 기록',
+      '9월 7일 주 · 기록 없음',
+      '9월 14일 주 · 기록 없음',
+      '이번 주 · 1일 기록',
+    ]);
+    // 단추가 아니다 — 누르면 카드 빈 곳처럼 확장 창이 열린다(WidgetCard 가 거르는 요소 안에 있으면 안 된다)
+    expect(
+      strip.closest(
+        'button, a, input, select, textarea, [role="button"], [data-widget-interactive="true"]',
+      ),
+    ).toBeNull();
+    // 핀 줄 바로 아래
+    expect(strip.previousElementSibling).toContainElement(
+      screen.getByRole('button', { name: '오늘은 쉴게요' }),
+    );
+  });
+
+  it('이번 학기 기록이 하나도 없으면 줄이 없다', () => {
+    setCheer(true);
+    render(<DashboardStudentRecords />);
+    expect(screen.queryByRole('img', { name: STRIP })).not.toBeInTheDocument();
+  });
+
+  it('응원·잔디를 끄면 줄이 없다', () => {
+    setCheer(false);
+    useStudentRecordsStore.setState({ records: [record('r1', '2026-09-21')] });
+    render(<DashboardStudentRecords />);
+    expect(screen.queryByRole('img', { name: STRIP })).not.toBeInTheDocument();
   });
 });
