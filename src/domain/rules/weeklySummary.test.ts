@@ -103,3 +103,29 @@ describe('computeWeeklySummary', () => {
     expect(r.upcomingSoon).toBe(1);
   });
 });
+
+describe('완료 날짜 — 완료 시각 우선', () => {
+  const range = weekRange(TODAY);
+  const localIso = (date: string): string => new Date(`${date}T10:00:00`).toISOString();
+
+  it('완료 시각이 있으면 그 날짜로 센다(마지막 수정 시각이 이번 주여도 지난주 완료면 빼기)', () => {
+    const lastWeek = mk({
+      id: 'lw',
+      completed: true,
+      completedAt: localIso('2026-06-18'),
+      updatedAt: localIso('2026-06-23'),
+    });
+    const thisWeek = mk({
+      id: 'tw',
+      completed: true,
+      completedAt: localIso('2026-06-23'),
+      updatedAt: localIso('2026-06-10'),
+    });
+    expect(computeWeeklySummary([lastWeek, thisWeek], range, TODAY).completedCount).toBe(1);
+  });
+
+  it('완료 시각이 없는 옛 할 일은 예전처럼 추정한다', () => {
+    const old = mk({ id: 'old', completed: true, updatedAt: localIso('2026-06-23') });
+    expect(computeWeeklySummary([old], range, TODAY).completedCount).toBe(1);
+  });
+});

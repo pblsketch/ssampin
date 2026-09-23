@@ -1,7 +1,7 @@
 /**
  * 위클리 요약 — 순수 집계(WS5a). 외부 AI·런타임 LLM 0. 신규 저장 데이터 0.
  *
- * 기존 Todo 필드(completed/archivedAt/updatedAt/dueDate/createdAt/category)에서만 계산한다.
+ * 기존 Todo 필드(completed/completedAt/archivedAt/updatedAt/dueDate/createdAt/category)에서만 계산한다.
  * ⚠️ 누적 보상 게이미피케이션 금지 — 스트릭·배지·랭킹·포인트 없음. 순수 정보 제공만.
  */
 import type { Todo } from '@domain/entities/Todo';
@@ -68,9 +68,20 @@ export function weekRange(today: Date = new Date()): WeekRange {
   return { start: ymd(start), end: ymd(end) };
 }
 
-/** 완료 추정 시각(완료 표시 항목) — archivedAt → updatedAt → createdAt 순. */
+/** ISO 시각 → 로컬 "YYYY-MM-DD". 읽을 수 없으면 undefined. */
+function localDateOf(iso: string): string | undefined {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? undefined : ymd(d);
+}
+
+/**
+ * 완료한 날(완료 표시 항목) — 완료 시각(`completedAt`)이 있으면 그 로컬 날짜.
+ * 없는 옛 할 일(완료 시각을 저장하기 전에 끝낸 일)은 추정: archivedAt → updatedAt → createdAt 순.
+ * 옛 할 일까지 완료 시각으로만 세면 업데이트한 주에 '완료' 수가 갑자기 줄어 보인다(오너 결정).
+ */
 function completedAtProxy(t: Todo): string | undefined {
-  return dateOnly(t.archivedAt) ?? dateOnly(t.updatedAt) ?? dateOnly(t.createdAt);
+  const completed = t.completedAt !== undefined ? localDateOf(t.completedAt) : undefined;
+  return completed ?? dateOnly(t.archivedAt) ?? dateOnly(t.updatedAt) ?? dateOnly(t.createdAt);
 }
 
 /**
