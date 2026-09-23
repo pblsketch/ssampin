@@ -17,6 +17,8 @@ import {
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { buildObservationPanelTarget } from '@adapters/utils/navigationTarget';
 import { markTalkOpened, pendingTalk, type TalkOfDay } from '@domain/rules/proactiveTalk';
+import type { SchoolMoment } from '@domain/rules/schoolMoments';
+import { momentForToday } from '@adapters/hooks/useSchoolMoment';
 import { addDaysIso, weekStartOf } from '@domain/rules/schoolCalendarDays';
 import { resolveCurrentTerm } from '@domain/rules/schoolTermStart';
 import { toLocalDateString } from '@shared/utils/localDate';
@@ -43,11 +45,19 @@ export function weeklyPanelWeek(notified: readonly string[], today: string): str
   return thisWeek;
 }
 
-/** 말 한 건 → 열 창. 돌아보기에 한 주 정리가 조각으로 들어갔으면 그 주를 '이번 주'로. */
-export function panelForTalk(talk: TalkOfDay): ObservationPanel {
-  if (talk.main.kind === 'weekly') return { kind: 'weekly', week: talk.main.key };
+/**
+ * 말 한 건 → 열 창. 돌아보기에 한 주 정리가 조각으로 들어갔으면 그 주를 '이번 주'로.
+ * 학교 달력 인사가 접혀 있으면 그 인사를 창 맨 위 한 줄로 싣는다(돌아보기 spec 4-4).
+ */
+export function panelForTalk(
+  talk: TalkOfDay,
+  moment: SchoolMoment | null = null,
+): ObservationPanel {
+  const folded = talk.folded.some((c) => c.kind === 'moment') ? moment : null;
+  const withMoment = folded !== null ? { moment: folded } : {};
+  if (talk.main.kind === 'weekly') return { kind: 'weekly', week: talk.main.key, ...withMoment };
   const week = talk.folded.find((c) => c.kind === 'weekly');
-  return { kind: 'retrospect', term: talk.main.key, includeWeek: week?.key ?? null };
+  return { kind: 'retrospect', term: talk.main.key, includeWeek: week?.key ?? null, ...withMoment };
 }
 
 function currentTerm(): string {
@@ -78,6 +88,14 @@ function markOpenedIf(kind: string): void {
   }
 }
 
+/**
+ * 학교 달력 인사가 그날의 말이면 '열어 봄'으로 적는다 — 인사는 여는 창이 없다(돌아보기 spec 4-4).
+ * 핀 줄 한마디·인사 토스트를 눌렀을 때 부른다. 핀 모습은 그날 그대로 남는다.
+ */
+export function dismissTodayMoment(): void {
+  markOpenedIf('moment');
+}
+
 /** 이 창에서 종류만 보고 연다 — 오늘 말이 그 종류면 그 말대로, 아니면 탭 단추 규칙대로. */
 export function openObservationPanelKind(kind: 'weekly' | 'retrospect'): void {
   markOpenedIf(kind);
@@ -85,7 +103,7 @@ export function openObservationPanelKind(kind: 'weekly' | 'retrospect'): void {
   const talk = useObservationDayStore.getState().talk;
   const talkToday = talk.decidedDate === today ? talk.talk : null;
   if (talkToday !== null && talkToday.main.kind === kind) {
-    useObservationPanelStore.getState().open(panelForTalk(talkToday));
+    useObservationPanelStore.getState().open(panelForTalk(talkToday, momentForToday(today)));
     return;
   }
   if (kind === 'weekly') {

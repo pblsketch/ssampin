@@ -20,6 +20,7 @@ import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { readTodoCompletionSince } from '@adapters/utils/todoCompletionSince';
 import { workCountItems, workCountLine } from '@domain/rules/recapWorkCounts';
 import { localWorkCounts, weekDateRange } from './recapWorkData';
+import { momentForToday } from './useSchoolMoment';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useRecordReminderStore, isReminderPaused } from '@adapters/stores/useRecordReminderStore';
 import { useModalCoordinatorStore } from '@adapters/stores/useModalCoordinatorStore';
@@ -530,6 +531,8 @@ export function useObservationTalkEngine(
       if (isRetrospectNoticeDay(today, regularEnd, calendar)) {
         candidates.push({ kind: 'retrospect', key: termWindow.term });
       }
+      // 학교 달력 인사(돌아보기 spec 4-3) — 그날에 묶인 말. 앱을 그날 켜지 않으면 사라진다.
+      if (momentForToday(today) !== null) candidates.push({ kind: 'moment', key: today });
       const skipped = weeklySkippedWeek(today, calendar, hasContent);
       const handled: TalkCandidate[] =
         skipped === null ? [] : [{ kind: WEEKLY_SKIPPED_KIND, key: skipped }];

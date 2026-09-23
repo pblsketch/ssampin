@@ -18,11 +18,19 @@ import { useTermWork, useWeekWorkLine } from '@adapters/hooks/useRecapWorkCounts
 import type { RecapCard } from '@adapters/hooks/observationRecap';
 import { useObservationCheerAvailable } from '@adapters/hooks/useObservationCheerContext';
 import { addDaysIso } from '@domain/rules/schoolCalendarDays';
+import type { SchoolMoment } from '@domain/rules/schoolMoments';
+import { toLocalDateString } from '@shared/utils/localDate';
 import { requestHomeroomTab } from '../../Homeroom/homeroomTabIntent';
 import { requestClassManagementTab } from '../../ClassManagement/classManagementTabIntent';
 import { requestClassRecordView } from '../../ClassManagement/classRecordViewIntent';
 import { RecapModalFrame } from './RecapModalFrame';
-import { TERM_RECAP_PIECES, WEEKLY_RECAP_PIECES, collectPieces } from './recapPieces';
+import { momentGreeting } from './cheerMessages';
+import {
+  TERM_RECAP_PIECES,
+  WEEKLY_RECAP_PIECES,
+  collectPieces,
+  type MomentLine,
+} from './recapPieces';
 import { saveTermRecapPng } from './termRecapPng';
 
 function md(iso: string): string {
@@ -30,16 +38,24 @@ function md(iso: string): string {
   return `${m ?? ''}월 ${d ?? ''}일`;
 }
 
+/** 창에 실린 학교 달력 인사 → 맨 위 한 줄(핀 줄·토스트와 같은 문구). */
+function momentLine(moment: SchoolMoment | null | undefined): MomentLine | null {
+  if (moment === null || moment === undefined) return null;
+  return { look: moment.look, text: momentGreeting(moment, toLocalDateString(new Date())) };
+}
+
 function WeeklyRecapModal({
   week,
+  moment,
   onClose,
 }: {
   readonly week: string;
+  readonly moment: MomentLine | null;
   readonly onClose: () => void;
 }): JSX.Element {
   const observation = useWeekRecap(week);
   const workLine = useWeekWorkLine(week);
-  const pieces = collectPieces(WEEKLY_RECAP_PIECES, { week, observation, workLine });
+  const pieces = collectPieces(WEEKLY_RECAP_PIECES, { moment, week, observation, workLine });
   return (
     <RecapModalFrame
       onClose={onClose}
@@ -71,9 +87,11 @@ function goToDraft(card: RecapCard): void {
 
 function TermRecapModal({
   includeWeek,
+  moment,
   onClose,
 }: {
   readonly includeWeek: string | null;
+  readonly moment: MomentLine | null;
   readonly onClose: () => void;
 }): JSX.Element {
   const [choice, setChoice] = useState<TermChoice>('current');
@@ -96,7 +114,14 @@ function TermRecapModal({
   const pieces =
     recap === null
       ? []
-      : collectPieces(TERM_RECAP_PIECES, { recap, thisWeek, thisWeekWorkLine, work, onGoDraft });
+      : collectPieces(TERM_RECAP_PIECES, {
+          moment: choice === 'current' ? moment : null,
+          recap,
+          thisWeek,
+          thisWeekWorkLine,
+          work,
+          onGoDraft,
+        });
 
   const exportPng = async (): Promise<void> => {
     if (recap === null || saving) return;
@@ -173,6 +198,9 @@ export function ObservationRecapModals(): JSX.Element | null {
   const available = useObservationCheerAvailable();
   const close = useCallback(() => useObservationPanelStore.getState().close(), []);
   if (panel === null || !available) return null;
-  if (panel.kind === 'weekly') return <WeeklyRecapModal week={panel.week} onClose={close} />;
-  return <TermRecapModal includeWeek={panel.includeWeek} onClose={close} />;
+  const moment = momentLine(panel.moment);
+  if (panel.kind === 'weekly') {
+    return <WeeklyRecapModal week={panel.week} moment={moment} onClose={close} />;
+  }
+  return <TermRecapModal includeWeek={panel.includeWeek} moment={moment} onClose={close} />;
 }

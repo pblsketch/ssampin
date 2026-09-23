@@ -13,7 +13,9 @@
 import { Fragment } from 'react';
 import type { TermWork } from '@adapters/hooks/useRecapWorkCounts';
 import type { RecapCard, TermRecap, WeekRecap } from '@adapters/hooks/observationRecap';
+import type { PinLook } from '@domain/rules/schoolMoments';
 import type { RecapPiece } from './RecapModalFrame';
+import { CheerPin } from './CheerPin';
 import { GrassGrid } from './MyGrassSection';
 import { ObservationWeekRow } from './ObservationWeekRow';
 
@@ -33,7 +35,32 @@ function lapLine(c: RecapCard): string | null {
 
 // ── 한 주 정리 ──
 
+/** 창 맨 위 학교 달력 인사 한 줄(돌아보기 spec 4-4) — 그날 말로 연 창에만. */
+export interface MomentLine {
+  readonly look: PinLook;
+  readonly text: string;
+}
+
+/** 인사 조각 — 늘 맨 위. 곁들이는 조각이라 이것만 있으면 빈 창으로 본다. */
+function momentPiece(moment: MomentLine | null | undefined): RecapPiece | null {
+  if (moment === null || moment === undefined) return null;
+  return {
+    id: 'moment',
+    order: -10,
+    title: null,
+    companion: true,
+    render: () => (
+      <div className="flex items-center gap-3 rounded-lg bg-sp-surface px-4 py-3">
+        <CheerPin state="idle" look={moment.look} size={40} />
+        <p className="text-sm font-medium text-sp-text">{moment.text}</p>
+      </div>
+    ),
+  };
+}
+
 export interface WeeklyRecapContext {
+  /** 그날 말로 연 창에만 — 학교 달력 인사 */
+  readonly moment?: MomentLine | null;
   readonly week: string;
   /** 관찰 조각 — 그 주 기록이 없으면 null */
   readonly observation: WeekRecap | null;
@@ -65,6 +92,7 @@ const workCountsWeekPiece: WeeklyPieceProvider = ({ workLine }) =>
 
 /** 한 주 정리 조각 목록 — 다른 작업은 여기에 더한다. */
 export const WEEKLY_RECAP_PIECES: readonly WeeklyPieceProvider[] = [
+  ({ moment }) => momentPiece(moment),
   observationWeekPiece,
   workCountsWeekPiece,
 ];
@@ -79,12 +107,16 @@ export function weeklyRecapHasContent(
   observation: WeekRecap | null,
   workLine: string | null = null,
 ): boolean {
-  return collectPieces(WEEKLY_RECAP_PIECES, { week, observation, workLine }).length > 0;
+  return collectPieces(WEEKLY_RECAP_PIECES, { week, observation, workLine }).some(
+    (p) => p.companion !== true,
+  );
 }
 
 // ── 학기 돌아보기 ──
 
 export interface TermRecapContext {
+  /** 그날 말로 연 창의 이번 학기에만 — 학교 달력 인사 */
+  readonly moment?: MomentLine | null;
   readonly recap: TermRecap;
   /** 한 주 정리와 겹친 날에만 — '이번 주' 조각의 관찰 부분 */
   readonly thisWeek: WeekRecap | null;
@@ -321,6 +353,7 @@ const thisWeekPiece: TermPieceProvider = ({ thisWeek, thisWeekWorkLine }) =>
 
 /** 학기 돌아보기 조각 목록 — 다른 작업은 여기에 더한다. */
 export const TERM_RECAP_PIECES: readonly TermPieceProvider[] = [
+  ({ moment }) => momentPiece(moment),
   termGrassPiece,
   termWorkCountsPiece,
   scenePiece,

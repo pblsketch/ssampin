@@ -18,6 +18,11 @@ export interface RecapPiece {
   /** null 이면 제목 없이 본문만 */
   readonly title: string | null;
   readonly render: () => ReactNode;
+  /**
+   * 곁들이는 조각(학교 달력 인사 등) — 이런 조각만 있으면 빈 창으로 보고 빈 줄도 함께 둔다.
+   * 알릴지 판단(`weeklyRecapHasContent`)에도 넣지 않는다.
+   */
+  readonly companion?: boolean;
 }
 
 interface RecapModalFrameProps {
@@ -41,23 +46,21 @@ export function RecapModalFrame({
   footer,
 }: RecapModalFrameProps): JSX.Element {
   const sorted = [...pieces].sort((a, b) => a.order - b.order);
+  const empty = sorted.every((p) => p.companion === true);
   return createPortal(
     <Modal isOpen onClose={onClose} title={title} size={size}>
       <div className="flex min-h-0 flex-col">
         {header}
         <div className="max-h-[70vh] space-y-4 overflow-y-auto px-6 pb-4 pt-1">
-          {sorted.length === 0 ? (
-            <p className="py-8 text-center text-sm text-sp-muted">{emptyMessage}</p>
-          ) : (
-            sorted.map((p) => (
-              <section key={p.id} aria-label={p.title ?? undefined}>
-                {p.title !== null && (
-                  <h3 className="mb-2 text-sm font-sp-semibold text-sp-text">{p.title}</h3>
-                )}
-                {p.render()}
-              </section>
-            ))
-          )}
+          {sorted.map((p) => (
+            <section key={p.id} aria-label={p.title ?? undefined}>
+              {p.title !== null && (
+                <h3 className="mb-2 text-sm font-sp-semibold text-sp-text">{p.title}</h3>
+              )}
+              {p.render()}
+            </section>
+          ))}
+          {empty && <p className="py-8 text-center text-sm text-sp-muted">{emptyMessage}</p>}
         </div>
         <div className="flex items-center justify-end gap-2 border-t border-sp-border px-6 py-3">
           {footer}

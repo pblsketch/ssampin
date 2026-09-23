@@ -12,6 +12,7 @@
  * 늘 떠 있으므로 쉬지 않고 다시 그리지 않게 한다. 손 흔들기·만세만 움직인다.
  */
 import { useEffect, useState } from 'react';
+import type { PinLook } from '@domain/rules/schoolMoments';
 
 export type CheerPinState = 'idle' | 'wave' | 'celebrate';
 
@@ -29,14 +30,25 @@ function prefersReducedMotion(): boolean {
   }
 }
 
+/** 달력 인사 날의 핀 모습(돌아보기 spec 4-5) — 가만히 있는 한 장. `scripts/pin-looks` 가 만든다. */
+function lookUrl(look: PinLook): string {
+  return `${import.meta.env.BASE_URL}pin-look-${look}.png?v=look-20260923`;
+}
+
 interface CheerPinProps {
   readonly state: CheerPinState;
   /** 한 변(px) */
   readonly size: number;
+  /**
+   * 달력 인사 날의 모습. 가만히 있을 때만 쓴다 — 손 흔들기·만세 동작은 원래 그림으로 움직인다.
+   * 그림을 읽지 못하면 원래 핀으로 조용히 돌아간다.
+   */
+  readonly look?: PinLook | null;
 }
 
-export function CheerPin({ state, size }: CheerPinProps): JSX.Element {
+export function CheerPin({ state, size, look = null }: CheerPinProps): JSX.Element {
   const [frame, setFrame] = useState(0);
+  const [lookFailed, setLookFailed] = useState<PinLook | null>(null);
 
   useEffect(() => {
     setFrame(0);
@@ -47,6 +59,26 @@ export function CheerPin({ state, size }: CheerPinProps): JSX.Element {
     );
     return () => window.clearInterval(id);
   }, [state]);
+
+  if (state === 'idle' && look !== null && lookFailed !== look) {
+    return (
+      <span
+        aria-hidden="true"
+        data-pin-look={look}
+        className="relative inline-block shrink-0 overflow-hidden"
+        style={{ width: size, height: size }}
+      >
+        <img
+          src={lookUrl(look)}
+          alt=""
+          draggable={false}
+          onError={() => setLookFailed(look)}
+          className="pointer-events-none select-none"
+          style={{ width: size, height: size, imageRendering: 'pixelated' }}
+        />
+      </span>
+    );
+  }
 
   return (
     <span

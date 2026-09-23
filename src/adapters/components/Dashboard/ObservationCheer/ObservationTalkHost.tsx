@@ -7,19 +7,30 @@
 import { useCallback } from 'react';
 import { useToastStore } from '@adapters/components/common/Toast';
 import { useObservationTalkEngine } from '@adapters/hooks/useObservationDaily';
+import { momentForToday } from '@adapters/hooks/useSchoolMoment';
 import type { TalkOfDay } from '@domain/rules/proactiveTalk';
 import { toLocalDateString } from '@shared/utils/localDate';
-import { talkNoticeText } from './cheerMessages';
-import { openObservationPanelKind } from './observationPanelNavigation';
+import { talkNotice } from './cheerMessages';
+import { dismissTodayMoment, openObservationPanelKind } from './observationPanelNavigation';
 import { ObservationRecapModals } from './ObservationRecapModals';
 import { weeklyRecapHasContent } from './recapPieces';
 
 export function ObservationTalkHost(): JSX.Element {
   const showToast = useCallback((talk: TalkOfDay) => {
     const kind = talk.main.kind;
-    const text = talkNoticeText(talk.main, toLocalDateString(new Date()));
-    if (text === null || (kind !== 'weekly' && kind !== 'retrospect')) return;
-    useToastStore.getState().showCheer(text, 'idle', () => openObservationPanelKind(kind));
+    const today = toLocalDateString(new Date());
+    const hasMoment = kind === 'moment' || talk.folded.some((c) => c.kind === 'moment');
+    const moment = hasMoment ? momentForToday(today) : null;
+    const text = talkNotice(talk, today, moment);
+    if (text === null) return;
+    const look = moment?.look;
+    // 학교 달력 인사가 그날의 말이면 여는 창이 없다 — 누르면 '열어 봄'만 적는다(돌아보기 spec 4-4).
+    if (kind === 'moment') {
+      useToastStore.getState().showCheer(text, 'idle', dismissTodayMoment, look);
+      return;
+    }
+    if (kind !== 'weekly' && kind !== 'retrospect') return;
+    useToastStore.getState().showCheer(text, 'idle', () => openObservationPanelKind(kind), look);
   }, []);
   useObservationTalkEngine('main', showToast, weeklyRecapHasContent);
   return <ObservationRecapModals />;

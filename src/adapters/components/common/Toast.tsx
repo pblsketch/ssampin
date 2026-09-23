@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { generateUUID } from '@infrastructure/utils/uuid';
 import { CheerPin } from '@adapters/components/Dashboard/ObservationCheer/CheerPin';
+import type { PinLook } from '@domain/rules/schoolMoments';
 
 interface ToastData {
   id: string;
@@ -9,6 +10,8 @@ interface ToastData {
   action?: { label: string; onClick: () => void };
   /** 'cheer' 토스트의 핀 동작(ADR-135) — 첫 기록은 손 흔들기, 한 바퀴는 만세, 먼저 거는 말은 가만히. */
   pinState?: 'idle' | 'wave' | 'celebrate';
+  /** 달력 인사 날의 핀 모습 */
+  look?: PinLook | null;
   /** 토스트 전체를 누르면 할 일(ADR-137 먼저 거는 말 — 한 주 정리·학기 돌아보기 열기). */
   onClick?: () => void;
 }
@@ -42,6 +45,8 @@ interface ToastState {
     message: string,
     pinState: 'idle' | 'wave' | 'celebrate',
     onClick?: () => void,
+    /** 달력 인사 날의 핀 모습(돌아보기 spec 4-5) */
+    look?: PinLook | null,
   ) => void;
 }
 
@@ -63,12 +68,19 @@ export const useToastStore = create<ToastState>((set) => ({
     }, ms);
     dismissTimers.set(id, timer);
   },
-  showCheer: (message, pinState, onClick) => {
+  showCheer: (message, pinState, onClick, look) => {
     const id = generateUUID();
     set((state) => ({
       toasts: [
         ...state.toasts,
-        { id, message, type: 'cheer', pinState, ...(onClick !== undefined ? { onClick } : {}) },
+        {
+          id,
+          message,
+          type: 'cheer',
+          pinState,
+          ...(onClick !== undefined ? { onClick } : {}),
+          ...(look !== undefined && look !== null ? { look } : {}),
+        },
       ],
     }));
     const timer = setTimeout(
@@ -122,7 +134,7 @@ function ToastItem({ toast, onDismiss }: { toast: ToastData; onDismiss: () => vo
   const onClick = toast.onClick;
   const icon =
     toast.type === 'cheer' ? (
-      <CheerPin state={toast.pinState ?? 'wave'} size={28} />
+      <CheerPin state={toast.pinState ?? 'wave'} size={28} look={toast.look ?? null} />
     ) : (
       <span
         className={`material-symbols-outlined ${COLOR_MAP[toast.type]} text-white p-1 rounded-lg text-sm`}
