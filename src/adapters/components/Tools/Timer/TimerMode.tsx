@@ -1,26 +1,40 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { formatTime, shouldTriggerPreWarning } from '@domain/rules/timerRules';
-import type { AlarmSoundId, PreWarningSettings } from '@domain/entities/Settings';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { useToastStore } from '@adapters/components/common/Toast';
-import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { TimerAlarmRepeat } from '@domain/entities/Settings';
+import {
+  canAdjustSeconds,
+  clampTimerSeconds,
+  endClockTime,
+  getTimerColorLevel,
+  isPreWarningArmed,
+  warningThresholdSeconds,
+} from '@domain/rules/timerRules';
 import { advanceCountdown } from '@domain/rules/toolPopupSession';
+import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+import { useSoundStore } from '@adapters/stores/useSoundStore';
+import { useTimerLocalStore } from '@adapters/stores/useTimerLocalStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { useToolPopupInitial, useToolPopupSlot } from '../popup/toolPopupSession';
 import type { TimerState } from './types';
-import { PRESETS } from './types';
-import { CircleProgress } from './CircleProgress';
+import { ActivityNameInput } from './ActivityNameInput';
+import { ClassroomOverlay } from './ClassroomOverlay';
 import { CustomTimeModal } from './CustomTimeModal';
-import { AlarmSoundSelector } from './AlarmSoundSelector';
+import { ADJUST_AMOUNTS, AdjustButton } from './TimerControls';
+import { TimerDial } from './TimerDial';
+import { TimerEndOverlay } from './TimerEndOverlay';
+import { TimerPresetBar } from './TimerPresetBar';
+import { TimerSoundSettings } from './TimerSoundSettings';
+import { startAlarmSequence, type AlarmStopHandle } from './timerAudio';
 import {
-  ALARM_PRESETS,
-  PRE_WARNING_PRESETS,
-  PRE_WARNING_TIMES,
-  playAlarmSound,
-  playPreWarningSound,
-  saveCustomAudio,
-  loadCustomAudio,
-  deleteCustomAudio,
-} from './timerAudio';
+  useIsClassroomOpen,
+  useReportTimerStatus,
+  useTimerModeKeydown,
+  useTimerShell,
+  useTimerVariant,
+} from './timerShellContext';
+import { useElementSize } from './useElementSize';
+import { useTimerAlarm } from './useTimerAlarm';
+import { useTimerStageSize } from './useTimerStageSize';
+import { useTimerToolSettings } from './useTimerToolSettings';
 
 /** 팝업으로 옮길 때 함께 가는 타이머 상태. */
 export interface TimerModeSnapshot {
@@ -28,10 +42,33 @@ export interface TimerModeSnapshot {
   readonly remaining: number;
   readonly state: TimerState;
   readonly selectedPreset: number;
+  /** 활동 이름(ADR-139). 옛 버전 스냅샷에는 없다. */
+  readonly activityName?: string;
+  /** 0 에 닿은 시각 — 초과 시간을 이어 센다. */
+  readonly finishedAt?: number | null;
 }
 
+const DEFAULT_SECONDS = 300;
+/** 이 폭보다 좁으면 ± 단추를 원 아래로 내린다(조정 가능). */
+const NARROW_LAYOUT_WIDTH = 640;
+/** 넓은 창에서 원 양옆 ± 칸 폭과, 원 크기를 잴 때 양쪽에서 뺄 자리(칸 + 사이 간격 24px). */
+const ADJUST_COLUMN_WIDTH = 84;
+const WIDE_SIDE_SPACE = ADJUST_COLUMN_WIDTH + 24;
+
 export function TimerMode() {
-  // 넘겨받은 상태가 있으면 그것으로 시작한다. 옮기는 사이 흐른 시간은 아래에서 반영한다.
+  const variant = useTimerVariant();
+  const shell = useTimerShell();
+  const { timerTool, editable, update: updateTimerTool } = useTimerToolSettings();
+  const alarmRepeat: TimerAlarmRepeat = variant === 'mobile' ? 'once' : timerTool.alarmRepeat;
+  const displayStyle = timerTool.displayStyle;
+  const preWarning = useSettingsStore((s) => s.settings.alarmSound.preWarning);
+  const localLoaded = useTimerLocalStore((s) => s.loaded);
+  const lastDuration = useTimerLocalStore((s) => s.state.lastDurationSeconds);
+  const recentNames = useTimerLocalStore((s) => s.state.recentActivityNames);
+  const showToast = useToastStore((s) => s.show);
+  const { playAlarmOnce, playPreWarning } = useTimerAlarm();
+
+  // ── 팝업에서 넘겨받은 상태 ─────────────────────────────────────
   const popupInitial = useToolPopupInitial<TimerModeSnapshot>('timer-countdown');
   const [restoredInitial] = useState(() =>
     popupInitial
@@ -40,289 +77,266 @@ export function TimerMode() {
             state: popupInitial.data.state,
             remaining: popupInitial.data.remaining,
             capturedAt: popupInitial.capturedAt,
+            finishedAt: popupInitial.data.finishedAt ?? null,
           },
           Date.now(),
         )
       : null,
   );
 
-  const [totalSeconds, setTotalSeconds] = useState(() => popupInitial?.data.totalSeconds ?? 300);
-  const [remaining, setRemaining] = useState(() => restoredInitial?.remaining ?? 300);
-  const [state, setState] = useState<TimerState>(() => restoredInitial?.state ?? 'idle');
-  const [selectedPreset, setSelectedPreset] = useState(
-    () => popupInitial?.data.selectedPreset ?? 300,
+  const [totalSeconds, setTotalSecondsState] = useState(
+    () => popupInitial?.data.totalSeconds ?? DEFAULT_SECONDS,
   );
+  const [remaining, setRemainingState] = useState(
+    () => restoredInitial?.remaining ?? popupInitial?.data.totalSeconds ?? DEFAULT_SECONDS,
+  );
+  const [state, setStateValue] = useState<TimerState>(() => restoredInitial?.state ?? 'idle');
+  const [finishedAt, setFinishedAt] = useState<number | null>(
+    () => restoredInitial?.finishedAt ?? null,
+  );
+  const [activityName, setActivityName] = useState(() => popupInitial?.data.activityName ?? '');
   const [showCustom, setShowCustom] = useState(false);
-  const [showSoundPanel, setShowSoundPanel] = useState(false);
-  const [showPreWarningPanel, setShowPreWarningPanel] = useState(false);
-  const [flashCount, setFlashCount] = useState(0);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const ADJUST_AMOUNTS = [
-    { label: '10초', seconds: 10 },
-    { label: '30초', seconds: 30 },
-    { label: '1분', seconds: 60 },
-    { label: '5분', seconds: 300 },
-  ] as const;
-
-  const preWarningTriggeredRef = useRef(false);
   const [showPreWarningBanner, setShowPreWarningBanner] = useState(false);
-  const preWarningBannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const settings = useSettingsStore((s) => s.settings);
-  const updateSettings = useSettingsStore((s) => s.update);
-  const showToast = useToastStore((s) => s.show);
-  const { selectedSound, customAudioName, volume, boost, preWarning } = settings.alarmSound;
+  // interval 이 옛 값을 보지 않도록 진짜 값은 ref 에 둔다(상태는 화면용).
+  const totalRef = useRef(totalSeconds);
+  const remainingRef = useRef(remaining);
+  const stateRef = useRef(state);
+  const setTotal = (v: number): void => {
+    totalRef.current = v;
+    setTotalSecondsState(v);
+  };
+  const setRemaining = (v: number): void => {
+    remainingRef.current = v;
+    setRemainingState(v);
+  };
+  const setState = (v: TimerState): void => {
+    stateRef.current = v;
+    setStateValue(v);
+  };
 
-  const [customDataUrl, setCustomDataUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    loadCustomAudio().then((data) => {
-      if (data?.dataUrl) setCustomDataUrl(data.dataUrl);
-    });
-  }, []);
-
-  const clearTimer = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-  }, []);
-
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const alarmStopRef = useRef<AlarmStopHandle | null>(null);
+  const bannerTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preWarningArmedRef = useRef(false);
+  /** 선생님이 시간을 건드렸거나 넘겨받은 상태가 있으면 '마지막 시간'으로 덮지 않는다. */
+  const touchedRef = useRef(popupInitial !== null);
   const preWarningRef = useRef(preWarning);
   preWarningRef.current = preWarning;
-  const volumeRef = useRef(volume);
-  volumeRef.current = volume;
-  const boostRef = useRef(boost);
-  boostRef.current = boost;
+  const alarmRepeatRef = useRef(alarmRepeat);
+  alarmRepeatRef.current = alarmRepeat;
+  const activityNameRef = useRef(activityName);
+  activityNameRef.current = activityName;
 
-  const start = useCallback((fromSeconds?: number) => {
-    // 이관 복원처럼 "지금 상태보다 앞선 값"으로 시작해야 할 때가 있어 인자를 받는다.
-    const initialRemaining = fromSeconds ?? remaining;
-    if (initialRemaining <= 0) return;
-    // 겹쳐 도는 일이 없도록 항상 먼저 정리한다.
+  // ── 마지막으로 시작한 시간 기억(spec 3-3) ────────────────────────
+  useEffect(() => {
+    void useTimerLocalStore.getState().load();
+  }, []);
+  useEffect(() => {
+    if (!localLoaded || touchedRef.current || stateRef.current !== 'idle') return;
+    if (lastDuration === null) return;
+    touchedRef.current = true;
+    setTotal(lastDuration);
+    setRemaining(lastDuration);
+  }, [localLoaded, lastDuration]);
+
+  const clearTick = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-    setState('running');
-    setShowSoundPanel(false);
-
-    if (initialRemaining <= preWarningRef.current.secondsBefore) {
-      preWarningTriggeredRef.current = true;
-    }
-
-    let lastTick = Date.now();
-    intervalRef.current = setInterval(() => {
-      const now = Date.now();
-      const delta = Math.floor((now - lastTick) / 1000);
-      if (delta >= 1) {
-        lastTick = now - ((now - lastTick) % 1000);
-        setRemaining((prev) => {
-          const next = prev - delta;
-
-          const pw = preWarningRef.current;
-          if (
-            pw.enabled &&
-            shouldTriggerPreWarning(next, pw.secondsBefore, preWarningTriggeredRef.current)
-          ) {
-            preWarningTriggeredRef.current = true;
-            playPreWarningSound(pw.sound, volumeRef.current, boostRef.current);
-            setShowPreWarningBanner(true);
-            if (preWarningBannerTimeoutRef.current) {
-              clearTimeout(preWarningBannerTimeoutRef.current);
-            }
-            preWarningBannerTimeoutRef.current = setTimeout(() => setShowPreWarningBanner(false), 5000);
-          }
-
-          if (next <= 0) {
-            setState('finished');
-            if (intervalRef.current) {
-              clearInterval(intervalRef.current);
-              intervalRef.current = null;
-            }
-            playAlarmSound(selectedSound, volume, boost, customDataUrl);
-            setFlashCount(6);
-            setShowPreWarningBanner(false);
-            return 0;
-          }
-          return next;
-        });
-      }
-    }, 100);
-  }, [remaining, selectedSound, volume, boost, customDataUrl]);
-
-  const pause = useCallback(() => {
-    setState('paused');
-    clearTimer();
-  }, [clearTimer]);
-
-  const reset = useCallback(() => {
-    clearTimer();
-    setState('idle');
-    setRemaining(totalSeconds);
-    setFlashCount(0);
-    preWarningTriggeredRef.current = false;
-    setShowPreWarningBanner(false);
-  }, [totalSeconds, clearTimer]);
-
-  const selectPreset = useCallback((seconds: number) => {
-    clearTimer();
-    setState('idle');
-    setTotalSeconds(seconds);
-    setRemaining(seconds);
-    setSelectedPreset(seconds);
-    setFlashCount(0);
-    preWarningTriggeredRef.current = false;
-    setShowPreWarningBanner(false);
-  }, [clearTimer]);
-
-  const handleCustomTime = useCallback((seconds: number) => {
-    setShowCustom(false);
-    clearTimer();
-    setState('idle');
-    setTotalSeconds(seconds);
-    setRemaining(seconds);
-    setSelectedPreset(-1);
-    setFlashCount(0);
-    preWarningTriggeredRef.current = false;
-    setShowPreWarningBanner(false);
-  }, [clearTimer]);
-
-  const dismiss = useCallback(() => {
-    reset();
-  }, [reset]);
-
-  const adjustTime = useCallback((delta: number) => {
-    setRemaining((prev) => {
-      const next = Math.max(1, Math.min(5999, prev + delta));
-      if (next > preWarningRef.current.secondsBefore) {
-        preWarningTriggeredRef.current = false;
-        setShowPreWarningBanner(false);
-      }
-      return next;
-    });
-    setTotalSeconds((prev) => {
-      const next = prev + delta;
-      return Math.max(1, Math.min(5999, next));
-    });
   }, []);
 
-  const handleSelectSound = useCallback(async (id: AlarmSoundId) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, selectedSound: id },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const stopAlarm = useCallback(() => {
+    alarmStopRef.current?.();
+    alarmStopRef.current = null;
+  }, []);
 
-  const handleVolumeChange = useCallback(async (v: number) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, volume: v },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const hideBanner = useCallback(() => {
+    if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+    bannerTimeoutRef.current = null;
+    setShowPreWarningBanner(false);
+  }, []);
 
-  const handleBoostChange = useCallback(async (b: number) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, boost: b },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const finish = useCallback(
+    (at: number) => {
+      clearTick();
+      hideBanner();
+      setRemaining(0);
+      setState('finished');
+      setFinishedAt(at);
+      stopAlarm();
+      alarmStopRef.current = startAlarmSequence(alarmRepeatRef.current, playAlarmOnce);
+    },
+    [clearTick, hideBanner, stopAlarm, playAlarmOnce],
+  );
 
-  const handlePreWarningChange = useCallback(async (pw: PreWarningSettings) => {
-    await updateSettings({
-      alarmSound: { ...settings.alarmSound, preWarning: pw },
-    });
-  }, [updateSettings, settings.alarmSound]);
-
-  const handleImportCustom = useCallback(async () => {
-    const api = window.electronAPI;
-    if (api) {
-      const result = await api.importAlarmAudio();
-      if (result) {
-        setCustomDataUrl(result.dataUrl);
-        await saveCustomAudio(result.name, result.dataUrl);
-        await updateSettings({
-          alarmSound: {
-            ...settings.alarmSound,
-            selectedSound: 'custom',
-            customAudioName: result.name,
-          },
-        });
+  const start = useCallback(
+    (fromSeconds?: number) => {
+      const startRemaining = fromSeconds ?? remainingRef.current;
+      if (startRemaining <= 0) return;
+      clearTick();
+      if (stateRef.current === 'idle') {
+        // 새로 시작 — 마지막 시간과 활동 이름을 이 기기에 기억한다.
+        void useTimerLocalStore.getState().setLastDuration(totalRef.current);
+        const name = activityNameRef.current.trim();
+        if (name !== '') void useTimerLocalStore.getState().rememberActivityName(name);
+        if (useSoundStore.getState().settings.enabled === false) {
+          showToast('소리가 꺼져 있어요. 알람이 울리지 않아요.', 'info');
+        }
       }
-    } else {
-      fileInputRef.current?.click();
-    }
-  }, [updateSettings, settings.alarmSound]);
+      touchedRef.current = true;
+      setState('running');
+      const pw = preWarningRef.current;
+      preWarningArmedRef.current =
+        pw.enabled && isPreWarningArmed(startRemaining, totalRef.current, pw.secondsBefore);
 
-  const handleFileInputChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const MAX_AUDIO_SIZE = 5 * 1024 * 1024;
-    if (file.size > MAX_AUDIO_SIZE) {
-      showToast('파일 크기가 너무 큽니다. 5MB 이하의 파일을 사용해주세요.', 'error');
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      setCustomDataUrl(dataUrl);
-      await saveCustomAudio(file.name, dataUrl);
-      await updateSettings({
-        alarmSound: {
-          ...settings.alarmSound,
-          selectedSound: 'custom',
-          customAudioName: file.name,
-        },
-      });
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  }, [updateSettings, settings.alarmSound, showToast]);
+      let lastTick = Date.now();
+      intervalRef.current = setInterval(() => {
+        const now = Date.now();
+        const delta = Math.floor((now - lastTick) / 1000);
+        if (delta < 1) return;
+        lastTick = now - ((now - lastTick) % 1000);
+        const next = remainingRef.current - delta;
+        const threshold = preWarningRef.current.secondsBefore;
+        if (preWarningArmedRef.current && next > 0 && next <= threshold) {
+          preWarningArmedRef.current = false;
+          playPreWarning();
+          setShowPreWarningBanner(true);
+          if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+          bannerTimeoutRef.current = setTimeout(() => setShowPreWarningBanner(false), 5000);
+        }
+        if (next <= 0) {
+          finish(now + next * 1000);
+          return;
+        }
+        setRemaining(next);
+      }, 100);
+    },
+    [clearTick, finish, playPreWarning, showToast],
+  );
 
-  const handleDeleteCustom = useCallback(async () => {
-    setCustomDataUrl(null);
-    await deleteCustomAudio();
-    await updateSettings({
-      alarmSound: {
-        ...settings.alarmSound,
-        selectedSound: 'beep',
-        customAudioName: null,
-      },
-    });
-  }, [updateSettings, settings.alarmSound]);
+  const pause = useCallback(() => {
+    clearTick();
+    setState('paused');
+  }, [clearTick]);
+
+  /** [확인]·리셋 — 설정 시간으로 되돌리고 알람을 멈춘다. */
+  const reset = useCallback(() => {
+    clearTick();
+    stopAlarm();
+    hideBanner();
+    setState('idle');
+    setRemaining(totalRef.current);
+    setFinishedAt(null);
+  }, [clearTick, stopAlarm, hideBanner]);
+
+  const toggle = useCallback(() => {
+    if (stateRef.current === 'running') pause();
+    else if (stateRef.current !== 'finished') start();
+  }, [pause, start]);
+
+  const setDuration = useCallback(
+    (seconds: number) => {
+      clearTick();
+      stopAlarm();
+      hideBanner();
+      touchedRef.current = true;
+      const s = clampTimerSeconds(seconds);
+      setTotal(s);
+      setRemaining(s);
+      setState('idle');
+      setFinishedAt(null);
+    },
+    [clearTick, stopAlarm, hideBanner],
+  );
+
+  /** ± 조정. 대기 중에는 설정 시간이, 진행·일시정지 중에는 남은·전체 시간이 함께 바뀐다(spec 3-2). */
+  const adjust = useCallback(
+    (delta: number) => {
+      const current = stateRef.current;
+      if (current === 'finished') return;
+      const cur = remainingRef.current;
+      if (!canAdjustSeconds(cur, delta)) return;
+      touchedRef.current = true;
+      const nextRemaining = cur + delta;
+      if (current === 'idle') {
+        setTotal(nextRemaining);
+        setRemaining(nextRemaining);
+        return;
+      }
+      const nextTotal = clampTimerSeconds(totalRef.current + delta);
+      setTotal(Math.max(nextTotal, nextRemaining));
+      setRemaining(nextRemaining);
+      const pw = preWarningRef.current;
+      if (nextRemaining > pw.secondsBefore) {
+        // 예고 시점 밖으로 늘렸으면 다시 울릴 수 있게 한다.
+        preWarningArmedRef.current =
+          pw.enabled &&
+          isPreWarningArmed(nextRemaining, Math.max(nextTotal, nextRemaining), pw.secondsBefore);
+        hideBanner();
+      }
+    },
+    [hideBanner],
+  );
 
   // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
-  // capture 는 **먼저 멈춘다**. 그래야 옮기는 동안 이 창에서 알람이 울리지 않고,
-  // 소유자가 언제나 한 곳뿐이라 같은 타이머가 두 번 끝나지 않는다.
+  // capture 는 **먼저 멈춘다**. 옮기는 동안 이 창에서 알람이 울리지 않고, 소유자가 언제나 한 곳뿐이다.
   const captureForPopup = useCallback((): TimerModeSnapshot => {
-    clearTimer();
-    if (preWarningBannerTimeoutRef.current) {
-      clearTimeout(preWarningBannerTimeoutRef.current);
-      preWarningBannerTimeoutRef.current = null;
-    }
-    return { totalSeconds, remaining, state, selectedPreset };
-  }, [clearTimer, totalSeconds, remaining, state, selectedPreset]);
+    clearTick();
+    stopAlarm();
+    hideBanner();
+    const total = totalRef.current;
+    return {
+      totalSeconds: total,
+      remaining: remainingRef.current,
+      state: stateRef.current,
+      selectedPreset: timerTool.presets.includes(total) ? total : -1,
+      activityName: activityNameRef.current,
+      finishedAt,
+    };
+  }, [clearTick, stopAlarm, hideBanner, timerTool.presets, finishedAt]);
 
-  const resumeFromPopup = useCallback(
-    (snapshot: TimerModeSnapshot, capturedAt: number) => {
-      const restored = advanceCountdown(
-        { state: snapshot.state, remaining: snapshot.remaining, capturedAt },
-        Date.now(),
-      );
-      setTotalSeconds(snapshot.totalSeconds);
-      setSelectedPreset(snapshot.selectedPreset);
+  const applyRestored = useCallback(
+    (
+      restored: ReturnType<typeof advanceCountdown>,
+      snapshot: { readonly totalSeconds: number; readonly activityName?: string },
+    ) => {
+      clearTick();
+      stopAlarm();
+      hideBanner();
+      setTotal(snapshot.totalSeconds);
+      setActivityName(snapshot.activityName ?? '');
       setRemaining(restored.remaining);
+      setFinishedAt(restored.finishedAt);
       setState(restored.state);
-      setFlashCount(0);
-      preWarningTriggeredRef.current = false;
-      setShowPreWarningBanner(false);
       if (restored.state === 'running') {
         start(restored.remaining);
       } else if (restored.alarmDueDuringTransfer) {
-        playAlarmSound(selectedSound, volume, boost, customDataUrl);
-        setFlashCount(6);
+        // 옮기는 사이에 끝났다 — 이 창에서 한 번만 알린다(보낸 창은 이미 멈췄다).
+        alarmStopRef.current = startAlarmSequence(alarmRepeatRef.current, playAlarmOnce);
       }
     },
-    [start, selectedSound, volume, boost, customDataUrl],
+    [clearTick, stopAlarm, hideBanner, start, playAlarmOnce],
+  );
+
+  const resumeFromPopup = useCallback(
+    (snapshot: TimerModeSnapshot, capturedAt: number) => {
+      touchedRef.current = true;
+      applyRestored(
+        advanceCountdown(
+          {
+            state: snapshot.state,
+            remaining: snapshot.remaining,
+            capturedAt,
+            finishedAt: snapshot.finishedAt ?? null,
+          },
+          Date.now(),
+        ),
+        snapshot,
+      );
+    },
+    [applyRestored],
   );
 
   useToolPopupSlot<TimerModeSnapshot>('timer-countdown', {
@@ -330,364 +344,300 @@ export function TimerMode() {
     resume: resumeFromPopup,
   });
 
-  // 넘겨받은 타이머가 돌고 있었으면 이 창에서 이어서 돌린다.
-  // 옮기는 사이에 시간이 다 됐으면 여기서 **한 번만** 알람을 울린다.
+  // 넘겨받은 타이머가 돌고 있었으면 이 창에서 이어서 돌린다. 마운트 때 한 번만.
   useEffect(() => {
-    if (restoredInitial === null) return;
-    if (restoredInitial.state === 'running') {
-      start(restoredInitial.remaining);
-    } else if (restoredInitial.alarmDueDuringTransfer) {
-      playAlarmSound(selectedSound, volume, boost, customDataUrl);
-      setFlashCount(6);
-    }
-    // 마운트 때 한 번만 — 이후 재실행되면 타이머가 두 번 돈다.
+    if (restoredInitial === null || popupInitial === null) return;
+    applyRestored(restoredInitial, popupInitial.data);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    return () => {
-      clearTimer();
-      if (preWarningBannerTimeoutRef.current) {
-        clearTimeout(preWarningBannerTimeoutRef.current);
+  useEffect(
+    () => () => {
+      clearTick();
+      stopAlarm();
+      if (bannerTimeoutRef.current) clearTimeout(bannerTimeoutRef.current);
+    },
+    [clearTick, stopAlarm],
+  );
+
+  // ── 틀에 알리기(탭 배지·화면 이동 안내·창 X·꺼짐 방지) ───────────────
+  useReportTimerStatus('timer', {
+    busy: state === 'running' || state === 'paused',
+    awaitingConfirm: state === 'finished',
+    running: state === 'running',
+    badge:
+      state === 'running' || state === 'paused'
+        ? { kind: 'remaining', seconds: remaining }
+        : state === 'finished'
+          ? { kind: 'finished' }
+          : null,
+  });
+
+  useTimerModeKeydown(
+    'timer',
+    (e) => {
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (showCustom) return;
+      if (e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      } else if (e.key === 'r' || e.key === 'R') {
+        e.preventDefault();
+        reset();
+      } else if (e.key === 'Enter' && stateRef.current === 'finished') {
+        e.preventDefault();
+        reset();
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        adjust(30);
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        adjust(-30);
       }
-    };
-  }, [clearTimer]);
+    },
+    [toggle, reset, adjust, showCustom],
+  );
 
-  useEffect(() => {
-    if (flashCount > 0) {
-      const t = setTimeout(() => setFlashCount((c) => c - 1), 300);
-      return () => clearTimeout(t);
-    }
-  }, [flashCount]);
+  // ── 화면 ────────────────────────────────────────────────────────
+  const { ref: rowRef, size: rowSize } = useElementSize({ width: 800, height: 400 });
+  const narrow = rowSize.width < NARROW_LAYOUT_WIDTH;
+  const { stageRef, geometry } = useTimerStageSize(displayStyle);
+  const level = getTimerColorLevel(remaining, totalSeconds, warningThresholdSeconds(preWarning));
+  const classroomOpen = useIsClassroomOpen('timer');
+  const paused = state === 'paused';
+  const statusLine =
+    state === 'running' ? (
+      <span>{endClockTime(Date.now(), remaining)}에 끝나요</span>
+    ) : paused ? (
+      <span className="inline-flex items-center gap-1.5">
+        <span className="material-symbols-outlined text-icon-md">pause_circle</span>
+        잠시 멈춤
+      </span>
+    ) : null;
 
-  useToolKeydown((e) => {
-    const tag = (document.activeElement as HTMLElement)?.tagName;
-    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+  const adjustDisabled = (delta: number): boolean =>
+    state === 'finished' || !canAdjustSeconds(remaining, delta);
 
-    if (e.key === ' ') {
-      e.preventDefault();
-      if (state === 'finished') return;
-      if (state === 'running') pause();
-      else start();
-    } else if (e.key === 'r' || e.key === 'R') {
-      e.preventDefault();
-      reset();
-    } else if (e.key === 'Enter' && state === 'finished') {
-      e.preventDefault();
-      dismiss();
-    } else if (e.key === 'ArrowUp' && (state === 'running' || state === 'paused')) {
-      e.preventDefault();
-      adjustTime(30);
-    } else if (e.key === 'ArrowDown' && (state === 'running' || state === 'paused')) {
-      e.preventDefault();
-      adjustTime(-30);
-    }
-  }, [state, start, pause, reset, dismiss, adjustTime]);
-
-  const ratio = totalSeconds > 0 ? remaining / totalSeconds : 0;
-  const isFlashing = flashCount > 0 && flashCount % 2 === 0;
+  const confirmButton = (
+    <button
+      type="button"
+      onClick={reset}
+      className="px-10 py-4 rounded-xl bg-sp-accent text-sp-accent-fg text-xl font-bold hover:brightness-110 transition"
+    >
+      확인
+    </button>
+  );
 
   return (
-    <div className="relative flex flex-col items-center gap-6 w-full max-w-lg mx-auto">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".mp3,.wav,.ogg,.m4a,.webm"
-        className="hidden"
-        onChange={handleFileInputChange}
-      />
-
-      {state === 'finished' && (
-        // 덮개 배경은 클래스가 아니라 인라인이다. `bg-sp-bg/90` 처럼 sp-* 토큰에 투명도 수식을
-        // 붙이면 Tailwind 가 규칙을 **아예 만들지 않아** 조용히 투명해진다(실측: rgba(0,0,0,0)).
-        // 그래서 뒤의 7xl 숫자가 "시간 종료!" 글씨와 겹쳐 보였다. 여기서는 가릴 것이 같은 자리의
-        // 같은 크기 숫자라 반투명이 곧 겹침이므로, 아예 불투명하게 덮는다.
-        // 유리 모드는 --sp-card 만 건드리고 --sp-bg 는 손대지 않으므로 항상 불투명하다.
-        <div
-          className={`absolute inset-0 z-40 rounded-2xl flex flex-col items-center justify-center transition-colors duration-200 ${
-            isFlashing ? 'bg-red-600/30' : ''
-          }`}
-          style={isFlashing ? undefined : { backgroundColor: 'var(--sp-bg)' }}
-        >
-          {/* text-red-400 은 밝은 테마 배경에서 대비가 2.1~2.8 로 큰 글씨 기준(3:1)에도 못 미쳤다.
-              sp-error 는 테마별로 값이 갈려(라이트 #dc2626 · 다크 #f87171) 12개 테마 전부 3.7 이상이다. */}
-          <p className="text-5xl md:text-7xl font-bold text-sp-error mb-8 animate-pulse">
-            시간 종료!
-          </p>
-          <button
-            onClick={dismiss}
-            className="px-10 py-4 rounded-xl bg-sp-accent text-white text-xl font-bold hover:bg-sp-accent/80 transition-colors"
-          >
-            확인
-          </button>
-        </div>
+    <div className="relative flex flex-col items-center w-full h-full min-h-0 gap-4 rounded-2xl">
+      {state === 'finished' && !classroomOpen && (
+        <TimerEndOverlay
+          finishedAt={finishedAt}
+          digitFontSize={geometry.digitFontSize}
+          actions={confirmButton}
+        />
       )}
 
-      {/* 프리셋 */}
-      <div className="flex flex-wrap justify-center gap-2">
-        {PRESETS.map((p) => (
-          <button
-            key={p.seconds}
-            onClick={() => selectPreset(p.seconds)}
-            disabled={state === 'running'}
-            className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
-              selectedPreset === p.seconds
-                ? 'bg-sp-accent text-white'
-                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-            } disabled:opacity-40 disabled:cursor-not-allowed`}
-          >
-            {p.label}
-          </button>
-        ))}
-        <button
-          onClick={() => setShowCustom(true)}
+      <div className="shrink-0 w-full flex flex-col items-center gap-3">
+        <TimerPresetBar
+          presets={timerTool.presets}
+          currentSeconds={totalSeconds}
           disabled={state === 'running'}
-          className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
-            selectedPreset === -1
-              ? 'bg-sp-accent text-white'
-              : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-          } disabled:opacity-40 disabled:cursor-not-allowed`}
+          editable={editable}
+          onSelect={setDuration}
+          onCustom={() => setShowCustom(true)}
+          onChangePresets={(presets) => void updateTimerTool({ presets })}
+        />
+        <ActivityNameInput
+          value={activityName}
+          onChange={setActivityName}
+          recentNames={recentNames}
+        />
+      </div>
+
+      <div
+        ref={rowRef}
+        className={`relative flex-1 min-h-[220px] w-full flex items-center justify-center ${
+          narrow ? 'flex-col gap-4' : 'flex-row gap-6'
+        }`}
+      >
+        {!narrow && (
+          // 넓은 창: 원 크기는 ± 칸 자리를 뺀 빈 공간으로 잰다. 스테이지를 따로 두어야 ± 칸이 화면 끝이 아니라
+          // 원 바로 옆에 붙는다(원 칸이 flex-1 이면 ± 칸이 양 끝으로 밀린다).
+          <div
+            ref={stageRef}
+            aria-hidden="true"
+            className="absolute inset-y-0 pointer-events-none"
+            style={{ left: WIDE_SIDE_SPACE, right: WIDE_SIDE_SPACE }}
+          />
+        )}
+        {!narrow && (
+          <div className="flex flex-col gap-2 shrink-0" style={{ width: ADJUST_COLUMN_WIDTH }}>
+            {ADJUST_AMOUNTS.map((a) => (
+              <AdjustButton
+                key={`minus-${a.seconds}`}
+                sign={-1}
+                label={a.label}
+                seconds={a.seconds}
+                disabled={adjustDisabled(-a.seconds)}
+                onClick={adjust}
+                fill
+              />
+            ))}
+          </div>
+        )}
+        <div
+          ref={narrow ? stageRef : undefined}
+          className={
+            narrow
+              ? 'relative flex-1 min-w-0 min-h-0 w-full h-full flex items-center justify-center'
+              : 'relative shrink-0 flex items-center justify-center'
+          }
         >
-          직접 입력
-        </button>
-      </div>
-
-      {/* 시간 조정 + 프로그레스 링 영역 */}
-      <div className="flex items-center gap-4">
-        <div className="flex flex-col gap-2">
-          {ADJUST_AMOUNTS.map((adj) => (
-            <button
-              key={`minus-${adj.seconds}`}
-              onClick={() => adjustTime(-adj.seconds)}
-              disabled={state === 'idle' || state === 'finished' || remaining <= adj.seconds}
-              className="group flex items-center gap-1 px-3 py-1.5 rounded-lg
-                bg-sp-card border border-sp-border text-sp-muted
-                hover:text-red-400 hover:border-red-400/40 hover:bg-red-400/5
-                disabled:opacity-20 disabled:cursor-not-allowed
-                transition-all text-xs font-medium"
-              title={`${adj.label} 빼기`}
-            >
-              <span className="material-symbols-outlined text-icon-sm group-hover:text-red-400">remove</span>
-              {adj.label}
-            </button>
-          ))}
-        </div>
-
-        <div className="relative w-[300px] h-[300px] flex items-center justify-center">
-          {showPreWarningBanner && state === 'running' && (
-            <div className="absolute -top-2 left-0 right-0 z-30 flex justify-center animate-in fade-in slide-in-from-top-2 duration-300">
-              <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-amber-500 shadow-md">
-                <span className="material-symbols-outlined text-white text-icon-lg">
-                  notifications_active
-                </span>
-                <span className="text-sm font-bold text-white">
-                  {remaining >= 60 ? `${Math.ceil(remaining / 60)}분` : `${remaining}초`} 남았어요! 마무리 준비~
-                </span>
+          <div className="relative">
+            <TimerDial
+              remaining={remaining}
+              total={totalSeconds}
+              level={level}
+              displayStyle={displayStyle}
+              geometry={geometry}
+              paused={paused}
+            />
+            {/* 예고 띠는 원 안 숫자 위 빈자리에 — 원 바깥 위에 두면 원 테두리를 가린다. */}
+            {showPreWarningBanner && state === 'running' && (
+              <div className="absolute left-1/2 top-[16%] -translate-x-1/2 z-30 pointer-events-none">
+                <div className="flex items-center gap-2 px-5 py-2.5 rounded-full bg-sp-card border-2 border-sp-warning shadow-lg whitespace-nowrap">
+                  <span className="material-symbols-outlined text-sp-warning text-icon-lg">
+                    notifications_active
+                  </span>
+                  <span className="text-sm font-bold text-sp-warning">
+                    {remaining >= 60 ? `${Math.ceil(remaining / 60)}분` : `${remaining}초`}{' '}
+                    남았어요! 마무리 준비~
+                  </span>
+                </div>
               </div>
-            </div>
-          )}
-          <CircleProgress ratio={ratio} preWarningActive={showPreWarningBanner && state === 'running'} />
-          <span className="text-7xl md:text-8xl font-mono font-bold text-sp-text z-10 select-none">
-            {formatTime(remaining)}
-          </span>
+            )}
+          </div>
         </div>
-
-        <div className="flex flex-col gap-2">
-          {ADJUST_AMOUNTS.map((adj) => (
-            <button
-              key={`plus-${adj.seconds}`}
-              onClick={() => adjustTime(adj.seconds)}
-              disabled={state === 'idle' || state === 'finished' || remaining + adj.seconds > 5999}
-              className="group flex items-center gap-1 px-3 py-1.5 rounded-lg
-                bg-sp-card border border-sp-border text-sp-muted
-                hover:text-emerald-400 hover:border-emerald-400/40 hover:bg-emerald-400/5
-                disabled:opacity-20 disabled:cursor-not-allowed
-                transition-all text-xs font-medium"
-              title={`${adj.label} 추가`}
-            >
-              <span className="material-symbols-outlined text-icon-sm group-hover:text-emerald-400">add</span>
-              {adj.label}
-            </button>
-          ))}
-        </div>
+        {!narrow && (
+          <div className="flex flex-col gap-2 shrink-0" style={{ width: ADJUST_COLUMN_WIDTH }}>
+            {ADJUST_AMOUNTS.map((a) => (
+              <AdjustButton
+                key={`plus-${a.seconds}`}
+                sign={1}
+                label={a.label}
+                seconds={a.seconds}
+                disabled={adjustDisabled(a.seconds)}
+                onClick={adjust}
+                fill
+              />
+            ))}
+          </div>
+        )}
+        {narrow && (
+          <div className="grid grid-cols-4 gap-1.5 w-full max-w-[360px] shrink-0 px-2">
+            {[...ADJUST_AMOUNTS].reverse().map((a) => (
+              <AdjustButton
+                key={`minus-${a.seconds}`}
+                sign={-1}
+                label={a.label}
+                seconds={a.seconds}
+                disabled={adjustDisabled(-a.seconds)}
+                onClick={adjust}
+                compact
+              />
+            ))}
+            {ADJUST_AMOUNTS.map((a) => (
+              <AdjustButton
+                key={`plus-${a.seconds}`}
+                sign={1}
+                label={a.label}
+                seconds={a.seconds}
+                disabled={adjustDisabled(a.seconds)}
+                onClick={adjust}
+                compact
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* 컨트롤 */}
-      <div className="flex items-center gap-6">
+      <p className="shrink-0 h-6 text-sm text-sp-muted flex items-center" aria-live="polite">
+        {statusLine}
+      </p>
+
+      <div className="shrink-0 flex items-center gap-6">
         <button
+          type="button"
           onClick={reset}
           disabled={state === 'idle'}
-          className="w-16 h-16 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
-          title="리셋"
+          className="w-16 h-16 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent transition-colors flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed"
+          title="처음으로 (R)"
+          aria-label="처음으로"
         >
           <span className="material-symbols-outlined text-[28px]">restart_alt</span>
         </button>
-        {state === 'running' ? (
-          <button
-            onClick={pause}
-            className="w-20 h-20 rounded-full bg-sp-highlight text-white flex items-center justify-center hover:bg-sp-highlight/80 transition-colors shadow-lg shadow-sp-highlight/20"
-            title="일시정지"
-          >
-            <span className="material-symbols-outlined text-4xl">pause</span>
-          </button>
-        ) : (
-          <button
-            onClick={() => start()}
-            disabled={remaining <= 0}
-            className="w-20 h-20 rounded-full bg-sp-accent text-white flex items-center justify-center hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20 disabled:opacity-30 disabled:cursor-not-allowed"
-            title="시작"
-          >
-            <span className="material-symbols-outlined text-4xl">play_arrow</span>
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={toggle}
+          disabled={state === 'finished' || remaining <= 0}
+          className="w-20 h-20 rounded-full bg-sp-accent text-sp-accent-fg flex items-center justify-center hover:brightness-110 transition shadow-lg disabled:opacity-30 disabled:cursor-not-allowed"
+          title={state === 'running' ? '잠시 멈춤 (Space)' : '시작 (Space)'}
+          aria-label={state === 'running' ? '잠시 멈춤' : '시작'}
+        >
+          <span className="material-symbols-outlined text-4xl">
+            {state === 'running' ? 'pause' : 'play_arrow'}
+          </span>
+        </button>
         <div className="w-16 h-16" />
       </div>
 
-      {/* 알람음 / 예고 알림 토글 버튼 */}
-      {state !== 'running' && (
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { setShowSoundPanel((v) => !v); setShowPreWarningPanel(false); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
-              showSoundPanel
-                ? 'bg-sp-accent/15 text-sp-accent border border-sp-accent/30'
-                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
-            }`}
-          >
-            <span className="material-symbols-outlined text-icon-md">
-              {volume === 0 ? 'volume_off' : 'volume_up'}
-            </span>
-            <span>
-              알람음: {selectedSound === 'custom' && customAudioName
-                ? customAudioName
-                : ALARM_PRESETS.find((p) => p.id === selectedSound)?.label ?? '기본 알림'}
-            </span>
-            <span className="material-symbols-outlined text-icon">
-              {showSoundPanel ? 'expand_less' : 'expand_more'}
-            </span>
-          </button>
-
-          <button
-            onClick={() => { setShowPreWarningPanel((v) => !v); setShowSoundPanel(false); }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
-              showPreWarningPanel
-                ? 'bg-amber-500 text-white border border-amber-500'
-                : preWarning.enabled
-                  ? 'bg-sp-card border border-amber-500/50 text-sp-text hover:border-amber-500'
-                  : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-amber-500/40'
-            }`}
-          >
-            <span className="material-symbols-outlined text-icon-md">notifications_active</span>
-            <span>예고 알림{preWarning.enabled ? `: ${preWarning.secondsBefore < 60 ? `${preWarning.secondsBefore}초` : `${preWarning.secondsBefore / 60}분`} 전` : ' (꺼짐)'}</span>
-            <span className="material-symbols-outlined text-icon">
-              {showPreWarningPanel ? 'expand_less' : 'expand_more'}
-            </span>
-          </button>
-        </div>
-      )}
-
-      {/* 알람음 설정 패널 */}
-      {showSoundPanel && state !== 'running' && (
-        <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200">
-          <AlarmSoundSelector
-            selectedSound={selectedSound}
-            customAudioName={customAudioName}
-            customDataUrl={customDataUrl}
-            volume={volume}
-            boost={boost}
-            onSelectSound={handleSelectSound}
-            onImportCustom={handleImportCustom}
-            onDeleteCustom={handleDeleteCustom}
-            onVolumeChange={handleVolumeChange}
-            onBoostChange={handleBoostChange}
-          />
-        </div>
-      )}
-
-      {/* 예고 알림 설정 패널 */}
-      {showPreWarningPanel && state !== 'running' && (
-        <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-amber-400 text-icon-md">
-                notifications_active
-              </span>
-              <span className="text-sm font-medium text-sp-text">종료 전 예고 알림</span>
-            </div>
-            <button
-              onClick={() => handlePreWarningChange({ ...preWarning, enabled: !preWarning.enabled })}
-              className={`relative w-10 h-5 rounded-full transition-colors ${
-                preWarning.enabled ? 'bg-amber-500' : 'bg-sp-border'
-              }`}
-            >
-              <span
-                className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                  preWarning.enabled ? 'translate-x-5' : 'translate-x-0.5'
-                }`}
-              />
-            </button>
-          </div>
-
-          {preWarning.enabled && (
-            <div className="space-y-4 animate-in fade-in duration-200">
-              <div>
-                <p className="text-xs text-sp-muted mb-2">알림 시점</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-sp-muted">종료</span>
-                  {PRE_WARNING_TIMES.map((sec) => (
-                    <button
-                      key={sec}
-                      onClick={() => handlePreWarningChange({ ...preWarning, secondsBefore: sec })}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                        preWarning.secondsBefore === sec
-                          ? 'bg-amber-500 border-amber-500 text-white'
-                          : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'
-                      }`}
-                    >
-                      {sec < 60 ? `${sec}초` : `${sec / 60}분`}
-                    </button>
-                  ))}
-                  <span className="text-xs text-sp-muted">전</span>
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-sp-muted mb-2">알림음</p>
-                <div className="flex gap-2">
-                  {PRE_WARNING_PRESETS.map((preset) => (
-                    <button
-                      key={preset.id}
-                      onClick={() => {
-                        handlePreWarningChange({ ...preWarning, sound: preset.id });
-                        playPreWarningSound(preset.id, volume, boost);
-                      }}
-                      className={`flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
-                        preWarning.sound === preset.id
-                          ? 'bg-amber-500 border-amber-500 text-white'
-                          : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-amber-500/40'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-icon-lg">{preset.icon}</span>
-                      <span className="text-xs font-medium">{preset.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {!preWarning.enabled && (
-            <p className="text-xs text-sp-muted text-center py-2">
-              활성화하면 타이머 종료 전 미리 알림을 받을 수 있어요
-            </p>
-          )}
-        </div>
-      )}
+      {/* 도는 동안에는 숨기되 자리는 남긴다 — 시작할 때 원이 밀려 움직이지 않게. */}
+      <div
+        className={`shrink-0 w-full ${state !== 'running' ? '' : 'invisible'}`}
+        aria-hidden={state !== 'running' ? undefined : true}
+      >
+        <TimerSoundSettings preWarning="timer" showRepeat />
+      </div>
 
       {showCustom && (
         <CustomTimeModal
-          onConfirm={handleCustomTime}
+          initialSeconds={totalSeconds}
+          onConfirm={(seconds) => {
+            setShowCustom(false);
+            setDuration(seconds);
+          }}
           onClose={() => setShowCustom(false)}
+        />
+      )}
+
+      {classroomOpen && shell !== null && (
+        <ClassroomOverlay
+          onExit={shell.closeClassroom}
+          displayStyle={displayStyle}
+          top={
+            activityName.trim() !== '' ? (
+              <p className="text-3xl md:text-5xl font-bold text-sp-text">{activityName}</p>
+            ) : undefined
+          }
+          bottom={statusLine ?? undefined}
+          renderStage={(g) => (
+            <TimerDial
+              remaining={remaining}
+              total={totalSeconds}
+              level={level}
+              displayStyle={displayStyle}
+              geometry={g}
+              paused={paused}
+            />
+          )}
+          pause={state === 'finished' ? null : { paused: state !== 'running', onToggle: toggle }}
+          overlay={
+            state === 'finished' ? (
+              <TimerEndOverlay finishedAt={finishedAt} digitFontSize={96} actions={confirmButton} />
+            ) : undefined
+          }
         />
       )}
     </div>

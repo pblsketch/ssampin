@@ -29,7 +29,8 @@ export function AlarmSoundSelector({
 
   const handlePreview = (id: AlarmSoundId) => {
     setPreviewPlaying(id);
-    playAlarmSound(id, volume, boost, customDataUrl);
+    // 미리듣기는 선생님이 직접 누른 소리라 🔊 음소거와 관계없이 들린다(ADR-139).
+    playAlarmSound(id, volume, boost, customDataUrl, { ignoreMute: true });
     setTimeout(() => setPreviewPlaying(null), 2000);
   };
 
@@ -43,8 +44,8 @@ export function AlarmSoundSelector({
             onClick={() => onSelectSound(preset.id)}
             className={`relative flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
               selectedSound === preset.id
-                ? 'bg-sp-accent/15 border-sp-accent text-sp-accent'
-                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
+                ? 'bg-sp-card border-sp-accent text-sp-accent'
+                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent'
             }`}
           >
             <span className="material-symbols-outlined text-[22px]">{preset.icon}</span>
@@ -57,8 +58,8 @@ export function AlarmSoundSelector({
               }}
               className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                 previewPlaying === preset.id
-                  ? 'bg-sp-accent text-white'
-                  : 'bg-sp-text/10 text-sp-muted hover:text-sp-text hover:bg-sp-text/20'
+                  ? 'bg-sp-accent text-sp-accent-fg'
+                  : 'bg-sp-surface text-sp-muted hover:text-sp-text'
               }`}
               title="미리듣기"
             >
@@ -80,16 +81,14 @@ export function AlarmSoundSelector({
           }}
           className={`relative flex flex-col items-center gap-1 p-3 rounded-xl border transition-all ${
             selectedSound === 'custom'
-              ? 'bg-sp-accent/15 border-sp-accent text-sp-accent'
-              : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
+              ? 'bg-sp-card border-sp-accent text-sp-accent'
+              : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent'
           }`}
         >
           <span className="material-symbols-outlined text-[22px]">
             {customDataUrl ? 'audio_file' : 'upload_file'}
           </span>
-          <span className="text-xs font-medium">
-            {customDataUrl ? '내 파일' : '직접 등록'}
-          </span>
+          <span className="text-xs font-medium">{customDataUrl ? '내 파일' : '직접 등록'}</span>
           <span className="text-caption opacity-60 truncate max-w-full px-1">
             {customAudioName || '파일 선택'}
           </span>
@@ -103,8 +102,8 @@ export function AlarmSoundSelector({
                 }}
                 className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center transition-all ${
                   previewPlaying === 'custom'
-                    ? 'bg-sp-accent text-white'
-                    : 'bg-sp-text/10 text-sp-muted hover:text-sp-text hover:bg-sp-text/20'
+                    ? 'bg-sp-accent text-sp-accent-fg'
+                    : 'bg-sp-surface text-sp-muted hover:text-sp-text'
                 }`}
                 title="미리듣기"
               >
@@ -117,7 +116,7 @@ export function AlarmSoundSelector({
                   e.stopPropagation();
                   onDeleteCustom();
                 }}
-                className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full flex items-center justify-center bg-white/10 text-sp-muted hover:text-red-400 hover:bg-red-500/20 transition-all"
+                className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full flex items-center justify-center bg-sp-surface text-sp-muted hover:text-sp-error transition-all"
                 title="삭제"
               >
                 <span className="material-symbols-outlined text-icon-sm">close</span>
@@ -157,8 +156,8 @@ export function AlarmSoundSelector({
               onClick={() => onBoostChange(b)}
               className={`px-3 py-1 rounded-lg text-xs font-medium transition-all border ${
                 boost === b
-                  ? 'bg-sp-accent/20 border-sp-accent text-sp-accent'
-                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
+                  ? 'bg-sp-card border-sp-accent text-sp-accent'
+                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent'
               }`}
             >
               {b}x
@@ -166,7 +165,7 @@ export function AlarmSoundSelector({
           ))}
         </div>
         {boost > 1 && (
-          <span className="text-xs text-amber-400 flex items-center gap-1">
+          <span className="text-xs text-sp-warning flex items-center gap-1">
             <span className="material-symbols-outlined text-icon-sm">volume_up</span>
             {boost}배 증폭
           </span>

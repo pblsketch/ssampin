@@ -1,8 +1,16 @@
+import { randomUUID } from 'node:crypto';
 import { BrowserWindow, ipcMain } from 'electron';
 import type { PopupToolId, ToolPopupWindowSpec } from '../../src/domain/entities/ToolPopup';
 import { installNavigationGuard } from '../security-guards';
 import type { ToolPopupManager, ToolPopupWindowLike } from '../toolPopupWindows';
 import { createToolPopupManager } from '../toolPopupWindows';
+
+/** 본문 창이 "받았다"고 답할 때까지 다시 보내는 간격(ms). 새로 만든 창은 화면이 늦게 뜬다. */
+const RETURN_RESEND_INTERVAL_MS = 1_000;
+/** "받았다"를 기다리는 한도(ms). 넘으면 팝업을 닫지 않는다. */
+const RETURN_ACK_TIMEOUT_MS = 20_000;
+/** 선생님이 안내 창에서 고르기를 기다리는 한도(ms). */
+const RETURN_DECISION_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * 쌤도구 팝업 IPC 배선.
@@ -21,6 +29,11 @@ export interface ToolPopupIpcDeps {
   readonly indexHtmlPath: string;
   devServerUrl(): string | undefined;
   getMainWindow(): BrowserWindow | null;
+  /**
+   * 본문 창을 보이게 하고(없으면 다시 만들고) 돌려준다. 메모리 절약 모드로 본문 창이
+   * 파괴된 채 팝업에서 [본문으로 가져오기]를 누른 경우에 쓴다(ADR-139). 없으면 null.
+   */
+  ensureMainWindow?(): Promise<BrowserWindow | null>;
   /** 앱이 아는 창(메인·위젯·아이콘·옆핀·팝업)인지. 모르는 발신자는 거절한다. */
   isTrustedSender(webContentsId: number): boolean;
   /** 열린 팝업 목록이 바뀌었음을 모든 창에 알린다. */
@@ -149,26 +162,100 @@ export function registerToolPopupIpc(deps: ToolPopupIpcDeps): ToolPopupIpcHandle
     return manager.listOpen();
   });
 
-  ipcMain.handle('toolPopup:returnToMain', (event, snapshot: unknown, capturedAt: unknown) => {
-    if (!trusted(event)) return false;
-    // ★도구 id 는 인자가 아니라 발신 창에서 역조회한다. 팝업이 남의 도구를 되돌릴 수 없다.
-    const toolId = manager.resolveToolIdByWebContents(event.sender.id);
-    if (toolId === null) return false;
-    const main = deps.getMainWindow();
-    if (main !== null && !main.isDestroyed()) {
+  // 본문으로 가져오기는 **왕복**이다(ADR-139). 본문에서 타이머가 진행 중이면 선생님께 묻고,
+  // [취소]면 팝업을 닫지 않는다. 그래서 본문의 답을 받은 뒤에야 팝업을 닫는다.
+  //   1) 본문 창에 보낸다. 새로 만든 창은 화면이 늦게 뜨므로 "받았다" 답이 올 때까지 다시 보낸다.
+  //   2) "받았다"가 오면 선생님이 고를 때까지 기다린다.
+  //   3) 받아들이면 팝업을 닫고 true. 아니면(취소·시간 초과·본문 창 없음) false — 팝업이 되살린다.
+  const pendingReturns = new Map<
+    string,
+    { acknowledged: boolean; resolveAck: () => void; resolveDecision: (accepted: boolean) => void }
+  >();
+
+  ipcMain.handle('toolPopup:returnAck', (event, requestId: unknown) => {
+    if (!trusted(event) || typeof requestId !== 'string') return false;
+    const pending = pendingReturns.get(requestId);
+    if (pending === undefined) return false;
+    pending.acknowledged = true;
+    pending.resolveAck();
+    return true;
+  });
+
+  ipcMain.handle('toolPopup:returnDecision', (event, requestId: unknown, accepted: unknown) => {
+    if (!trusted(event) || typeof requestId !== 'string') return false;
+    const pending = pendingReturns.get(requestId);
+    if (pending === undefined) return false;
+    pendingReturns.delete(requestId);
+    pending.resolveDecision(accepted === true);
+    return true;
+  });
+
+  ipcMain.handle(
+    'toolPopup:returnToMain',
+    async (event, snapshot: unknown, capturedAt: unknown): Promise<boolean> => {
+      if (!trusted(event)) return false;
+      // ★도구 id 는 인자가 아니라 발신 창에서 역조회한다. 팝업이 남의 도구를 되돌릴 수 없다.
+      const toolId = manager.resolveToolIdByWebContents(event.sender.id);
+      if (toolId === null) return false;
+      let main = deps.getMainWindow();
+      if ((main === null || main.isDestroyed()) && deps.ensureMainWindow) {
+        main = await deps.ensureMainWindow();
+      }
+      // 넘길 본문 창이 없으면 팝업을 닫지 않는다 — 닫으면 상태가 사라진다.
+      if (main === null || main.isDestroyed()) return false;
       if (main.isMinimized()) main.restore();
       main.show();
       main.focus();
-      main.webContents.send('toolPopup:returned', {
+
+      const requestId = randomUUID();
+      let resolveAck: () => void = () => undefined;
+      let resolveDecision: (accepted: boolean) => void = () => undefined;
+      const acked = new Promise<void>((resolve) => {
+        resolveAck = resolve;
+      });
+      const decided = new Promise<boolean>((resolve) => {
+        resolveDecision = resolve;
+      });
+      pendingReturns.set(requestId, { acknowledged: false, resolveAck, resolveDecision });
+
+      const payload = {
         toolId,
         snapshot: snapshot ?? null,
         capturedAt:
           typeof capturedAt === 'number' && Number.isFinite(capturedAt) ? capturedAt : Date.now(),
+        requestId,
+      };
+      const target = main;
+      const send = (): void => {
+        if (!target.isDestroyed()) target.webContents.send('toolPopup:returned', payload);
+      };
+      send();
+      const resend = setInterval(send, RETURN_RESEND_INTERVAL_MS);
+      const ackTimedOut = await Promise.race([
+        acked.then(() => false),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(true), RETURN_ACK_TIMEOUT_MS)),
+      ]);
+      clearInterval(resend);
+      if (ackTimedOut) {
+        pendingReturns.delete(requestId);
+        return false;
+      }
+      const closedWhileWaiting = new Promise<boolean>((resolve) => {
+        target.once('closed', () => resolve(false));
       });
-    }
-    manager.close(toolId);
-    return true;
-  });
+      const accepted = await Promise.race([
+        decided,
+        closedWhileWaiting,
+        new Promise<boolean>((resolve) =>
+          setTimeout(() => resolve(false), RETURN_DECISION_TIMEOUT_MS),
+        ),
+      ]);
+      pendingReturns.delete(requestId);
+      if (!accepted) return false;
+      manager.close(toolId);
+      return true;
+    },
+  );
 
   return {
     manager,

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLeaveGuardStore } from '@adapters/stores/useLeaveGuardStore';
 import { HOME_ROUTE, parentOf, parsePath, toPath, type MobileRoute } from './routes';
 
 /** 현재 브라우저 주소(경로+쿼리). */
@@ -42,9 +43,31 @@ export interface RouteApi {
  */
 export function useRoute(): RouteApi {
   const [route, setRoute] = useState<MobileRoute>(() => parsePath(currentPath()));
+  // 마지막으로 보여 준 주소 — 휴대폰 뒤로 가기를 되돌려 놓고 물을 때 쓴다(ADR-139).
+  const shownPathRef = useRef(currentPath());
+  // 선생님이 [끄고 이동]을 고른 뒤의 뒤로 가기는 다시 묻지 않는다.
+  const bypassGuardRef = useRef(false);
 
   useEffect(() => {
-    const onPop = () => setRoute(parsePath(currentPath()));
+    const onPop = () => {
+      const guarded = !bypassGuardRef.current && useLeaveGuardStore.getState().guards.length > 0;
+      bypassGuardRef.current = false;
+      if (!guarded) {
+        shownPathRef.current = currentPath();
+        setRoute(parsePath(currentPath()));
+        return;
+      }
+      // 타이머가 진행 중이다 — 브라우저가 이미 주소를 바꿨으므로 한 칸을 다시 쌓아 되돌려 놓고 묻는다.
+      window.history.pushState(
+        { depth: currentDepth() + 1 } satisfies HistoryDepth,
+        '',
+        shownPathRef.current,
+      );
+      useLeaveGuardStore.getState().requestLeave('navigate', () => {
+        bypassGuardRef.current = true;
+        window.history.back();
+      });
+    };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
   }, []);
@@ -77,28 +100,37 @@ export function useRoute(): RouteApi {
       return;
     }
 
-    const nextState: HistoryDepth = {
-      depth: opts?.replace ? currentDepth() : currentDepth() + 1,
-    };
-    if (opts?.replace) {
-      window.history.replaceState(nextState, '', path);
-    } else {
-      window.history.pushState(nextState, '', path);
-    }
-    setRoute(next);
+    // 타이머가 진행 중이면 떠나기 전에 묻는다(ADR-139).
+    useLeaveGuardStore.getState().requestLeave('navigate', () => {
+      const nextState: HistoryDepth = {
+        depth: opts?.replace ? currentDepth() : currentDepth() + 1,
+      };
+      if (opts?.replace) {
+        window.history.replaceState(nextState, '', path);
+      } else {
+        window.history.pushState(nextState, '', path);
+      }
+      shownPathRef.current = path;
+      setRoute(next);
+    });
   }, []);
 
   const goBack = useCallback<RouteApi['goBack']>(() => {
-    if (currentDepth() > 0) {
-      window.history.back();
-      return;
-    }
-    // 딥링크로 바로 들어온 화면. 쌓인 항목이 없으니 브라우저에 맡기면 앱을 벗어난다.
-    // 부모 화면으로 바꿔치기해서 앱 안에 머무르게 한다.
-    const parent = parentOf(parsePath(currentPath())) ?? HOME_ROUTE;
-    const path = toPath(parent);
-    window.history.replaceState({ depth: 0 } satisfies HistoryDepth, '', path);
-    setRoute(parent);
+    useLeaveGuardStore.getState().requestLeave('navigate', () => {
+      if (currentDepth() > 0) {
+        // 이미 물었으므로 뒤로 가기 처리에서 다시 묻지 않는다.
+        bypassGuardRef.current = true;
+        window.history.back();
+        return;
+      }
+      // 딥링크로 바로 들어온 화면. 쌓인 항목이 없으니 브라우저에 맡기면 앱을 벗어난다.
+      // 부모 화면으로 바꿔치기해서 앱 안에 머무르게 한다.
+      const parent = parentOf(parsePath(currentPath())) ?? HOME_ROUTE;
+      const path = toPath(parent);
+      window.history.replaceState({ depth: 0 } satisfies HistoryDepth, '', path);
+      shownPathRef.current = path;
+      setRoute(parent);
+    });
   }, []);
 
   return { route, navigate, goBack };

@@ -11,12 +11,11 @@ vi.mock('@adapters/hooks/useToolSound', () => ({
   useToolSound: () => ({ playProgress: () => {}, playResult: () => {}, stopAll: () => {} }),
 }));
 
-vi.mock('@adapters/components/Tools/Timer/timerAudio', () => ({
-  ALARM_PRESETS: [{ id: 'beep', label: '기본 알림' }],
-  PRE_WARNING_PRESETS: [{ id: 'soft', label: '부드럽게', icon: 'notifications' }],
-  PRE_WARNING_TIMES: [30, 60],
+vi.mock('@adapters/components/Tools/Timer/timerAudio', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@adapters/components/Tools/Timer/timerAudio')>()),
   playAlarmSound: () => {},
   playPreWarningSound: () => {},
+  playStepTransitionSound: () => {},
   saveCustomAudio: async () => {},
   loadCustomAudio: async () => null,
   deleteCustomAudio: async () => {},
@@ -34,7 +33,14 @@ afterEach(cleanup);
 
 /** 도구별로 "이 칸이 스냅샷에 담겨야 한다"는 약속. */
 const EXPECTED_SLOTS: Readonly<Record<PopupToolId, readonly string[]>> = {
-  'tool-timer': ['timer-shell', 'timer-countdown'],
+  // 네 모드가 모두 살아 있어 네 칸이 다 따라간다(ADR-139, spec 5-2·6-3).
+  'tool-timer': [
+    'timer-shell',
+    'timer-countdown',
+    'timer-stopwatch',
+    'timer-presentation',
+    'timer-steps',
+  ],
   'tool-random': ['random'],
   'tool-traffic-light': ['traffic-light'],
   'tool-scoreboard': ['scoreboard'],

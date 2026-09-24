@@ -1,3 +1,4 @@
+import { needsTimerRingOverride } from '@domain/rules/timerColor';
 import { useLayoutEffect } from 'react';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { computeTodayBg, getPresetTheme, PRESET_THEMES } from '@domain/entities/DashboardTheme';
@@ -70,6 +71,18 @@ function applyThemeColors(colors: ThemeColors): void {
   const light = isLightColor(colors.bg);
   root.classList.toggle('theme-light', light);
   root.classList.toggle('theme-dark', !light);
+  applyTimerRingColor(colors.accent, light);
+}
+
+/**
+ * 쌤도구 타이머 원의 '평소' 색(ADR-139). 테마 색이 경고색과 헷갈리는 테마(주황·흑백)에서는
+ * sp-info 로 바꾼다. 새 HEX 가 아니라 기존 토큰을 가리킨다.
+ */
+function applyTimerRingColor(accent: string, lightBackground: boolean): void {
+  document.documentElement.style.setProperty(
+    '--sp-timer-ring-normal',
+    needsTimerRingOverride(accent, lightBackground) ? 'var(--sp-info)' : 'var(--sp-accent)',
+  );
 }
 
 /**
@@ -105,6 +118,7 @@ function applyWidgetStyle(ws: WidgetStyleSettings | undefined): void {
   if (s.accentColor) {
     root.style.setProperty('--sp-accent', s.accentColor);
     root.style.setProperty('--sp-accent-fg', computeAccentFg(s.accentColor));
+    applyTimerRingColor(s.accentColor, root.classList.contains('theme-light'));
   }
   if (s.textColor) {
     root.style.setProperty('--sp-text', s.textColor);

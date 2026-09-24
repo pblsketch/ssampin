@@ -5,6 +5,14 @@ import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
 import { DualToolContext } from './DualToolContext';
 import { ToolServicesContext } from './ToolServicesContext';
 import { useToolPopupSession } from './popup/toolPopupSession';
+import { useLeaveGuardStore, type LeaveGuard } from '@adapters/stores/useLeaveGuardStore';
+
+/** 병렬 칸을 Esc 로 닫을 때 쓰는 안내용 표식 — 칸 안의 도구만 따진다(팝업 선택지 없음). */
+const SLOT_CLOSE_GUARD: LeaveGuard = {
+  id: 'dual-slot-close',
+  canMoveToPopup: () => false,
+  moveToPopup: async () => false,
+};
 
 interface ToolLayoutProps {
   title: string;
@@ -14,6 +22,15 @@ interface ToolLayoutProps {
   children: React.ReactNode;
   shortcuts?: KeyboardShortcut[];
   disableZoom?: boolean;
+  /**
+   * 이 도구가 진행 중인가(타이머가 돌고 있음 등). 병렬 모드에서 Esc 로 칸을 닫기 전에 묻는다.
+   * 칸의 X 단추·도구 교체는 명시적 닫기라 묻지 않는다(ADR-139).
+   */
+  leaveGuardActive?: boolean;
+  /** 주면 머리글에 [교실 화면] 단추를 둔다(쌤도구 타이머, ADR-139). */
+  onClassroomMode?: () => void;
+  /** 머리글을 숨긴다 — 병렬 칸 안에서 교실 화면을 켰을 때. */
+  hideHeader?: boolean;
 }
 
 const DUAL_MIN_WIDTH = 1280;
@@ -72,6 +89,9 @@ export function ToolLayout({
   children,
   shortcuts,
   disableZoom,
+  leaveGuardActive = false,
+  onClassroomMode,
+  hideHeader = false,
 }: ToolLayoutProps) {
   const [zoom, setZoom] = useState(100);
   const [showHelp, setShowHelp] = useState(false);
@@ -126,8 +146,15 @@ export function ToolLayout({
       // ESC: 듀얼 모드면 슬롯 닫기, 아니면 onBack
       if (e.key === 'Escape') {
         e.preventDefault();
-        if (dualCtx) dualCtx.onSlotClose();
-        else onBack();
+        if (dualCtx) {
+          if (leaveGuardActive) {
+            useLeaveGuardStore.getState().requestLeave('closeSlot', () => dualCtx.onSlotClose(), {
+              guards: [SLOT_CLOSE_GUARD],
+            });
+          } else {
+            dualCtx.onSlotClose();
+          }
+        } else onBack();
         return;
       }
 
@@ -162,7 +189,7 @@ export function ToolLayout({
         }
       }
     },
-    [onBack, toggleFullscreen, toggleSound, dualCtx],
+    [onBack, toggleFullscreen, toggleSound, dualCtx, leaveGuardActive],
   );
 
   const allShortcuts = [
@@ -178,7 +205,11 @@ export function ToolLayout({
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className={`flex items-center justify-between ${isFullscreen ? 'mb-2' : 'mb-6'}`}>
+      <div
+        className={`flex items-center justify-between ${isFullscreen ? 'mb-2' : 'mb-6'} ${
+          hideHeader ? 'hidden' : ''
+        }`}
+      >
         <div className="flex items-center gap-4 min-w-0 flex-1">
           {!isFullscreen && !inPopupWindow && (
             <>
@@ -237,7 +268,13 @@ export function ToolLayout({
                 ? 'text-sp-muted hover:text-sp-text hover:bg-sp-text/5'
                 : 'text-red-400 hover:text-red-300 hover:bg-red-500/10'
             }`}
-            title={soundEnabled ? '소리 끄기 (M)' : '소리 켜기 (M)'}
+            title={
+              soundEnabled
+                ? '소리 끄기 — 타이머 알람도 함께 꺼져요 (M)'
+                : '소리 켜기 — 타이머 알람이 다시 울려요 (M)'
+            }
+            aria-label={soundEnabled ? '소리 끄기' : '소리 켜기'}
+            aria-pressed={!soundEnabled}
           >
             <span className="material-symbols-outlined text-icon-lg">
               {soundEnabled ? 'volume_up' : 'volume_off'}
@@ -285,7 +322,7 @@ export function ToolLayout({
           {canMoveToPopup && (
             <button
               type="button"
-              onClick={popupSession.moveToPopup}
+              onClick={() => void popupSession.moveToPopup()}
               disabled={popupSession.busy}
               className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-text/5 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
               title="팝업으로 옮기기 — 진행 상태 그대로 별도 창으로"
@@ -378,6 +415,19 @@ export function ToolLayout({
                 <span className="material-symbols-outlined text-icon-lg">swap_vert</span>
               </button>
             </>
+          )}
+
+          {/* 교실 화면 — 쌤도구 타이머 */}
+          {onClassroomMode && (
+            <button
+              type="button"
+              onClick={onClassroomMode}
+              className="p-2 rounded-lg text-sp-muted hover:text-sp-text hover:bg-sp-surface transition-all"
+              title="교실 화면 — 시간만 크게 (F)"
+              aria-label="교실 화면으로 보기"
+            >
+              <span className="material-symbols-outlined text-icon-lg">cast_for_education</span>
+            </button>
           )}
 
           {/* Fullscreen / Slot maximize button — 좁은 폭(모바일)에선 숨김, 듀얼 슬롯 최대화는 유지 */}

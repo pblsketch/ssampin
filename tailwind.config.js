@@ -143,8 +143,14 @@ export default {
         'pin-hover-bounce': 'pinHoverBounce 0.6s ease-in-out infinite',
         // v2.2.3 — 펫 말풍선 등장(살짝 떠오르며 페이드인)
         'pin-bubble-pop': 'pinBubblePop 0.18s ease-out',
+        // 쌤도구 타이머 일시정지 — 숫자가 천천히 깜빡인다(동작 줄이기 설정이면 전역 규칙이 끈다)
+        'sp-paused-blink': 'spPausedBlink 1.8s ease-in-out infinite',
       },
       keyframes: {
+        spPausedBlink: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.35' },
+        },
         slideInRight: {
           '0%': { transform: 'translateX(100%)', opacity: '0' },
           '100%': { transform: 'translateX(0)', opacity: '1' },

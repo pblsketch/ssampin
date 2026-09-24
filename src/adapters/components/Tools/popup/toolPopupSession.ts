@@ -42,8 +42,11 @@ export interface ToolPopupSessionValue {
   readonly initialSnapshot: ToolPopupSnapshotEnvelope | null;
   /** 도구 조각이 자기 칸을 등록한다. 반환값을 호출하면 등록이 풀린다. */
   registerSlot(slotId: string, handlers: ToolHandoffHandlers<unknown>): () => void;
-  /** 본문 → 팝업으로 옮기기. */
-  moveToPopup(): void;
+  /**
+   * 본문 → 팝업으로 옮기기. 새 창이 준비되면 true, 실패하면(본문에서 그대로 되살림) false.
+   * 화면 이동 안내·창 X 자동 팝업이 성공 여부를 보고 이동·숨김을 정한다(ADR-139).
+   */
+  moveToPopup(): Promise<boolean>;
   /** 팝업 → 본문으로 가져오기. */
   returnToMain(): void;
   /** 팝업 창 닫기(= 이 실행 종료). */

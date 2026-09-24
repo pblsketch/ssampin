@@ -151,6 +151,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setAlwaysOnTop: (flag: boolean): Promise<void> =>
     ipcRenderer.invoke('window:setAlwaysOnTop', flag),
 
+  /**
+   * 본문 창이 숨거나 없어지기 직전 신호(ADR-139). 진행 중인 타이머를 팝업으로 옮긴 뒤
+   * `replyBeforeHide` 로 'none' | 'moving' | 'moved' | 'failed' 를 답한다.
+   */
+  onBeforeHide: (callback: (requestId: string) => void): (() => void) => {
+    const handler = (_event: unknown, requestId: string): void => callback(requestId);
+    ipcRenderer.on('window:beforeHide', handler);
+    return (): void => {
+      ipcRenderer.removeListener('window:beforeHide', handler);
+    };
+  },
+  replyBeforeHide: (
+    requestId: string,
+    status: 'none' | 'moving' | 'moved' | 'failed',
+  ): Promise<boolean> => ipcRenderer.invoke('window:beforeHideReply', requestId, status),
+
   // ─────────────────────────────────────────────────────────────
   // 쌤도구 팝업 — 도구를 별도 창으로 띄우기 (설계 §4·§5)
   //   허용한 요청만 노출한다. 도구 id 검사와 발신 창 확인은 main 이 한 번 더 한다.
@@ -174,9 +190,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setAlwaysOnTop: (toolId: string | null, flag: boolean): Promise<boolean> =>
       ipcRenderer.invoke('toolPopup:setAlwaysOnTop', toolId, flag),
     list: (): Promise<string[]> => ipcRenderer.invoke('toolPopup:list'),
-    /** 팝업 → 본문. 도구 id 는 main 이 발신 창에서 역조회한다. */
+    /** 팝업 → 본문. 도구 id 는 main 이 발신 창에서 역조회한다. 본문이 거절하면 false. */
     returnToMain: (snapshot: unknown, capturedAt: number): Promise<boolean> =>
       ipcRenderer.invoke('toolPopup:returnToMain', snapshot, capturedAt),
+    /** 메인 창: 돌아오기 요청을 받았다. */
+    acknowledgeReturn: (requestId: string): Promise<boolean> =>
+      ipcRenderer.invoke('toolPopup:returnAck', requestId),
+    /** 메인 창: 돌아오기를 받아들일지(선생님이 [취소]를 고르면 false). */
+    respondReturn: (requestId: string, accepted: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('toolPopup:returnDecision', requestId, accepted),
     /** 열린 팝업 목록 변화 구독. */
     onChanged: (callback: (openToolIds: string[]) => void): (() => void) => {
       const handler = (_event: unknown, ids: string[]): void => callback(ids);
@@ -185,13 +207,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
         ipcRenderer.removeListener('toolPopup:changed', handler);
       };
     },
-    /** 팝업이 본문으로 돌아왔을 때 메인 창이 받는 신호. */
+    /**
+     * 팝업이 본문으로 돌아오려 할 때 메인 창이 받는 신호.
+     * 메인 창은 받자마자 `acknowledgeReturn`, 받아들일지 정하면 `respondReturn` 으로 답한다.
+     */
     onReturned: (
-      callback: (payload: { toolId: string; snapshot: unknown; capturedAt: number }) => void,
+      callback: (payload: {
+        toolId: string;
+        snapshot: unknown;
+        capturedAt: number;
+        requestId?: string;
+      }) => void,
     ): (() => void) => {
       const handler = (
         _event: unknown,
-        payload: { toolId: string; snapshot: unknown; capturedAt: number },
+        payload: { toolId: string; snapshot: unknown; capturedAt: number; requestId?: string },
       ): void => callback(payload);
       ipcRenderer.on('toolPopup:returned', handler);
       return (): void => {
@@ -407,7 +437,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   }): Promise<ArrayBuffer | null> => ipcRenderer.invoke('export:printToPDF', options),
   // 방금 저장한 파일 열기 — handle 은 showSaveDialog 가 발급한 것 (소비하지 않음).
   openFile: (handle: string): Promise<void> => ipcRenderer.invoke('export:openFile', { handle }),
-  importAlarmAudio: (): Promise<{ name: string; dataUrl: string } | null> =>
+  importAlarmAudio: (): Promise<{ name: string; dataUrl: string } | { tooLarge: true } | null> =>
     ipcRenderer.invoke('audio:importAlarm'),
   importFont: (): Promise<{ name: string; dataUrl: string; mimeType: string } | null> =>
     ipcRenderer.invoke('font:import'),

@@ -1,6 +1,6 @@
 import type { KeyboardShortcut } from '../types';
 
-export type Tab = 'timer' | 'stopwatch' | 'presentation';
+export type Tab = 'timer' | 'stopwatch' | 'presentation' | 'steps';
 export type TimerState = 'idle' | 'running' | 'paused' | 'finished';
 export type StopwatchState = 'idle' | 'running' | 'paused';
 

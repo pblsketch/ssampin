@@ -1,6 +1,7 @@
 import { useContext, useEffect } from 'react';
 import type { DependencyList } from 'react';
 import { DualToolContext } from '@adapters/components/Tools/DualToolContext';
+import { useLeaveGuardStore } from '@adapters/stores/useLeaveGuardStore';
 
 interface UseToolKeydownOptions {
   /** 비활성 슬롯에서도 반드시 실행 (전역 단축키 예외 케이스). 기본 false. */
@@ -30,6 +31,9 @@ export function useToolKeydown(
   useEffect(() => {
     const wrapped = (e: KeyboardEvent) => {
       if (ctx !== null && !active && !allowInactive) return;
+      // 화면 이동 안내 창이 떠 있는 동안에는 도구 단축키를 멈춘다 — Space 로 타이머가
+      // 멈추거나 Esc 로 다시 떠나기를 청하는 일이 없게(ADR-139).
+      if (useLeaveGuardStore.getState().pending !== null) return;
       handler(e);
     };
     window.addEventListener('keydown', wrapped, capture);

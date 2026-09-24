@@ -491,10 +491,12 @@ const presenceChecks = [
   //   "시간 종료!" 글씨와 숫자가 겹쳐 보였다. 코드 리뷰로는 절대 안 잡히고 게이트도 초록이었다.
   //   그래서 인라인 `var(--sp-bg)` 로 칠한다. 누가 "정리"하며 클래스로 되돌리면 같은 결함이 돌아온다.
   // ────────────────────────────────────────────────────────────────────────
+  //   2026-09-24(ADR-139): 종료 화면을 타이머·단계·발표가 함께 쓰는 TimerEndOverlay 로 옮겼다.
+  //   깜빡일 때도 color-mix 로 불투명하게 섞는다 — 옛 `bg-red-600/30` 반투명 깜빡임도 없앴다.
   {
-    file: 'src/adapters/components/Tools/Timer/TimerMode.tsx',
+    file: 'src/adapters/components/Tools/Timer/TimerEndOverlay.tsx',
     pattern:
-      /state === 'finished'[\s\S]{0,1600}?style=\{isFlashing \? undefined : \{ backgroundColor: 'var\(--sp-bg\)' \}\}/,
+      /backgroundColor: isFlashing\s*\?\s*'color-mix\(in srgb, var\(--sp-error\) 30%, var\(--sp-bg\)\)'\s*:\s*'var\(--sp-bg\)'/,
     name: 'REGRESSION #82: 타이머 종료 덮개 배경은 인라인 var(--sp-bg) 로 칠한다 (sp-* 토큰 투명도 수식은 조용히 투명해진다)',
   },
 

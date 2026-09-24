@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, Suspense } from 'react';
+import React, { useCallback, useEffect, useRef, useState, Suspense } from 'react';
 import { Sidebar, type PageId } from '@adapters/components/Layout/Sidebar';
 import { EventPopup } from '@adapters/components/Dashboard/EventPopup';
 import { ReminderPopup } from '@adapters/components/Reminder/ReminderPopup';
@@ -137,6 +137,12 @@ import { useDriveSyncStore } from '@adapters/stores/useDriveSyncStore';
 import { DriveSyncConflictModal } from '@adapters/components/common/DriveSyncConflictModal';
 import { FirstSyncConfirmModal } from '@adapters/components/common/FirstSyncConfirmModal';
 import { reloadStores } from '@adapters/hooks/useDriveSync';
+import { useToolWindowDataSync } from '@adapters/hooks/useToolWindowDataSync';
+import {
+  useLeaveGuardStore,
+  moveGuardedToolsBeforeHide,
+} from '@adapters/stores/useLeaveGuardStore';
+import { LeaveGuardDialog } from '@adapters/components/common/LeaveGuardDialog';
 import { SYNC_REGISTRY } from '@usecases/sync/syncRegistry';
 import { validateShareFile } from '@domain/rules/shareRules';
 import { isNoiseError } from '@domain/rules/isNoiseError';
@@ -836,6 +842,20 @@ function MainApp() {
     });
   }, []);
   const [currentPage, setCurrentPage] = useState<PageId>('dashboard');
+  // 페이지 이동은 모두 이 함수를 거친다 — 타이머가 돌고 있으면 떠나기 전에 묻는다(ADR-139).
+  const currentPageRef = useRef(currentPage);
+  currentPageRef.current = currentPage;
+  const navigateTo = useCallback((page: PageId, beforeNavigate?: () => void): void => {
+    const go = (): void => {
+      beforeNavigate?.();
+      setCurrentPage(page);
+    };
+    if (page === currentPageRef.current) {
+      go();
+      return;
+    }
+    useLeaveGuardStore.getState().requestLeave('navigate', go);
+  }, []);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   // 설정 페이지 진입 시 활성화할 탭 (위젯에서 'settings#widget' 등으로 진입한 경우만 셋팅).
@@ -876,7 +896,7 @@ function MainApp() {
     const unsub = useConsultationStore.getState().registerScheduleSyncListener();
     return () => unsub();
   }, []);
-  const handleRequestDualMode = useCallbackForDualEntry(setCurrentPage);
+  const handleRequestDualMode = useCallbackForDualEntry(navigateTo);
   const { setShareFile, setShowImportModal } = useEventsStore();
   const { settings, isFirstRun } = useSettingsStore();
   useAnalyticsLifecycle();
@@ -893,13 +913,13 @@ function MainApp() {
           .show(
             '✨ 새 기능: "아이콘 모드"가 추가됐어요! 설정 → 위젯 → 창 닫기 동작에서 켤 수 있어요.',
             'info',
-            { label: '설정 열기', onClick: () => setCurrentPage('settings') },
+            { label: '설정 열기', onClick: () => navigateTo('settings') },
           );
         localStorage.setItem(SHOWN_KEY, 'true');
       });
     }, 3000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [navigateTo]);
 
   // Analytics: 앱 시작 이벤트 + 활성일 기록
   useEffect(() => {
@@ -1027,10 +1047,11 @@ function MainApp() {
         const parsed: unknown = JSON.parse(content);
         const shareFile = validateShareFile(parsed);
         if (shareFile) {
-          setCurrentPage('schedule');
-          setShareFile(shareFile);
-          setShowImportModal(true);
-          track('share_import');
+          navigateTo('schedule', () => {
+            setShareFile(shareFile);
+            setShowImportModal(true);
+            track('share_import');
+          });
         }
       } catch {
         // Invalid file, ignore
@@ -1038,7 +1059,7 @@ function MainApp() {
     });
 
     return unsubscribe;
-  }, [setShareFile, setShowImportModal]);
+  }, [setShareFile, setShowImportModal, navigateTo]);
 
   // 위젯 → 메인 윈도우 크로스 윈도우 네비게이션 수신
   useEffect(() => {
@@ -1049,15 +1070,16 @@ function MainApp() {
       // 'settings#widget'(설정 특정 탭) / 'timetable#sync-review'(위젯의 시간표 변동 검토)
       // 같은 fragment 형식 지원 — parseNavigationTarget 이 규칙의 단일 소스.
       const target = parseNavigationTarget(page);
-      if (target.settingsTab) setSettingsInitialTab(target.settingsTab);
-      if (target.timetableIntent) setTimetableInitialIntent(target.timetableIntent);
-      setCurrentPage(target.page);
+      navigateTo(target.page, () => {
+        if (target.settingsTab) setSettingsInitialTab(target.settingsTab);
+        if (target.timetableIntent) setTimetableInitialIntent(target.timetableIntent);
+      });
       // 위젯 창에서 넘어온 학생 기록·출결 진입 — 하위 탭 요청은 창을 못 건너오므로 여기서 푼다.
       if (target.studentRecordIntent) applyStudentRecordIntent(target.studentRecordIntent);
     });
 
     return unsubscribe;
-  }, []);
+  }, [navigateTo]);
 
   // 다른 창에서 데이터 변경 시 스토어 리로드 (메인 ↔ 위젯 동기화)
   useEffect(() => {
@@ -1070,6 +1092,20 @@ function MainApp() {
 
     return unsubscribe;
   }, []);
+  // 쌤도구 팝업과 음소거·타이머 기기 값 맞추기 (settings 는 위 reloadStores 가 다시 읽는다)
+  useToolWindowDataSync({ reloadSettings: false });
+
+  // 본문 창이 숨거나 없어지기 직전 — 진행 중인 타이머를 팝업으로 자동으로 옮긴다(ADR-139).
+  useEffect(() => {
+    const api = window.electronAPI;
+    if (!api?.onBeforeHide || !api.replyBeforeHide) return;
+    const reply = api.replyBeforeHide;
+    return api.onBeforeHide((requestId) => {
+      void moveGuardedToolsBeforeHide(() => void reply(requestId, 'moving')).then((status) =>
+        reply(requestId, status),
+      );
+    });
+  }, []);
 
   // AI 브릿지 live-sync 쓰기 수신(메인 창) — 외부 AI 의 일정·할일 쓰기를 store 액션으로 적용
   useAiBridgeLiveSync();
@@ -1080,14 +1116,15 @@ function MainApp() {
   useEffect(() => {
     const handler = (e: Event) => {
       const target = parseNavigationTarget((e as CustomEvent<string>).detail);
-      if (target.settingsTab) setSettingsInitialTab(target.settingsTab);
-      if (target.timetableIntent) setTimetableInitialIntent(target.timetableIntent);
-      setCurrentPage(target.page);
+      navigateTo(target.page, () => {
+        if (target.settingsTab) setSettingsInitialTab(target.settingsTab);
+        if (target.timetableIntent) setTimetableInitialIntent(target.timetableIntent);
+      });
       if (target.studentRecordIntent) applyStudentRecordIntent(target.studentRecordIntent);
     };
     window.addEventListener('ssampin:navigate', handler);
     return () => window.removeEventListener('ssampin:navigate', handler);
-  }, []);
+  }, [navigateTo]);
 
   // 구글 계정 + 캘린더 + Tasks 연결 상태 초기화
   // useGoogleAccountStore.initialize()가 useCalendarSyncStore.initialize()도 연쇄 호출함
@@ -1326,8 +1363,16 @@ function MainApp() {
   useEffect(() => {
     subscribeToolPopup();
     return getToolPopupBridge().onReturned((payload) => {
-      putReturnedToolPopup(payload.toolId, payload.snapshot);
-      setCurrentPage(payload.toolId);
+      // 본문에서 타이머가 진행 중이면 먼저 묻는다. [취소]면 그 도구는 팝업에 그대로 남는다.
+      useLeaveGuardStore.getState().requestLeave(
+        'returnTool',
+        () => {
+          putReturnedToolPopup(payload.toolId, payload.snapshot);
+          setCurrentPage(payload.toolId);
+          payload.respond(true);
+        },
+        { cancel: () => payload.respond(false) },
+      );
     });
   }, [putReturnedToolPopup, subscribeToolPopup]);
 
@@ -1374,7 +1419,7 @@ function MainApp() {
         {!isFullscreen && (
           <Sidebar
             currentPage={currentPage}
-            onNavigate={setCurrentPage}
+            onNavigate={navigateTo}
             onFeedback={() => setShowFeedback(true)}
           />
         )}
@@ -1395,7 +1440,7 @@ function MainApp() {
               대시보드는 배경이 창 맨 위까지 이어져야 하므로 투명하게 둔다. */}
           <WindowDragStrip surface={currentPage !== 'dashboard'} />
           <main className={`flex-1 min-h-0 overflow-y-auto ${isFullscreen ? 'p-4' : 'p-8'}`}>
-            {renderPage(currentPage, setCurrentPage, isFullscreen, {
+            {renderPage(currentPage, navigateTo, isFullscreen, {
               onRequestDualMode: handleRequestDualMode,
               lastSingleTool,
               settingsInitialTab,
@@ -1460,8 +1505,9 @@ function MainApp() {
         <HelpChatPanel />
         <CloseActionDialog />
         <OAuthModalsProvider />
-        <CommandPalette onNavigate={setCurrentPage} />
+        <CommandPalette onNavigate={navigateTo} />
         <QuickAddModal />
+        <LeaveGuardDialog />
       </div>
     </div>
   );

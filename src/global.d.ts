@@ -301,6 +301,12 @@ interface ElectronAPI {
   /** 데스크톱 앱에서만. 옛 preload 에는 없을 수 있어 선택 속성으로 둔다 — 없으면 화면이 그 사실을 말한다. */
   ownAi?: OwnAiElectronAPI;
   setAlwaysOnTop: (flag: boolean) => Promise<void>;
+  /** 본문 창이 숨거나 없어지기 직전 신호(ADR-139). 진행 중인 타이머를 팝업으로 옮긴다. */
+  onBeforeHide?: (callback: (requestId: string) => void) => () => void;
+  replyBeforeHide?: (
+    requestId: string,
+    status: 'none' | 'moving' | 'moved' | 'failed',
+  ) => Promise<boolean>;
   setWidget: (options: {
     width: number;
     height: number;
@@ -399,9 +405,16 @@ interface ElectronAPI {
     setAlwaysOnTop: (toolId: string | null, flag: boolean) => Promise<boolean>;
     list: () => Promise<string[]>;
     returnToMain: (snapshot: unknown, capturedAt: number) => Promise<boolean>;
+    acknowledgeReturn: (requestId: string) => Promise<boolean>;
+    respondReturn: (requestId: string, accepted: boolean) => Promise<boolean>;
     onChanged: (callback: (openToolIds: string[]) => void) => () => void;
     onReturned: (
-      callback: (payload: { toolId: string; snapshot: unknown; capturedAt: number }) => void,
+      callback: (payload: {
+        toolId: string;
+        snapshot: unknown;
+        capturedAt: number;
+        requestId?: string;
+      }) => void,
     ) => () => void;
   };
 
@@ -447,7 +460,8 @@ interface ElectronAPI {
   }) => Promise<ArrayBuffer | null>;
   /** showSaveDialog 가 준 handle 로 방금 저장한 파일 열기 (소비하지 않음). */
   openFile: (handle: string) => Promise<void>;
-  importAlarmAudio: () => Promise<{ name: string; dataUrl: string } | null>;
+  /** 5MB 를 넘으면 `{ tooLarge: true }`. 취소하면 null. */
+  importAlarmAudio: () => Promise<{ name: string; dataUrl: string } | { tooLarge: true } | null>;
   importFont: () => Promise<{ name: string; dataUrl: string; mimeType: string } | null>;
   importShareFile: () => Promise<{
     content: string | ArrayBuffer;

@@ -1,1186 +1,823 @@
-import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
-import { formatTime, getPresentationWarningLevel } from '@domain/rules/timerRules';
-import { useSettingsStore } from '@adapters/stores/useSettingsStore';
-import { useStudentStore } from '@adapters/stores/useStudentStore';
-import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
-import { isStudentActive } from '@domain/rules/studentActivity';
-import { numberActiveRoster } from '@domain/rules/rosterNumbering';
-import { useToolKeydown } from '@adapters/hooks/useToolKeydown';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  playAlarmSound,
-  playPreWarningSound,
-  ALARM_PRESETS,
-  PRE_WARNING_PRESETS,
-  PRE_WARNING_TIMES,
-  saveCustomAudio,
-  loadCustomAudio,
-  deleteCustomAudio,
-} from './timerAudio';
-import { CircleProgress } from './CircleProgress';
-import { AlarmSoundSelector } from './AlarmSoundSelector';
-import type { AlarmSoundId, PreWarningSettings } from '@domain/entities/Settings';
-import { advanceCountdown } from '@domain/rules/toolPopupSession';
+  formatShortDuration,
+  getTimerColorLevel,
+  isPreWarningArmed,
+  overtimeSeconds,
+  warningThresholdSeconds,
+} from '@domain/rules/timerRules';
+import {
+  arrowAction,
+  canDeferCurrent,
+  classroomNextAction,
+  completeCurrent,
+  currentPresenterId,
+  deferCurrent,
+  isPresentationBusy,
+  isPresentationCounting,
+  isRunFinished,
+  nextPresenterId,
+  skipCurrent,
+  spaceAction,
+  startPresentationRun,
+  talkUsage,
+  type PresentationAction,
+  type PresentationPhase,
+  type PresentationRun,
+  type TalkEndReason,
+} from '@domain/rules/presentationQueue';
+import type { TimerPresentationRoster } from '@domain/rules/timerLocalState';
+import { transferElapsedSeconds } from '@domain/rules/toolPopupSession';
+import { useSoundStore } from '@adapters/stores/useSoundStore';
+import { useTimerLocalStore } from '@adapters/stores/useTimerLocalStore';
+import { useToastStore } from '@adapters/components/common/Toast';
 import { useToolPopupInitial, useToolPopupSlot } from '../popup/toolPopupSession';
+import { ClassroomOverlay, type ClassroomNextAction } from './ClassroomOverlay';
+import { PresentationSetup, type PresentationSetupValue } from './PresentationSetup';
+import { TimerDial } from './TimerDial';
+import { TimerEndOverlay } from './TimerEndOverlay';
+import { MuteNotice } from './TimerSoundSettings';
+import { startAlarmSequence, type AlarmStopHandle } from './timerAudio';
+import {
+  useIsClassroomOpen,
+  useReportTimerStatus,
+  useTimerModeKeydown,
+  useTimerShell,
+} from './timerShellContext';
+import { useTimerAlarm } from './useTimerAlarm';
+import { useTimerStageSize } from './useTimerStageSize';
+import { useTimerToolSettings } from './useTimerToolSettings';
 
-type PresentationState = 'setup' | 'running' | 'paused' | 'slide-done' | 'all-done';
-type InputMode = 'custom' | 'students' | 'teachingClass';
+/**
+ * 발표 타이머(ADR-139, spec 4, 설계 11장).
+ *
+ * - 상태 여덟 가지와 키는 `presentationQueue` 의 표 하나를 따른다(spec 4-4).
+ * - 발표 종료 알람은 반복 설정과 관계없이 **한 번**만 — 발표 중인 학생을 끊지 않는다.
+ *   질문 시간도 선생님이 눌러야 시작한다.
+ * - 넘긴 시간은 작고 흐리게, 교실 화면에서는 숨긴다. 시간 기록은 눌러야 보이고 저장하지 않는다.
+ *   색·순위·정렬은 만들지 않는다(ADR-134).
+ * - 명단·순서·설정은 이 PC 에만 기억한다(`timer-local`). 동기화하지 않는다.
+ */
 
-interface Presenter {
-  id: string;
-  name: string;
-  number?: number; // 학번 (명단 연동 시)
-}
+const DEFAULT_DURATION = 180;
+/** 자동 진행 대기(ms). */
+const AUTO_ADVANCE_MS = 2000;
 
-const DEFAULT_DURATION = 180; // 3분
-
-const DURATION_PRESETS = [
-  { label: '1분', seconds: 60 },
-  { label: '2분', seconds: 120 },
-  { label: '3분', seconds: 180 },
-  { label: '5분', seconds: 300 },
-];
-
-/** 팝업으로 옮길 때 함께 가는 발표 타이머 상태. */
-export interface PresentationSnapshot {
-  readonly presenters: readonly Presenter[];
-  /** Map 은 그대로 넘어가지 않으므로 쌍의 배열로 담는다. */
+interface SerializedSetup {
+  readonly presenters: PresentationSetupValue['presenters'];
   readonly order: readonly (readonly [string, number])[];
-  readonly duration: number;
-  readonly inputMode: InputMode;
-  readonly state: PresentationState;
-  readonly currentIndex: number;
-  readonly remaining: number;
+  readonly inputMode: PresentationSetupValue['inputMode'];
+  readonly durationSeconds: number;
+  readonly qnaSeconds: number | null;
   readonly autoAdvance: boolean;
 }
 
-/** 발표 타이머에서 시간이 흐르는 상태 — 카운트다운 복원 규칙에 넘길 때 쓴다. */
-function toCountdownState(state: PresentationState): 'running' | 'paused' | 'idle' {
-  if (state === 'running') return 'running';
-  if (state === 'paused') return 'paused';
-  return 'idle';
+/** 팝업으로 옮길 때 함께 가는 발표 타이머 상태. */
+export interface PresentationSnapshot {
+  readonly setup: SerializedSetup;
+  readonly phase: PresentationPhase;
+  readonly run: PresentationRun | null;
+  readonly remaining: number;
+  /** 발표 시간이 0 에 닿은 시각(초과 시간). [발표 마침]이면 null. */
+  readonly talkEndedAt: number | null;
+  readonly talkEndReason: TalkEndReason | null;
+  readonly talkRemainingAtEnd: number;
+  /** 질문 시간으로 넘어갈 때 확정한 발표 기록(질문이 끝나면 저장). */
+  readonly pendingUsage: { readonly usedSeconds: number; readonly overSeconds: number } | null;
+  readonly showRecords: boolean;
 }
 
+function serializeSetup(v: PresentationSetupValue): SerializedSetup {
+  return {
+    presenters: v.presenters,
+    order: [...v.order.entries()],
+    inputMode: v.inputMode,
+    durationSeconds: v.durationSeconds,
+    qnaSeconds: v.qnaSeconds,
+    autoAdvance: v.autoAdvance,
+  };
+}
+
+function deserializeSetup(s: SerializedSetup | TimerPresentationRoster): PresentationSetupValue {
+  return {
+    presenters: s.presenters,
+    order: new Map(s.order),
+    inputMode: s.inputMode,
+    durationSeconds: s.durationSeconds,
+    qnaSeconds: s.qnaSeconds,
+    autoAdvance: s.autoAdvance,
+  };
+}
+
+const EMPTY_SETUP: PresentationSetupValue = {
+  presenters: [],
+  order: new Map(),
+  inputMode: 'custom',
+  durationSeconds: DEFAULT_DURATION,
+  qnaSeconds: null,
+  autoAdvance: false,
+};
+
 export function PresentationMode() {
+  const shell = useTimerShell();
+  const { timerTool } = useTimerToolSettings();
+  const presentationPw = timerTool.presentationPreWarning;
+  const { playAlarmOnce, playPreWarning } = useTimerAlarm();
+  const showToast = useToastStore((s) => s.show);
+  const localLoaded = useTimerLocalStore((s) => s.loaded);
+  const savedRoster = useTimerLocalStore((s) => s.state.presentationRoster);
+
   const popupInitial = useToolPopupInitial<PresentationSnapshot>('timer-presentation');
-  const [restoredInitial] = useState(() =>
-    popupInitial
-      ? advanceCountdown(
-          {
-            state: toCountdownState(popupInitial.data.state),
-            remaining: popupInitial.data.remaining,
-            capturedAt: popupInitial.capturedAt,
-          },
-          Date.now(),
-        )
-      : null,
+  const [setup, setSetup] = useState<PresentationSetupValue>(() =>
+    popupInitial ? deserializeSetup(popupInitial.data.setup) : EMPTY_SETUP,
   );
-
-  // ─── 발표자 리스트 관리 ────────────────────────
-  const [presenters, setPresenters] = useState<Presenter[]>(() => [
-    ...(popupInitial?.data.presenters ?? []),
-  ]);
-  const [newName, setNewName] = useState('');
-  const [duration, setDuration] = useState(() => popupInitial?.data.duration ?? DEFAULT_DURATION);
-  const [inputMode, setInputMode] = useState<InputMode>(
-    () => popupInitial?.data.inputMode ?? 'custom',
+  const [phase, setPhaseState] = useState<PresentationPhase>(
+    () => popupInitial?.data.phase ?? 'setup',
   );
+  const [run, setRunState] = useState<PresentationRun | null>(() => popupInitial?.data.run ?? null);
+  const [remaining, setRemainingState] = useState(() => popupInitial?.data.remaining ?? 0);
+  const [talkEndedAt, setTalkEndedAt] = useState<number | null>(
+    () => popupInitial?.data.talkEndedAt ?? null,
+  );
+  const [talkEndReason, setTalkEndReason] = useState<TalkEndReason | null>(
+    () => popupInitial?.data.talkEndReason ?? null,
+  );
+  const [showRecords, setShowRecords] = useState(() => popupInitial?.data.showRecords ?? false);
 
-  // ─── 타이머 상태 ──────────────────────────────
-  const [state, setState] = useState<PresentationState>(() => popupInitial?.data.state ?? 'setup');
-  const [currentIndex, setCurrentIndex] = useState(() => popupInitial?.data.currentIndex ?? 0);
-  const [remaining, setRemaining] = useState(() => restoredInitial?.remaining ?? 0);
+  const phaseRef = useRef(phase);
+  const runRef = useRef(run);
+  const remainingRef = useRef(remaining);
+  const setupRef = useRef(setup);
+  setupRef.current = setup;
+  const talkEndedAtRef = useRef(talkEndedAt);
+  talkEndedAtRef.current = talkEndedAt;
+  const talkEndReasonRef = useRef(talkEndReason);
+  talkEndReasonRef.current = talkEndReason;
+  const talkRemainingAtEndRef = useRef(popupInitial?.data.talkRemainingAtEnd ?? 0);
+  const pendingUsageRef = useRef(popupInitial?.data.pendingUsage ?? null);
+  const setPhase = (v: PresentationPhase): void => {
+    phaseRef.current = v;
+    setPhaseState(v);
+  };
+  const setRun = (v: PresentationRun | null): void => {
+    runRef.current = v;
+    setRunState(v);
+  };
+  const setRemaining = (v: number): void => {
+    remainingRef.current = v;
+    setRemainingState(v);
+  };
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const preWarningFiredRef = useRef(false);
+  const alarmStopRef = useRef<AlarmStopHandle | null>(null);
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const preWarningArmedRef = useRef(false);
+  const pwRef = useRef(presentationPw);
+  pwRef.current = presentationPw;
 
-  // ─── 명단 연동 (ToolRoulette 패턴) ────────────
-  const tcClasses = useTeachingClassStore((s) => s.classes);
-  const tcLoaded = useTeachingClassStore((s) => s.loaded);
-  const loadTc = useTeachingClassStore((s) => s.load);
-  const [showTcDropdown, setShowTcDropdown] = useState(false);
-  const tcDropdownRef = useRef<HTMLDivElement>(null);
-
-  // ─── 옵션 ─────────────────────────────────────
-  const [autoAdvance, setAutoAdvance] = useState(() => popupInitial?.data.autoAdvance ?? false);
-  const [showSoundPanel, setShowSoundPanel] = useState(false);
-  const [showPreWarningPanel, setShowPreWarningPanel] = useState(false);
-
-  // ─── 알람 설정 ────────────────────────────────
-  const settings = useSettingsStore((s) => s.settings);
-  const updateSettings = useSettingsStore((s) => s.update);
-  const { selectedSound, customAudioName, volume, boost, preWarning } = settings.alarmSound;
-  const [customDataUrl, setCustomDataUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
+  // ── 명단 기억(이 PC 에만, spec 4-2) ──────────────────────────────
+  const restoredRosterRef = useRef(popupInitial !== null);
   useEffect(() => {
-    loadCustomAudio().then((data) => {
-      if (data?.dataUrl) setCustomDataUrl(data.dataUrl);
-    });
+    void useTimerLocalStore.getState().load();
+  }, []);
+  useEffect(() => {
+    if (!localLoaded || restoredRosterRef.current) return;
+    restoredRosterRef.current = true;
+    if (savedRoster !== null && phaseRef.current === 'setup')
+      setSetup(deserializeSetup(savedRoster));
+  }, [localLoaded, savedRoster]);
+
+  const updateSetup = useCallback((patch: Partial<PresentationSetupValue>) => {
+    const next = { ...setupRef.current, ...patch };
+    setSetup(next);
+    restoredRosterRef.current = true;
+    const s = serializeSetup(next);
+    void useTimerLocalStore.getState().setPresentationRoster(next.presenters.length > 0 ? s : null);
   }, []);
 
-  useEffect(() => {
-    if (!tcLoaded) loadTc();
-  }, [tcLoaded, loadTc]);
-
-  // Close TC dropdown on outside click
-  useEffect(() => {
-    if (!showTcDropdown) return;
-    const handleClick = (e: MouseEvent) => {
-      if (tcDropdownRef.current && !tcDropdownRef.current.contains(e.target as Node)) {
-        setShowTcDropdown(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
-  }, [showTcDropdown]);
-
-  const clearTimer = useCallback(() => {
+  const clearTick = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
   }, []);
-
-  useEffect(() => clearTimer, [clearTimer]);
-
-  // ─── 명단 불러오기 ────────────────────────────
-  const loadStudents = useCallback(() => {
-    const allStudents = useStudentStore.getState().students;
-    // 여기 `number` 는 학번이다(수업반 경로도 `s.number` 를 쓴다). 배열 위치를 쓰면 결번 뒤
-    // 학생의 번호가 밀려 "번호순" 정렬과 화면 표시가 실제 학번과 어긋난다(2026-09-08 검토).
-    const valid = numberActiveRoster(allStudents).filter(
-      ({ student }) => student.name.trim() !== '',
-    );
-    if (valid.length > 0) {
-      setPresenters(
-        valid.map(({ student, number }) => ({ id: `s-${student.id}`, name: student.name, number })),
-      );
-      setInputMode('students');
-    }
-  }, []);
-
-  const handleTcButtonClick = useCallback(() => {
-    if (tcClasses.length === 0) return;
-    if (tcClasses.length === 1) {
-      const cls = tcClasses[0]!;
-      const valid = cls.students.filter(isStudentActive);
-      if (valid.length > 0) {
-        setPresenters(
-          valid.map((s, i) => ({
-            id: `tc-${i}`,
-            name: s.name?.trim() ? s.name : `${s.number}번`,
-            number: s.number,
-          })),
-        );
-        setInputMode('teachingClass');
-      }
-    } else {
-      setShowTcDropdown((v) => !v);
-    }
-  }, [tcClasses]);
-
-  const loadTeachingClass = useCallback(
-    (classId: string) => {
-      const cls = tcClasses.find((c) => c.id === classId);
-      if (!cls) return;
-      const valid = cls.students.filter(isStudentActive);
-      if (valid.length > 0) {
-        setPresenters(
-          valid.map((s, i) => ({
-            id: `tc-${i}`,
-            name: s.name?.trim() ? s.name : `${s.number}번`,
-            number: s.number,
-          })),
-        );
-        setInputMode('teachingClass');
-      }
-      setShowTcDropdown(false);
-    },
-    [tcClasses],
-  );
-
-  // 같은 밀리초에 둘을 더하면 id 가 겹쳐 순서표에서 한 명이 사라진다(React key 중복도 난다).
-  // 팝업 이관은 이 id 로 순서를 담으므로 반드시 서로 달라야 한다.
-  const presenterSeqRef = useRef(0);
-
-  const addPresenter = useCallback(() => {
-    const name = newName.trim();
-    if (!name) return;
-    presenterSeqRef.current += 1;
-    const id = `c-${Date.now()}-${presenterSeqRef.current}`;
-    setPresenters((prev) => {
-      const next = [...prev, { id, name }];
-      // 직접 입력 모드: 입력 순서 = 발표 순서
-      setOrderMap((prevMap) => {
-        const nextMap = new Map(prevMap);
-        nextMap.set(id, next.length);
-        return nextMap;
-      });
-      return next;
-    });
-    setNewName('');
-    setInputMode('custom');
-  }, [newName]);
-
-  const removePresenter = useCallback((id: string) => {
-    setPresenters((prev) => prev.filter((p) => p.id !== id));
-    setOrderMap((prev) => {
-      const next = new Map(prev);
-      next.delete(id);
-      return next;
-    });
-  }, []);
-
-  // ─── 발표 순서 관리 ──────────────────────────
-  // orderMap: presenter id → 발표 순서 (1-based). 비어있으면 미지정.
-  const [orderMap, setOrderMap] = useState<Map<string, number>>(
-    () => new Map(popupInitial?.data.order ?? []),
-  );
-  const [editingOrder, setEditingOrder] = useState<{ id: string; value: string } | null>(null);
-
-  const setPresenterOrder = useCallback((id: string, order: number) => {
-    setOrderMap((prev) => {
-      const next = new Map(prev);
-      if (order < 1) {
-        next.delete(id);
-      } else {
-        next.set(id, order);
-      }
-      return next;
-    });
-  }, []);
-
-  const assignOrderByNumber = useCallback(() => {
-    // 학번 오름차순
-    const sorted = [...presenters].sort((a, b) => (a.number ?? 0) - (b.number ?? 0));
-    const next = new Map<string, number>();
-    sorted.forEach((p, i) => next.set(p.id, i + 1));
-    setOrderMap(next);
-  }, [presenters]);
-
-  const assignOrderByNumberDesc = useCallback(() => {
-    // 학번 내림차순
-    const sorted = [...presenters].sort((a, b) => (b.number ?? 0) - (a.number ?? 0));
-    const next = new Map<string, number>();
-    sorted.forEach((p, i) => next.set(p.id, i + 1));
-    setOrderMap(next);
-  }, [presenters]);
-
-  const assignOrderRandom = useCallback(() => {
-    const shuffled = [...presenters];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
-    }
-    const next = new Map<string, number>();
-    shuffled.forEach((p, i) => next.set(p.id, i + 1));
-    setOrderMap(next);
-  }, [presenters]);
-
-  // 발표 순서가 정해진 학생들을 순서대로 정렬
-  const orderedPresenters = useMemo(() => {
-    const assigned = presenters.filter((p) => orderMap.has(p.id));
-    return assigned.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
-  }, [presenters, orderMap]);
-
-  const hasAllOrders = presenters.length > 0 && presenters.every((p) => orderMap.has(p.id));
-
-  // ─── 타이머 제어 ──────────────────────────────
-
-  // refs for alarm settings to avoid stale closures in setInterval
-  const selectedSoundRef = useRef(selectedSound);
-  selectedSoundRef.current = selectedSound;
-  const volumeRef = useRef(volume);
-  volumeRef.current = volume;
-  const boostRef = useRef(boost);
-  boostRef.current = boost;
-  const preWarningRef = useRef(preWarning);
-  preWarningRef.current = preWarning;
-
-  const beginCountdown = useCallback(
-    (secs: number) => {
-      clearTimer();
-      setRemaining(secs);
-      setState('running');
-      preWarningFiredRef.current = false;
-
-      let lastTick = Date.now();
-      intervalRef.current = setInterval(() => {
-        const now = Date.now();
-        const delta = Math.floor((now - lastTick) / 1000);
-        if (delta >= 1) {
-          lastTick = now - ((now - lastTick) % 1000);
-          setRemaining((prev) => {
-            const next = prev - delta;
-
-            const pw = preWarningRef.current;
-            if (!preWarningFiredRef.current && next <= 10 && next > 0 && pw.enabled) {
-              preWarningFiredRef.current = true;
-              playPreWarningSound(pw.sound, volumeRef.current, boostRef.current);
-            }
-
-            if (next <= 0) {
-              if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-              }
-              playAlarmSound(selectedSoundRef.current, volumeRef.current, boostRef.current, null);
-              setState('slide-done');
-              return 0;
-            }
-            return next;
-          });
-        }
-      }, 100);
-    },
-    [clearTimer],
-  );
-
-  const startTimer = useCallback(() => {
-    if (orderedPresenters.length === 0) return;
-    setCurrentIndex(0);
-    beginCountdown(duration);
-  }, [orderedPresenters.length, duration, beginCountdown]);
-
-  const pauseTimer = useCallback(() => {
-    setState('paused');
-    clearTimer();
-  }, [clearTimer]);
-
-  // resumeTimer needs current remaining — use a ref
-  const remainingRef = useRef(remaining);
-  remainingRef.current = remaining;
-
-  const resumeTimerStable = useCallback(() => {
-    beginCountdown(remainingRef.current);
-  }, [beginCountdown]);
-
-  const currentIndexRef = useRef(currentIndex);
-  currentIndexRef.current = currentIndex;
-  const presentersLenRef = useRef(orderedPresenters.length);
-  presentersLenRef.current = orderedPresenters.length;
-  const durationRef = useRef(duration);
-  durationRef.current = duration;
-
-  const nextPresenter = useCallback(() => {
-    const nextIdx = currentIndexRef.current + 1;
-    if (nextIdx >= presentersLenRef.current) {
-      clearTimer();
-      setState('all-done');
-      return;
-    }
-    setCurrentIndex(nextIdx);
-    beginCountdown(durationRef.current);
-  }, [clearTimer, beginCountdown]);
-
-  const resetAll = useCallback(() => {
-    clearTimer();
-    setState('setup');
-    setCurrentIndex(0);
-    setRemaining(0);
-  }, [clearTimer]);
-
-  // ─── 자동 진행: slide-done 후 2초 뒤 자동 nextPresenter ──
-  const autoAdvanceRef = useRef(autoAdvance);
-  autoAdvanceRef.current = autoAdvance;
-  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => {
-    if (state === 'slide-done' && autoAdvanceRef.current) {
-      autoAdvanceTimerRef.current = setTimeout(() => {
-        nextPresenter();
-      }, 2000);
-    }
-    return () => {
-      if (autoAdvanceTimerRef.current) {
-        clearTimeout(autoAdvanceTimerRef.current);
-        autoAdvanceTimerRef.current = null;
-      }
-    };
-  }, [state, nextPresenter]);
-
-  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
-  // capture 는 **먼저 멈춘다** — 옮기는 동안 이 창에서 발표 종료 알람이 울리면 안 된다.
-  const captureForPopup = useCallback((): PresentationSnapshot => {
-    clearTimer();
+  const clearAutoAdvance = useCallback(() => {
     if (autoAdvanceTimerRef.current) {
       clearTimeout(autoAdvanceTimerRef.current);
       autoAdvanceTimerRef.current = null;
     }
-    return {
-      presenters,
-      order: [...orderMap.entries()],
-      duration,
-      inputMode,
-      state,
-      currentIndex,
-      remaining,
-      autoAdvance,
-    };
-  }, [
-    clearTimer,
-    presenters,
-    orderMap,
-    duration,
-    inputMode,
-    state,
-    currentIndex,
-    remaining,
-    autoAdvance,
-  ]);
+  }, []);
+  const stopAlarm = useCallback(() => {
+    alarmStopRef.current?.();
+    alarmStopRef.current = null;
+  }, []);
+  const stopAll = useCallback(() => {
+    clearTick();
+    clearAutoAdvance();
+    stopAlarm();
+  }, [clearTick, clearAutoAdvance, stopAlarm]);
 
-  const resumeFromPopup = useCallback(
-    (snapshot: PresentationSnapshot, capturedAt: number) => {
-      const restored = advanceCountdown(
-        {
-          state: toCountdownState(snapshot.state),
-          remaining: snapshot.remaining,
-          capturedAt,
-        },
-        Date.now(),
-      );
-      clearTimer();
-      setPresenters([...snapshot.presenters]);
-      setOrderMap(new Map(snapshot.order));
-      setDuration(snapshot.duration);
-      setInputMode(snapshot.inputMode);
-      setCurrentIndex(snapshot.currentIndex);
-      setAutoAdvance(snapshot.autoAdvance);
-      if (snapshot.state === 'running' && restored.state === 'running') {
-        beginCountdown(restored.remaining);
-        return;
-      }
-      setRemaining(restored.remaining);
-      if (restored.alarmDueDuringTransfer) {
-        // 옮기는 사이에 발표 시간이 끝났다 — 여기서 한 번만 알린다.
-        playAlarmSound(selectedSoundRef.current, volumeRef.current, boostRef.current, null);
-        setState('slide-done');
-        return;
-      }
-      setState(snapshot.state);
+  const orderedIds = useMemo(
+    () =>
+      setup.presenters
+        .filter((p) => setup.order.has(p.id))
+        .sort((a, b) => (setup.order.get(a.id) ?? 0) - (setup.order.get(b.id) ?? 0))
+        .map((p) => p.id),
+    [setup],
+  );
+  const nameOf = useCallback(
+    (id: string | null): string => setup.presenters.find((p) => p.id === id)?.name ?? '',
+    [setup.presenters],
+  );
+
+  // 아래 콜백들은 서로를 부른다 — 최신 함수를 ref 로 잇는다.
+  const actionsRef = useRef<{
+    onTalkTimeUp: (at: number) => void;
+    onQnaTimeUp: () => void;
+    next: (auto?: boolean) => void;
+  }>({ onTalkTimeUp: () => undefined, onQnaTimeUp: () => undefined, next: () => undefined });
+
+  const startCountdown = useCallback(
+    (seconds: number, kind: 'talk' | 'qna', armFromSeconds?: number) => {
+      clearTick();
+      setRemaining(seconds);
+      setPhase(kind);
+      const pw = pwRef.current;
+      preWarningArmedRef.current =
+        kind === 'talk' &&
+        pw.enabled &&
+        isPreWarningArmed(
+          armFromSeconds ?? seconds,
+          setupRef.current.durationSeconds,
+          pw.secondsBefore,
+        );
+      let lastTick = Date.now();
+      intervalRef.current = setInterval(() => {
+        const now = Date.now();
+        const delta = Math.floor((now - lastTick) / 1000);
+        if (delta < 1) return;
+        lastTick = now - ((now - lastTick) % 1000);
+        const next = remainingRef.current - delta;
+        if (preWarningArmedRef.current && next > 0 && next <= pwRef.current.secondsBefore) {
+          preWarningArmedRef.current = false;
+          playPreWarning();
+        }
+        if (next <= 0) {
+          clearTick();
+          setRemaining(0);
+          if (phaseRef.current === 'talk') actionsRef.current.onTalkTimeUp(now + next * 1000);
+          else actionsRef.current.onQnaTimeUp();
+          return;
+        }
+        setRemaining(next);
+      }, 100);
     },
-    [beginCountdown, clearTimer],
+    [clearTick, playPreWarning],
+  );
+
+  const scheduleAutoAdvance = useCallback(() => {
+    clearAutoAdvance();
+    if (!setupRef.current.autoAdvance) return;
+    autoAdvanceTimerRef.current = setTimeout(() => actionsRef.current.next(true), AUTO_ADVANCE_MS);
+  }, [clearAutoAdvance]);
+
+  const beginTalk = useCallback(
+    (nextRun: PresentationRun) => {
+      stopAll();
+      setRun(nextRun);
+      if (isRunFinished(nextRun)) {
+        setPhase('all-done');
+        setShowRecords(false);
+        return;
+      }
+      setTalkEndedAt(null);
+      setTalkEndReason(null);
+      pendingUsageRef.current = null;
+      startCountdown(setupRef.current.durationSeconds, 'talk');
+    },
+    [stopAll, startCountdown],
+  );
+
+  const onTalkTimeUp = useCallback(
+    (at: number) => {
+      setPhase('talk-ended');
+      setTalkEndedAt(at);
+      setTalkEndReason('time-up');
+      talkRemainingAtEndRef.current = 0;
+      stopAlarm();
+      // 발표 중인 학생을 끊지 않도록 반복하지 않는다.
+      alarmStopRef.current = startAlarmSequence('once', playAlarmOnce);
+      if (setupRef.current.qnaSeconds === null) scheduleAutoAdvance();
+    },
+    [stopAlarm, playAlarmOnce, scheduleAutoAdvance],
+  );
+
+  const onQnaTimeUp = useCallback(() => {
+    setPhase('qna-ended');
+    stopAlarm();
+    alarmStopRef.current = startAlarmSequence('once', playAlarmOnce);
+    scheduleAutoAdvance();
+  }, [stopAlarm, playAlarmOnce, scheduleAutoAdvance]);
+
+  /** 지금 학생의 발표 기록(발표 끝 상태에서 넘어갈 때 확정). */
+  const usageNow = useCallback((auto: boolean) => {
+    return talkUsage({
+      durationSeconds: setupRef.current.durationSeconds,
+      reason: talkEndReasonRef.current ?? 'time-up',
+      remainingAtEnd: talkRemainingAtEndRef.current,
+      // 자동 진행으로 넘어가며 기다린 2초는 학생 탓이 아니다 — 초과로 세지 않는다.
+      overtimeSeconds:
+        auto || talkEndedAtRef.current === null
+          ? 0
+          : overtimeSeconds(talkEndedAtRef.current, Date.now()),
+    });
+  }, []);
+
+  const next = useCallback(
+    (auto = false) => {
+      const current = runRef.current;
+      if (current === null) return;
+      const p = phaseRef.current;
+      let usage: { usedSeconds: number; overSeconds: number } | null = null;
+      if (p === 'talk-ended') usage = usageNow(auto);
+      else if (p === 'qna-ended' || p === 'qna' || p === 'qna-paused')
+        usage = pendingUsageRef.current;
+      if (usage === null) return;
+      beginTalk(completeCurrent(current, usage));
+    },
+    [usageNow, beginTalk],
+  );
+
+  actionsRef.current = { onTalkTimeUp, onQnaTimeUp, next };
+
+  const start = useCallback(() => {
+    if (orderedIds.length === 0) return;
+    if (!useSoundStore.getState().settings.enabled) {
+      showToast('소리가 꺼져 있어요. 알람이 울리지 않아요.', 'info');
+    }
+    setShowRecords(false);
+    beginTalk(startPresentationRun(orderedIds));
+  }, [orderedIds, beginTalk, showToast]);
+
+  const pauseOrResume = useCallback(() => {
+    const p = phaseRef.current;
+    if (p === 'talk' || p === 'qna') {
+      clearTick();
+      setPhase(p === 'talk' ? 'talk-paused' : 'qna-paused');
+    } else if (p === 'talk-paused' || p === 'qna-paused') {
+      const kind = p === 'talk-paused' ? 'talk' : 'qna';
+      startCountdown(remainingRef.current, kind, remainingRef.current);
+    }
+  }, [clearTick, startCountdown]);
+
+  const finishTalkEarly = useCallback(() => {
+    const p = phaseRef.current;
+    if (p !== 'talk' && p !== 'talk-paused') return;
+    clearTick();
+    talkRemainingAtEndRef.current = remainingRef.current;
+    setTalkEndReason('finished-early');
+    setTalkEndedAt(null);
+    setPhase('talk-ended');
+    if (setupRef.current.qnaSeconds === null) scheduleAutoAdvance();
+  }, [clearTick, scheduleAutoAdvance]);
+
+  const startQna = useCallback(() => {
+    const qna = setupRef.current.qnaSeconds;
+    if (phaseRef.current !== 'talk-ended' || qna === null) return;
+    stopAlarm();
+    clearAutoAdvance();
+    pendingUsageRef.current = usageNow(false);
+    startCountdown(qna, 'qna');
+  }, [stopAlarm, clearAutoAdvance, usageNow, startCountdown]);
+
+  const finishQna = useCallback(() => {
+    const p = phaseRef.current;
+    if (p !== 'qna' && p !== 'qna-paused') return;
+    clearTick();
+    setPhase('qna-ended');
+    scheduleAutoAdvance();
+  }, [clearTick, scheduleAutoAdvance]);
+
+  const deferNow = useCallback(() => {
+    const current = runRef.current;
+    if (current === null || !canDeferCurrent(current)) return;
+    // 미루기 전에 흐른 시간은 버린다 — 나중 차례에 실제로 발표한 시간만 기록된다.
+    beginTalk(deferCurrent(current));
+  }, [beginTalk]);
+
+  const skipNow = useCallback(() => {
+    const current = runRef.current;
+    if (current === null) return;
+    beginTalk(skipCurrent(current));
+  }, [beginTalk]);
+
+  const resetAll = useCallback(() => {
+    stopAll();
+    setRun(null);
+    setRemaining(0);
+    setTalkEndedAt(null);
+    setTalkEndReason(null);
+    pendingUsageRef.current = null;
+    setShowRecords(false);
+    setPhase('setup');
+  }, [stopAll]);
+
+  const perform = useCallback(
+    (action: PresentationAction) => {
+      switch (action) {
+        case 'start':
+          start();
+          break;
+        case 'pause':
+        case 'resume':
+          pauseOrResume();
+          break;
+        case 'finishTalk':
+          finishTalkEarly();
+          break;
+        case 'startQna':
+          startQna();
+          break;
+        case 'finishQna':
+          finishQna();
+          break;
+        case 'next':
+          next(false);
+          break;
+        case 'none':
+          break;
+      }
+    },
+    [start, pauseOrResume, finishTalkEarly, startQna, finishQna, next],
+  );
+
+  // ── 쌤도구 팝업 이관 ────────────────────────────────────────────
+  const captureForPopup = useCallback((): PresentationSnapshot => {
+    stopAll();
+    return {
+      setup: serializeSetup(setupRef.current),
+      phase: phaseRef.current,
+      run: runRef.current,
+      remaining: remainingRef.current,
+      talkEndedAt: talkEndedAtRef.current,
+      talkEndReason: talkEndReasonRef.current,
+      talkRemainingAtEnd: talkRemainingAtEndRef.current,
+      pendingUsage: pendingUsageRef.current,
+      showRecords,
+    };
+  }, [stopAll, showRecords]);
+
+  const applySnapshot = useCallback(
+    (snapshot: PresentationSnapshot, capturedAt: number) => {
+      stopAll();
+      setSetup(deserializeSetup(snapshot.setup));
+      setupRef.current = deserializeSetup(snapshot.setup);
+      restoredRosterRef.current = true;
+      setRun(snapshot.run);
+      setTalkEndedAt(snapshot.talkEndedAt);
+      talkEndedAtRef.current = snapshot.talkEndedAt;
+      setTalkEndReason(snapshot.talkEndReason);
+      talkEndReasonRef.current = snapshot.talkEndReason;
+      talkRemainingAtEndRef.current = snapshot.talkRemainingAtEnd;
+      pendingUsageRef.current = snapshot.pendingUsage;
+      setShowRecords(snapshot.showRecords);
+      setRemaining(snapshot.remaining);
+      const p = snapshot.phase;
+      if (!isPresentationCounting(p)) {
+        setPhase(p);
+        // 자동 진행을 기다리던 중에 옮겼으면 새 창에서 다시 기다린다(2초는 처음부터).
+        const waitingForNext =
+          p === 'qna-ended' || (p === 'talk-ended' && snapshot.setup.qnaSeconds === null);
+        if (waitingForNext) scheduleAutoAdvance();
+        return;
+      }
+      // 옮기는 사이에도 시간이 흐른다. 0 을 지났으면 이 창에서 한 번만 알린다.
+      const left = snapshot.remaining - transferElapsedSeconds(capturedAt, Date.now());
+      if (left > 0) {
+        startCountdown(left, p === 'talk' ? 'talk' : 'qna', left);
+        return;
+      }
+      setRemaining(0);
+      if (p === 'talk') onTalkTimeUp(capturedAt + snapshot.remaining * 1000);
+      else onQnaTimeUp();
+    },
+    [stopAll, startCountdown, onTalkTimeUp, onQnaTimeUp, scheduleAutoAdvance],
   );
 
   useToolPopupSlot<PresentationSnapshot>('timer-presentation', {
     capture: captureForPopup,
-    resume: resumeFromPopup,
+    resume: applySnapshot,
   });
 
-  // 넘겨받은 발표가 진행 중이었으면 이 창에서 이어서 돌린다.
   useEffect(() => {
-    if (restoredInitial === null) return;
-    if (restoredInitial.state === 'running') {
-      beginCountdown(restoredInitial.remaining);
-    } else if (restoredInitial.alarmDueDuringTransfer) {
-      playAlarmSound(selectedSoundRef.current, volumeRef.current, boostRef.current, null);
-      setState('slide-done');
-    }
-    // 마운트 때 한 번만 — 이후 재실행되면 발표 시간이 처음부터 다시 돈다.
+    if (popupInitial === null) return;
+    applySnapshot(popupInitial.data, popupInitial.capturedAt);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── 알람음 핸들러 ────────────────────────────
-  const handleSelectSound = useCallback(
-    async (id: AlarmSoundId) => {
-      await updateSettings({
-        alarmSound: { ...settings.alarmSound, selectedSound: id },
-      });
-    },
-    [updateSettings, settings.alarmSound],
-  );
+  useEffect(() => stopAll, [stopAll]);
 
-  const handleVolumeChange = useCallback(
-    async (v: number) => {
-      await updateSettings({
-        alarmSound: { ...settings.alarmSound, volume: v },
-      });
-    },
-    [updateSettings, settings.alarmSound],
-  );
+  // ── 틀에 알리기 ────────────────────────────────────────────────
+  const ended = phase === 'talk-ended' || phase === 'qna-ended';
+  useReportTimerStatus('presentation', {
+    busy: isPresentationBusy(phase),
+    awaitingConfirm: false,
+    running: isPresentationCounting(phase),
+    badge: ended
+      ? { kind: 'finished' }
+      : isPresentationBusy(phase)
+        ? { kind: 'remaining', seconds: remaining }
+        : null,
+    classroomReady: isPresentationBusy(phase),
+  });
 
-  const handleBoostChange = useCallback(
-    async (b: number) => {
-      await updateSettings({
-        alarmSound: { ...settings.alarmSound, boost: b },
-      });
-    },
-    [updateSettings, settings.alarmSound],
-  );
-
-  const handlePreWarningChange = useCallback(
-    async (pw: PreWarningSettings) => {
-      await updateSettings({
-        alarmSound: { ...settings.alarmSound, preWarning: pw },
-      });
-    },
-    [updateSettings, settings.alarmSound],
-  );
-
-  const handleImportCustom = useCallback(async () => {
-    const api = window.electronAPI;
-    if (api) {
-      const result = await api.importAlarmAudio();
-      if (result) {
-        setCustomDataUrl(result.dataUrl);
-        await saveCustomAudio(result.name, result.dataUrl);
-        await updateSettings({
-          alarmSound: {
-            ...settings.alarmSound,
-            selectedSound: 'custom',
-            customAudioName: result.name,
-          },
-        });
-      }
-    } else {
-      fileInputRef.current?.click();
-    }
-  }, [updateSettings, settings.alarmSound]);
-
-  const handleFileInputChange = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = async () => {
-        const dataUrl = reader.result as string;
-        setCustomDataUrl(dataUrl);
-        await saveCustomAudio(file.name, dataUrl);
-        await updateSettings({
-          alarmSound: {
-            ...settings.alarmSound,
-            selectedSound: 'custom',
-            customAudioName: file.name,
-          },
-        });
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
-    },
-    [updateSettings, settings.alarmSound],
-  );
-
-  const handleDeleteCustom = useCallback(async () => {
-    setCustomDataUrl(null);
-    await deleteCustomAudio();
-    await updateSettings({
-      alarmSound: {
-        ...settings.alarmSound,
-        selectedSound: 'beep',
-        customAudioName: null,
-      },
-    });
-  }, [updateSettings, settings.alarmSound]);
-
-  // ─── 키보드 단축키 ────────────────────────────
-  useToolKeydown(
+  useTimerModeKeydown(
+    'presentation',
     (e) => {
       const tag = (document.activeElement as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-
       if (e.key === ' ') {
         e.preventDefault();
-        if (state === 'setup') startTimer();
-        else if (state === 'running') pauseTimer();
-        else if (state === 'paused') resumeTimerStable();
-        else if (state === 'slide-done') nextPresenter();
+        perform(spaceAction(phaseRef.current, setupRef.current.qnaSeconds !== null));
       } else if (e.key === 'ArrowRight' || e.key === 'n' || e.key === 'N') {
         e.preventDefault();
-        if (state === 'slide-done' || state === 'running' || state === 'paused') {
-          nextPresenter();
-        }
+        perform(arrowAction(phaseRef.current));
       } else if (e.key === 'r' || e.key === 'R') {
         e.preventDefault();
         resetAll();
       }
     },
-    [state, startTimer, pauseTimer, resumeTimerStable, nextPresenter, resetAll],
+    [perform, resetAll],
   );
 
-  // ─── 경고 레벨 ────────────────────────────────
-  const warningLevel =
-    state === 'running' || state === 'paused' ? getPresentationWarningLevel(remaining) : 'none';
+  const { stageRef, geometry } = useTimerStageSize(timerTool.displayStyle);
+  const classroomOpen = useIsClassroomOpen('presentation');
 
-  const currentPresenter = orderedPresenters[currentIndex];
-  const ratio = duration > 0 ? remaining / duration : 0;
-
-  // ─── 셋업 화면 ────────────────────────────────
-  if (state === 'setup') {
+  if (phase === 'setup') {
     return (
-      <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto">
-        {/* 명단 소스 선택 */}
-        <div className="flex gap-2 w-full">
-          <button
-            onClick={() => {
-              if (inputMode !== 'custom') {
-                setPresenters([]);
-                setOrderMap(new Map());
-              }
-              setInputMode('custom');
-            }}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-              inputMode === 'custom'
-                ? 'bg-sp-accent/15 border-sp-accent text-sp-accent'
-                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
-            }`}
+      <PresentationSetup
+        value={setup}
+        onChange={updateSetup}
+        onStart={start}
+        onClear={() => updateSetup({ presenters: [], order: new Map(), inputMode: 'custom' })}
+      />
+    );
+  }
+
+  // ── 진행 / 완료 ─────────────────────────────────────────────────
+  const currentId = run ? currentPresenterId(run) : null;
+  const nextId = run ? nextPresenterId(run) : null;
+  const total = run?.order.length ?? 0;
+  const position = run ? Math.min(run.index + 1, total) : 0;
+  const qnaEnabled = setup.qnaSeconds !== null;
+  const inQna = phase === 'qna' || phase === 'qna-paused' || phase === 'qna-ended';
+  const countdownTotal = inQna ? (setup.qnaSeconds ?? 0) : setup.durationSeconds;
+  const warningThreshold = inQna ? 0 : warningThresholdSeconds(presentationPw);
+  const level = getTimerColorLevel(remaining, countdownTotal, warningThreshold);
+  const paused = phase === 'talk-paused' || phase === 'qna-paused';
+
+  const primary =
+    'h-16 px-6 rounded-full bg-sp-accent text-sp-accent-fg font-bold flex items-center gap-2 hover:brightness-110 transition';
+  const secondary =
+    'px-4 py-2 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent text-sm flex items-center gap-1.5 transition-colors';
+
+  const endActions = (
+    <>
+      {phase === 'talk-ended' && qnaEnabled && (
+        <button type="button" className={primary} onClick={startQna}>
+          <span className="material-symbols-outlined">forum</span>질문 시간
+        </button>
+      )}
+      <button
+        type="button"
+        className={phase === 'talk-ended' && qnaEnabled ? secondary : primary}
+        onClick={() => next(false)}
+        title={nextId === null ? '마지막 발표자예요 — 누르면 발표 완료 (→)' : '다음 발표자 (→)'}
+      >
+        <span className="material-symbols-outlined">skip_next</span>
+        다음 발표자
+      </button>
+    </>
+  );
+  const endTitle =
+    phase === 'qna-ended'
+      ? '질문 시간 끝'
+      : talkEndReason === 'finished-early'
+        ? '발표 마침'
+        : '시간 종료';
+  const endTone = endTitle === '시간 종료' ? 'alert' : 'calm';
+
+  const nextActionFor = (action: PresentationAction): ClassroomNextAction | null => {
+    switch (action) {
+      case 'finishTalk':
+        return { label: '발표 마침', icon: 'flag', onClick: finishTalkEarly };
+      case 'startQna':
+        return { label: '질문 시간', icon: 'forum', onClick: startQna };
+      case 'finishQna':
+        return { label: '질문 마침', icon: 'check_circle', onClick: finishQna };
+      case 'next':
+        return { label: '다음 발표자', icon: 'skip_next', onClick: () => next(false) };
+      default:
+        return null;
+    }
+  };
+
+  if (phase === 'all-done') {
+    const records = run?.records ?? [];
+    return (
+      <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto py-8">
+        <span className="material-symbols-outlined text-sp-success text-[72px]">check_circle</span>
+        <p className="text-3xl font-bold text-sp-text">발표 완료!</p>
+        <p className="text-sp-muted">
+          {records.filter((r) => r.status === 'presented').length}명이 발표를 마쳤어요
+        </p>
+        {showRecords ? (
+          <ul
+            className="w-full divide-y divide-sp-border rounded-xl bg-sp-card border border-sp-border px-4"
+            aria-label="발표 시간 기록"
           >
-            <span className="material-symbols-outlined text-icon-md">edit</span>
-            직접 입력
-          </button>
-          <button
-            onClick={loadStudents}
-            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-              inputMode === 'students'
-                ? 'bg-sp-accent/15 border-sp-accent text-sp-accent'
-                : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
-            }`}
-          >
-            <span className="material-symbols-outlined text-icon-md">group</span>
-            우리반
-          </button>
-          <div className="relative flex-1" ref={tcDropdownRef}>
-            <button
-              onClick={handleTcButtonClick}
-              className={`w-full flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-sm font-medium transition-all border ${
-                inputMode === 'teachingClass'
-                  ? 'bg-sp-accent/15 border-sp-accent text-sp-accent'
-                  : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
-              }`}
-            >
-              <span className="material-symbols-outlined text-icon-md">school</span>
-              수업반
-            </button>
-            {showTcDropdown && tcClasses.length > 1 && (
-              <div
-                data-sp-floating
-                className="absolute top-full left-0 right-0 mt-1 z-20 bg-sp-card border border-sp-border rounded-xl shadow-lg overflow-hidden"
-              >
-                {tcClasses.map((cls) => (
-                  <button
-                    key={cls.id}
-                    onClick={() => loadTeachingClass(cls.id)}
-                    className="w-full px-4 py-2.5 text-left text-sm text-sp-text hover:bg-sp-accent/10 transition-colors"
-                  >
-                    {cls.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 발표자 직접 입력 */}
-        <div className="flex gap-2 w-full">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') addPresenter();
-            }}
-            placeholder="발표자 이름 입력"
-            className="flex-1 px-4 py-2.5 bg-sp-bg border border-sp-border rounded-xl text-sm text-sp-text placeholder:text-sp-muted/50 focus:border-sp-accent focus:outline-none"
-          />
-          <button
-            onClick={addPresenter}
-            disabled={!newName.trim()}
-            className="px-4 py-2.5 bg-sp-accent text-white rounded-xl text-sm font-medium hover:bg-sp-accent/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-          >
-            추가
-          </button>
-        </div>
-
-        {/* 발표자 리스트 */}
-        {presenters.length > 0 && (
-          <div className="w-full">
-            {/* 순서 지정 버튼들 */}
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-sp-muted">발표 순서</span>
-              <div className="flex items-center gap-1.5">
-                {presenters.some((p) => p.number != null) && (
-                  <>
-                    <button
-                      onClick={assignOrderByNumber}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40 text-xs font-medium transition-all"
-                    >
-                      <span className="material-symbols-outlined text-sm">arrow_upward</span>
-                      번호순
-                    </button>
-                    <button
-                      onClick={assignOrderByNumberDesc}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40 text-xs font-medium transition-all"
-                    >
-                      <span className="material-symbols-outlined text-sm">arrow_downward</span>
-                      번호역순
-                    </button>
-                  </>
-                )}
-                <button
-                  onClick={assignOrderRandom}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
-                    orderMap.size > 0 &&
-                    !presenters.some((p) => p.number != null && orderMap.get(p.id) !== undefined)
-                      ? 'bg-sp-accent/10 border-sp-accent/30 text-sp-accent'
-                      : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">shuffle</span>
-                  무작위
-                </button>
-                <button
-                  onClick={() => setOrderMap(new Map())}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all border ${
-                    orderMap.size === 0
-                      ? 'bg-sp-accent/10 border-sp-accent/30 text-sp-accent'
-                      : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-sm">edit</span>
-                  직접 입력
-                </button>
-              </div>
-            </div>
-            {/* 헤더 */}
-            <div className="flex items-center px-3 py-1.5 text-caption text-sp-muted">
-              {presenters.some((p) => p.number != null) && (
-                <span className="w-8 text-center">번호</span>
-              )}
-              <span className="flex-1 pl-2">이름</span>
-              <span className="w-12 text-center">순서</span>
-              <span className="w-6" />
-            </div>
-            <div className="max-h-48 overflow-y-auto rounded-xl bg-sp-card border border-sp-border divide-y divide-sp-border/50">
-              {presenters.map((p) => {
-                const order = orderMap.get(p.id);
-                return (
-                  <div key={p.id} className="flex items-center px-3 py-2">
-                    {/* 학번 */}
-                    {presenters.some((pr) => pr.number != null) && (
-                      <span className="w-8 text-center text-xs text-sp-muted font-mono">
-                        {p.number ?? '–'}
-                      </span>
-                    )}
-                    {/* 이름 */}
-                    <span className="flex-1 pl-2 text-sm text-sp-text">{p.name}</span>
-                    {/* 발표 순서 */}
-                    {editingOrder?.id === p.id ? (
-                      <input
-                        type="number"
-                        min={1}
-                        max={presenters.length}
-                        value={editingOrder.value}
-                        onChange={(e) => setEditingOrder({ id: p.id, value: e.target.value })}
-                        onBlur={() => {
-                          const num = parseInt(editingOrder.value, 10);
-                          if (num >= 1 && num <= presenters.length) {
-                            setPresenterOrder(p.id, num);
-                          } else if (!editingOrder.value.trim()) {
-                            setPresenterOrder(p.id, 0); // 순서 해제
-                          }
-                          setEditingOrder(null);
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            const num = parseInt(editingOrder.value, 10);
-                            if (num >= 1 && num <= presenters.length) {
-                              setPresenterOrder(p.id, num);
-                            } else if (!editingOrder.value.trim()) {
-                              setPresenterOrder(p.id, 0);
-                            }
-                            setEditingOrder(null);
-                          } else if (e.key === 'Escape') {
-                            setEditingOrder(null);
-                          }
-                        }}
-                        className="w-10 h-7 bg-sp-bg border border-sp-accent rounded-lg text-center text-xs font-mono text-sp-text focus:outline-none"
-                        autoFocus
-                      />
-                    ) : (
-                      <button
-                        onClick={() =>
-                          setEditingOrder({ id: p.id, value: order != null ? String(order) : '' })
-                        }
-                        className={`w-10 h-7 rounded-lg text-xs font-mono transition-all flex items-center justify-center ${
-                          order != null
-                            ? 'bg-sp-accent/10 border border-sp-accent/30 text-sp-accent hover:bg-sp-accent/20'
-                            : 'bg-sp-bg border border-sp-border text-sp-muted hover:border-sp-accent/40'
-                        }`}
-                        title="클릭하여 순서 지정"
-                      >
-                        {order ?? ''}
-                      </button>
-                    )}
-                    {/* 삭제 */}
-                    <button
-                      onClick={() => removePresenter(p.id)}
-                      className="w-6 h-6 ml-1 rounded-full flex items-center justify-center text-sp-muted hover:text-red-400 hover:bg-red-500/10 transition-all"
-                      title="삭제"
-                    >
-                      <span className="material-symbols-outlined text-icon-sm">close</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* 발표 시간 설정 */}
-        <div className="w-full">
-          <p className="text-xs text-sp-muted mb-2">발표 시간 (1인당)</p>
-          <div className="flex flex-wrap gap-2">
-            {DURATION_PRESETS.map((p) => (
-              <button
-                key={p.seconds}
-                onClick={() => setDuration(p.seconds)}
-                className={`px-3.5 py-1.5 rounded-full text-sm font-medium transition-all ${
-                  duration === p.seconds
-                    ? 'bg-sp-accent text-white'
-                    : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/50'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* 자동 진행 토글 */}
-        <div className="flex items-center justify-between w-full px-1">
-          <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-sp-muted text-icon-md">skip_next</span>
-            <span className="text-sm text-sp-text">다음 발표자 자동 진행</span>
-          </div>
-          <button
-            onClick={() => setAutoAdvance((v) => !v)}
-            className={`relative w-10 h-5 rounded-full transition-colors ${
-              autoAdvance ? 'bg-sp-accent' : 'bg-sp-border'
-            }`}
-          >
-            <span
-              className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                autoAdvance ? 'translate-x-5' : 'translate-x-0.5'
-              }`}
-            />
-          </button>
-        </div>
-
-        {/* 알람음 / 예고 알림 토글 */}
-        <div className="flex items-center gap-2 w-full">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".mp3,.wav,.ogg,.m4a,.webm"
-            className="hidden"
-            onChange={handleFileInputChange}
-          />
-          <button
-            onClick={() => {
-              setShowSoundPanel((v) => !v);
-              setShowPreWarningPanel(false);
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
-              showSoundPanel
-                ? 'bg-sp-accent/15 text-sp-accent border border-sp-accent/30'
-                : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent/40'
-            }`}
-          >
-            <span className="material-symbols-outlined text-icon-md">
-              {volume === 0 ? 'volume_off' : 'volume_up'}
-            </span>
-            <span>
-              알람음:{' '}
-              {selectedSound === 'custom' && customAudioName
-                ? customAudioName
-                : (ALARM_PRESETS.find((ap) => ap.id === selectedSound)?.label ?? '기본 알림')}
-            </span>
-          </button>
-          <button
-            onClick={() => {
-              setShowPreWarningPanel((v) => !v);
-              setShowSoundPanel(false);
-            }}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm transition-all ${
-              showPreWarningPanel
-                ? 'bg-amber-500 text-white border border-amber-500'
-                : preWarning.enabled
-                  ? 'bg-sp-card border border-amber-500/50 text-sp-text hover:border-amber-500'
-                  : 'bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-amber-500/40'
-            }`}
-          >
-            <span className="material-symbols-outlined text-icon-md">notifications_active</span>
-            <span>
-              예고 알림
-              {preWarning.enabled
-                ? `: ${preWarning.secondsBefore < 60 ? `${preWarning.secondsBefore}초` : `${preWarning.secondsBefore / 60}분`} 전`
-                : ' (꺼짐)'}
-            </span>
-          </button>
-        </div>
-
-        {/* 알람음 설정 패널 */}
-        {showSoundPanel && (
-          <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200">
-            <AlarmSoundSelector
-              selectedSound={selectedSound}
-              customAudioName={customAudioName}
-              customDataUrl={customDataUrl}
-              volume={volume}
-              boost={boost}
-              onSelectSound={handleSelectSound}
-              onImportCustom={handleImportCustom}
-              onDeleteCustom={handleDeleteCustom}
-              onVolumeChange={handleVolumeChange}
-              onBoostChange={handleBoostChange}
-            />
-          </div>
-        )}
-
-        {/* 예고 알림 설정 패널 */}
-        {showPreWarningPanel && (
-          <div className="w-full animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-amber-400 text-icon-md">
-                  notifications_active
+            {records.map((r) => (
+              <li key={r.presenterId} className="flex items-center justify-between py-2.5">
+                <span className="text-sm text-sp-text">{nameOf(r.presenterId)}</span>
+                <span className="text-sm tabular-nums text-sp-muted">
+                  {r.status === 'skipped'
+                    ? '건너뜀'
+                    : `${formatShortDuration(r.usedSeconds)}${r.overSeconds > 0 ? ` +${formatShortDuration(r.overSeconds)}` : ''}`}
                 </span>
-                <span className="text-sm font-medium text-sp-text">종료 전 예고 알림</span>
-              </div>
-              <button
-                onClick={() =>
-                  handlePreWarningChange({ ...preWarning, enabled: !preWarning.enabled })
-                }
-                className={`relative w-10 h-5 rounded-full transition-colors ${
-                  preWarning.enabled ? 'bg-amber-500' : 'bg-sp-border'
-                }`}
-              >
-                <span
-                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-                    preWarning.enabled ? 'translate-x-5' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-            {preWarning.enabled && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div>
-                  <p className="text-xs text-sp-muted mb-2">알림 시점</p>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-sp-muted">종료</span>
-                    {PRE_WARNING_TIMES.map((sec) => (
-                      <button
-                        key={sec}
-                        onClick={() =>
-                          handlePreWarningChange({ ...preWarning, secondsBefore: sec })
-                        }
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                          preWarning.secondsBefore === sec
-                            ? 'bg-amber-500 border-amber-500 text-white'
-                            : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text'
-                        }`}
-                      >
-                        {sec < 60 ? `${sec}초` : `${sec / 60}분`}
-                      </button>
-                    ))}
-                    <span className="text-xs text-sp-muted">전</span>
-                  </div>
-                </div>
-                <div>
-                  <p className="text-xs text-sp-muted mb-2">알림음</p>
-                  <div className="flex gap-2">
-                    {PRE_WARNING_PRESETS.map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() => {
-                          handlePreWarningChange({ ...preWarning, sound: preset.id });
-                          playPreWarningSound(preset.id, volume, boost);
-                        }}
-                        className={`flex-1 flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
-                          preWarning.sound === preset.id
-                            ? 'bg-amber-500 border-amber-500 text-white'
-                            : 'bg-sp-card border-sp-border text-sp-muted hover:text-sp-text hover:border-amber-500/40'
-                        }`}
-                      >
-                        <span className="material-symbols-outlined text-icon-lg">
-                          {preset.icon}
-                        </span>
-                        <span className="text-xs font-medium">{preset.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            {!preWarning.enabled && (
-              <p className="text-xs text-sp-muted text-center py-2">
-                활성화하면 발표 종료 전 미리 알림을 받을 수 있어요
-              </p>
-            )}
-          </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <button type="button" className={secondary} onClick={() => setShowRecords(true)}>
+            <span className="material-symbols-outlined text-icon-md">list_alt</span>
+            시간 기록 보기
+          </button>
         )}
-
-        {/* 시작 버튼 */}
         <button
-          onClick={startTimer}
-          disabled={!hasAllOrders}
-          className="w-full py-4 rounded-xl bg-sp-accent text-white text-lg font-bold hover:bg-sp-accent/80 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          type="button"
+          onClick={resetAll}
+          className="px-8 py-3 rounded-xl bg-sp-accent text-sp-accent-fg font-medium hover:brightness-110 transition"
         >
-          <span className="material-symbols-outlined text-icon-xl">play_arrow</span>
-          {hasAllOrders
-            ? `발표 시작 (${orderedPresenters.length}명)`
-            : `순서를 지정하세요 (${orderMap.size}/${presenters.length})`}
+          처음으로
         </button>
       </div>
     );
   }
 
-  // ─── 발표 진행 / 완료 화면 ────────────────────
+  const presenterLine = (
+    <div className="flex flex-col items-center gap-1 text-center">
+      <p className="text-sm text-sp-muted">{inQna ? '질문 시간' : '현재 발표자'}</p>
+      <p className="text-3xl md:text-4xl font-bold text-sp-text">{nameOf(currentId)}</p>
+    </div>
+  );
+
   return (
-    <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto">
-      {/* 발표 진행 바 */}
-      <div className="flex gap-1 w-full">
-        {orderedPresenters.map((p, i) => (
+    <div className="relative flex flex-col items-center w-full h-full min-h-0 gap-3 rounded-2xl">
+      {ended && !classroomOpen && (
+        <TimerEndOverlay
+          finishedAt={phase === 'talk-ended' ? talkEndedAt : null}
+          title={endTitle}
+          tone={endTone}
+          overtimeStyle="small"
+          flash={phase === 'talk-ended' && talkEndReason === 'time-up'}
+          actions={endActions}
+        />
+      )}
+      {/* 진행 막대 — 끝난 차례는 채우고 지금 차례는 강조(색으로 학생을 가리지 않는다) */}
+      <div className="shrink-0 flex gap-1 w-full max-w-2xl" aria-hidden="true">
+        {(run?.order ?? []).map((id, i) => (
           <div
-            key={p.id}
-            className={`h-1.5 rounded-full flex-1 transition-all ${
-              i < currentIndex
-                ? 'bg-emerald-500'
-                : i === currentIndex
-                  ? warningLevel === 'red'
-                    ? 'bg-red-500 animate-pulse'
-                    : warningLevel === 'yellow'
-                      ? 'bg-amber-500'
-                      : 'bg-sp-accent'
+            key={id}
+            className={`h-1.5 rounded-full flex-1 ${
+              i < (run?.index ?? 0)
+                ? 'bg-sp-muted'
+                : i === run?.index
+                  ? 'bg-sp-accent'
                   : 'bg-sp-border'
             }`}
-            title={p.name}
           />
         ))}
       </div>
-
-      {/* 순서 표시 */}
-      <p className="text-sm text-sp-muted">
-        {currentIndex + 1} / {orderedPresenters.length}
+      <p className="shrink-0 text-sm text-sp-muted">
+        {position} / {total}
       </p>
-
-      {/* 전체 완료 */}
-      {state === 'all-done' ? (
-        <div className="flex flex-col items-center gap-6 py-8">
-          <span className="material-symbols-outlined text-emerald-400 text-[72px]">
-            check_circle
-          </span>
-          <p className="text-3xl font-bold text-sp-text">발표 완료!</p>
-          <p className="text-sp-muted">{orderedPresenters.length}명 모두 발표를 마쳤습니다</p>
+      <div className="shrink-0">{presenterLine}</div>
+      <div ref={stageRef} className="flex-1 min-h-[200px] w-full flex items-center justify-center">
+        <TimerDial
+          remaining={remaining}
+          total={countdownTotal}
+          level={level}
+          displayStyle={timerTool.displayStyle}
+          geometry={geometry}
+          paused={paused}
+        />
+      </div>
+      {nextId !== null && (
+        <p className="shrink-0 text-sm text-sp-muted flex items-center gap-1.5">
+          <span className="material-symbols-outlined text-icon-sm">arrow_forward</span>
+          다음: {nameOf(nextId)}
+        </p>
+      )}
+      <div className="shrink-0 flex items-center gap-3 flex-wrap justify-center">
+        <button
+          type="button"
+          onClick={resetAll}
+          className="w-16 h-16 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:border-sp-accent transition-colors flex items-center justify-center"
+          title="처음으로 (R)"
+          aria-label="처음으로"
+        >
+          <span className="material-symbols-outlined text-icon-xl">restart_alt</span>
+        </button>
+        {(phase === 'talk' ||
+          phase === 'talk-paused' ||
+          phase === 'qna' ||
+          phase === 'qna-paused') && (
           <button
-            onClick={resetAll}
-            className="px-8 py-3 rounded-xl bg-sp-accent text-white font-medium hover:bg-sp-accent/80 transition-colors"
+            type="button"
+            onClick={pauseOrResume}
+            className="w-16 h-16 rounded-full bg-sp-card border border-sp-border text-sp-text hover:border-sp-accent flex items-center justify-center transition-colors"
+            title={paused ? '다시 시작 (Space)' : '잠시 멈춤 (Space)'}
+            aria-label={paused ? '다시 시작' : '잠시 멈춤'}
           >
-            처음으로
+            <span className="material-symbols-outlined text-3xl">
+              {paused ? 'play_arrow' : 'pause'}
+            </span>
+          </button>
+        )}
+        {(phase === 'talk' || phase === 'talk-paused') && (
+          <button type="button" className={primary} onClick={finishTalkEarly} title="발표 마침 (→)">
+            <span className="material-symbols-outlined">flag</span>발표 마침
+          </button>
+        )}
+        {(phase === 'qna' || phase === 'qna-paused') && (
+          <button type="button" className={primary} onClick={finishQna} title="질문 마침 (→)">
+            <span className="material-symbols-outlined">check_circle</span>질문 마침
+          </button>
+        )}
+      </div>
+      <div className="shrink-0">
+        <MuteNotice />
+      </div>
+      {(phase === 'talk' || phase === 'talk-paused') && (
+        <div className="shrink-0 flex items-center gap-2">
+          {run !== null && canDeferCurrent(run) && (
+            <button
+              type="button"
+              className={secondary}
+              onClick={deferNow}
+              title="이 학생을 맨 뒤로 보내고 다음 학생 시작"
+            >
+              <span className="material-symbols-outlined text-icon-md">move_down</span>나중에
+            </button>
+          )}
+          <button type="button" className={secondary} onClick={skipNow} title="이번 발표에서 빼기">
+            <span className="material-symbols-outlined text-icon-md">fast_forward</span>건너뛰기
           </button>
         </div>
-      ) : (
-        <>
-          {/* 현재 발표자 이름 */}
-          <div
-            className={`text-center transition-colors duration-300 ${
-              warningLevel === 'red'
-                ? 'text-red-400'
-                : warningLevel === 'yellow'
-                  ? 'text-amber-400'
-                  : 'text-sp-text'
-            }`}
-          >
-            <p className="text-lg text-sp-muted mb-1">현재 발표자</p>
-            <p className="text-4xl font-bold">{currentPresenter?.name}</p>
-          </div>
-
-          {/* 카운트다운 링 */}
-          <div
-            className={`relative w-[280px] h-[280px] flex items-center justify-center rounded-full transition-all duration-500 ${
-              warningLevel === 'red'
-                ? 'ring-4 ring-red-500/30'
-                : warningLevel === 'yellow'
-                  ? 'ring-4 ring-amber-500/20'
-                  : ''
-            }`}
-          >
-            <CircleProgress
-              ratio={ratio}
-              preWarningActive={warningLevel === 'yellow' || warningLevel === 'red'}
+      )}
+      {classroomOpen && shell !== null && (
+        <ClassroomOverlay
+          onExit={shell.closeClassroom}
+          displayStyle={timerTool.displayStyle}
+          top={
+            <>
+              <p className="text-3xl md:text-5xl font-bold text-sp-text">{nameOf(currentId)}</p>
+              <p className="text-lg md:text-2xl text-sp-muted">
+                {inQna ? '질문 시간 · ' : ''}
+                {position}/{total}
+              </p>
+            </>
+          }
+          renderStage={(g) => (
+            <TimerDial
+              remaining={remaining}
+              total={countdownTotal}
+              level={level}
+              displayStyle={timerTool.displayStyle}
+              geometry={g}
+              paused={paused}
             />
-            <div className="z-10 flex flex-col items-center">
-              <span
-                className={`text-7xl font-mono font-bold select-none transition-colors duration-300 ${
-                  warningLevel === 'red'
-                    ? 'text-red-400 animate-pulse'
-                    : warningLevel === 'yellow'
-                      ? 'text-amber-400'
-                      : 'text-sp-text'
-                }`}
-              >
-                {formatTime(remaining)}
-              </span>
-              {state === 'slide-done' && (
-                <p className="text-lg font-bold text-amber-400 mt-2 animate-bounce">시간 종료!</p>
-              )}
-            </div>
-          </div>
-
-          {/* 다음 발표자 미리보기 */}
-          {currentIndex + 1 < orderedPresenters.length && (
-            <p className="text-sm text-sp-muted flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-icon-sm">arrow_forward</span>
-              다음: {orderedPresenters[currentIndex + 1]!.name}
-            </p>
           )}
-
-          {/* 컨트롤 */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={resetAll}
-              className="w-14 h-14 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all flex items-center justify-center"
-              title="처음으로"
-            >
-              <span className="material-symbols-outlined text-icon-xl">restart_alt</span>
-            </button>
-
-            {state === 'running' ? (
-              <button
-                onClick={pauseTimer}
-                className="w-20 h-20 rounded-full bg-sp-highlight text-white flex items-center justify-center hover:bg-sp-highlight/80 transition-colors shadow-lg shadow-sp-highlight/20"
-                title="일시정지"
-              >
-                <span className="material-symbols-outlined text-4xl">pause</span>
-              </button>
-            ) : state === 'paused' ? (
-              <button
-                onClick={resumeTimerStable}
-                className="w-20 h-20 rounded-full bg-sp-accent text-white flex items-center justify-center hover:bg-sp-accent/80 transition-colors shadow-lg shadow-sp-accent/20"
-                title="재개"
-              >
-                <span className="material-symbols-outlined text-4xl">play_arrow</span>
-              </button>
-            ) : (
-              <button
-                onClick={nextPresenter}
-                className="w-20 h-20 rounded-full bg-emerald-500 text-white flex items-center justify-center hover:bg-emerald-400 transition-colors shadow-lg shadow-emerald-500/20"
-                title="다음 발표자"
-              >
-                <span className="material-symbols-outlined text-4xl">skip_next</span>
-              </button>
-            )}
-
-            {(state === 'running' || state === 'paused') && (
-              <button
-                onClick={nextPresenter}
-                className="w-14 h-14 rounded-full bg-sp-card border border-sp-border text-sp-muted hover:text-sp-text hover:bg-sp-text/10 transition-all flex items-center justify-center"
-                title="건너뛰기"
-              >
-                <span className="material-symbols-outlined text-icon-xl">skip_next</span>
-              </button>
-            )}
-            {state === 'slide-done' && <div className="w-14 h-14" />}
-          </div>
-        </>
+          pause={
+            phase === 'talk' || phase === 'talk-paused' || phase === 'qna' || phase === 'qna-paused'
+              ? { paused, onToggle: pauseOrResume }
+              : null
+          }
+          nextAction={nextActionFor(classroomNextAction(phase, qnaEnabled))}
+          overlay={
+            ended ? (
+              // 교실 화면에서는 넘긴 시간을 아예 숨긴다(spec 4-5).
+              <TimerEndOverlay
+                finishedAt={phase === 'talk-ended' ? talkEndedAt : null}
+                title={endTitle}
+                tone={endTone}
+                overtimeStyle="hidden"
+                flash={false}
+                actions={endActions}
+              />
+            ) : undefined
+          }
+        />
       )}
     </div>
   );

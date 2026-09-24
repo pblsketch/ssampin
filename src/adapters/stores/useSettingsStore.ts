@@ -1,3 +1,4 @@
+import { DEFAULT_TIMER_TOOL_SETTINGS } from '@domain/rules/timerSettings';
 import { create } from 'zustand';
 import type {
   Settings,
@@ -171,6 +172,7 @@ const DEFAULT_SETTINGS: Settings = {
       sound: 'gentle-chime',
     },
   },
+  timerTool: DEFAULT_TIMER_TOOL_SETTINGS,
   workSymbols: {
     symbols: DEFAULT_WORK_SYMBOLS,
   },

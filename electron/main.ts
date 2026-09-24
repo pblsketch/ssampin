@@ -1240,6 +1240,68 @@ function applyGlobalShortcuts(config: ShortcutSyncConfig): {
   return { registered, failed };
 }
 
+// ─── 본문 창을 숨기기 전 준비 (ADR-139, spec 5-4) ───────────────────────────
+// 본문 창이 숨거나 없어지기 직전에, 진행 중인 쌤도구(타이머)를 팝업 창으로 자동으로 옮긴다.
+// 렌더러는 옮길 것이 없으면 즉시 'none', 옮기기 시작하면 'moving' 을 먼저 보내고
+// 끝나면 'moved' / 'failed' 를 보낸다. 'failed' 면 창을 숨기지 않는다 — 타이머를 잃지 않는 것이 먼저다.
+// 응답이 전혀 없으면(앱 시작 직후처럼 화면이 아직 없음) 옮길 것이 없는 것으로 보고 숨긴다.
+const BEFORE_HIDE_FIRST_REPLY_MS = 1_500;
+/** 팝업 창 준비 한도(toolPopupWindows 의 TOOL_POPUP_READY_TIMEOUT_MS, 10초)보다 길게 기다린다. */
+const BEFORE_HIDE_MOVE_TIMEOUT_MS = 15_000;
+const beforeHideWaiters = new Map<string, (status: string) => void>();
+let beforeHideReplyRegistered = false;
+
+function ensureBeforeHideReplyHandler(): void {
+  if (beforeHideReplyRegistered) return;
+  beforeHideReplyRegistered = true;
+  ipcMain.handle('window:beforeHideReply', (_event, requestId: unknown, status: unknown) => {
+    if (typeof requestId !== 'string' || typeof status !== 'string') return false;
+    beforeHideWaiters.get(requestId)?.(status);
+    return true;
+  });
+}
+
+async function prepareMainWindowForHide(): Promise<boolean> {
+  const win = mainWindow;
+  if (!win || win.isDestroyed() || win.webContents.isLoading()) return true;
+  ensureBeforeHideReplyHandler();
+  const requestId = crypto.randomUUID();
+  const statuses: string[] = [];
+  let notify: () => void = () => undefined;
+  beforeHideWaiters.set(requestId, (status) => {
+    statuses.push(status);
+    notify();
+  });
+  const nextStatus = (timeoutMs: number): Promise<string | null> =>
+    new Promise((resolve) => {
+      if (statuses.length > 0) {
+        resolve(statuses.shift() ?? null);
+        return;
+      }
+      const timer = setTimeout(() => {
+        notify = () => undefined;
+        resolve(null);
+      }, timeoutMs);
+      notify = () => {
+        clearTimeout(timer);
+        notify = () => undefined;
+        resolve(statuses.shift() ?? null);
+      };
+    });
+  try {
+    win.webContents.send('window:beforeHide', requestId);
+    const first = await nextStatus(BEFORE_HIDE_FIRST_REPLY_MS);
+    if (first === null || first === 'none' || first === 'moved') return true;
+    if (first === 'failed') return false;
+    const final = await nextStatus(BEFORE_HIDE_MOVE_TIMEOUT_MS);
+    return final === 'moved';
+  } catch {
+    return true;
+  } finally {
+    beforeHideWaiters.delete(requestId);
+  }
+}
+
 /**
  * 메인 창을 "위젯 모드로 전환" 상황에서 숨기거나(기본) 완전히 destroy한다.
  * 메모리 절약 모드(memorySaverMode)가 true이면 destroy하여 렌더러 프로세스를 해제한다.
@@ -2269,6 +2331,16 @@ function executeWindowTransition(target: WindowMode): Promise<void> {
         `executeWindowTransition running target=${target} currentWindowMode=${currentWindowMode}`,
       );
 
+      // 본문 창을 숨기는 전환이면 먼저 진행 중인 타이머를 팝업으로 옮긴다(ADR-139).
+      // 옮기지 못했으면 전환하지 않는다.
+      if (target !== 'main' && !(await prepareMainWindowForHide())) {
+        diagWarn(
+          'icon',
+          `executeWindowTransition aborted target=${target}: tool popup move failed`,
+        );
+        return;
+      }
+
       switch (target) {
         case 'icon': {
           diagLog('icon', `case icon: lastUserMode=${lastUserMode} (preserved)`);
@@ -2585,8 +2657,12 @@ function createWindow(): void {
         void executeWindowTransition('widget');
       } else {
         // tray: 위젯 전환 없이 트레이로만 숨김 (메모리 절약 모드와 무관)
-        currentWindowMode = 'main'; // 트레이로만 숨겼으므로 main 상태 유지
-        mainWindow?.hide();
+        // 숨기기 전에 진행 중인 타이머를 팝업으로 옮긴다(ADR-139). 옮기지 못했으면 숨기지 않는다.
+        void prepareMainWindowForHide().then((ok) => {
+          if (!ok) return;
+          currentWindowMode = 'main'; // 트레이로만 숨겼으므로 main 상태 유지
+          mainWindow?.hide();
+        });
       }
     }
   });
@@ -3344,8 +3420,12 @@ function registerIpcHandlers(): void {
       app.quit();
     } else {
       // tray로 숨김은 메모리 절약 모드 영향 없음
-      currentWindowMode = 'main';
-      mainWindow?.hide();
+      // 숨기기 전에 진행 중인 타이머를 팝업으로 옮긴다(ADR-139, 창 X 트레이 분기와 같다).
+      void prepareMainWindowForHide().then((ok) => {
+        if (!ok) return;
+        currentWindowMode = 'main';
+        mainWindow?.hide();
+      });
     }
   });
 
@@ -3789,10 +3869,14 @@ function registerIpcHandlers(): void {
       ensureMainWindow();
     } else {
       // 위젯이 없으면 생성하고, 표시된 뒤 메인창 숨김/해제
-      const widgetOptions = readSettingsWidgetOptions();
-      createWidgetWindow(widgetOptions, () =>
-        hideOrDestroyMainWindow(widgetOptions.memorySaverMode),
-      );
+      // 숨기기 전에 진행 중인 타이머를 팝업으로 옮긴다(ADR-139). 옮기지 못했으면 그대로 둔다.
+      void prepareMainWindowForHide().then((ok) => {
+        if (!ok) return;
+        const widgetOptions = readSettingsWidgetOptions();
+        createWidgetWindow(widgetOptions, () =>
+          hideOrDestroyMainWindow(widgetOptions.memorySaverMode),
+        );
+      });
     }
   });
 
@@ -4647,7 +4731,7 @@ function registerIpcHandlers(): void {
   // audio:importAlarm — 알람음 파일 가져오기
   ipcMain.handle(
     'audio:importAlarm',
-    async (): Promise<{ name: string; dataUrl: string } | null> => {
+    async (): Promise<{ name: string; dataUrl: string } | { tooLarge: true } | null> => {
       if (!mainWindow) return null;
       const result = await dialog.showOpenDialog(mainWindow, {
         title: '알람음 파일 선택',
@@ -4658,7 +4742,8 @@ function registerIpcHandlers(): void {
       const filePath = result.filePaths[0]!;
       const stat = fs.statSync(filePath);
       if (stat.size > 5 * 1024 * 1024) {
-        return null; // 5MB 제한
+        // 5MB 제한 — 화면이 까닭을 알릴 수 있게 따로 돌려준다(ADR-139, spec 4-1).
+        return { tooLarge: true };
       }
       const name = path.basename(filePath);
       const buf = fs.readFileSync(filePath);
@@ -6183,6 +6268,11 @@ if (!gotTheLock) {
       indexHtmlPath: path.join(__dirname, '../dist/index.html'),
       devServerUrl: () => process.env['VITE_DEV_SERVER_URL'],
       getMainWindow: () => mainWindow,
+      // 메모리 절약 모드로 본문 창이 파괴된 뒤 [본문으로 가져오기]를 누르면 본문 창을 되살린다.
+      ensureMainWindow: async () => {
+        await executeWindowTransition('main');
+        return mainWindow;
+      },
       isTrustedSender: (webContentsId) =>
         getAllAppWindows().some((win) => win.webContents.id === webContentsId),
       broadcastChanged: (openToolIds: readonly PopupToolId[]) =>

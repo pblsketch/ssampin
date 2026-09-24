@@ -137,6 +137,52 @@ export interface AlarmSoundSettings {
   readonly preWarning: PreWarningSettings;
 }
 
+/** 타이머 남은 시간 표시 — 원 테두리 또는 줄어드는 부채꼴. */
+export type TimerDisplayStyle = 'ring' | 'pie';
+
+/** 종료 알람 반복 — 한 번 · 3번 · [확인]할 때까지. */
+export type TimerAlarmRepeat = 'once' | 'three' | 'untilConfirm';
+
+/** 발표 타이머 전용 예고 알림. 타이머 탭의 예고 알림과 따로 둔다(ADR-139). */
+export interface PresentationPreWarningSettings {
+  readonly enabled: boolean;
+  readonly secondsBefore: 10 | 30 | 60;
+}
+
+/** 단계 타이머의 한 단계. 이름이 비면 화면에서 "N단계"로 부른다. */
+export interface TimerStepDefinition {
+  readonly id: string;
+  readonly name: string;
+  readonly seconds: number;
+}
+
+/** 이름 붙여 저장한 단계 타이머 순서. */
+export interface TimerStepSequence {
+  readonly id: string;
+  readonly name: string;
+  readonly steps: readonly TimerStepDefinition[];
+  /** 전체 반복 횟수(1~10). */
+  readonly repeat: number;
+  /** 마지막 바퀴의 마지막 단계를 건너뛴다(단계 2개 이상·반복 2 이상일 때만 뜻이 있다). */
+  readonly skipLastStepOnFinalRound: boolean;
+}
+
+/**
+ * 쌤도구 타이머 설정 — settings 파일에 들어가 기기 사이에 동기화된다.
+ *
+ * 자주 바뀌는 값(마지막 시간·최근 활동 이름)과 학생 이름(발표 명단)은 여기 두지 않는다.
+ * 그것들은 이 기기에만 저장한다(`timer-local`). 읽을 때는 `normalizeTimerToolSettings` 를 거친다.
+ */
+export interface TimerToolSettings {
+  /** 프리셋(초). 1~8개, 각 5~5999, 중복 없음. */
+  readonly presets: readonly number[];
+  readonly displayStyle: TimerDisplayStyle;
+  readonly alarmRepeat: TimerAlarmRepeat;
+  readonly presentationPreWarning: PresentationPreWarningSettings;
+  /** 저장한 단계 순서(최대 20개). */
+  readonly stepSequences: readonly TimerStepSequence[];
+}
+
 export type WidgetLayoutMode = 'full' | 'split-h' | 'split-v' | 'quad' | 'sidebar-right';
 
 // 위젯 표시 모드
@@ -710,6 +756,11 @@ export interface Settings {
   readonly schoolInfo?: SchoolInfoLink;
   readonly pin: PinSettings;
   readonly alarmSound: AlarmSoundSettings;
+  /**
+   * 쌤도구 타이머 설정(프리셋·표시 방식·알람 반복·발표 예고·단계 순서).
+   * optional 이라 옛 저장값과 호환된다. 읽을 때는 항상 `normalizeTimerToolSettings` 로 기본값과 합친다.
+   */
+  readonly timerTool?: TimerToolSettings;
   readonly workSymbols: WorkSymbolsSettings;
   readonly weather: WeatherSettings;
   readonly analytics?: {

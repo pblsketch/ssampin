@@ -68,9 +68,12 @@ export function Modal({
 
   if (!isOpen) return null;
 
-  const focusOptions = initialFocusRef?.current
-    ? { initialFocus: initialFocusRef.current }
-    : { fallbackFocus: '[data-modal-fallback]' };
+  // 처음 그릴 때는 ref 가 아직 비어 있다 — 값 대신 함수로 넘겨 초점을 옮기는 순간에 읽게 한다.
+  // (비어 있으면 focus-trap 기본값: 첫 번째로 누를 수 있는 요소)
+  const focusOptions = {
+    fallbackFocus: '[data-modal-fallback]',
+    ...(initialFocusRef ? { initialFocus: () => initialFocusRef.current ?? undefined } : {}),
+  };
 
   return (
     <FocusTrap

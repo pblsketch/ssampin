@@ -39,8 +39,14 @@ const ToolCoin = React.lazy(() =>
 const ToolScoreboard = React.lazy(() =>
   import('@adapters/components/Tools/ToolScoreboard').then((m) => ({ default: m.ToolScoreboard })),
 );
+// 데스크톱과 같은 타이머 모듈을 쓴다 — 모바일은 타이머·스톱워치 두 탭만(ADR-139).
 const ToolTimer = React.lazy(() =>
-  import('@adapters/components/Tools/ToolTimer').then((m) => ({ default: m.ToolTimer })),
+  import('@adapters/components/Tools/Timer').then((m) => {
+    function MobileToolTimer(props: MobileToolProps) {
+      return <m.ToolTimer {...props} variant="mobile" />;
+    }
+    return { default: MobileToolTimer };
+  }),
 );
 const ToolWorkSymbols = React.lazy(() =>
   import('@adapters/components/Tools/ToolWorkSymbols').then((m) => ({
@@ -68,6 +74,7 @@ import { InAppBrowserBanner } from './components/InAppBrowserBanner';
 import { SegmentedControl } from './components/common/SegmentedControl';
 import { QuickAddFab, type QuickAddAction } from './components/QuickAddFab';
 import { Snackbar } from '@mobile/components/common/Snackbar';
+import { LeaveGuardDialog } from '@adapters/components/common/LeaveGuardDialog';
 import { MobileHeader } from '@mobile/components/common/MobileHeader';
 import { useMobileUiTriggerStore } from './stores/useMobileUiTriggerStore';
 import { useRoute } from '@mobile/routing/useRoute';
@@ -584,6 +591,8 @@ export function App() {
 
       {/* 전역 스낵바(되돌리기). 화면마다 각자 마운트하면 그 화면에서만 떠서 전역으로 둔다. */}
       <Snackbar />
+      {/* 타이머가 진행 중일 때 떠나기 전에 묻는다(ADR-139). */}
+      <LeaveGuardDialog />
 
       {/* 하단 탭 6→4 재편 첫 실행 안내 */}
       <NavMigrationCoachmark />

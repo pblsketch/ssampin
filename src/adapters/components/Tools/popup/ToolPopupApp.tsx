@@ -3,6 +3,7 @@ import type { PopupToolId } from '@domain/entities/ToolPopup';
 import { parseToolPopupQuery } from '@domain/rules/toolPopupRules';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { useThemeApplier } from '@adapters/hooks/useThemeApplier';
+import { useToolWindowDataSync } from '@adapters/hooks/useToolWindowDataSync';
 import { TOOL_REGISTRY } from '@adapters/components/Tools/toolRegistry';
 import { getToolPopupBridge } from './toolPopupBridge';
 import type { ToolPopupSessionValue, ToolPopupSnapshotEnvelope } from './toolPopupSession';
@@ -30,6 +31,8 @@ export function ToolPopupApp(): JSX.Element {
   useEffect(() => {
     if (!settingsLoaded) void loadSettings();
   }, [settingsLoaded, loadSettings]);
+  // 본문 창과 음소거·타이머 설정·기기 값을 맞춘다(한 창에서 🔊 를 끄면 다른 창도 조용해진다).
+  useToolWindowDataSync({ reloadSettings: true });
 
   const [phase, setPhase] = useState<'loading' | 'ready' | 'rejected'>(
     query === null ? 'rejected' : 'loading',
@@ -141,7 +144,7 @@ function ToolPopupSurface({ toolId, envelope }: ToolPopupSurfaceProps): JSX.Elem
       toolId,
       initialSnapshot: envelope,
       registerSlot: (slotId, handlers) => registry.register(slotId, handlers),
-      moveToPopup: () => {},
+      moveToPopup: async () => false,
       returnToMain,
       closePopup,
       alwaysOnTop,

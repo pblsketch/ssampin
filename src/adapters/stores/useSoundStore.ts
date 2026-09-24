@@ -34,6 +34,11 @@ interface SoundState {
   settings: SoundSettings;
   loaded: boolean;
   load: () => Promise<void>;
+  /**
+   * 저장된 값을 다시 읽는다. 다른 창(본문 ↔ 팝업)에서 음소거를 바꿨을 때 쓴다.
+   * `load` 는 한 번만 읽으므로 창 사이 맞춤에는 이것을 쓴다(ADR-139).
+   */
+  reload: () => Promise<void>;
   toggleEnabled: () => Promise<void>;
   setVolume: (volume: number) => Promise<void>;
 }
@@ -53,6 +58,18 @@ export const useSoundStore = create<SoundState>((set, get) => ({
       }
     } catch {
       set({ loaded: true });
+    }
+  },
+
+  reload: async () => {
+    try {
+      const data = await readSettings();
+      set({
+        settings: data ? { ...DEFAULT_SOUND_SETTINGS, ...data } : DEFAULT_SOUND_SETTINGS,
+        loaded: true,
+      });
+    } catch {
+      /* 읽지 못하면 지금 값을 그대로 둔다 */
     }
   },
 

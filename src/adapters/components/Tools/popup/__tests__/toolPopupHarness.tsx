@@ -32,7 +32,7 @@ export function renderInPlacement(
     toolId: options.toolId,
     initialSnapshot: options.initialSnapshot ?? null,
     registerSlot: (slotId, handlers) => registry.register(slotId, handlers),
-    moveToPopup: () => {},
+    moveToPopup: async () => false,
     returnToMain: () => {},
     closePopup: () => {},
     alwaysOnTop: false,

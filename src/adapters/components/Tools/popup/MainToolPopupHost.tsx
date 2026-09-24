@@ -78,29 +78,32 @@ function PopupCapableTool({
   // ★ref 가드 — 상태 갱신은 비동기라 연속 클릭 두 번이 같은 옛 상태를 본다(과거 실사고).
   const movingRef = useRef(false);
 
-  const moveToPopup = useCallback(() => {
-    if (movingRef.current) return;
+  const moveToPopup = useCallback(async (): Promise<boolean> => {
+    if (movingRef.current) return false;
     // 이미 별도 창에서 도는 도구면 시작하지 않는다 — 멈추고 담아 봐야 그 스냅샷이 갈 곳이 없다.
-    if (useToolPopupStore.getState().openToolIds.includes(toolId)) return;
+    if (useToolPopupStore.getState().openToolIds.includes(toolId)) return false;
     movingRef.current = true;
     setBusy(true);
     // 1) 먼저 멈추고 담는다 — 이 순간부터 소유자는 아무도 아니다(이중 실행 없음).
     const captured = registry.capture(Date.now());
-    void bridge
-      .open(toolId, captured, captured.capturedAt)
-      .then((result) => {
-        if (result.ok) {
-          // 성공 — 본문은 아래에서 안내 화면으로 바뀌므로 여기서 되살리지 않는다.
-          return;
-        }
-        // 2) 실패하면 원래 실행을 그대로 되살린다. 흐른 시간은 스냅샷 시각으로 보정된다.
-        registry.resume(captured);
-        showToast(FAILURE_MESSAGES[result.reason], 'error');
-      })
-      .finally(() => {
-        movingRef.current = false;
-        setBusy(false);
-      });
+    try {
+      const result = await bridge.open(toolId, captured, captured.capturedAt);
+      if (result.ok) {
+        // 성공 — 본문은 아래에서 안내 화면으로 바뀌므로 여기서 되살리지 않는다.
+        return true;
+      }
+      // 2) 실패하면 원래 실행을 그대로 되살린다. 흐른 시간은 스냅샷 시각으로 보정된다.
+      registry.resume(captured);
+      showToast(FAILURE_MESSAGES[result.reason], 'error');
+      return false;
+    } catch {
+      registry.resume(captured);
+      showToast(FAILURE_MESSAGES.unavailable, 'error');
+      return false;
+    } finally {
+      movingRef.current = false;
+      setBusy(false);
+    }
   }, [bridge, registry, showToast, toolId]);
 
   const session = useMemo<ToolPopupSessionValue>(

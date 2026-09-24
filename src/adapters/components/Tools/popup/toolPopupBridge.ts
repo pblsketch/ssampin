@@ -28,6 +28,11 @@ export interface ToolPopupReturnPayload {
   readonly toolId: PopupToolId;
   readonly snapshot: unknown;
   readonly capturedAt: number;
+  /**
+   * 본문이 받아들일지 답한다(ADR-139). 본문에서 타이머가 진행 중이면 선생님께 물은 뒤 답한다.
+   * false 면 팝업은 닫히지 않고 자기 도구를 되살린다. **반드시 한 번 불러야 한다.**
+   */
+  respond(accepted: boolean): void;
 }
 
 export interface ToolPopupBridge {
@@ -56,6 +61,8 @@ function onlyPopupIds(values: unknown): readonly PopupToolId[] {
 type ElectronToolPopupApi = NonNullable<NonNullable<Window['electronAPI']>['toolPopup']>;
 
 function createElectronBridge(popup: ElectronToolPopupApi): ToolPopupBridge {
+  // main 은 "받았다" 답이 올 때까지 같은 요청을 다시 보낸다 — 같은 요청은 한 번만 처리한다.
+  const seenReturnRequests = new Set<string>();
   return {
     supportsAlwaysOnTop: true,
     async open(toolId, snapshot, capturedAt) {
@@ -77,11 +84,27 @@ function createElectronBridge(popup: ElectronToolPopupApi): ToolPopupBridge {
     onChanged: (callback) => popup.onChanged((ids) => callback(onlyPopupIds(ids))),
     onReturned: (callback) =>
       popup.onReturned((payload) => {
-        if (!isPopupToolId(payload.toolId)) return;
+        const requestId = payload.requestId;
+        // 받았다는 신호를 먼저 보낸다 — main 은 이 신호가 없으면 팝업을 닫지 않고 되살린다.
+        if (typeof requestId === 'string') {
+          void popup.acknowledgeReturn(requestId);
+          if (seenReturnRequests.has(requestId)) return;
+          seenReturnRequests.add(requestId);
+        }
+        if (!isPopupToolId(payload.toolId)) {
+          if (typeof requestId === 'string') void popup.respondReturn(requestId, false);
+          return;
+        }
+        let answered = false;
         callback({
           toolId: payload.toolId,
           snapshot: payload.snapshot,
           capturedAt: payload.capturedAt,
+          respond: (accepted) => {
+            if (answered || typeof requestId !== 'string') return;
+            answered = true;
+            void popup.respondReturn(requestId, accepted);
+          },
         });
       }),
   };
@@ -101,11 +124,18 @@ function normalizeReason(reason: string | undefined): ToolPopupFailureReason {
 }
 
 interface BrowserMessage {
-  readonly type: 'ready' | 'closed' | 'returned';
+  readonly type: 'ready' | 'closed' | 'returned' | 'return-ack' | 'return-decision';
   readonly toolId: PopupToolId;
   readonly snapshot?: unknown;
   readonly capturedAt?: number;
+  readonly requestId?: string;
+  readonly accepted?: boolean;
 }
+
+/** 본문이 "받았다"고 답하기를 기다리는 한도. 넘으면 팝업을 그대로 둔다. */
+const RETURN_ACK_TIMEOUT_MS = 3_000;
+/** 선생님이 안내 창에서 고르기를 기다리는 한도. */
+const RETURN_DECISION_TIMEOUT_MS = 10 * 60 * 1000;
 
 /**
  * 개발용 브라우저 폴백.
@@ -146,16 +176,35 @@ function createBrowserBridge(): ToolPopupBridge {
       return;
     }
     if (message.type === 'returned') {
+      // 팝업 창 자신도 이 채널을 듣는다 — 본문 창(돌아오기를 받는 쪽)만 답한다.
+      if (returnListeners.size === 0) return;
+      const requestId = message.requestId;
+      const toolId = message.toolId;
+      getChannel()?.postMessage({ type: 'return-ack', toolId, requestId } satisfies BrowserMessage);
+      let answered = false;
+      const respond = (accepted: boolean): void => {
+        if (answered) return;
+        answered = true;
+        getChannel()?.postMessage({
+          type: 'return-decision',
+          toolId,
+          requestId,
+          accepted,
+        } satisfies BrowserMessage);
+        if (accepted) {
+          opened.get(toolId)?.close();
+          opened.delete(toolId);
+          emitChanged();
+        }
+      };
       for (const listener of returnListeners) {
         listener({
-          toolId: message.toolId,
+          toolId,
           snapshot: message.snapshot ?? null,
           capturedAt: message.capturedAt ?? Date.now(),
+          respond,
         });
       }
-      opened.get(message.toolId)?.close();
-      opened.delete(message.toolId);
-      emitChanged();
     }
   });
 
@@ -289,14 +338,44 @@ function createBrowserBridge(): ToolPopupBridge {
     async returnToMain(snapshot, capturedAt) {
       const toolId = new URLSearchParams(window.location.search).get('tool');
       if (!isPopupToolId(toolId)) return false;
-      getChannel()?.postMessage({
-        type: 'returned',
-        toolId,
-        snapshot,
-        capturedAt,
-      } satisfies BrowserMessage);
-      window.close();
-      return true;
+      const bc = getChannel();
+      if (bc === null) return false;
+      handoffSeq += 1;
+      const requestId = `ret-${Date.now()}-${handoffSeq}`;
+      // 본문이 받았다고 답하고(짧게 기다림), 선생님이 고를 때까지(길게 기다림) 닫지 않는다.
+      const accepted = await new Promise<boolean>((resolve) => {
+        let acked = false;
+        const onMessage = (event: MessageEvent): void => {
+          const message = event.data as BrowserMessage | null;
+          if (message?.requestId !== requestId) return;
+          if (message.type === 'return-ack') {
+            acked = true;
+            clearTimeout(ackTimer);
+          } else if (message.type === 'return-decision') {
+            finish(message.accepted === true);
+          }
+        };
+        const finish = (value: boolean): void => {
+          clearTimeout(ackTimer);
+          clearTimeout(decisionTimer);
+          bc.removeEventListener('message', onMessage);
+          resolve(value);
+        };
+        bc.addEventListener('message', onMessage);
+        const ackTimer = setTimeout(() => {
+          if (!acked) finish(false);
+        }, RETURN_ACK_TIMEOUT_MS);
+        const decisionTimer = setTimeout(() => finish(false), RETURN_DECISION_TIMEOUT_MS);
+        bc.postMessage({
+          type: 'returned',
+          toolId,
+          snapshot,
+          capturedAt,
+          requestId,
+        } satisfies BrowserMessage);
+      });
+      if (accepted) window.close();
+      return accepted;
     },
 
     onChanged(callback) {

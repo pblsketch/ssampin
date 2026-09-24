@@ -15,6 +15,8 @@ export interface CountdownSnapshot {
   /** 찍은 시점의 남은 초. */
   readonly remaining: number;
   readonly capturedAt: number;
+  /** 이미 끝나 있었다면 0 에 닿은 시각(epoch ms). 초과 시간을 이어 세는 데 쓴다. */
+  readonly finishedAt?: number | null;
 }
 
 export interface CountdownRestore {
@@ -25,6 +27,11 @@ export interface CountdownRestore {
    * 받는 쪽이 이때 **한 번만** 알람을 울린다(보낸 쪽은 이미 정지했다).
    */
   readonly alarmDueDuringTransfer: boolean;
+  /**
+   * 끝난 상태로 복원될 때 0 에 닿은 시각(epoch ms). 끝나지 않았으면 null.
+   * 옮기는 사이에 끝났으면 "찍은 시각 + 남은 시간"이다 — 받는 쪽이 초과 시간을 그때부터 센다.
+   */
+  readonly finishedAt: number | null;
 }
 
 /**
@@ -33,18 +40,33 @@ export interface CountdownRestore {
  */
 export function advanceCountdown(snapshot: CountdownSnapshot, now: number): CountdownRestore {
   if (snapshot.state !== 'running') {
+    const finishedAt =
+      snapshot.state === 'finished' &&
+      typeof snapshot.finishedAt === 'number' &&
+      Number.isFinite(snapshot.finishedAt)
+        ? snapshot.finishedAt
+        : null;
     return {
       state: snapshot.state,
       remaining: Math.max(0, snapshot.remaining),
       alarmDueDuringTransfer: false,
+      finishedAt,
     };
   }
-  const elapsed = elapsedSeconds(snapshot.capturedAt, now);
+  const elapsed = transferElapsedSeconds(snapshot.capturedAt, now);
   const next = snapshot.remaining - elapsed;
   if (next <= 0) {
-    return { state: 'finished', remaining: 0, alarmDueDuringTransfer: true };
+    const reachedZeroAt = Number.isFinite(snapshot.capturedAt)
+      ? snapshot.capturedAt + Math.max(0, snapshot.remaining) * 1000
+      : now;
+    return {
+      state: 'finished',
+      remaining: 0,
+      alarmDueDuringTransfer: true,
+      finishedAt: reachedZeroAt,
+    };
   }
-  return { state: 'running', remaining: next, alarmDueDuringTransfer: false };
+  return { state: 'running', remaining: next, alarmDueDuringTransfer: false, finishedAt: null };
 }
 
 export interface StopwatchSnapshot {
@@ -77,6 +99,7 @@ function elapsedMillis(capturedAt: number, now: number): number {
   return Math.max(0, now - capturedAt);
 }
 
-function elapsedSeconds(capturedAt: number, now: number): number {
+/** 옮기는 사이 흐른 초(내림). 단계 타이머처럼 따로 계산하는 쪽도 이 값을 쓴다. */
+export function transferElapsedSeconds(capturedAt: number, now: number): number {
   return Math.floor(elapsedMillis(capturedAt, now) / 1000);
 }
