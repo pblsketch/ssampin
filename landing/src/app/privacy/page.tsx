@@ -21,7 +21,7 @@ const koContent = {
   lang: 'ko',
   title: '개인정보처리방침',
   subtitle: '쌤핀 (SsamPin)',
-  lastUpdated: '최종 수정일: 2026년 8월 21일',
+  lastUpdated: '최종 수정일: 2026년 9월 29일',
   switchLang: 'View in English',
   switchHref: '?lang=en',
   sections: [
@@ -115,6 +115,18 @@ const koContent = {
               <strong>Google Tasks 할 일 데이터</strong>(Tasks 연동 시) — 제목, 완료 상태, 마감일,
               메모(notes)
             </li>
+            <li>
+              <strong>협업 기능이 사용자의 Google Drive에 만드는 파일</strong> — 과제 수합을 쓰면
+              학생이 제출한 파일을 선생님 Drive의 과제 폴더에, 온라인 교무실을 쓰면 부서 자료를 부서
+              관리자 선생님의 Drive에, 서명받기 결과를 Google 시트로 내보내면 그 시트를 선생님
+              Drive에 만듭니다. 모두 쌤핀이 직접 만든 파일이며, 쌤핀은 그 밖의 Drive 파일에는
+              접근하지 않습니다.
+            </li>
+            <li>
+              <strong>서버에 보관하는 Google 연동 토큰</strong>(과제 수합·온라인 교무실 사용 시) —
+              학생·부서원이 선생님 PC가 꺼져 있을 때도 파일을 올리고 열 수 있도록 선생님의 Google
+              계정 이메일과 연동 토큰을 암호화해 서버에 보관합니다(제3조·제11조).
+            </li>
           </ul>
         </>
       ),
@@ -148,6 +160,11 @@ const koContent = {
               백업·복원
             </li>
             <li>쌤핀의 할 일을 Google Tasks와 양방향 동기화(모바일 Google Tasks 앱과의 연결)</li>
+            <li>
+              과제 수합의 학생 제출 파일을 선생님 Drive에 저장하고, 온라인 교무실의 부서 자료를
+              관리자 Drive에 저장·공유
+            </li>
+            <li>과제 수합·온라인 교무실·상담 예약·설문을 만들고 관리하는 선생님의 본인 확인</li>
           </ul>
           <p>
             마케팅, 광고, 제3자 분석, 기계학습 모델 학습 등 연동 기능의 직접 목적 외에는 어떤
@@ -161,7 +178,7 @@ const koContent = {
       title: '정보 저장 방식',
       content: (
         <>
-          <p>쌤핀은 서버리스(Serverless) 구조로 설계되었습니다:</p>
+          <p>쌤핀의 데이터는 다음과 같이 저장됩니다:</p>
           <ul>
             <li>
               <strong>로컬 저장:</strong> 활성 사용 데이터는 원칙적으로 사용자의 PC(
@@ -169,8 +186,9 @@ const koContent = {
               자료는 예외이며, 그 범위는 제11조에 있습니다.
             </li>
             <li>
-              <strong>쌤핀 개발자 서버 미보관:</strong> 쌤핀 개발자는 사용자 데이터를 저장·처리하는
-              별도 서버를 운영하지 않습니다.
+              <strong>클라우드 저장(수탁자):</strong> 협업 기능·AI 기능에 필요한 자료는 그 기능을 쓸
+              때에만 클라우드 백엔드(Supabase)에 저장·처리됩니다(제11조). 그 밖의 자료를 모아 두는
+              서버는 두지 않습니다.
             </li>
             <li>
               <strong>Google Drive &quot;쌤핀 동기화&quot; 폴더:</strong> &quot;앱 데이터 백업&quot;
@@ -181,11 +199,20 @@ const koContent = {
             </li>
             <li>
               <strong>암호화 저장:</strong> OAuth 인증 토큰은 Windows DPAPI(Electron safeStorage)를
-              통해 OS 키체인에 암호화하여 저장합니다.
+              통해 OS 키체인에 암호화하여 저장합니다. 과제 수합·온라인 교무실을 사용하면 같은 토큰이
+              서버에도 AES-256-GCM으로 암호화되어 보관됩니다(아래).
             </li>
             <li>
-              <strong>직접 통신:</strong> 앱은 Google Calendar API, Google Drive API, Google Tasks
-              API와 사용자의 PC에서 직접 통신하며, 중간 서버를 거치지 않습니다.
+              <strong>Google API 통신:</strong> Google Calendar·Tasks 동기화와 Drive 백업은 사용자의
+              PC에서 Google API와 직접 통신하며, 중간 서버를 거치지 않습니다. 다만{' '}
+              <strong>과제 수합과 온라인 교무실</strong>은 학생·부서원이 선생님 PC가 꺼져 있을 때도
+              파일을 올리고 열 수 있어야 하므로, 선생님의 Google 계정 이메일과 연동 토큰을
+              서버(Supabase)에 암호화해 보관하고 서버가 그 토큰으로 Google Drive에 요청합니다. 이
+              토큰은 Google 계정을 연결할 때 받은 권한(제6조)을 그대로 지니지만, 서버는{' '}
+              <strong>
+                학생 제출 파일 저장, 부서 자료 저장·공유 권한 관리 같은 Drive 작업과 본인 확인에만
+              </strong>{' '}
+              사용하며 Google Calendar·Tasks에는 접근하지 않습니다.
             </li>
             <li>
               <strong>전송 보안:</strong> Google API와의 모든 통신은 HTTPS(TLS)를 통해 암호화되어
@@ -202,13 +229,23 @@ const koContent = {
         <>
           <ul>
             <li>
-              쌤핀은 각 Google 연동 기능이 활성화된 동안에만 관련 데이터를 보존합니다. 사용자가
-              연동을 해제하거나 앱을 삭제하면 해당 데이터는 즉시 삭제됩니다.
+              쌤핀은 각 Google 연동 기능이 활성화된 동안에만 Google과 동기화합니다. 연동을 해제하면
+              동기화가 멈추고, 아래와 같이 삭제됩니다.
             </li>
             <li>
               <strong>Google 계정 연결 해제:</strong> 설정 &gt; Google 연동 탭에서 &quot;연결
-              해제&quot;를 누르면 OAuth 토큰과 Google에서 가져온 일정·할 일이 로컬에서 즉시
-              제거됩니다. 로컬에서 생성한 시간표·메모·할 일 등은 그대로 유지됩니다.
+              해제&quot;를 누르면 ① 과제 수합·온라인 교무실을 위해 서버에 보관한 토큰을 삭제하고 ②
+              Google에 토큰 폐기를 요청한 뒤 ③ 이 컴퓨터의 OAuth 토큰과 Google Calendar에서 가져온
+              일정을 즉시 제거합니다. 인터넷 연결 문제로 ①·②를 끝내지 못하면 앱이 알려 드리며,
+              이때는 아래 Google 계정 권한 페이지에서 직접 해제해 주세요. Google Tasks에서 가져온 할
+              일은 동기화만 끊기고 할 일 목록에 남으므로 필요하면 직접 지워 주세요. 로컬에서 생성한
+              시간표·메모·할 일 등은 그대로 유지됩니다.
+            </li>
+            <li>
+              <strong>서버에 보관한 토큰의 보관 기한:</strong> 연결 해제 때 즉시 삭제되며,
+              Google에서 권한이 철회된 토큰은 서버가 확인하는 즉시, 6개월 동안 쓰이지 않은 토큰은
+              자동으로 삭제됩니다. 과제 수합·온라인 교무실 화면을 다시 열면 앱이 새 토큰을
+              보관합니다.
             </li>
             <li>
               <strong>앱 데이터 백업 삭제:</strong> 백업 카드의 &quot;클라우드 데이터 전체
@@ -223,7 +260,8 @@ const koContent = {
             <li>
               앱을 삭제하면 로컬에 저장된 모든 데이터(쌤핀 전용 JSON 파일)가 함께 삭제됩니다. Google
               Drive 백업 폴더의 사본은 그대로 남으므로 원하시면 위 &quot;클라우드 데이터 전체
-              삭제&quot; 기능을 먼저 실행해 주세요.
+              삭제&quot; 기능을 먼저 실행해 주세요. 서버에 보관한 토큰도 바로 지우려면 앱을 지우기
+              전에 &quot;연결 해제&quot;를 눌러 주세요.
             </li>
             <li>
               Google 계정 설정에서{' '}
@@ -252,20 +290,32 @@ const koContent = {
               않습니다.
             </li>
             <li>
-              쌤핀은 Google Calendar·Drive·Tasks API와 직접 통신합니다. 또한 상담 예약·과제
-              수합·전자 서명·설문 등 <strong>온라인 협업 기능</strong>을 사용할 때는, 그 기능 제공에
-              필요한 범위에서 일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 또한 앱 내
-              AI 도우미에 질문하면 그 질문과 직전 대화가 답변 생성을 위해 주식회사 업스테이지·Google
-              LLC로 전송됩니다. 이는 제3자 제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>
-              이며, 자세한 내용은 제11조에 따릅니다. 제11조에 적힌 곳 외에 어떤 외부 서비스에도
-              데이터를 전달하지 않습니다.
+              쌤핀의 Google Calendar·Tasks 동기화와 Drive 백업은 사용자의 PC에서 Google API와 직접
+              통신합니다(과제 수합·온라인 교무실은 제3조). 또한 상담 예약·과제 수합·전자 서명·설문
+              등 <strong>온라인 협업 기능</strong>을 사용할 때는, 그 기능 제공에 필요한 범위에서
+              일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 앱 내 AI 도우미나 쌤핀 AI에
+              질문하면 답변 생성을 위해 주식회사 업스테이지·Google LLC로 전송됩니다. 이는 제3자
+              제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>이며, 자세한 내용은 제11조에
+              따릅니다. 사용자가 직접 연결한 외부 AI 도구로 전달되는 경우는 제10조에 따릅니다.
+              제10조·제11조에 적힌 곳 외에 어떤 외부 서비스에도 데이터를 전달하지 않습니다.
             </li>
             <li>사용자 데이터를 광고주, 데이터 브로커 또는 정보 재판매자에게 이전하지 않습니다.</li>
             <li>
               사용자 데이터를 광고 제공, 신용 평가, 대출 심사 등의 목적으로 사용하지 않습니다.
             </li>
             <li>
-              사용자 데이터를 쌤핀을 포함한 어떤 기계학습(ML) 모델 학습에도 사용하지 않습니다.
+              쌤핀은 사용자 데이터를 기계학습(ML) 모델 학습에 사용하지 않으며, 학습 목적으로
+              제3자에게 제공하지 않습니다. 다만 사용자가 켠 &apos;쌤핀 AI&apos;로 보낸 내용은
+              수탁자(주식회사 업스테이지)가 모델 학습에 활용할 수 있습니다(제11조).
+            </li>
+            <li>
+              <strong>
+                Google API로 받은 데이터(Google Calendar에서 가져온 일정, Google Tasks에서 가져온 할
+                일, Google Drive에서 받은 과제 제출물·교무실 자료)는 원본이든 집계·가공한 형태든
+                쌤핀 AI로 보내지 않으며, 어떤 AI·ML 모델의 개발·개선·학습에도 사용하거나 그 목적으로
+                제공하지 않습니다.
+              </strong>{' '}
+              (제9조)
             </li>
           </ul>
         </>
@@ -283,8 +333,9 @@ const koContent = {
                 <code>.../auth/userinfo.email</code>
               </strong>{' '}
               — 로그인한 Google 계정의 이메일 주소를 받아 설정 화면의 &quot;연결된 계정&quot;에
-              표시하고, 재로그인 시 데이터 일관성(동일 계정 여부)을 확인합니다. 이름·프로필 사진 등
-              다른 프로필 정보는 요청하지 않습니다.
+              표시하고, 재로그인 시 데이터 일관성(동일 계정 여부)을 확인합니다. 과제 수합·온라인
+              교무실·상담 예약·설문에서는 그 기능을 만든 선생님 본인인지 확인하는 데 씁니다.
+              이름·프로필 사진 등 다른 프로필 정보는 요청하지 않습니다.
             </li>
             <li>
               <strong>
@@ -297,8 +348,9 @@ const koContent = {
               <strong>
                 <code>.../auth/drive.file</code>
               </strong>{' '}
-              — 쌤핀이 직접 만든 파일(&quot;쌤핀 동기화&quot; 폴더 안의 파일)만 접근합니다. 사용자의
-              다른 Drive 파일(문서, 사진 등)에는 접근할 수 없습니다.
+              — 쌤핀이 직접 만든 파일만 접근합니다. &quot;쌤핀 동기화&quot; 폴더의 백업 파일, 과제
+              수합 폴더와 학생 제출 파일, 온라인 교무실 자료, 서명받기 결과 시트가 여기에
+              해당합니다. 사용자의 다른 Drive 파일(문서, 사진 등)에는 접근할 수 없습니다.
             </li>
             <li>
               <strong>
@@ -317,7 +369,9 @@ const koContent = {
             >
               Google API Services User Data Policy의 Limited Use
             </a>{' '}
-            원칙에 따라 사용하며, 위에 명시된 기능 제공 외 다른 목적으로는 사용하지 않습니다.
+            원칙에 따라 사용하며, 위에 명시된 기능 제공 외 다른 목적으로는 사용하지 않습니다. 네
+            스코프는 하나의 연결로 함께 부여되며, 과제 수합·온라인 교무실을 쓰면 이 연결의 토큰이
+            서버에 암호화되어 보관됩니다(제3조).
           </p>
         </>
       ),
@@ -335,7 +389,10 @@ const koContent = {
             <strong>가. 앱 안에서 직접 하실 수 있는 것</strong>
           </p>
           <ul>
-            <li>앱 내 설정 &gt; Google 연동 탭에서 계정 연결 해제 (모든 OAuth 토큰 즉시 삭제)</li>
+            <li>
+              앱 내 설정 &gt; Google 연동 탭에서 계정 연결 해제 (이 컴퓨터와 서버에 보관한 OAuth
+              토큰 삭제, Google에 폐기 요청)
+            </li>
             <li>앱 데이터 백업 토글 OFF 또는 &quot;클라우드 데이터 전체 삭제&quot; 실행</li>
             <li>Google Tasks 토글 OFF로 동기화 중단</li>
             <li>Google 계정 앱 권한 페이지에서 직접 접근 권한 철회</li>
@@ -398,6 +455,16 @@ const koContent = {
             </a>
             (Limited Use 요구사항 포함)을 준수합니다.
           </p>
+          <p>
+            특히 Google Workspace API(Google Calendar, Google Tasks, Google Drive)로 받은 데이터는
+            원본이든 집계·익명화·가공한 형태든{' '}
+            <strong>
+              범용(비개인화) AI·ML 모델의 개발·개선·학습에 사용하지 않으며, 그 목적으로 제3자에게
+              제공하지 않습니다.
+            </strong>{' '}
+            Google Workspace API로 받은 원본 또는 가공 데이터의 사용은 Limited Use 요구사항을 포함한
+            Google 사용자 데이터 정책을 준수합니다.
+          </p>
         </>
       ),
     },
@@ -408,9 +475,17 @@ const koContent = {
         <>
           <p>
             쌤핀은 사용자가 <strong>AI 브릿지 기능을 명시적으로 연결한 경우에 한해</strong>, 내
-            컴퓨터에 저장된 학생·자리·관찰 데이터를 외부 AI 도구(Claude, Codex/GPT,
-            Antigravity/Gemini 등 MCP 클라이언트)와 연결합니다. 이 데이터는{' '}
-            <strong>외부 서버를 거치지 않고</strong> 내 컴퓨터에서 외부 AI 도구로 직접 전달됩니다.
+            컴퓨터에 저장된 학생·자리·관찰·일정·할 일 등의 데이터(Google에서 동기화한 일정·할 일
+            포함)를 외부 AI 도구(Claude, Codex/GPT, Antigravity/Gemini 등 MCP 클라이언트)와
+            연결합니다. 이 데이터는 <strong>외부 서버를 거치지 않고</strong> 내 컴퓨터에서 외부 AI
+            도구로 직접 전달됩니다.
+          </p>
+          <p>
+            <strong>내 AI로 실행(선생님 구독 연결)</strong> — 사용자가 실험실 기능에서 켜고 자신의
+            Claude·Codex 구독을 연결한 경우, 쌤핀 AI 창의 질문과 생기부 초안 작성 자료(선생님이 고른
+            관찰 기록·과제 제출물 등의 근거, 학생 이름은 ［이름1］처럼 가림)가 내 컴퓨터에서 해당
+            도구로 직접 전달되며, 그 도구는 위 AI 브릿지로 앱 자료를 조회할 수 있습니다. 쌤핀 서버를
+            거치지 않습니다.
           </p>
           <ul>
             <li>
@@ -427,7 +502,7 @@ const koContent = {
               켜진 경우, 관찰 내용 원문(민감 정보 포함 가능)이 외부 AI로 전달될 수 있습니다.
             </li>
             <li>
-              연결한 외부 AI 도구에 전달된 데이터에는{' '}
+              연결한 외부 AI 도구(내 AI로 실행 포함)에 전달된 데이터에는{' '}
               <strong>해당 제공자(Anthropic·OpenAI·Google 등)의 처리 정책</strong>이 적용됩니다.
               쌤핀은 외부 AI 제공자의 데이터 처리에 관여하지 않습니다.
             </li>
@@ -462,7 +537,8 @@ const koContent = {
           <ul>
             <li>
               <strong>상담 예약</strong> — 상담 일정과 대상 학급·학생 번호, 예약 시 학생 번호.
-              예약자 연락처·메모는 사용자 단말에서 암호화한 뒤 전송·저장합니다.
+              예약자 연락처·메모는 사용자 단말에서 암호화한 뒤 전송·저장합니다. 상담 일정을 만든
+              선생님 본인 확인을 위해 Google 계정 이메일을 확인해 저장합니다.
             </li>
             <li>
               <strong>과제 수합</strong> — 과제 정보와 제출 현황(학생 이름·번호). 학생이 목록에서
@@ -479,7 +555,8 @@ const koContent = {
               <strong>해시값</strong>으로만 저장합니다.
             </li>
             <li>
-              <strong>설문·체크리스트</strong> — 학생 번호와 응답 내용.
+              <strong>설문·체크리스트</strong> — 학생 번호와 응답 내용. 설문을 만든 선생님 본인
+              확인을 위해 Google 계정 이메일을 확인해 저장합니다.
             </li>
             <li>
               <strong>교실 화면 공유 수신 확인</strong> — 보드 식별자·접속 시각 등 기술 정보만
@@ -492,8 +569,11 @@ const koContent = {
               <strong>학생 정보나 초안 내용은 담기지 않습니다.</strong>
             </li>
             <li>
-              <strong>Google 연동 토큰 보관</strong> — 교사 이메일과 암호화된 OAuth
-              토큰(AES-256-GCM).
+              <strong>Google 연동 토큰 보관</strong>(과제 수합·온라인 교무실 사용 시) — 교사 Google
+              계정 이메일과 암호화된 OAuth 토큰(AES-256-GCM). 학생 제출 파일을 선생님 Drive에
+              저장하고 부서 자료를 관리자 Drive에 저장·공유하는 Drive 작업에만 씁니다. 연결 해제 때
+              즉시, Google에서 권한이 철회되면 바로, 6개월 동안 쓰이지 않으면 자동으로 삭제됩니다
+              (제4조).
             </li>
             <li>
               <strong>온라인 교무실</strong> — 학교 부서 단위로 선생님들끼리 공지·자료를 나누는
@@ -543,13 +623,18 @@ const koContent = {
             <li>
               <strong>쌤핀 AI(앱 안 업무 도우미)</strong> — <strong>설정에서 켠 경우에만</strong>{' '}
               동작합니다(기본 꺼짐). 켜면 사용자가 입력한 질문과, 앱이{' '}
-              <strong>이 컴퓨터 안에서 계산한 집계 수치</strong>(예: &quot;출석 27명, 결석
-              1명&quot;) 가 답변 생성을 위해 전송됩니다. 학생 이름·학번은 전송 전에{' '}
+              <strong>이 컴퓨터 안에서 찾아 준 자료</strong> — 집계 수치(예: &quot;출석 27명, 결석
+              1명&quot;), 할 일·일정 제목과 장소, 메모 내용, 노트·즐겨찾기 이름, 급식·시간표·진도 등
+              — 가 답변 생성을 위해 전송됩니다. 학생 이름·학번은 전송 전에{' '}
               <strong>［이름1］ 같은 임시 표시로 바뀌어</strong> 나가므로 실제 이름은 전송되지
               않으며, 연락처·주민등록번호가 포함된 항목은 그 항목 자체가 제외됩니다. 임시 표시를
               실제 이름으로 되돌리는 일은 <strong>사용자의 컴퓨터 안에서만</strong> 이루어집니다.
-              명단·기록 본문· 출결 사유·상담 내용은 <strong>전송되지 않습니다</strong>. 조회는 전부
-              사용자의 컴퓨터에서 이루어지고, 서버는 이미 계산된 숫자만 받습니다.
+              명단·기록 본문· 출결 사유·상담 내용은 <strong>전송되지 않습니다</strong>.{' '}
+              <strong>
+                Google Calendar·Google Tasks에서 가져온 일정·할 일은 원본도 개수도 전송되지 않으며,
+                화면에만 표시됩니다.
+              </strong>{' '}
+              조회는 전부 사용자의 컴퓨터에서 이루어지고, 서버는 앱이 골라 준 자료만 받습니다.
               <br />
               <strong>
                 다만 지금은 이 AI를 무료로 제공받아 사용하고 있어, 전송된 내용이 인공지능 모델
@@ -640,7 +725,7 @@ const koContent = {
           <ul>
             <li>
               <strong>Supabase Inc.</strong> (미국) — 협업 기능(상담 예약·과제 수합·전자 서명·설문
-              등) 데이터의 클라우드 저장·처리 (제11조)
+              등) 데이터와 과제 수합·온라인 교무실용 Google 연동 토큰의 클라우드 저장·처리 (제11조)
             </li>
             <li>
               <strong>Vercel Inc.</strong> (미국) — 협업 기능이 사용하는 웹페이지 호스팅
@@ -790,7 +875,7 @@ const enContent = {
   lang: 'en',
   title: 'Privacy Policy',
   subtitle: 'SsamPin',
-  lastUpdated: 'Last updated: August 21, 2026',
+  lastUpdated: 'Last updated: September 29, 2026',
   switchLang: '한국어로 보기',
   switchHref: '?lang=ko',
   sections: [
@@ -871,6 +956,21 @@ const enContent = {
               <strong>Google Tasks data</strong> (when Tasks sync is enabled) — title, completion
               status, due date, notes
             </li>
+            <li>
+              <strong>Files the collaboration features create in Google Drive</strong> — with
+              assignment collection, files students submit are saved to the assignment folder in the
+              teacher&apos;s Drive; with the Online Staff Room, department files are saved to the
+              department administrator&apos;s Drive; exporting e-signature results to Google Sheets
+              creates that sheet in the teacher&apos;s Drive. All of these are files SsamPin itself
+              creates; SsamPin does not access any other Drive files.
+            </li>
+            <li>
+              <strong>Google integration tokens kept on the server</strong> (when using assignment
+              collection or the Online Staff Room) — so that students and department members can
+              upload and open files even while the teacher&apos;s PC is off, the teacher&apos;s
+              Google account email and integration tokens are stored encrypted on the server
+              (Sections 3 and 11).
+            </li>
           </ul>
         </>
       ),
@@ -913,6 +1013,15 @@ const enContent = {
               Two-way synchronization of to-dos between SsamPin and Google Tasks (enabling use with
               the mobile Google Tasks app)
             </li>
+            <li>
+              Saving files students submit through assignment collection to the teacher&apos;s
+              Drive, and saving and sharing Online Staff Room files in the administrator&apos;s
+              Drive
+            </li>
+            <li>
+              Verifying the identity of the teacher who creates and manages assignment collection,
+              Online Staff Room, consultation booking, and surveys
+            </li>
           </ul>
           <p>
             Your information is never used for marketing, advertising, third-party analytics,
@@ -927,7 +1036,7 @@ const enContent = {
       title: 'How We Store Your Information',
       content: (
         <>
-          <p>SsamPin is designed with a serverless architecture:</p>
+          <p>SsamPin stores data as follows:</p>
           <ul>
             <li>
               <strong>Local storage by default:</strong> Active user data is, as a rule, stored on
@@ -936,8 +1045,9 @@ const enContent = {
               Section 11.
             </li>
             <li>
-              <strong>No SsamPin developer servers:</strong> The SsamPin developer does not operate
-              any server that stores or processes user data.
+              <strong>Cloud storage (processor):</strong> Data needed by the collaboration and AI
+              features is stored and processed on a cloud backend (Supabase) only when you use those
+              features (Section 11). We keep no other server that collects your data.
             </li>
             <li>
               <strong>Google Drive &quot;쌤핀 동기화&quot; folder:</strong> When the &quot;App-Data
@@ -948,12 +1058,25 @@ const enContent = {
             </li>
             <li>
               <strong>Encrypted storage:</strong> OAuth tokens are encrypted and stored in the OS
-              keychain using Windows DPAPI (Electron safeStorage).
+              keychain using Windows DPAPI (Electron safeStorage). If you use assignment collection
+              or the Online Staff Room, the same tokens are also kept on the server, encrypted with
+              AES-256-GCM (see below).
             </li>
             <li>
-              <strong>Direct communication:</strong> The app communicates directly with the Google
-              Calendar, Drive, and Tasks APIs from your PC, without passing through any intermediate
-              servers.
+              <strong>Google API communication:</strong> Google Calendar and Tasks sync and Drive
+              backup communicate with Google APIs directly from your PC, without passing through any
+              intermediate server. However, because students and department members must be able to
+              upload and open files while the teacher&apos;s PC is off,{' '}
+              <strong>assignment collection and the Online Staff Room</strong> keep the
+              teacher&apos;s Google account email and integration tokens encrypted on the server
+              (Supabase), and the server calls Google Drive with those tokens. The tokens carry the
+              same permissions granted when you connected your Google account (Section 6), but the
+              server uses them{' '}
+              <strong>
+                only for Drive operations (saving submitted files, saving files and managing sharing
+                for department files) and identity verification
+              </strong>
+              , and never accesses Google Calendar or Tasks.
             </li>
             <li>
               <strong>Transit security:</strong> All communication with Google APIs is encrypted in
@@ -970,14 +1093,25 @@ const enContent = {
         <>
           <ul>
             <li>
-              SsamPin retains data only while each Google integration feature is active. Data is
-              immediately deleted when you disconnect an integration or uninstall the app.
+              SsamPin syncs with Google only while each Google integration feature is active. When
+              you disconnect, syncing stops and data is deleted as described below.
             </li>
             <li>
               <strong>Google account disconnect:</strong> Pressing &quot;Disconnect&quot; in
-              Settings &gt; Google Integration removes OAuth tokens and all events/tasks imported
-              from Google from local storage. Locally created timetables, memos, and to-dos are
-              preserved.
+              Settings &gt; Google Integration (1) deletes the tokens kept on the server for
+              assignment collection and the Online Staff Room, (2) asks Google to revoke the tokens,
+              and (3) immediately removes the OAuth tokens and the events imported from Google
+              Calendar from this computer. If (1) or (2) cannot finish because of a network problem,
+              the app tells you so; in that case please revoke access directly from the Google
+              Account permissions page below. To-dos imported from Google Tasks stay in your to-do
+              list with syncing stopped, so delete them yourself if you wish. Locally created
+              timetables, memos, and to-dos are preserved.
+            </li>
+            <li>
+              <strong>Retention of tokens kept on the server:</strong> they are deleted immediately
+              on disconnect, as soon as the server finds that Google access has been revoked, and
+              automatically after six months without use. Opening assignment collection or the
+              Online Staff Room again stores a fresh token.
             </li>
             <li>
               <strong>App-Data Backup deletion:</strong> The &quot;Delete all cloud data&quot;
@@ -992,7 +1126,8 @@ const enContent = {
             <li>
               Uninstalling the app deletes all locally stored data (SsamPin&apos;s JSON files).
               Backup copies in the Google Drive app folder remain, so run &quot;Delete all cloud
-              data&quot; beforehand if you want to remove them as well.
+              data&quot; beforehand if you want to remove them as well. To delete the tokens kept on
+              the server right away, press &quot;Disconnect&quot; before uninstalling.
             </li>
             <li>
               You can also directly revoke the app&apos;s access from your{' '}
@@ -1020,15 +1155,17 @@ const enContent = {
               purposes.
             </li>
             <li>
-              SsamPin communicates directly with the Google Calendar, Drive, and Tasks APIs. In
-              addition, when you use <strong>online collaboration features</strong> (consultation
-              booking, assignment collection, e-signature, surveys, etc.), some data is transmitted
-              to and stored on a cloud backend (Supabase) as needed to provide those features. In
-              addition, when you ask the in-app AI assistant a question, that question and the
-              preceding conversation are sent to Upstage Inc. and Google LLC to generate an answer.
-              This is a <strong>processing consignment</strong> for feature delivery, not
-              third-party provision; see Section 11 for details. No data is sent to external
-              services other than those listed in Section 11.
+              SsamPin&apos;s Google Calendar and Tasks sync and Drive backup communicate with Google
+              APIs directly from your PC (for assignment collection and the Online Staff Room, see
+              Section 3). In addition, when you use <strong>online collaboration features</strong>{' '}
+              (consultation booking, assignment collection, e-signature, surveys, etc.), some data
+              is transmitted to and stored on a cloud backend (Supabase) as needed to provide those
+              features. When you ask the in-app AI assistant or Ssampin AI a question, it is sent to
+              Upstage Inc. and Google LLC to generate an answer. This is a{' '}
+              <strong>processing consignment</strong> for feature delivery, not third-party
+              provision; see Section 11 for details. Data passed to external AI tools you connect
+              yourself is covered by Section 10. No data is sent to external services other than
+              those listed in Sections 10 and 11.
             </li>
             <li>
               We do not transfer user data to advertisers, data brokers, or information resellers.
@@ -1038,8 +1175,20 @@ const enContent = {
               decisions, or any other purposes beyond the app&apos;s core functionality.
             </li>
             <li>
-              We do not use user data to train any machine-learning (ML) model, including SsamPin
-              itself.
+              SsamPin does not use user data to train machine-learning (ML) models and does not
+              provide it to third parties for training. However, content you send to Ssampin AI (if
+              you turn it on) may be used for model training by our processor, Upstage Inc. (Section
+              11).
+            </li>
+            <li>
+              <strong>
+                Data received through Google APIs (events imported from Google Calendar, to-dos
+                imported from Google Tasks, and assignment submissions or Staff Room files received
+                from Google Drive), whether raw, aggregated, or derived, is never sent to Ssampin AI
+                and is never used to develop, improve, or train any AI or ML model, nor provided to
+                anyone for that purpose.
+              </strong>{' '}
+              (Section 9)
             </li>
           </ul>
         </>
@@ -1061,7 +1210,9 @@ const enContent = {
               </strong>{' '}
               — retrieves the email address of the signed-in Google account to display it as the
               &quot;Connected Account&quot; in the Settings screen and to verify account consistency
-              on re-login. Other profile information (name, picture, etc.) is not requested.
+              on re-login. For assignment collection, the Online Staff Room, consultation booking,
+              and surveys, it verifies that you are the teacher who created them. Other profile
+              information (name, picture, etc.) is not requested.
             </li>
             <li>
               <strong>
@@ -1074,9 +1225,10 @@ const enContent = {
               <strong>
                 <code>.../auth/drive.file</code>
               </strong>{' '}
-              — accesses only the files SsamPin itself creates (inside the &quot;쌤핀 동기화&quot;
-              folder). Your other Drive files (documents, photos, etc.) remain inaccessible to
-              SsamPin.
+              — accesses only the files SsamPin itself creates: backup files in the &quot;쌤핀
+              동기화&quot; folder, assignment folders and submitted files, Online Staff Room files,
+              and e-signature result sheets. Your other Drive files (documents, photos, etc.) remain
+              inaccessible to SsamPin.
             </li>
             <li>
               <strong>
@@ -1096,6 +1248,9 @@ const enContent = {
               Limited Use requirements of the Google API Services User Data Policy
             </a>
             , and does not use the data for any purpose other than delivering the features above.
+            The four scopes are granted together as one connection; if you use assignment collection
+            or the Online Staff Room, that connection&apos;s tokens are kept encrypted on the server
+            (Section 3).
           </p>
         </>
       ),
@@ -1115,8 +1270,8 @@ const enContent = {
           </p>
           <ul>
             <li>
-              Disconnect your Google account in Settings &gt; Google Integration (all OAuth tokens
-              are deleted immediately)
+              Disconnect your Google account in Settings &gt; Google Integration (OAuth tokens on
+              this computer and on the server are deleted, and Google is asked to revoke them)
             </li>
             <li>Turn off App-Data Backup or run &quot;Delete all cloud data&quot;</li>
             <li>Turn off Google Tasks to stop synchronization</li>
@@ -1187,6 +1342,16 @@ const enContent = {
             </a>
             , including the Limited Use requirements.
           </p>
+          <p>
+            In particular, SsamPin does not use data obtained through Google Workspace APIs (Google
+            Calendar, Google Tasks, Google Drive), whether raw, aggregated, anonymized, or derived,{' '}
+            <strong>
+              to develop, improve, or train generalized (non-personalized) AI or ML models, and does
+              not transfer such data to third parties for that purpose.
+            </strong>{' '}
+            The use of raw or derived user data received from Google Workspace APIs will adhere to
+            the Google User Data Policy, including the Limited Use requirements.
+          </p>
         </>
       ),
     },
@@ -1196,11 +1361,19 @@ const enContent = {
       content: (
         <>
           <p>
-            Only when you explicitly connect the AI Bridge feature, SsamPin connects the student,
-            seating, and observation data stored on your computer with external AI tools (MCP
-            clients such as Claude, Codex/GPT, Antigravity/Gemini). This data is passed directly
-            from your computer to the external AI tool{' '}
-            <strong>without going through any intermediate server</strong>.
+            Only when you explicitly connect the AI Bridge feature, SsamPin connects data stored on
+            your computer — students, seating, observations, events, to-dos, and so on (including
+            events and to-dos synced from Google) — with external AI tools (MCP clients such as
+            Claude, Codex/GPT, Antigravity/Gemini). This data is passed directly from your computer
+            to the external AI tool <strong>without going through any intermediate server</strong>.
+          </p>
+          <p>
+            <strong>Run with my AI (connecting your own subscription)</strong> — if you turn this on
+            in Labs and connect your own Claude or Codex subscription, your questions in the Ssampin
+            AI panel and the material for student-record drafts (evidence you choose, such as
+            observations and assignment submissions, with student names masked as ［이름1］) are
+            passed directly from your computer to that tool, which can look up app data through the
+            AI Bridge above. Nothing goes through SsamPin servers.
           </p>
           <ul>
             <li>
@@ -1219,7 +1392,7 @@ const enContent = {
               include sensitive information) may be sent to the external AI.
             </li>
             <li>
-              Data passed to a connected external AI tool is subject to{' '}
+              Data passed to a connected external AI tool (including Run with my AI) is subject to{' '}
               <strong>that provider&apos;s policies (Anthropic, OpenAI, Google, etc.)</strong>.
               SsamPin is not involved in the external AI provider&apos;s data processing.
             </li>
@@ -1256,7 +1429,8 @@ const enContent = {
             <li>
               <strong>Consultation booking</strong> — the schedule and target class/student numbers,
               and the student number at the time of booking. The booker&apos;s contact details and
-              memo are encrypted on your device before transmission and storage.
+              memo are encrypted on your device before transmission and storage. To verify the
+              teacher who creates a schedule, their Google account email is checked and stored.
             </li>
             <li>
               <strong>Assignment collection</strong> — assignment information and submission status
@@ -1281,7 +1455,8 @@ const enContent = {
               (User-Agent) are stored only as <strong>hashes</strong>, not in raw form.
             </li>
             <li>
-              <strong>Surveys / checklists</strong> — student number and response content.
+              <strong>Surveys / checklists</strong> — student number and response content. To verify
+              the teacher who creates a survey, their Google account email is checked and stored.
             </li>
             <li>
               <strong>Classroom screen-share delivery receipts</strong> — only technical information
@@ -1295,8 +1470,13 @@ const enContent = {
               <strong>no student information or draft content is included.</strong>
             </li>
             <li>
-              <strong>Google integration token storage</strong> — the teacher&apos;s email and
-              encrypted OAuth tokens (AES-256-GCM).
+              <strong>Google integration token storage</strong> (when using assignment collection or
+              the Online Staff Room) — the teacher&apos;s Google account email and encrypted OAuth
+              tokens (AES-256-GCM). Used only for Drive operations: saving submitted files to the
+              teacher&apos;s Drive and saving and sharing department files in the
+              administrator&apos;s Drive. Deleted immediately on disconnect, as soon as Google
+              access is found to be revoked, and automatically after six months without use (Section
+              4).
             </li>
             <li>
               <strong>Online Staff Room</strong> — a space where teachers share notices and files
@@ -1354,6 +1534,33 @@ const enContent = {
               names or contact details in your questions.
             </li>
             <li>
+              <strong>Ssampin AI (in-app work assistant)</strong> — works{' '}
+              <strong>only if you turn it on in Settings</strong> (off by default). When on, your
+              question and <strong>the material the app finds on this computer</strong> — aggregate
+              figures (e.g., &quot;27 present, 1 absent&quot;), to-do and event titles and
+              locations, memo content, note and bookmark names, meals, timetable, and curriculum
+              progress — are sent to generate an answer. Student names and numbers are{' '}
+              <strong>replaced with placeholders such as ［이름1］</strong> before sending, and any
+              item containing contact details or resident registration numbers is excluded; turning
+              placeholders back into real names happens <strong>only on your computer</strong>.
+              Rosters, record text, attendance reasons, and counseling content are{' '}
+              <strong>not transmitted</strong>.{' '}
+              <strong>
+                Events and to-dos imported from Google Calendar and Google Tasks are not transmitted
+                at all — neither the items nor their count — and are shown only on your screen.
+              </strong>
+              <br />
+              <strong>
+                Because this AI is currently provided to us free of charge, content sent to it may
+                be used to train AI models, and there is no way to opt out.
+              </strong>{' '}
+              That is why the feature is limited to what does not include personal information.
+              Questions containing possibly sensitive wording (family circumstances, health,
+              counseling) are <strong>flagged on screen</strong> — not blocked; you decide whether
+              to send. Contact-number and resident-registration-number patterns and student names on
+              your roster are blocked or removed before sending.
+            </li>
+            <li>
               <strong>Reports to the developer (bug reports and suggestions)</strong> — what you
               send via &quot;Send feedback&quot; in the sidebar or the report form in the AI
               assistant. The text you write, a reply email address (only if you provide one), the
@@ -1397,11 +1604,10 @@ const enContent = {
           </p>
           <ul>
             <li>
-              Student information is Student information held by the app itself (attendance,
-              observation and counseling records) is{' '}
-              <strong>stored only on the teacher&apos;s PC</strong> and is not separately collected
-              by the developer. However, when the collaboration features below are used, that data
-              is stored with our cloud consignee (Section 11).
+              Student information held by the app itself (attendance, observation and counseling
+              records) is <strong>stored only on the teacher&apos;s PC</strong> and is not
+              separately collected by the developer. However, when the collaboration features below
+              are used, that data is stored with our cloud consignee (Section 11).
             </li>
             <li>
               In online collaboration features (consultation booking, surveys, checklists), students
@@ -1445,13 +1651,15 @@ const enContent = {
             Some of SsamPin&apos;s collaboration features, Google integrations, and the AI assistant
             consign personal information processing to companies whose servers are located overseas,
             and personal information may be transferred abroad in the process. If a teacher does not
-            use these features, no information is transferred overseas.
+            use these features, no information is transferred overseas.{' '}
+            <strong>Ssampin AI is off by default; nothing is sent unless you turn it on.</strong>
           </p>
           <ul>
             <li>
               <strong>Supabase Inc.</strong> (USA) — cloud storage and processing of collaboration
-              feature data (consultation booking, assignment collection, e-signature, surveys, etc.;
-              Section 11)
+              feature data (consultation booking, assignment collection, e-signature, surveys, etc.)
+              and of Google integration tokens for assignment collection and the Online Staff Room
+              (Section 11)
             </li>
             <li>
               <strong>Vercel Inc.</strong> (USA) — hosting of the web pages used by collaboration
@@ -1683,8 +1891,8 @@ export default async function PrivacyPage({ searchParams }: PageProps) {
             </svg>
             <p className="text-sm leading-relaxed text-sp-muted">
               {isEnglish
-                ? 'SsamPin does not operate its own server for storing user data, and all active data is stored on your PC by default. However, when you use Google integrations (Calendar, Drive backup, Tasks) or certain online collaboration features (consultation booking, assignment collection, e-signature, surveys, etc.), some data is transmitted to external services as needed to provide those features. See Sections 3, 5, and 11 below for details.'
-                : '쌤핀은 사용자 데이터를 저장하는 자체 서버를 운영하지 않으며, 모든 활성 데이터는 기본적으로 사용자 PC에 저장됩니다. 다만 Google 연동(캘린더·Drive 백업·Tasks)과 일부 온라인 협업 기능(상담 예약·과제 수합·전자 서명·설문 등)을 사용할 때는, 그 기능 제공에 필요한 범위에서 일부 데이터가 외부 서비스로 전송됩니다. 자세한 내용은 아래 제3조·제5조·제11조를 참고하세요.'}
+                ? 'SsamPin stores your data on your PC by default. However, when you use Google integrations (Calendar, Drive backup, Tasks), online collaboration features (consultation booking, assignment collection, e-signature, surveys, Online Staff Room, etc.), or AI features, some data is transmitted to external services as needed to provide those features, and collaboration data is stored on a cloud server (Supabase, our processor). If you use assignment collection or the Online Staff Room, your Google integration tokens are also kept encrypted on the server. See Sections 3, 5, 10, and 11 below for details.'
+                : '쌤핀의 데이터는 기본적으로 사용자 PC에 저장됩니다. 다만 Google 연동(캘린더·Drive 백업·Tasks), 온라인 협업 기능(상담 예약·과제 수합·전자 서명·설문·온라인 교무실 등), AI 기능을 사용할 때는 그 기능 제공에 필요한 범위에서 일부 데이터가 외부 서비스로 전송되며, 협업 기능의 자료는 클라우드 서버(Supabase, 수탁자)에 저장됩니다. 과제 수합·온라인 교무실을 쓰면 Google 연동 토큰도 암호화해 서버에 보관합니다. 자세한 내용은 아래 제3조·제5조·제10조·제11조를 참고하세요.'}
             </p>
           </div>
         </div>
