@@ -7,6 +7,7 @@ import type {
   IGoogleTasksPort,
   GoogleTask,
   GoogleTaskList,
+  GoogleTaskUpdate,
 } from '@domain/ports/IGoogleTasksPort';
 import { GOOGLE_AUTH_BLOCKED_MESSAGE } from '@domain/rules/calendarSyncRules';
 
@@ -57,8 +58,7 @@ function parseRetryAfterMs(header: string | null): number | null {
   return null;
 }
 
-const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 export class GoogleTasksApiClient implements IGoogleTasksPort {
   private onTokenRefresh: (() => Promise<string>) | null = null;
@@ -96,7 +96,11 @@ export class GoogleTasksApiClient implements IGoogleTasksPort {
       const body = await res.text();
 
       // 429 / 503: transient 케이스만 1~2회 재시도 (일일 쿼터는 즉시 throw)
-      if ((res.status === 429 || res.status === 503) && !isDailyQuotaExceeded(body) && backoffAttempt < 2) {
+      if (
+        (res.status === 429 || res.status === 503) &&
+        !isDailyQuotaExceeded(body) &&
+        backoffAttempt < 2
+      ) {
         const retryAfter = parseRetryAfterMs(res.headers.get('Retry-After'));
         const backoffMs = retryAfter ?? Math.min(1000 * 2 ** backoffAttempt, 4000);
         await sleep(backoffMs);
@@ -125,10 +129,7 @@ export class GoogleTasksApiClient implements IGoogleTasksPort {
   }
 
   async listTaskLists(accessToken: string): Promise<readonly GoogleTaskList[]> {
-    const data = await this.request<TaskListsResponse>(
-      accessToken,
-      '/users/@me/lists',
-    );
+    const data = await this.request<TaskListsResponse>(accessToken, '/users/@me/lists');
     return (data.items ?? []).map((list) => ({
       id: list.id,
       title: list.title,
@@ -178,21 +179,17 @@ export class GoogleTasksApiClient implements IGoogleTasksPort {
     taskListId: string,
     task: Partial<GoogleTask>,
   ): Promise<GoogleTask> {
-    return this.request<GoogleTask>(
-      accessToken,
-      `/lists/${encodeURIComponent(taskListId)}/tasks`,
-      {
-        method: 'POST',
-        body: JSON.stringify(task),
-      },
-    );
+    return this.request<GoogleTask>(accessToken, `/lists/${encodeURIComponent(taskListId)}/tasks`, {
+      method: 'POST',
+      body: JSON.stringify(task),
+    });
   }
 
   async updateTask(
     accessToken: string,
     taskListId: string,
     taskId: string,
-    task: Partial<GoogleTask>,
+    task: GoogleTaskUpdate,
   ): Promise<GoogleTask> {
     return this.request<GoogleTask>(
       accessToken,
@@ -204,11 +201,7 @@ export class GoogleTasksApiClient implements IGoogleTasksPort {
     );
   }
 
-  async deleteTask(
-    accessToken: string,
-    taskListId: string,
-    taskId: string,
-  ): Promise<void> {
+  async deleteTask(accessToken: string, taskListId: string, taskId: string): Promise<void> {
     await this.request<void>(
       accessToken,
       `/lists/${encodeURIComponent(taskListId)}/tasks/${encodeURIComponent(taskId)}`,

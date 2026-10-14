@@ -4,11 +4,11 @@ export interface GoogleTask {
   readonly title: string;
   readonly notes?: string;
   readonly status: 'needsAction' | 'completed';
-  readonly due?: string;        // RFC3339 date string
-  readonly updated: string;     // RFC3339
+  readonly due?: string; // RFC3339 date string
+  readonly updated: string; // RFC3339
   readonly etag: string;
   readonly selfLink?: string;
-  readonly completed?: string;  // RFC3339 (완료 시각)
+  readonly completed?: string; // RFC3339 (완료 시각)
   readonly deleted?: boolean;
   /**
    * tasks.clear() 또는 Google Tasks 앱에서 "완료 항목 지우기" 실행 후 마킹되는 플래그.
@@ -17,6 +17,17 @@ export interface GoogleTask {
    */
   readonly hidden?: boolean;
   readonly parent?: string;
+}
+
+/**
+ * Task 수정(PATCH) 쓰기용 — 지운 마감일·메모는 `null` 로 보내 구글 쪽도 지운다.
+ * 생성(POST)은 값이 없는 칸을 보내지 않으므로 `createTask` 는 `Partial<GoogleTask>` 그대로다.
+ */
+export interface GoogleTaskUpdate {
+  readonly title?: string;
+  readonly status?: 'needsAction' | 'completed';
+  readonly due?: string | null;
+  readonly notes?: string | null;
 }
 
 /** Google Task List */
@@ -31,11 +42,24 @@ export interface IGoogleTasksPort {
   /** 사용자의 Task List 목록 조회 */
   listTaskLists(accessToken: string): Promise<readonly GoogleTaskList[]>;
   /** 특정 Task List의 모든 Task 조회 */
-  listTasks(accessToken: string, taskListId: string, updatedMin?: string): Promise<readonly GoogleTask[]>;
+  listTasks(
+    accessToken: string,
+    taskListId: string,
+    updatedMin?: string,
+  ): Promise<readonly GoogleTask[]>;
   /** Task 생성 */
-  createTask(accessToken: string, taskListId: string, task: Partial<GoogleTask>): Promise<GoogleTask>;
+  createTask(
+    accessToken: string,
+    taskListId: string,
+    task: Partial<GoogleTask>,
+  ): Promise<GoogleTask>;
   /** Task 수정 (PATCH) */
-  updateTask(accessToken: string, taskListId: string, taskId: string, task: Partial<GoogleTask>): Promise<GoogleTask>;
+  updateTask(
+    accessToken: string,
+    taskListId: string,
+    taskId: string,
+    task: GoogleTaskUpdate,
+  ): Promise<GoogleTask>;
   /** Task 삭제 */
   deleteTask(accessToken: string, taskListId: string, taskId: string): Promise<void>;
 }
