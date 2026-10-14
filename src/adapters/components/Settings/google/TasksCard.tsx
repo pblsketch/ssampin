@@ -1,5 +1,6 @@
 import { ServiceCard } from '../shared/ServiceCard';
 import { TasksScopeRequestModal } from '../modals/TasksScopeRequestModal';
+import { TasksConflictLog } from './TasksConflictLog';
 import { useGoogleAccountStore } from '@adapters/stores/useGoogleAccountStore';
 import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
 import { Modal } from '@adapters/components/common/Modal';
@@ -96,6 +97,9 @@ export function TasksCard({ onJumpToBackup }: TasksCardProps) {
               : '연동 기록 없음'}
           </span>
         </div>
+
+        {/* 최근 충돌 기록 (기록이 없으면 그리지 않는다) */}
+        <TasksConflictLog />
 
         {/* 지금 연동 실행 */}
         <button
