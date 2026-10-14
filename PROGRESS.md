@@ -1,6 +1,6 @@
 # Progress
 
-마지막 업데이트: 2026-09-29 KST (v2.5.4 출시 완료)
+마지막 업데이트: 2026-10-14 KST (Google Tasks 동기화 보강 — 미출시)
 
 > **이 파일은 상태판이다 — 300줄 상한.** 세션별 상세 기록은 `docs/progress/YYYY-MM.md`(최신이 위)에 쓰고,
 > 여기에는 항목당 3~5줄과 링크만 남긴다. 완료·출시된 개별 항목은 지우고 릴리즈 요약 하나로 합친다.
@@ -24,6 +24,9 @@
 - **퀴즈·설문·토론 후속**: 격차 분석의 P0 — 부적절한 응답을 교실 화면에서 가리는 장치(`hideWord` 는 있으나 연결 안 됨). 글자 대비 미달은 공통 토큰(`sp-muted`·`sp-accent`) 문제라 디자인 협업·오너 판단 대기. 터널 성공·실패 계측은 오너 판단 대기.
   [격차 분석](docs/03-analysis/participation-classroom-gap-20260921.analysis.md).
 - **사용 통계·온라인 교무실 계측 후속**: 통계 롤업은 재가동됐고 서버061·065는 운영 적용. 앱 계측 배포·실기기 확인과 지표 관찰이 남았다. [2026-09](docs/progress/2026-09.md) · [2026-08](docs/progress/2026-08.md).
+- **Google Tasks 동기화 보강 (2026-10-14, ADR-141)**: 충돌 알림·기록(쌤핀이 이기고 덮이는 구글 내용을 남김)·지운 마감일/메모 반영·로그 정리·암호화 불가 시 메모리 보관.
+  게이트 초록(전체 테스트 메타 4파일은 5초 제한 시간 초과 → 60초로 단독 통과). **실제 구글 계정 확인 미완·미출시**, 공개 가이드 변경은 미커밋.
+  [체크리스트](docs/google-tasks-sync.md) · [기록](docs/progress/2026-10.md).
 - **Supabase 디스크 IO 예산 경고 → 롤업 증분 갱신 (2026-09-30, ADR-140)**: 078 운영 적용 — 구체화 뷰 9종을 같은 이름 표로 바꾸고 새 행이 닿은 날짜·기기만 다시 계산. 9종 전수 대조 일치, 정기 회차 65초(옛 130~280초), 회차당 IO 약 절반.
   **오너 판단 필요**: 메모리 부족(Nano 0.5GB) 탓 스왑 IO 가 평소에도 기준(250 IOPS)을 넘나들어 경고는 계속 올 수 있다 — 처방은 컴퓨트 Micro 승격. [기록](docs/progress/2026-09.md).
 
@@ -51,5 +54,5 @@
 
 ## 📚 기록 보관
 
-- 월별 작업 기록: [2026-09](docs/progress/2026-09.md) · [2026-08](docs/progress/2026-08.md) · [2026-07](docs/progress/2026-07.md) · [2026-06](docs/progress/2026-06.md) · [옛 상태판](docs/progress/legacy-status-board.md)
+- 월별 작업 기록: [2026-10](docs/progress/2026-10.md) · [2026-09](docs/progress/2026-09.md) · [2026-08](docs/progress/2026-08.md) · [2026-07](docs/progress/2026-07.md) · [2026-06](docs/progress/2026-06.md) · [옛 상태판](docs/progress/legacy-status-board.md)
 - 결정 기록: [DECISIONS.md](DECISIONS.md) → `docs/03-decisions/ADR-NNN.md`

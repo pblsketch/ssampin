@@ -3,6 +3,10 @@
  *
  * 로컬 Todo ↔ Google Tasks 양방향 동기화 처리.
  * domain 레이어만 의존.
+ *
+ * ★현재 쓰이지 않는다(충돌 수가 항상 0 인 옛 구현). 실제 동기화의 정본은
+ *   `adapters/stores/useTasksSyncStore.ts` 의 `syncNow` 이고, 충돌 규칙은
+ *   `domain/rules/tasksSyncRules.ts` 다. 여기를 고쳐도 동작이 바뀌지 않는다(ADR-141).
  */
 import type { Todo } from '@domain/entities/Todo';
 import type { IGoogleTasksPort, GoogleTask } from '@domain/ports/IGoogleTasksPort';
