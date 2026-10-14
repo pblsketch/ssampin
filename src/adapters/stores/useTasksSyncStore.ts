@@ -469,12 +469,44 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
           }
 
           try {
-            await googleTasksPort.updateTask(
+            const updated = await googleTasksPort.updateTask(
               accessToken,
               taskListId,
               todo.googleTaskId,
               toGoogleTaskUpdatePayload(todo),
             );
+
+            if (updated.deleted === true) {
+              // 실제 구글 계정으로 확인한 동작(2026-10-14): 삭제된 항목에 수정을 보내면 오류 없이
+              // 200 으로 받아 주지만 삭제 상태 그대로다(되살아나지 않는다). 올리기 전 구글 상태를
+              // 읽지 못한 회차에서는 이 응답이 유일한 신호다. 그대로 두면 이어지는 가져오기가
+              // 삭제 표시를 보고 쌤핀에서 고친 할 일을 지운다 — 쌤핀 변경을 살려 새로 만든다.
+              if (!conflictKind) {
+                detectedConflicts.push(
+                  buildTasksSyncConflict({
+                    id: generateUUID(),
+                    detectedAt: stamp(),
+                    kind: 'remote-deleted',
+                    todo,
+                    remote: undefined,
+                  }),
+                );
+              }
+              const created = await googleTasksPort.createTask(
+                accessToken,
+                taskListId,
+                toGoogleTaskCreatePayload(todo),
+              );
+              workMap.set(todo.id, {
+                ...todo,
+                googleTaskId: created.id,
+                googleTaskListId: taskListId,
+                pendingRemoteOp: undefined,
+                lastSyncedAt: stamp(),
+              });
+              continue;
+            }
+
             workMap.set(todo.id, {
               ...todo,
               pendingRemoteOp: undefined,

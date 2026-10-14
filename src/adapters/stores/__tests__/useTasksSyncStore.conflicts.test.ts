@@ -121,7 +121,8 @@ beforeEach(() => {
       },
     ) => {
       const cur = remoteTasks.get(id);
-      if (!cur || cur.deleted) throw notFound();
+      // 실제 구글(2026-10-14 확인): 삭제된 항목에 수정을 보내도 오류 없이 200 이고 삭제 상태 그대로다.
+      if (!cur) throw notFound();
       const next: GoogleTask = {
         ...cur,
         ...(p.title !== undefined ? { title: p.title } : {}),
@@ -384,6 +385,42 @@ describe('syncNow — 충돌 알림과 기록', () => {
     expect(found('t1').pendingRemoteOp).toBeUndefined();
     expect(useTasksSyncStore.getState().conflicts).toEqual([]);
     expect(useTasksSyncStore.getState().error).toBeNull();
+  });
+});
+
+describe('syncNow — 삭제된 항목에 수정이 받아들여지는 구글 동작', () => {
+  it('구글 상태를 읽지 못한 회차에도 삭제된 항목에 보낸 수정이 성공으로 끝나지 않고 새로 만든다', async () => {
+    seed(
+      [todo({ id: 't1', googleTaskId: 'g1', text: '쌤핀 제목', pendingRemoteOp: 'update' })],
+      [remoteTask({ id: 'g1', deleted: true, title: '지워진 제목', updated: T1 })],
+    );
+    mocks.listTasks.mockRejectedValueOnce(new Error('network')); // 스냅샷 읽기 실패
+
+    await runSync();
+
+    // 수정은 200 으로 받아들여졌지만 삭제 상태 그대로 — 쌤핀에서 고친 내용을 살려 새로 만든다
+    expect(mocks.updateTask).toHaveBeenCalledTimes(1);
+    expect(mocks.createTask).toHaveBeenCalledTimes(1);
+    expect(found('t1').text).toBe('쌤핀 제목');
+    expect(found('t1').googleTaskId).toBe('new-1');
+    expect(found('t1').pendingRemoteOp).toBeUndefined();
+    const [c] = useTasksSyncStore.getState().conflicts;
+    expect(c?.kind).toBe('remote-deleted');
+    expect(mocks.toastShow).toHaveBeenCalledTimes(1);
+  });
+
+  it('위 경로에서 재생성이 실패해도 쌤핀 할 일은 남고 다음 회차에 다시 시도한다', async () => {
+    seed(
+      [todo({ id: 't1', googleTaskId: 'g1', text: '쌤핀 제목', pendingRemoteOp: 'update' })],
+      [remoteTask({ id: 'g1', deleted: true, title: '지워진 제목', updated: T1 })],
+    );
+    mocks.listTasks.mockRejectedValueOnce(new Error('network'));
+    mocks.createTask.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 503 }));
+
+    await runSync();
+
+    expect(found('t1').text).toBe('쌤핀 제목');
+    expect(found('t1').pendingRemoteOp).toBe('update');
   });
 });
 
