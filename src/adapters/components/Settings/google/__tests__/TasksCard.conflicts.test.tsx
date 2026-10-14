@@ -85,7 +85,7 @@ describe('TasksCard — 최근 충돌 기록', () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        '쌤핀에서 지우거나 보관해서 구글에서도 지웠어요 · 구글에서 고친 내용은 아래에 남겨요',
+        '쌤핀에서 보관해서 구글에서도 지웠어요 · 구글에서 고친 내용은 아래에 남겨요',
       ),
     ).toBeTruthy();
   });

@@ -125,11 +125,13 @@ export function detectTasksConflict(input: DetectTasksConflictInput): TasksSyncC
   if (todo.googleTaskListId !== undefined && todo.googleTaskListId !== taskListId) return null;
   if (op !== 'update' && op !== 'delete') return null;
 
+  // 구글 하위 할 일은 쌤핀 할 일과 연결되지 않는다 — 지워진 것이어도 판정하지 않는다.
+  if (remote?.parent) return null;
+
   // 구글에서 이미 지워졌다 — 쌤핀에서 고친 경우만 알린다(지우려던 것은 잃을 내용이 없다).
   if (remote === undefined || remote.deleted === true) {
     return op === 'update' ? 'remote-deleted' : null;
   }
-  if (remote.parent) return null;
 
   if (!remoteIsNewer(remote.updated, todo.lastSyncedAt)) return null;
   const content = remoteTaskContent(remote);

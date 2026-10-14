@@ -74,7 +74,17 @@ export function registerSecureStorageHandlers(): void {
     // 암호화 불가 — 디스크에 평문을 쓰지 않는다. 메모리에만 두고 옛 평문 파일은 지운다.
     memoryOnly.set(key, value);
     if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath);
+      // 옛 **평문**만 지운다. 암호화된 파일은 잠깐 암호화를 못 쓰는 것일 수 있어(키체인이 아직
+      // 준비되지 않음 등) 지우면 암호화가 돌아와도 다시 로그인해야 한다 — 그대로 둔다.
+      let legacyPlaintext = false;
+      try {
+        legacyPlaintext = isJsonText(fs.readFileSync(filePath, 'utf-8'));
+      } catch {
+        legacyPlaintext = false;
+      }
+      if (legacyPlaintext) {
+        fs.unlinkSync(filePath);
+      }
     }
     if (!warnedMemoryOnly) {
       warnedMemoryOnly = true;

@@ -33,6 +33,9 @@ const FORBIDDEN: readonly RegExp[] = [
   /\brefreshToken\b/,
   /\bcodeVerifier\b/,
   /\bcodeChallenge\b/,
+  /\bcode\b/, // 인증 코드(불리언으로 감싼 것은 위에서 지운다)
+  /\b(?:final|auth)Url\b/, // client_id·redirect_uri 가 든 주소
+  /\btokens\b/,
   /\bprimary\b/, // 기본 캘린더의 ID·이름은 사용자 이메일이다
   /\bexistingMapping\.googleCalendarId\b/, // 매핑된 캘린더 ID(기본 캘린더면 이메일)
 ];

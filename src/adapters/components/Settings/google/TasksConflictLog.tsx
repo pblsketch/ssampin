@@ -10,8 +10,7 @@ import type {
 const KIND_LABEL: Readonly<Record<TasksSyncConflictKind, string>> = {
   'edit-edit': '구글과 쌤핀에서 둘 다 고쳤어요 · 쌤핀 내용을 남겼어요',
   'remote-deleted': '구글에서 지웠지만 쌤핀에서 고쳐서 구글에 다시 만들었어요',
-  'local-deleted':
-    '쌤핀에서 지우거나 보관해서 구글에서도 지웠어요 · 구글에서 고친 내용은 아래에 남겨요',
+  'local-deleted': '쌤핀에서 보관해서 구글에서도 지웠어요 · 구글에서 고친 내용은 아래에 남겨요',
 };
 
 /** "2026-10-14" → "2026년 10월 14일". 모양이 다르면 받은 그대로 보여 준다. */

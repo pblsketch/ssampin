@@ -119,9 +119,16 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
     });
 
     if (!res.ok) {
-      const err = await res.text();
-      // redirect_uri·client_id 는 화면·로그에 남기지 않는다. 상태 코드와 구글이 준 오류만 남긴다.
-      throw new Error(`Token exchange failed: ${res.status} ${err}`);
+      const body = await res.text();
+      // redirect_uri·client_id 는 화면·로그에 남기지 않는다. 상태 코드와 구글이 준 오류 코드만 남긴다.
+      let code = '';
+      try {
+        const parsed = JSON.parse(body) as { error?: unknown };
+        if (typeof parsed.error === 'string') code = parsed.error;
+      } catch {
+        // 본문이 JSON 이 아니면 상태 코드만 남긴다.
+      }
+      throw new Error(`Token exchange failed: ${res.status}${code ? ` ${code}` : ''}`);
     }
 
     const data = (await res.json()) as TokenResponse;

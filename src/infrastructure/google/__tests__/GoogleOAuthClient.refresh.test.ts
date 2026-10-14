@@ -84,6 +84,21 @@ describe('GoogleOAuthClient 토큰 갱신·교환', () => {
     });
   });
 
+  it('코드 교환 실패 메시지는 상태 코드와 구글 오류 코드만 담는다', async () => {
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: 'redirect_uri_mismatch',
+          error_description: `Bad redirect http://127.0.0.1:54321/callback for ${CLIENT_ID}`,
+        }),
+        { status: 400 },
+      ),
+    );
+    await expect(
+      new GoogleOAuthClient().exchangeCode('c', 'http://127.0.0.1:54321/callback', 'v'),
+    ).rejects.toThrow(new Error('Token exchange failed: 400 redirect_uri_mismatch'));
+  });
+
   it('코드 교환에 성공해도 이메일·redirect_uri 를 콘솔에 남기지 않는다', async () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => undefined);
     fetchMock

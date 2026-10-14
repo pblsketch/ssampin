@@ -117,6 +117,23 @@ describe('암호화를 쓸 수 없을 때', () => {
     expect(call('secure:read', KEY)).toBe(JSON.stringify({ accessToken: 'new' }));
   });
 
+  it('쓰기: 암호화된 파일은 지우지 않는다(잠깐 못 쓰는 것일 수 있다)', () => {
+    state.available = true;
+    call('secure:write', KEY, TOKENS);
+    const encrypted = fs.readFileSync(file());
+    state.available = false;
+
+    call('secure:write', KEY, JSON.stringify({ accessToken: 'refreshed' }));
+
+    expect(fs.existsSync(file())).toBe(true);
+    expect(fs.readFileSync(file()).equals(encrypted)).toBe(true);
+    // 이번 실행 중에는 메모리 값이 우선한다
+    expect(call('secure:read', KEY)).toBe(JSON.stringify({ accessToken: 'refreshed' }));
+    // 암호화가 돌아오면 파일의 값을 읽을 수 있다
+    call('secure:delete', KEY);
+    expect(fs.existsSync(file())).toBe(false);
+  });
+
   it('쓰기: 경고에 값을 싣지 않는다', () => {
     call('secure:write', KEY, TOKENS);
     const warned = (console.warn as unknown as { mock: { calls: unknown[][] } }).mock.calls

@@ -120,7 +120,7 @@ describe('충돌 판정', () => {
     expect(detect(todo(), remote())).toBe('edit-edit');
   });
 
-  it('local-deleted: 쌤핀에서 지운(보관한) 것을 구글에서 고쳤다', () => {
+  it('local-deleted: 쌤핀에서 보관한 것을 구글에서 고쳤다', () => {
     expect(detect(todo({ pendingRemoteOp: 'delete' }), remote())).toBe('local-deleted');
   });
 
@@ -209,6 +209,9 @@ describe('충돌 판정', () => {
     });
     it('구글 하위 할 일', () => {
       expect(detect(todo(), remote({ parent: 'p1' }))).toBeNull();
+    });
+    it('지워진 구글 하위 할 일도 판정하지 않는다', () => {
+      expect(detect(todo(), remote({ parent: 'p1', deleted: true }))).toBeNull();
     });
   });
 });

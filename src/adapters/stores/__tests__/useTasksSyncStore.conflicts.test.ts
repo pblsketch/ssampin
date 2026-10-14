@@ -535,3 +535,83 @@ describe('syncNow — 기록 관리', () => {
     expect(useTasksSyncStore.getState().conflicts.map((c) => c.id)).toEqual(['c1']);
   });
 });
+
+describe('syncNow — 검토에서 나온 경로', () => {
+  it('재생성이 실패해도 같은 회차의 가져오기가 쌤핀에서 고친 할 일을 지우지 않는다', async () => {
+    seed(
+      [todo({ id: 't1', googleTaskId: 'g1', text: '쌤핀 제목', pendingRemoteOp: 'update' })],
+      [remoteTask({ id: 'g1', deleted: true, title: '지워진 제목', updated: T1 })],
+    );
+    mocks.createTask.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 503 }));
+
+    await runSync();
+
+    // 선생님이 고친 내용이 살아 있고, 다음 회차에 다시 올릴 수 있게 보류 상태다
+    expect(found('t1').text).toBe('쌤핀 제목');
+    expect(found('t1').pendingRemoteOp).toBe('update');
+    expect(mocks.updateTask).not.toHaveBeenCalled();
+  });
+
+  it('재생성이 실패한 뒤 다음 회차에 성공하면 구글에 다시 만들어진다', async () => {
+    seed(
+      [todo({ id: 't1', googleTaskId: 'g1', text: '쌤핀 제목', pendingRemoteOp: 'update' })],
+      [remoteTask({ id: 'g1', deleted: true, title: '지워진 제목', updated: T1 })],
+    );
+    mocks.createTask.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: 503 }));
+
+    await runSync();
+    await runSync();
+
+    expect(found('t1').googleTaskId).toBe('new-1');
+    expect(found('t1').pendingRemoteOp).toBeUndefined();
+    expect(useTasksSyncStore.getState().conflicts).toHaveLength(1); // 중복 기록 없음
+  });
+
+  it('동기화가 도는 사이 연결을 끊으면 충돌 기록을 다시 남기지 않는다', async () => {
+    seed(
+      [todo({ id: 't1', googleTaskId: 'g1', text: '쌤핀 제목', pendingRemoteOp: 'update' })],
+      [remoteTask({ id: 'g1', title: '구글 제목', updated: T1 })],
+    );
+    const original = mocks.updateTask.getMockImplementation();
+    mocks.updateTask.mockImplementation(async (...args: unknown[]) => {
+      await useTasksSyncStore.getState().disableSync(); // 올리는 도중 끊음
+      return original ? original(...args) : undefined;
+    });
+
+    await runSync();
+
+    expect(useTasksSyncStore.getState().conflicts).toEqual([]);
+    expect(storageFiles.has('tasks-sync-conflicts')).toBe(false);
+    expect(mocks.toastShow).not.toHaveBeenCalled();
+  });
+
+  it('404 대체 생성도 빈 마감일·메모를 null 로 보내지 않는다', async () => {
+    seed([
+      todo({
+        id: 't1',
+        googleTaskId: 'old-g',
+        googleTaskListId: 'old-list',
+        pendingRemoteOp: 'update',
+        dueDate: undefined,
+        notes: undefined,
+      }),
+    ]);
+    await runSync();
+    const payload = mocks.createTask.mock.calls[0]?.[2] as Record<string, unknown>;
+    expect('due' in payload).toBe(false);
+    expect('notes' in payload).toBe(false);
+  });
+
+  it('옛 목록에 연결된 항목만 보류 중이면 구글 상태를 추가로 읽지 않는다', async () => {
+    seed([
+      todo({
+        id: 't1',
+        googleTaskId: 'old-g',
+        googleTaskListId: 'old-list',
+        pendingRemoteOp: 'update',
+      }),
+    ]);
+    await runSync();
+    expect(mocks.listTasks).toHaveBeenCalledTimes(1); // 가져오기 한 번뿐
+  });
+});

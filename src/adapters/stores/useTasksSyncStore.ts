@@ -283,10 +283,15 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
     const flushConflicts = async (): Promise<void> => {
       if (detectedConflicts.length === 0) return;
       const incoming = detectedConflicts.splice(0, detectedConflicts.length);
+      // 회차가 도는 사이 동기화가 꺼졌다면(연결 해제) 구글에서 받은 내용을 다시 남기지 않는다.
+      if (!get().isEnabled) return;
       const { merged, added } = mergeTasksSyncConflicts(get().conflicts, incoming);
       if (added.length === 0) return;
       set({ conflicts: merged });
-      await writeTasksSyncConflicts(merged);
+      if (!(await writeTasksSyncConflicts(merged))) {
+        // 내용은 싣지 않는다. 화면에는 보이지만 다시 켜면 기록이 없을 수 있다.
+        console.warn('[TasksSync] 충돌 기록을 저장하지 못했습니다');
+      }
       try {
         const { useToastStore } = await import('@adapters/components/common/Toast');
         // 제목은 넣지 않는다(개수만) — 할 일에는 학생 이름이 들어갈 수 있다(ADR-066).
@@ -323,7 +328,10 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         let remoteSnapshot: ReadonlyMap<string, GoogleTask> | null = null;
         const needsSnapshot = [...workMap.values()].some(
           (t) =>
-            !!t.googleTaskId && (t.pendingRemoteOp === 'update' || t.pendingRemoteOp === 'delete'),
+            !!t.googleTaskId &&
+            (t.pendingRemoteOp === 'update' || t.pendingRemoteOp === 'delete') &&
+            // 옛(다른) 목록에 연결된 항목은 판정하지 않으므로 읽을 이유도 없다
+            (t.googleTaskListId === undefined || t.googleTaskListId === taskListId),
         );
         if (needsSnapshot) {
           try {
@@ -376,7 +384,8 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         // (b) 로컬 todo 중 pendingRemoteOp:'delete' 항목
         for (const todo of [...workMap.values()]) {
           if (todo.pendingRemoteOp !== 'delete' || !todo.googleTaskId) continue;
-          // 쌤핀에서 지운(보관한) 사이 구글에서 고쳤다면 사라지기 전에 그 내용을 기록한다.
+          // 쌤핀에서 보관한 사이 구글에서 고쳤다면 사라지기 전에 그 내용을 기록한다.
+          // (영구 삭제는 로컬 기록이 이미 없어 비교할 내용이 없다 — 고아 삭제 큐라 판정하지 않는다.)
           judgeConflict(todo);
           try {
             await googleTasksPort.deleteTask(accessToken, taskListId, todo.googleTaskId);
@@ -534,6 +543,10 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
                   remoteDeletedAt: stamp(),
                   lastSyncedAt: stamp(),
                 });
+              } else if (local.pendingRemoteOp === 'update') {
+                // 쌤핀에서 고친 내용을 아직 못 올린 항목(올리기가 실패해 보류 중)이다. 구글 삭제를
+                // 따라 지우면 선생님이 고친 내용이 사라진다 — 남겨 두면 다음 회차 올리기 단계가
+                // 구글에 다시 만든다(충돌로 기록된다). 4-4 가 보류 항목을 보호하는 것과 같다.
               } else {
                 // 일반 todo는 원격 삭제 = 로컬 삭제 (사용자 기대)
                 workMap.delete(local.id);
