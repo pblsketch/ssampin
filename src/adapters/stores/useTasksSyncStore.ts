@@ -2,9 +2,23 @@ import { create } from 'zustand';
 import type { GoogleTask, GoogleTaskList } from '@domain/ports/IGoogleTasksPort';
 import type { Todo } from '@domain/entities/Todo';
 import { TODO_LOCAL_ONLY_FIELDS } from '@domain/entities/Todo';
+import type { TasksSyncConflict } from '@domain/entities/TasksSyncConflict';
 import { completedAtFromRemote } from '@domain/rules/todoCompletion';
 import { todoContentDiffers } from '@domain/rules/googleSourcedData';
+import {
+  buildTasksSyncConflict,
+  detectTasksConflict,
+  mergeTasksSyncConflicts,
+  remoteNotesToLocal,
+  toGoogleTaskCreatePayload,
+  toGoogleTaskUpdatePayload,
+} from '@domain/rules/tasksSyncRules';
 import { generateUUID } from '@infrastructure/utils/uuid';
+import {
+  clearTasksSyncConflictsStorage,
+  readTasksSyncConflicts,
+  writeTasksSyncConflicts,
+} from '@adapters/repositories/tasksSyncConflictStore';
 
 interface TasksSyncState {
   // 동기화 설정
@@ -32,6 +46,12 @@ interface TasksSyncState {
   /** 원격에서 삭제 대기 중인 Google Task ID 목록 (orphan: 로컬 record가 이미 사라진 항목) */
   pendingDeleteIds: readonly string[];
 
+  /**
+   * 최근 충돌 기록(최신이 앞, 최대 20개). **기기 전용** — `tasks-sync-state` 가 아니라
+   * 별도 키에 둔다. 승자는 늘 쌤핀이고, 덮인 구글 쪽 내용을 잃지 않게 남긴다.
+   */
+  conflicts: readonly TasksSyncConflict[];
+
   // 액션
   enableSync: () => Promise<void>;
   disableSync: () => Promise<void>;
@@ -45,6 +65,8 @@ interface TasksSyncState {
   markForRemoteDelete: (googleTaskId: string) => Promise<void>;
   /** 쿼터 쿨다운을 즉시 해제 (사용자가 설정 화면에서 "지금 다시 시도"를 누를 때) */
   clearQuotaCooldown: () => Promise<void>;
+  /** 충돌 기록을 모두 지운다 (설정 화면의 "기록 지우기") */
+  clearConflicts: () => Promise<void>;
 }
 
 const STORAGE_KEY = 'tasks-sync-state';
@@ -115,6 +137,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
   showScopeRequestModal: false,
   showTaskListPicker: false,
   pendingDeleteIds: [],
+  conflicts: [],
 
   enableSync: async () => {
     const { useCalendarSyncStore } = await import('./useCalendarSyncStore');
@@ -154,6 +177,7 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
       error: null,
       quotaCooldownUntil: null,
       pendingDeleteIds: [],
+      conflicts: [],
     });
 
     try {
@@ -168,6 +192,9 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
     } catch (err) {
       console.error('[TasksSync] disableSync 저장 오류:', err);
     }
+
+    // 연결을 끊으면 구글에서 받은 내용이 든 충돌 기록도 함께 지운다.
+    await clearTasksSyncConflictsStorage();
   },
 
   setShowScopeRequestModal: (show) => set({ showScopeRequestModal: show }),
@@ -245,6 +272,37 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
     set({ isSyncing: true, error: null });
     const taskListId = state.taskListId;
 
+    // 이번 회차에 판정한 충돌. 회차가 뒤에서 실패해도 이미 구글을 덮어썼으므로 finally 에서 저장한다.
+    const detectedConflicts: TasksSyncConflict[] = [];
+
+    /**
+     * 이번 회차의 충돌을 기록에 합치고, 새로 들어간 것이 있으면 토스트를 한 번 띄운다.
+     * 합칠 때는 회차 시작 때 읽은 사본이 아니라 **지금의 기록**에 합친다
+     * (그 사이 선생님이 "기록 지우기"를 눌렀을 수 있다).
+     */
+    const flushConflicts = async (): Promise<void> => {
+      if (detectedConflicts.length === 0) return;
+      const incoming = detectedConflicts.splice(0, detectedConflicts.length);
+      const { merged, added } = mergeTasksSyncConflicts(get().conflicts, incoming);
+      if (added.length === 0) return;
+      set({ conflicts: merged });
+      await writeTasksSyncConflicts(merged);
+      try {
+        const { useToastStore } = await import('@adapters/components/common/Toast');
+        // 제목은 넣지 않는다(개수만) — 할 일에는 학생 이름이 들어갈 수 있다(ADR-066).
+        useToastStore
+          .getState()
+          .show(
+            `구글과 쌤핀에서 서로 다르게 바뀐 할 일이 ${added.length}개 있어요. 쌤핀에서 한 변경을 따랐어요. 구글 쪽 내용은 설정의 Google Tasks 카드에서 볼 수 있어요.`,
+            'info',
+            undefined,
+            6000,
+          );
+      } catch {
+        // 토스트 표시 실패는 무시
+      }
+    };
+
     tasksSyncPromise = (async () => {
       try {
         const { authenticateGoogle, googleTasksPort, todoRepository } =
@@ -259,6 +317,42 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         // 작업용 맵 (id 기준)
         const workMap = new Map<string, Todo>(initialTodos.map((t) => [t.id, t]));
         const stamp = (): string => new Date().toISOString();
+
+        // 충돌 판정용 구글 현재 상태 스냅샷 — 올리기 전에 읽는다. 구글을 덮어쓰거나 지울
+        // 보류 변경이 있을 때만 읽는다(없으면 추가 호출 없음). 읽기에 실패하면 판정만 건너뛴다.
+        let remoteSnapshot: ReadonlyMap<string, GoogleTask> | null = null;
+        const needsSnapshot = [...workMap.values()].some(
+          (t) =>
+            !!t.googleTaskId && (t.pendingRemoteOp === 'update' || t.pendingRemoteOp === 'delete'),
+        );
+        if (needsSnapshot) {
+          try {
+            const tasks = await googleTasksPort.listTasks(accessToken, taskListId);
+            remoteSnapshot = new Map(tasks.map((t) => [t.id, t]));
+          } catch (snapshotErr) {
+            if (isDailyQuotaError(snapshotErr)) throw snapshotErr;
+            console.warn('[TasksSync] 충돌 판정용 구글 상태 읽기 실패 — 판정만 건너뜁니다');
+          }
+        }
+
+        /** 이 할 일이 올라가기 직전 구글 쪽과 충돌하면 기록해 두고 종류를 돌려준다. */
+        const judgeConflict = (todo: Todo): ReturnType<typeof detectTasksConflict> => {
+          if (!remoteSnapshot || !todo.googleTaskId) return null;
+          const remote = remoteSnapshot.get(todo.googleTaskId);
+          const kind = detectTasksConflict({ todo, remote, taskListId });
+          if (kind) {
+            detectedConflicts.push(
+              buildTasksSyncConflict({
+                id: generateUUID(),
+                detectedAt: stamp(),
+                kind,
+                todo,
+                remote,
+              }),
+            );
+          }
+          return kind;
+        };
 
         // ── 1. PUSH-DELETE ──
         // (a) orphan pendingDeleteIds (로컬 record가 이미 사라진 googleTaskId)
@@ -282,6 +376,8 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         // (b) 로컬 todo 중 pendingRemoteOp:'delete' 항목
         for (const todo of [...workMap.values()]) {
           if (todo.pendingRemoteOp !== 'delete' || !todo.googleTaskId) continue;
+          // 쌤핀에서 지운(보관한) 사이 구글에서 고쳤다면 사라지기 전에 그 내용을 기록한다.
+          judgeConflict(todo);
           try {
             await googleTasksPort.deleteTask(accessToken, taskListId, todo.googleTaskId);
             workMap.set(todo.id, {
@@ -317,12 +413,11 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
           if (todo.googleTaskId) continue; // 이미 원격 ID 있음
           if (todo.archivedAt || todo.remoteDeletedAt) continue; // archive/tombstone 제외
           try {
-            const created = await googleTasksPort.createTask(accessToken, taskListId, {
-              title: todo.text,
-              status: todo.completed ? 'completed' : 'needsAction',
-              ...(todo.dueDate ? { due: `${todo.dueDate}T00:00:00.000Z` } : {}),
-              ...(todo.notes ? { notes: todo.notes } : {}),
-            });
+            const created = await googleTasksPort.createTask(
+              accessToken,
+              taskListId,
+              toGoogleTaskCreatePayload(todo),
+            );
             workMap.set(todo.id, {
               ...todo,
               googleTaskId: created.id,
@@ -339,13 +434,38 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
         // ── 3. PUSH-UPDATE ──
         for (const todo of [...workMap.values()]) {
           if (todo.pendingRemoteOp !== 'update' || !todo.googleTaskId) continue;
+
+          const conflictKind = judgeConflict(todo);
+          if (conflictKind === 'remote-deleted') {
+            // 구글에서 이미 지워진 항목이다. 지워진 항목에 수정을 보내지 않고(구글이 어떻게
+            // 받아들일지에 기대지 않는다) 쌤핀에서 한 변경을 살려 새 할 일로 만든다.
+            try {
+              const created = await googleTasksPort.createTask(
+                accessToken,
+                taskListId,
+                toGoogleTaskCreatePayload(todo),
+              );
+              workMap.set(todo.id, {
+                ...todo,
+                googleTaskId: created.id,
+                googleTaskListId: taskListId,
+                pendingRemoteOp: undefined,
+                lastSyncedAt: stamp(),
+              });
+            } catch (createErr) {
+              console.error('[TasksSync] 삭제된 항목 재생성 실패:', todo.id, createErr);
+              // pendingRemoteOp 유지 → 다음 sync 재시도(같은 충돌은 중복 기록되지 않는다)
+            }
+            continue;
+          }
+
           try {
-            await googleTasksPort.updateTask(accessToken, taskListId, todo.googleTaskId, {
-              title: todo.text,
-              status: todo.completed ? 'completed' : 'needsAction',
-              ...(todo.dueDate ? { due: `${todo.dueDate}T00:00:00.000Z` } : {}),
-              ...(todo.notes ? { notes: todo.notes } : {}),
-            });
+            await googleTasksPort.updateTask(
+              accessToken,
+              taskListId,
+              todo.googleTaskId,
+              toGoogleTaskUpdatePayload(todo),
+            );
             workMap.set(todo.id, {
               ...todo,
               pendingRemoteOp: undefined,
@@ -356,12 +476,11 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
             if (code === 404) {
               // 원격에 없음 → fallback create
               try {
-                const created = await googleTasksPort.createTask(accessToken, taskListId, {
-                  title: todo.text,
-                  status: todo.completed ? 'completed' : 'needsAction',
-                  ...(todo.dueDate ? { due: `${todo.dueDate}T00:00:00.000Z` } : {}),
-                  ...(todo.notes ? { notes: todo.notes } : {}),
-                });
+                const created = await googleTasksPort.createTask(
+                  accessToken,
+                  taskListId,
+                  toGoogleTaskCreatePayload(todo),
+                );
                 workMap.set(todo.id, {
                   ...todo,
                   googleTaskId: created.id,
@@ -466,7 +585,8 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
                 completed: remote.status === 'completed',
                 completedAt: completedAtFromRemote(remote, local),
                 ...(remote.due ? { dueDate: remote.due.substring(0, 10) } : { dueDate: undefined }),
-                ...(remote.notes ? { notes: remote.notes } : {}),
+                // 구글은 비운 메모를 필드째 뺀다 — 없음은 "지웠다"이므로 쌤핀 메모도 지운다.
+                notes: remoteNotesToLocal(remote.notes),
                 lastSyncedAt: stamp(),
               };
               // ★구글 쪽 수정이 내용을 바꿨으면 그때부터 구글에서 받은 자료다(ADR-136 D1).
@@ -653,6 +773,14 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
           isSyncing: false,
           error: err instanceof Error ? err.message : '동기화 중 오류가 발생했습니다.',
         });
+      } finally {
+        // 성공·실패·쿼터 쿨다운 어느 경로로 끝나든 판정한 충돌은 기록하고 알린다.
+        // (이미 구글을 덮어썼고, 다음 회차는 같은 충돌을 중복으로 걸러 다시 알릴 수 없다.)
+        try {
+          await flushConflicts();
+        } catch (flushErr) {
+          console.error('[TasksSync] 충돌 기록 저장 오류:', flushErr);
+        }
       }
     })();
 
@@ -664,6 +792,13 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
   },
 
   initialize: async () => {
+    try {
+      // 충돌 기록은 동기화 설정과 따로 저장한다(기기 전용) — 설정이 없어도 읽는다.
+      set({ conflicts: await readTasksSyncConflicts() });
+    } catch (err) {
+      console.error('[TasksSync] 충돌 기록 읽기 오류:', err);
+    }
+
     try {
       const { storage } = await import('@adapters/di/container');
       const saved = await storage.read<PersistedState>(STORAGE_KEY);
@@ -726,5 +861,10 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
     } catch (err) {
       console.error('[TasksSync] clearQuotaCooldown 저장 오류:', err);
     }
+  },
+
+  clearConflicts: async () => {
+    set({ conflicts: [] });
+    await clearTasksSyncConflictsStorage();
   },
 }));
