@@ -1,5 +1,6 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { reportTodoSaveFailure } from '@adapters/stores/todoSaveFeedback';
 import type { Todo } from '@domain/entities/Todo';
 import type { TodoCategory } from '@domain/entities/Todo';
 import { TodoEditModal } from '../components/TodoEditModal';
@@ -98,8 +99,12 @@ export function ListView({ categoryFilter }: ListViewProps) {
           onChange={(e) => setQuickAddText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && quickAddText.trim()) {
-              void addTodo(quickAddText.trim());
+              const text = quickAddText.trim();
               setQuickAddText('');
+              void addTodo(text).catch((err: unknown) => {
+                setQuickAddText(text);
+                reportTodoSaveFailure(err);
+              });
             }
           }}
           placeholder="새 할 일 추가..."
@@ -109,8 +114,12 @@ export function ListView({ categoryFilter }: ListViewProps) {
           type="button"
           onClick={() => {
             if (quickAddText.trim()) {
-              void addTodo(quickAddText.trim());
+              const text = quickAddText.trim();
               setQuickAddText('');
+              void addTodo(text).catch((err: unknown) => {
+                setQuickAddText(text);
+                reportTodoSaveFailure(err);
+              });
             }
           }}
           disabled={!quickAddText.trim()}

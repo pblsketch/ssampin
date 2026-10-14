@@ -13,6 +13,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { reportTodoSaveFailure } from '@adapters/stores/todoSaveFeedback';
 import { useToastStore } from '@adapters/components/common/Toast';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
@@ -253,7 +254,10 @@ function EditorTodoItem({ todo, onToggle, onDelete, onUpdate }: EditorTodoItemPr
           // 삭제 직후 add 폴백 — useTodoStore의 addTodo 사용 불가(id 자동 생성).
           // 안전한 폴백: 사용자가 삭제 직후 되돌리기 누르면 사용자 텍스트만 재추가.
           // (note: 마감일/우선순위 등 메타는 사용자에게 다시 입력 안내 — Phase 1 단순화)
-          void useTodoStore.getState().addTodo(todo.text, todo.dueDate, todo.priority ?? 'none');
+          void useTodoStore
+            .getState()
+            .addTodo(todo.text, todo.dueDate, todo.priority ?? 'none')
+            .catch(reportTodoSaveFailure);
         },
       },
       5000,

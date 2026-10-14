@@ -20,7 +20,13 @@ export class ElectronStorageAdapter implements IStoragePort {
     if (!api) {
       return;
     }
-    await api.writeData(filename, JSON.stringify(data, null, 2));
+    // 저장소가 쓰지 못했다고 답하면(백신·잠금·디스크 가득 등) 성공처럼 넘기지 않고 알린다.
+    // 삼키면 호출 쪽이 화면만 갱신해 입력한 내용이 다음에 디스크를 읽을 때 조용히 사라진다.
+    // (예전 preload 처럼 값을 안 돌려주는 경우는 성공으로 본다 — 명시적으로 false 일 때만 실패.)
+    const ok = await api.writeData(filename, JSON.stringify(data, null, 2));
+    if (ok === false) {
+      throw new Error(`저장하지 못했습니다: ${filename}`);
+    }
   }
 
   async replaceIfUnchanged<T>(filename: string, expected: T | null, next: T): Promise<boolean> {

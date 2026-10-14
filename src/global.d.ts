@@ -290,7 +290,8 @@ interface ElectronAPI {
   coolMessenger: CoolMessengerElectronAPI;
   /** 데스크톱 앱에서만 존재한다. 브라우저·모바일에서는 없음(버튼을 아예 그리지 않는다). */
   voiceTyping?: VoiceTypingElectronAPI;
-  writeData: (filename: string, data: string) => Promise<void>;
+  /** 저장 성공 여부. 실패하면 false — 삼키지 말고 알려야 한다. */
+  writeData: (filename: string, data: string) => Promise<boolean>;
   writeDataIfUnchanged: (
     filename: string,
     expectedData: string | null,

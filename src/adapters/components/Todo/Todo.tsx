@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { reportTodoSaveFailure } from '@adapters/stores/todoSaveFeedback';
 import { useTasksSyncStore } from '@adapters/stores/useTasksSyncStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { useEventsStore } from '@adapters/stores/useEventsStore';
@@ -400,7 +401,13 @@ export function Todo() {
       : useParsed && parsed.startDate
         ? parsed.startDate
         : newStartDate;
-    void addTodo(text, dueDate, priority, category, recurrence ?? undefined, time, startDate);
+    void addTodo(text, dueDate, priority, category, recurrence ?? undefined, time, startDate).catch(
+      (err: unknown) => {
+        // 저장하지 못했다 — 입력한 글을 되돌려 놓아 다시 누를 수 있게 한다.
+        setNewText((current) => (current === '' ? rawText : current));
+        reportTodoSaveFailure(err);
+      },
+    );
     setNewText('');
     setNewPriority('none');
     setNewRecurrenceIdx(0);

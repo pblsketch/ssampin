@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { reportTodoSaveFailure } from '@adapters/stores/todoSaveFeedback';
 import { toLocalDateString } from '@shared/utils/localDate';
 import type { Todo } from '@domain/entities/Todo';
 import { filterActive, filterByCategory } from '@domain/rules/todoRules';
@@ -154,8 +155,12 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
           onChange={(e) => setQuickAddText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && quickAddText.trim()) {
-              void addTodo(quickAddText.trim(), toLocalDateString());
+              const text = quickAddText.trim();
               setQuickAddText('');
+              void addTodo(text, toLocalDateString()).catch((err: unknown) => {
+                setQuickAddText(text);
+                reportTodoSaveFailure(err);
+              });
             }
           }}
           placeholder="새 할 일 추가... (오늘 날짜로 타임라인에 표시됩니다)"
@@ -165,8 +170,12 @@ export function TimelineView({ categoryFilter }: TimelineViewProps) {
           type="button"
           onClick={() => {
             if (quickAddText.trim()) {
-              void addTodo(quickAddText.trim(), toLocalDateString());
+              const text = quickAddText.trim();
               setQuickAddText('');
+              void addTodo(text, toLocalDateString()).catch((err: unknown) => {
+                setQuickAddText(text);
+                reportTodoSaveFailure(err);
+              });
             }
           }}
           disabled={!quickAddText.trim()}

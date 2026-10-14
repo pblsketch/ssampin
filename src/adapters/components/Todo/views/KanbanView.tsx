@@ -2,6 +2,7 @@ import { useMemo, useCallback, useState } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import type { DragEndEvent } from '@dnd-kit/core';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
+import { reportTodoSaveFailure } from '@adapters/stores/todoSaveFeedback';
 import type { Todo, TodoStatus } from '@domain/entities/Todo';
 import {
   inferStatus,
@@ -94,8 +95,12 @@ export function KanbanView({ categoryFilter }: KanbanViewProps) {
           onChange={(e) => setQuickAddText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && quickAddText.trim()) {
-              void addTodo(quickAddText.trim());
+              const text = quickAddText.trim();
               setQuickAddText('');
+              void addTodo(text).catch((err: unknown) => {
+                setQuickAddText(text);
+                reportTodoSaveFailure(err);
+              });
             }
           }}
           placeholder="새 할 일 추가..."
@@ -105,8 +110,12 @@ export function KanbanView({ categoryFilter }: KanbanViewProps) {
           type="button"
           onClick={() => {
             if (quickAddText.trim()) {
-              void addTodo(quickAddText.trim());
+              const text = quickAddText.trim();
               setQuickAddText('');
+              void addTodo(text).catch((err: unknown) => {
+                setQuickAddText(text);
+                reportTodoSaveFailure(err);
+              });
             }
           }}
           disabled={!quickAddText.trim()}

@@ -42,7 +42,7 @@ type AggregatedResult = AggregatedSingleMulti | AggregatedScale | AggregatedText
 
 contextBridge.exposeInMainWorld('electronAPI', {
   readData: (filename: string): Promise<string | null> => ipcRenderer.invoke('data:read', filename),
-  writeData: (filename: string, data: string): Promise<void> =>
+  writeData: (filename: string, data: string): Promise<boolean> =>
     ipcRenderer.invoke('data:write', filename, data),
   writeDataIfUnchanged: (
     filename: string,

@@ -152,6 +152,7 @@ import {
   peekOpenPath,
 } from './security/dialogHandles';
 import { safeFetchText } from './security/safeFetch';
+import { writeDataFileAtomic } from './dataFileWrite';
 
 declare const __dirname: string;
 
@@ -3685,53 +3686,12 @@ function registerIpcHandlers(): void {
     return null;
   });
 
-  // data:write — JSON 파일 쓰기 (백업 + atomic write + 검증)
-  ipcMain.handle('data:write', (_event, filename: string, data: string): void => {
-    const dataDir = getDataDir();
-    const filePath = path.join(dataDir, `${filename}.json`);
-    const backupPath = path.join(dataDir, `${filename}.backup.json`);
-
-    // Step 1: 기존 파일이 있으면 백업 생성
-    try {
-      if (fs.existsSync(filePath)) {
-        const existing = fs.readFileSync(filePath, 'utf-8');
-        if (existing.length > 10) {
-          fs.writeFileSync(backupPath, existing, 'utf-8');
-        }
-      }
-    } catch {
-      // 백업 실패해도 저장은 계속 진행
-    }
-
-    // Step 2: 임시 파일에 먼저 쓰기 (atomic write)
-    const tempPath = path.join(dataDir, `${filename}.tmp.json`);
-    try {
-      fs.writeFileSync(tempPath, data, 'utf-8');
-
-      // Step 3: 쓰기 검증 — 다시 읽어서 맞는지 확인
-      const verification = fs.readFileSync(tempPath, 'utf-8');
-      if (verification.length !== data.length) {
-        console.error(
-          `[data:write] 검증 실패: ${filename} (기대 ${data.length}바이트, 실제 ${verification.length}바이트)`,
-        );
-        try {
-          fs.unlinkSync(tempPath);
-        } catch {
-          /* ignore */
-        }
-        return;
-      }
-
-      // Step 4: 검증 통과 → 임시 파일을 원본으로 교체 (rename은 atomic)
-      fs.renameSync(tempPath, filePath);
-    } catch (writeErr) {
-      console.error(`[data:write] 저장 실패: ${filename}`, writeErr);
-      try {
-        fs.unlinkSync(tempPath);
-      } catch {
-        /* ignore */
-      }
-      return;
+  // data:write — JSON 파일 쓰기 (백업 + atomic write + 검증). 성공 여부를 돌려준다:
+  // 실패를 삼키면 렌더러가 저장된 줄 알고 화면만 갱신해 입력한 내용이 조용히 사라진다.
+  ipcMain.handle('data:write', (_event, filename: string, data: string): boolean => {
+    const result = writeDataFileAtomic(getDataDir(), filename, data);
+    if (!result.ok) {
+      return false;
     }
 
     // 다른 창에 데이터 변경 알림 (메인 ↔ 위젯 동기화)
@@ -3748,6 +3708,8 @@ function registerIpcHandlers(): void {
         // ignore parsing error
       }
     }
+
+    return true;
   });
 
   ipcMain.handle(
