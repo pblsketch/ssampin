@@ -242,10 +242,7 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
   },
 
   completeAuth: async (code: string, redirectUri: string, codeVerifier?: string) => {
-    console.log('[CalendarSync] completeAuth start', {
-      redirectUri,
-      hasVerifier: Boolean(codeVerifier),
-    });
+    console.log('[CalendarSync] completeAuth start', { hasVerifier: Boolean(codeVerifier) });
     set({ isLoading: true, error: null });
     try {
       const { authenticateGoogle } = await import('@adapters/di/container');
@@ -603,7 +600,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
       );
 
       if (existingMapping && existingMapping.googleCalendarId) {
-        console.log('[NeisSync] reusing existing mapping:', existingMapping.googleCalendarId);
+        // 기본 캘린더 ID 는 사용자 이메일이므로 남기지 않는다.
+        console.log('[NeisSync] reusing existing mapping');
         if (!existingMapping.syncEnabled) {
           const updated = get().mappings.map((m) =>
             m.categoryId === NEIS_SCHEDULE_CATEGORY.id ? { ...m, syncEnabled: true } : m,
@@ -623,7 +621,8 @@ export const useCalendarSyncStore = create<CalendarSyncState>((set, get) => ({
         if (!primary) {
           throw new Error('구글 캘린더 목록을 불러올 수 없습니다. 잠시 후 다시 시도해주세요.');
         }
-        console.log('[NeisSync] primary calendar:', primary.id, primary.summary);
+        // 기본 캘린더의 ID·이름은 사용자 이메일이라 남기지 않는다.
+        console.log('[NeisSync] primary calendar resolved');
 
         const newMapping: CalendarMapping = {
           categoryId: NEIS_SCHEDULE_CATEGORY.id,

@@ -111,10 +111,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
       body['code_verifier'] = codeVerifier;
     }
 
-    console.log('[GoogleOAuth] exchangeCode start', {
-      redirectUri,
-      hasVerifier: Boolean(codeVerifier),
-    });
+    console.log('[GoogleOAuth] exchangeCode start', { hasVerifier: Boolean(codeVerifier) });
     const res = await fetchWithTimeout(GOOGLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -123,9 +120,8 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
 
     if (!res.ok) {
       const err = await res.text();
-      throw new Error(
-        `Token exchange failed: ${res.status} ${err} [redirect_uri=${redirectUri}, client_id=${this.clientId.substring(0, 10)}...]`,
-      );
+      // redirect_uri·client_id 는 화면·로그에 남기지 않는다. 상태 코드와 구글이 준 오류만 남긴다.
+      throw new Error(`Token exchange failed: ${res.status} ${err}`);
     }
 
     const data = (await res.json()) as TokenResponse;
@@ -133,7 +129,7 @@ export class GoogleOAuthClient implements IGoogleAuthPort {
 
     // 사용자 이메일 가져오기
     const email = await this.fetchUserEmail(data.access_token);
-    console.log('[GoogleOAuth] exchangeCode email received', email);
+    console.log('[GoogleOAuth] exchangeCode email received');
 
     return {
       accessToken: data.access_token,

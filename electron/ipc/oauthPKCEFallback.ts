@@ -45,7 +45,7 @@ export function registerPKCEFallbackHandlers(): void {
       // 학교망에서 localhost 자체가 차단된 경우에도 브라우저 주소창에 code가 노출되므로
       // 사용자가 직접 복사할 수 있어 PKCE 플로우 자체는 동작한다.
       const port = await new Promise<number>((resolve) => {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
         const http = require('http') as typeof import('http');
         const tmp = http.createServer();
         tmp.on('error', () => resolve(8421));
@@ -66,10 +66,7 @@ export function registerPKCEFallbackHandlers(): void {
       );
 
       if (finalUrl.includes('code_challenge=')) {
-        finalUrl = finalUrl.replace(
-          /code_challenge=[^&]*/,
-          `code_challenge=${challenge}`,
-        );
+        finalUrl = finalUrl.replace(/code_challenge=[^&]*/, `code_challenge=${challenge}`);
       } else {
         finalUrl += `&code_challenge=${challenge}&code_challenge_method=S256`;
       }
@@ -77,7 +74,7 @@ export function registerPKCEFallbackHandlers(): void {
       // PKCE에서는 client_secret을 쓰지 않으므로 client_secret 파라미터를 명시하지 않는 게 안전
       // (auth URL에는 원래 secret이 들어있지 않으므로 별도 처리 불필요)
 
-      console.log('[oauth:pkce-start]', { redirectUri });
+      console.log('[oauth:pkce-start]');
       await shell.openExternal(finalUrl);
 
       return { verifier, redirectUri };

@@ -206,10 +206,7 @@ export const useGoogleAccountStore = create<GoogleAccountState>((set, get) => ({
   },
 
   completeAuth: async (code: string, redirectUri: string, codeVerifier?: string) => {
-    console.log('[GoogleAccount] completeAuth start', {
-      redirectUri,
-      hasVerifier: Boolean(codeVerifier),
-    });
+    console.log('[GoogleAccount] completeAuth start', { hasVerifier: Boolean(codeVerifier) });
     set({ isLoading: true, error: null });
     try {
       const { authenticateGoogle } = await import('@adapters/di/container');

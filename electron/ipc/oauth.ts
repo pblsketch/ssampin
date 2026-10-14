@@ -221,10 +221,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
               reject(new Error('OAuth internal error: redirect_uri 미확정 상태에서 code 수신'));
               return;
             }
-            console.log('[oauth] IPC promise resolving', {
-              hasCode: Boolean(code),
-              redirectUri: resolvedRedirectUri,
-            });
+            console.log('[oauth] IPC promise resolving', { hasCode: Boolean(code) });
             resolve({ code, redirectUri: resolvedRedirectUri, codeVerifier });
           };
           const wrappedReject = (err: Error) => {
@@ -244,7 +241,8 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
 
           const server = http.createServer((req, res) => {
             const parsedUrl = url.parse(req.url ?? '', true);
-            console.log('[oauth] callback request', { url: req.url, path: parsedUrl.pathname });
+            // 쿼리에는 인증 code 가 들어 있으므로 경로 이름만 남긴다.
+            console.log('[oauth] callback request', { path: parsedUrl.pathname });
 
             if (parsedUrl.pathname === '/callback') {
               callbackReceived = true;
@@ -313,7 +311,7 @@ export function registerOAuthHandlers(_mainWindow: BrowserWindow): void {
             const redirectUri = `http://127.0.0.1:${port}/callback`;
             // 클로저 변수에 저장 — 콜백 도착 시 wrappedResolve가 사용
             resolvedRedirectUri = redirectUri;
-            console.log('[oauth] server listening', { redirectUri });
+            console.log('[oauth] server listening');
 
             // authUrl의 placeholder redirect_uri를 실제 포트로 교체
             let finalUrl = authUrl.replace(
