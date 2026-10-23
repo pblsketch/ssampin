@@ -1,5 +1,6 @@
 import { AiBridgeCard } from '../aiBridge/AiBridgeCard';
 import { OwnAiProviderCard } from '../aiBridge/OwnAiProviderCard';
+import { ApiKeyConnectCard } from '../aiBridge/ApiKeyConnectCard';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { useOwnAiStatusRefresh } from '@adapters/stores/useOwnAiStatusStore';
 import { OWN_AI_PROVIDERS } from '@domain/entities/OwnAiProvider';
@@ -66,6 +67,8 @@ export function AiBridgeTab() {
       </div>
       {/* 쌤핀 AI(앱 안에서 묻고 답하기)는 설정 > 실험실 기능 탭으로 옮겼다 (2026-08-24 오너 결정) */}
       <AiBridgeCard />
+      {/* 내 API 키(BYOK, ADR-143) — 구독이 없는 선생님이 가장 쉽게 시작하는 길이라 구독보다 위에 둔다. */}
+      <ApiKeyConnectCard />
       {/* 내 AI로 실행(구독) — 설치·로그인·모델 선택. 스위치 자체는 실험실 기능 탭에 있다. */}
       <OwnAiSection />
     </div>

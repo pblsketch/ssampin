@@ -2,13 +2,13 @@ import type { InquiryThread } from '@domain/entities/InquiryThread';
 import type { RecordEvidence } from '@domain/entities/RecordEvidence';
 import type { RecordMapStudentContext } from '@domain/entities/RecordMapProposal';
 import type { KeywordGroup } from '@domain/privacy/types';
-import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import type { AiRunProviderId } from '@domain/entities/ApiKeyProvider';
 
 export interface RecordMapAiRequest {
   readonly runId: string;
   readonly attemptId: string;
   /** Provider is frozen when the run is created and survives resume. */
-  readonly provider: OwnAiProviderId;
+  readonly provider: AiRunProviderId;
   readonly text: string;
 }
 

@@ -78,13 +78,14 @@ import { ComciganApiClient } from '@infrastructure/comcigan/ComciganApiClient';
 import { AppinApiClient } from '@infrastructure/appin/AppinApiClient';
 import { AssistClient } from '@infrastructure/ai/AssistClient';
 import { OwnAiAssistPort } from '@infrastructure/ownAi/OwnAiAssistPort';
+import { ApiKeyAssistPort } from '@infrastructure/ownAi/ApiKeyAssistPort';
 import { fetchRecordPromptL1 as fetchRecordPromptL1Impl } from '@infrastructure/ownAi/RecordPromptClient';
 import {
   fetchModelCatalog as fetchModelCatalogImpl,
   type ModelCatalog,
 } from '@infrastructure/ownAi/AiModelCatalogClient';
 import { withSolarFallback } from '@usecases/assist/withSolarFallback';
-import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import type { AiRunProviderId } from '@domain/entities/ApiKeyProvider';
 import { GoogleOAuthClient } from '@infrastructure/google/GoogleOAuthClient';
 import { GoogleCalendarApiClient } from '@infrastructure/google/GoogleCalendarApiClient';
 import { SupabaseAnalyticsAdapter } from '@infrastructure/analytics/SupabaseAnalyticsAdapter';
@@ -397,13 +398,17 @@ export const assistPort: AssistPort = new AssistClient();
  * 그건 동의 없는 전송이다.
  */
 export function assistPortFor(options: {
-  readonly provider: OwnAiProviderId | 'ssampin';
+  readonly provider: AiRunProviderId | 'ssampin';
   readonly solarEnabled: () => boolean;
   readonly appendSystemPrompt?: string;
   readonly onUsage?: (fiveHourUtilization: number | null, resetsAt: number | null) => void;
   readonly onFallback?: (reason: unknown) => void;
 }): AssistPort {
   if (options.provider === 'ssampin') return assistPort;
+  // ★내 API 키는 쌤핀 AI 로 넘기지 않는다(ADR-143) — 선생님이 고른 통로가 실패하면 그대로 말한다.
+  //   지시문도 포트가 직접 만든다(오늘 날짜·별칭 안내·평문 지시). CLI 용 별칭 대응표는 필요 없다 —
+  //   도구 실행을 앱이 하므로 모델이 학번으로 조회할 일이 없다.
+  if (options.provider === 'apikey') return new ApiKeyAssistPort();
 
   const own = new OwnAiAssistPort({
     provider: options.provider,

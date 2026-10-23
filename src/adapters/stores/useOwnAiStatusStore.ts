@@ -15,6 +15,8 @@ import {
   type OwnAiConnection,
   type OwnAiProviderId,
 } from '@domain/entities/OwnAiProvider';
+import type { AiRunProviderId } from '@domain/entities/ApiKeyProvider';
+import { useApiKeyStatusStore } from './useApiKeyStatusStore';
 import { useAssistStore } from './useAssistStore';
 
 export interface OwnAiUsage {
@@ -108,20 +110,26 @@ export function isOwnAiConnected(
   return c?.state === 'connected';
 }
 
-/** 연결된 공급자 목록(순서 고정). 배열 참조는 `connections` 가 바뀔 때만 바뀐다. */
-export function useConnectedOwnAiProviders(): readonly OwnAiProviderId[] {
+/**
+ * 지금 AI 를 돌릴 수 있는 통로 목록(순서 고정) — 연결된 구독 CLI + 고른 모델이 있는 내 API 키.
+ *
+ * ★'apikey' 를 여기서 함께 돌려준다(ADR-143). AI 패널·생기부 초안·근거 보드·분량 조절이
+ *   모두 이 목록으로 고르기 단추를 그리므로, 한 곳만 고쳐도 모든 AI 기능에서 키를 쓸 수 있다.
+ * 배열 참조는 연결 상태나 고른 키가 바뀔 때만 바뀐다.
+ */
+export function useConnectedOwnAiProviders(): readonly AiRunProviderId[] {
   const connections = useOwnAiStatusStore((s) => s.connections);
-  return useMemo(
-    () => OWN_AI_PROVIDERS.filter((p) => isOwnAiConnected(connections[p])),
-    [connections],
-  );
+  const apiKeyActive = useApiKeyStatusStore((s) => (s.snapshot?.active ?? null) !== null);
+  return useMemo(() => {
+    const cli: AiRunProviderId[] = OWN_AI_PROVIDERS.filter((p) => isOwnAiConnected(connections[p]));
+    return apiKeyActive ? [...cli, 'apikey'] : cli;
+  }, [connections, apiKeyActive]);
 }
 
-/** "내 AI" 로 답할 준비가 됐는가 = 실험실 스위치 ON + 연결된 공급자 1개 이상. */
+/** "내 AI" 로 답할 준비가 됐는가 = 실험실 스위치 ON + 연결된 구독 또는 고른 API 키. */
 export function useOwnAiReady(): boolean {
   const enabled = useAssistStore((s) => s.ownAiEnabled);
-  const connections = useOwnAiStatusStore((s) => s.connections);
-  return enabled && OWN_AI_PROVIDERS.some((p) => isOwnAiConnected(connections[p]));
+  return enabled && useConnectedOwnAiProviders().length > 0;
 }
 
 /**
@@ -139,9 +147,12 @@ const FOCUS_RECHECK_MIN_MS = 10 * 60_000;
  */
 export function useOwnAiStatusRefresh(active: boolean): void {
   const refresh = useOwnAiStatusStore((s) => s.refresh);
+  const refreshApiKey = useApiKeyStatusStore((s) => s.refresh);
   useEffect(() => {
     if (!active) return;
     void refresh();
+    // 내 API 키 상태도 함께 — 키는 CLI 를 띄우지 않으니 가볍다.
+    void refreshApiKey();
     let last = Date.now();
     const onFocus = (): void => {
       if (Date.now() - last < FOCUS_RECHECK_MIN_MS) return;
@@ -155,5 +166,5 @@ export function useOwnAiStatusRefresh(active: boolean): void {
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [active, refresh]);
+  }, [active, refresh, refreshApiKey]);
 }

@@ -95,6 +95,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
 
+  /**
+   * 내 API 키(BYOK, ADR-143). ★키를 **넣는** 통로만 있다 — 꺼내는 통로는 없다.
+   * 응답에는 "어느 서비스에 키가 있다 + 끝 4자리"까지만 실린다.
+   */
+  apiKey: {
+    status: (): Promise<unknown> => ipcRenderer.invoke('apiKey:status'),
+    save: (service: string, key: string): Promise<unknown> =>
+      ipcRenderer.invoke('apiKey:save', service, key),
+    remove: (service: string): Promise<unknown> => ipcRenderer.invoke('apiKey:remove', service),
+    models: (service: string, force?: boolean): Promise<unknown> =>
+      ipcRenderer.invoke('apiKey:models', service, force === true),
+    setActive: (service: string, model: string): Promise<unknown> =>
+      ipcRenderer.invoke('apiKey:setActive', service, model),
+    openKeyPage: (service: string): Promise<boolean> =>
+      ipcRenderer.invoke('apiKey:openKeyPage', service),
+    chat: (payload: {
+      requestId: string;
+      purpose: 'panel' | 'draft';
+      messages: readonly { role: 'system' | 'user' | 'assistant'; content: string }[];
+      tools?: readonly unknown[];
+      sessionId?: string;
+    }): Promise<unknown> => ipcRenderer.invoke('apiKey:chat', payload),
+    cancel: (requestId: string): Promise<boolean> => ipcRenderer.invoke('apiKey:cancel', requestId),
+  },
+
   aiBridge: {
     register: (
       client: 'claude' | 'codex' | 'antigravity',

@@ -20,7 +20,8 @@ import type { RecordMapApplication } from '@domain/entities/RecordMapApplication
 import { recordMapSourceFingerprint } from '@domain/rules/recordMapApplication';
 import { academicTermForDate } from '@domain/rules/academicCalendar';
 import type { KeywordGroup } from '@domain/privacy/types';
-import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import type { AiRunProviderId } from '@domain/entities/ApiKeyProvider';
+import { isOwnAiErrorKind, OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import { CreateRecordMapRun } from '@usecases/recordMap/CreateRecordMapRun';
 import { GenerateRecordMapStudent } from '@usecases/recordMap/GenerateRecordMapStudent';
 import type {
@@ -62,7 +63,7 @@ export interface RecordMapBatchPanelProps {
   readonly classSubject?: string;
   readonly areas: readonly RecordArea[];
   readonly initialArea: RecordArea | null;
-  readonly provider: OwnAiProviderId;
+  readonly provider: AiRunProviderId;
   readonly roster: readonly KeywordGroup[];
   readonly scaffoldConfigurationForArea: (area: RecordArea) => {
     readonly candidates: readonly RecordMapScaffoldSnapshot[];
@@ -98,6 +99,10 @@ const RECORD_MAP_STATUS_LABELS: Readonly<Record<RecordMapRunStatus, string>> = {
 };
 
 export function recordMapFailureLabel(message: string | undefined): string {
+  // 내 API 키 실패(ADR-143)는 할 일이 갈래마다 다르다 — 키 다시 넣기·충전·기다리기·모델 바꾸기.
+  if (message?.startsWith('key-') && isOwnAiErrorKind(message)) {
+    return OWN_AI_ERROR_MESSAGES[message].draft;
+  }
   const value = (message ?? '').toLocaleLowerCase('en');
   if (value.includes('empty') || value.includes('빈 응답')) return 'AI가 빈 응답을 보냈습니다.';
   if (value.includes('evidence') || value.includes('근거') || value.includes('reference')) {

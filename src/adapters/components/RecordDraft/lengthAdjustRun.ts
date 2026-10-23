@@ -12,6 +12,7 @@
  *   없는 근거가 생기지 않는다. 한 번 더 부르면 지어내라고 떠미는 셈이다.
  */
 import { aiDraftText, type RecordAiDraftAdjust } from '@domain/entities/RecordAiDraft';
+import type { AiRunProviderId } from '@domain/entities/ApiKeyProvider';
 import { neisByteLength } from '@domain/entities/RecordDraft';
 import {
   parseGeneratedNarrativeParagraphs,
@@ -132,7 +133,7 @@ export function measureAnswer(
 
 export interface LengthAdjustRunInput {
   readonly api: OwnAiRunApi;
-  readonly provider: 'claude' | 'codex';
+  readonly provider: AiRunProviderId;
   /** 규정 지시문(1층). ★없으면 부르는 쪽이 실행하지 않는다 - 조절도 같은 게이트를 받는다. */
   readonly systemPrompt: string;
   /** 꾸러미 재료. `targetBytes` 는 재조정 때 이 함수가 바꿔 다시 조립한다. */
@@ -242,7 +243,7 @@ export interface DraftShrinkResult {
 
 export interface DraftShrinkInput {
   readonly api: OwnAiRunApi;
-  readonly provider: 'claude' | 'codex';
+  readonly provider: AiRunProviderId;
   /** 규정 지시문(1층) — 초안을 쓸 때 받은 것을 그대로 쓴다. */
   readonly systemPrompt: string;
   readonly signal?: AbortSignal;

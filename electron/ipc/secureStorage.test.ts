@@ -191,3 +191,27 @@ describe('삭제와 전환', () => {
     expect(call('secure:read', 'markdown-convert:mask-sessions:v1')).toBe('{"b":2}');
   });
 });
+
+describe('키 이름 검사 — 화면이 넘긴 키로 data 폴더 밖을 건드리지 못한다', () => {
+  it.each(['../outside', '..\\outside', 'a/b', 'a\\b', '', '.hidden', 'x'.repeat(200)])(
+    '거절: %s',
+    (bad) => {
+      expect(() => call('secure:write', bad, 'v')).toThrow('허용되지 않는 키 이름');
+      expect(() => call('secure:read', bad)).toThrow('허용되지 않는 키 이름');
+      expect(() => call('secure:delete', bad)).toThrow('허용되지 않는 키 이름');
+    },
+  );
+
+  it('data 폴더 밖 파일을 지우지 못한다', () => {
+    const victim = path.join(state.root, 'victim.txt');
+    fs.writeFileSync(victim, 'keep');
+    expect(() => call('secure:delete', '../../victim.txt')).toThrow();
+    expect(fs.readFileSync(victim, 'utf-8')).toBe('keep');
+  });
+
+  it('지금 쓰는 키 이름은 그대로 받는다', () => {
+    state.available = false;
+    expect(() => call('secure:write', 'calendar-tokens', '{}')).not.toThrow();
+    expect(() => call('secure:write', 'markdown-convert:mask-sessions:v1', '{}')).not.toThrow();
+  });
+});

@@ -78,6 +78,7 @@ import type {
 import { useAssistStore } from '@adapters/stores/useAssistStore';
 import { fetchRecordPromptL1 } from '@adapters/di/container';
 import { useConnectedOwnAiProviders } from '@adapters/stores/useOwnAiStatusStore';
+import { useApiKeyStatusStore } from '@adapters/stores/useApiKeyStatusStore';
 import { useRecordAiDraftStore } from '@adapters/stores/useRecordAiDraftStore';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import type { OwnAiErrorKind } from '@domain/entities/OwnAiProvider';
@@ -226,11 +227,17 @@ export function RecordDraftView({
   const addAiVersion = useRecordAiDraftStore((s) => s.add);
   /** 조절을 돌릴 공급자 - 패널과 같은 규칙(고른 것이 연결돼 있으면 그것, 아니면 연결된 첫 번째). */
   const runProviderForLength =
-    preferredProvider === 'claude' || preferredProvider === 'codex'
-      ? connectedProviders.includes(preferredProvider)
-        ? preferredProvider
-        : (connectedProviders[0] ?? null)
+    preferredProvider !== 'ssampin' && connectedProviders.includes(preferredProvider)
+      ? preferredProvider
       : (connectedProviders[0] ?? null);
+  /** 내 API 키로 조절하면 판에 남길 모델은 금고(main)가 고른 값이다. */
+  const apiKeyModel = useApiKeyStatusStore((s) => s.snapshot?.active?.model ?? '');
+  const lengthModel =
+    runProviderForLength === null
+      ? ''
+      : runProviderForLength === 'apikey'
+        ? apiKeyModel
+        : ownAiModels[runProviderForLength];
 
   const [activeArea, setActiveArea] = useState<RecordArea>(areas[0] ?? 'autonomy');
   const [filter, setFilter] = useState<DraftFilter>('all');
@@ -834,7 +841,7 @@ export function RecordDraftView({
           ...(classId !== undefined ? { classId } : {}),
         },
         provider: runProviderForLength,
-        ...(ownAiModels[runProviderForLength] ? { model: ownAiModels[runProviderForLength] } : {}),
+        ...(lengthModel ? { model: lengthModel } : {}),
         // 주제는 **조절 대상 판**의 것을 물려받는다. 화면의 현재 칩이 아니다.
         ...(threadId !== undefined ? { threadId } : {}),
         paragraphs: picked.paragraphs,
@@ -860,7 +867,7 @@ export function RecordDraftView({
         threadId,
       );
     },
-    [runProviderForLength, addAiVersion, activeArea, subject, classId, ownAiModels, applyAiDraft],
+    [runProviderForLength, addAiVersion, activeArea, subject, classId, lengthModel, applyAiDraft],
   );
 
   /** [다시 표시] — 본문은 그대로, 표식만 갱신한다. */

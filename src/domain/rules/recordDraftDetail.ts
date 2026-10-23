@@ -1,9 +1,9 @@
-import type { OwnAiProviderId } from '../entities/OwnAiProvider';
+import type { AiRunProviderId } from '../entities/ApiKeyProvider';
 
 export type RecordDraftDetail = 'grounded';
 
 export function recordDraftDetailForModel(
-  provider: OwnAiProviderId | null,
+  provider: AiRunProviderId | null,
   model: string | undefined,
 ): RecordDraftDetail | undefined {
   return provider === 'codex' && (model === 'gpt-5.6-terra' || model === 'gpt-5.6-luna')

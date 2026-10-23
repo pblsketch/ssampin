@@ -9,7 +9,7 @@
 import type { InquiryThreadStatus, NarrativeScene } from './InquiryThread';
 import type { RecordArea } from './RecordDraft';
 import type { NarrativeFrameId, RecordScaffoldScene } from '../rules/narrativeFrames';
-import type { OwnAiProviderId } from './OwnAiProvider';
+import type { AiRunProviderId } from './ApiKeyProvider';
 
 export const RECORD_MAP_PROPOSAL_SCHEMA_VERSION = 1 as const;
 
@@ -183,7 +183,7 @@ export interface RecordMapRun {
   readonly items: readonly RecordMapRunItem[];
   readonly reviewPace: RecordMapReviewPace;
   readonly scaffoldPolicy: RecordMapScaffoldPolicy;
-  readonly provider: OwnAiProviderId;
+  readonly provider: AiRunProviderId;
   readonly rebuildTopics?: boolean;
   readonly instruction?: string;
   readonly createdAt: number;

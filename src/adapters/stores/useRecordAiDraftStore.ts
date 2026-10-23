@@ -8,6 +8,7 @@ import {
 } from '@domain/entities/RecordAiDraft';
 import type { NarrativeParagraph } from '@domain/rules/narrativeParagraphs';
 import type { RecordDraftStyleStamp } from '@domain/entities/RecordWritingStyle';
+import type { AiRunProviderId } from '@domain/entities/ApiKeyProvider';
 import { recordAiDraftRepository } from '@adapters/di/container';
 import { generateUUID } from '@infrastructure/utils/uuid';
 
@@ -15,7 +16,7 @@ import { generateUUID } from '@infrastructure/utils/uuid';
 export interface RecordAiDraftAddInput {
   draftKey: RecordAiDraftKey;
   threadId?: string;
-  provider: 'claude' | 'codex';
+  provider: AiRunProviderId;
   model?: string;
   /** 이 초안을 만들 때 쓴 작성 규정의 판본(서버가 배급하며 함께 준다). */
   promptVersion?: number;

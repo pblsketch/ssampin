@@ -20,15 +20,30 @@ const memoryOnly = new Map<string, string>();
 let warnedMemoryOnly = false;
 
 /**
+ * 키 이름으로 쓸 수 있는 글자. 지금 쓰는 키는 `calendar-tokens`·`markdown-convert:mask-sessions:v1`
+ * 꼴이다. ★경로 구분자(`/`·`\`)와 `..` 은 받지 않는다 — 화면이 넘긴 키가 그대로 파일 이름이 되므로,
+ * 받으면 `../../` 로 data 폴더 밖 아무 파일이나 읽고 쓰고 지울 수 있다(ADR-143 점검 중 발견).
+ */
+const SECURE_KEY_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+/**
  * 보안 파일 경로 생성
  * userData/data/.<key> 형식으로 저장 (숨김 파일)
  */
 function getSecurePath(key: string): string {
+  if (typeof key !== 'string' || !SECURE_KEY_PATTERN.test(key) || key.includes('..')) {
+    throw new Error('[secureStorage] 허용되지 않는 키 이름');
+  }
   const dir = path.join(getContentRoot(), 'data');
+  const filePath = path.join(dir, `.${key}`);
+  // 글자 검사를 지나도 경로가 data 폴더 바로 아래가 아니면 거절한다(이중 확인).
+  if (path.dirname(path.resolve(filePath)) !== path.resolve(dir)) {
+    throw new Error('[secureStorage] 허용되지 않는 키 이름');
+  }
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  return path.join(dir, `.${key}`);
+  return filePath;
 }
 
 function encryptionAvailable(): boolean {

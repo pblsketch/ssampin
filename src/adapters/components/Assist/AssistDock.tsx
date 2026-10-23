@@ -27,6 +27,7 @@ import {
   useOwnAiStatusStore,
 } from '@adapters/stores/useOwnAiStatusStore';
 import { answererLabel } from './answererLabels';
+import { ApiKeyModelSelect } from './ApiKeyModelSelect';
 import { useOwnAiModelCatalog } from '@adapters/hooks/useOwnAiModelCatalog';
 import { OwnAiProposalCards } from './OwnAiProposalCards';
 import { AttachmentStrip } from './AttachmentStrip';
@@ -228,8 +229,8 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
     if (provider === 'ssampin' && !solarEnabled) {
       setSendNotice(
         connectedProviders.length > 0
-          ? '쌤핀 AI가 꺼져 있어요. 위에서 답할 AI(Claude Code·Codex)를 골라 주세요.'
-          : '쌤핀 AI가 꺼져 있고 연결된 구독 AI도 없어요. 설정 > AI 연결에서 연결해 주세요.',
+          ? '쌤핀 AI가 꺼져 있어요. 위에서 답할 AI를 골라 주세요.'
+          : '쌤핀 AI가 꺼져 있고 연결된 AI도 없어요. 설정 > AI 연결에서 구독 AI나 내 API 키를 연결해 주세요.',
       );
       return;
     }
@@ -292,23 +293,31 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
             </label>
           )}
           {/* 모델 — 구독 AI 를 고른 동안에만 보인다. 쌤핀 AI 는 고를 모델이 없다. */}
-          {provider !== 'ssampin' && connectedProviders.includes(provider) && (
+          {provider === 'apikey' && connectedProviders.includes(provider) && (
             <label className="flex items-center gap-1 text-xs text-sp-muted">
               <span className="sr-only">모델 고르기</span>
-              <select
-                value={ownAiModels[provider]}
-                onChange={(e) => changeModel(provider, e.target.value)}
-                disabled={busy}
-                className="rounded-lg border border-sp-border bg-sp-bg px-1.5 py-0.5 text-xs text-sp-text disabled:opacity-50"
-              >
-                {modelCatalog[provider].map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
+              <ApiKeyModelSelect disabled={busy} />
             </label>
           )}
+          {provider !== 'ssampin' &&
+            provider !== 'apikey' &&
+            connectedProviders.includes(provider) && (
+              <label className="flex items-center gap-1 text-xs text-sp-muted">
+                <span className="sr-only">모델 고르기</span>
+                <select
+                  value={ownAiModels[provider]}
+                  onChange={(e) => changeModel(provider, e.target.value)}
+                  disabled={busy}
+                  className="rounded-lg border border-sp-border bg-sp-bg px-1.5 py-0.5 text-xs text-sp-text disabled:opacity-50"
+                >
+                  {modelCatalog[provider].map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           {/* 남은 사용량은 알 때만, 그것도 한도가 가까울 때만 말한다 — 평소엔 조용히 둔다. */}
           {usage?.fiveHourUtilization !== null &&
             usage !== null &&

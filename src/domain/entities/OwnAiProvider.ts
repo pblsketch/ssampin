@@ -93,7 +93,24 @@ export type OwnAiErrorKind =
   /** 앱 안에서 다른 내 AI 실행이 진행 중이다 */
   | 'busy'
   | 'cancelled'
-  | 'crashed';
+  | 'crashed'
+  // ── 내 API 키(BYOK) 경로 전용 (ADR-143) ──
+  /** 고른 서비스에 키가 없다(지웠거나 아직 안 넣었다) */
+  | 'key-missing'
+  /** 서비스가 키를 거절했다(401·403, 제미나이는 400 "API key not valid") */
+  | 'key-invalid'
+  /** 충전액이 없다(402) */
+  | 'key-no-credit'
+  /** 요청이 몰렸거나 한도에 닿았다(429) */
+  | 'key-rate-limited'
+  /** 고른 모델을 그 키로는 쓸 수 없다(404, 모델 없음) */
+  | 'key-model-unavailable'
+  /** 인터넷에 닿지 못했다 */
+  | 'key-network'
+  /** 답이 너무 오래 걸려 멈췄다 */
+  | 'key-timeout'
+  /** 서비스 쪽 오류(5xx)이거나 빈 답이 왔다 */
+  | 'key-provider-error';
 
 /** 실행 중 렌더러로 흘려보내는 이벤트. */
 export type OwnAiRunEvent =

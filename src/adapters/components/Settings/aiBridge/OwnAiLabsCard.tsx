@@ -108,8 +108,9 @@ export function OwnAiLabsCard() {
         <div className="min-w-0">
           <h3 className="text-sm font-sp-semibold text-sp-text">내 AI로 실행 (구독)</h3>
           <p className="mt-1 text-sm text-sp-muted">
-            이미 쓰고 계신 Claude Code·Codex 로 쌤핀 AI 패널이 답하게 합니다. 생기부 초안도 이
-            방식으로만 만들 수 있어요. 연결은 설정 &gt; AI 연결에서 합니다.
+            이미 쓰고 계신 Claude Code·Codex 나 선생님 API 키로 쌤핀 AI 패널이 답하게 합니다. 생기부
+            초안도 이 방식으로만 만들 수 있어요. 연결은 설정 &gt; AI 연결에서 합니다(API 키를 넣으면
+            이 스위치가 저절로 켜져요).
           </p>
         </div>
         <button

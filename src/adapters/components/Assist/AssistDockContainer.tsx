@@ -92,6 +92,7 @@ import { executeAssistWrite } from './executeAssistWrite';
 import type { WriteDeps } from './executeAssistWrite';
 import { buildSplitQuestion, subscribeObservationSplit } from './observationSplitRequest';
 import { assistPort, assistPortFor } from '@adapters/di/container';
+import { useApiKeyStatusStore } from '@adapters/stores/useApiKeyStatusStore';
 import {
   useConnectedOwnAiProviders,
   useOwnAiStatusRefresh,
@@ -773,6 +774,10 @@ function writeDeps(): WriteDeps {
 
 export function AssistDockContainer() {
   const enabled = useAssistStore((s) => s.enabled);
+  /** 내 API 키로 패널을 쓸 수 있는가 — "내 AI" 스위치 + 고른 키·모델(ADR-143). */
+  const ownAiSwitchOn = useAssistStore((s) => s.ownAiEnabled);
+  const apiKeyActive = useApiKeyStatusStore((s) => (s.snapshot?.active ?? null) !== null);
+  const apiKeyPanelUsable = ownAiSwitchOn && apiKeyActive;
   const ask = useAssistStore((s) => s.ask);
   const settleProposal = useAssistStore((s) => s.settleProposal);
 
@@ -848,7 +853,9 @@ export function AssistDockContainer() {
    * 돌아가므로(멱등) 여러 번 불려도 안전하다.
    */
   useEffect(() => {
-    if (!enabled) return;
+    // ★내 API 키로 답할 때도 불러온다(ADR-143) — 그 통로는 구독 CLI 와 달리 앱이 직접 조회해
+    //   결과를 싣는다. 쌤핀 AI 를 안 켠 선생님이 키로만 쓰면 스토어가 비어 "0건"이라고 답한다.
+    if (!enabled && !apiKeyPanelUsable) return;
     void useStudentStore.getState().load();
     void useTeachingClassStore.getState().load();
     void useStudentRecordsStore.getState().load();
@@ -863,7 +870,7 @@ export function AssistDockContainer() {
     void useGradeAnalysisStore.getState().load();
     void useRubricStore.getState().load();
     void useSeatingStore.getState().load();
-  }, [enabled]);
+  }, [enabled, apiKeyPanelUsable]);
 
   /**
    * ★구글에서 받은 일정·할 일을 **여기서 가른다**(ADR-136). 조회 도구에는 가른 뒤의 것만
@@ -1128,8 +1135,10 @@ export function AssistDockContainer() {
         //   - 기능이 꺼졌으면 실행하지 않는다 — 옵트인 차단선은 실행 경로에도 있어야 한다.
         //   - pending 이 아니면(이미 실행 중·소멸) 무시한다 — 이중 클릭 방어의 절반.
         const current = useAssistStore.getState();
-        if (!current.enabled) return;
         const turn = current.turns.find((t) => t.id === turnId);
+        // 내 API 키가 낸 제안은 쌤핀 AI 동의와 상관없다 — 그 통로를 켠 스위치("내 AI")를 본다.
+        const viaApiKey = turn?.answeredBy?.provider === 'apikey' && current.ownAiEnabled;
+        if (!current.enabled && !viaApiKey) return;
         if (!turn || turn.proposalState !== 'pending') return;
         // 누르는 즉시 running 으로 — 버튼이 사라져 두 번 누를 수 없다(나머지 절반).
         settleProposal(turnId, 'running');
@@ -1251,12 +1260,13 @@ export function AssistDockContainer() {
    *   창까지 열리는 일이 없도록 여기서 한 번 더 막는다.
    */
   useEffect(() => {
-    if (!enabled) return;
+    // 내 AI(구독·API 키)만 켠 선생님도 받아쓴 글을 나눌 수 있다 — 같은 가리기 관문을 지난다.
+    if (!enabled && !ownAiUsable) return;
     return subscribeObservationSplit((text) => {
       setOpen(true);
       handleAsk(buildSplitQuestion(text));
     });
-  }, [enabled, handleAsk, setOpen]);
+  }, [enabled, ownAiUsable, handleAsk, setOpen]);
 
   // 쌤핀 AI 를 안 켰어도 "내 AI"가 연결돼 있으면 패널을 쓸 수 있다.
   if (!enabled && !ownAiUsable) return null;

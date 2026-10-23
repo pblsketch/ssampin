@@ -13,9 +13,11 @@ import {
   globalShortcut,
   clipboard,
   session,
+  safeStorage,
 } from 'electron';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import crypto from 'crypto';
 import { autoUpdater } from 'electron-updater';
 import {
@@ -64,6 +66,9 @@ import { registerBoardHandlers, endActiveBoardSessionSync } from './ipc/board';
 import { registerMultiSurveyShareHandlers } from './ipc/multiSurveyShare';
 import { registerAiBridgeHandlers } from './ipc/aiBridge';
 import { registerOwnAiHandlers, cancelAllOwnAiRunsSync, ownAiActiveUntil } from './ipc/ownAi';
+import { registerApiKeyHandlers } from './ipc/apiKey';
+import { createApiKeyVault } from './ipc/apiKeyVault';
+import { createApiKeyClient } from './ipc/apiKeyClient';
 import { registerLiveSyncHost, type LiveSyncHost } from './ipc/aiBridgeLiveSyncHost';
 import {
   createSidePinElectron,
@@ -152,7 +157,7 @@ import {
   peekOpenPath,
 } from './security/dialogHandles';
 import { safeFetchText } from './security/safeFetch';
-import { writeDataFileAtomic } from './dataFileWrite';
+import { isSafeDataFileName, writeDataFileAtomic } from './dataFileWrite';
 
 declare const __dirname: string;
 
@@ -163,6 +168,38 @@ registerMiniAppScheme();
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
 let liveSyncHost: LiveSyncHost | null = null;
+let apiKeyHandlers: { cancelAll: () => void } | null = null;
+
+/**
+ * 이 화면이 쌤핀 자체 화면(설치본의 dist 폴더 또는 개발 서버)인가 — 내 API 키 IPC 의 마지막 관문(ADR-143).
+ * 창이 어떤 이유로 바깥 주소로 넘어가도 preload 가 남는다. 그 페이지가 키 통로를 쓰지 못하게 한다.
+ * ★경로로 비교한다 — 사용자 이름에 한글이 있으면 file:// 주소의 %인코딩이 달라질 수 있다.
+ */
+function isAppRendererUrl(raw: string): boolean {
+  try {
+    const u = new URL(raw);
+    const dev = process.env['VITE_DEV_SERVER_URL'];
+    if (dev && u.origin === new URL(dev).origin) return true;
+    if (u.protocol !== 'file:') return false;
+    const norm = (x: string): string => (process.platform === 'win32' ? x.toLowerCase() : x);
+    const page = norm(path.resolve(fileURLToPath(u)));
+    const dist = norm(path.resolve(__dirname, '../dist') + path.sep);
+    return page.startsWith(dist);
+  } catch {
+    return false;
+  }
+}
+
+/** OS 암호화를 진짜로 쓸 수 있는가 — 리눅스에서 키링이 없으면 `basic_text`(사실상 평문)라 못 쓰는 것으로 본다. */
+function byokEncryptionAvailable(): boolean {
+  if (!safeStorage.isEncryptionAvailable()) return false;
+  if (process.platform !== 'linux') return true;
+  try {
+    return safeStorage.getSelectedStorageBackend() !== 'basic_text';
+  } catch {
+    return false;
+  }
+}
 let quickAddWindow: BrowserWindow | null = null;
 let stickerPickerWindow: BrowserWindow | null = null;
 /** 쌤도구 팝업 창 관리자 — registerToolPopupIpc() 에서 채워진다. */
@@ -3640,6 +3677,9 @@ function registerIpcHandlers(): void {
   // data:read — userData/data/{filename}.json 읽기 (손상 감지 + 백업 복구)
   ipcMain.handle('data:read', (_event, filename: string): string | null => {
     const dataDir = getDataDir();
+    // ★데이터 폴더 밖(`../`)은 읽지 않는다(ADR-143 보안 점검).
+    if (!isSafeDataFileName(dataDir, filename))
+      throw new Error('[data:read] 허용되지 않는 파일 이름');
     const filePath = path.join(dataDir, `${filename}.json`);
     const backupPath = path.join(dataDir, `${filename}.backup.json`);
 
@@ -3716,6 +3756,7 @@ function registerIpcHandlers(): void {
     'data:writeIfUnchanged',
     (_event, filename: string, expectedData: string | null, nextData: string): boolean => {
       const dataDir = getDataDir();
+      if (!isSafeDataFileName(dataDir, filename)) return false;
       const filePath = path.join(dataDir, `${filename}.json`);
       const backupPath = path.join(dataDir, `${filename}.backup.json`);
       const tempPath = path.join(dataDir, `${filename}.tmp.json`);
@@ -3751,6 +3792,7 @@ function registerIpcHandlers(): void {
 
   ipcMain.handle('data:remove', (_event, filename: string): void => {
     const dataDir = getDataDir();
+    if (!isSafeDataFileName(dataDir, filename)) return;
     const filePath = path.join(dataDir, `${filename}.json`);
     const backupPath = path.join(dataDir, `${filename}.backup.json`);
     const tempPath = path.join(dataDir, `${filename}.tmp.json`);
@@ -6277,6 +6319,41 @@ if (!gotTheLock) {
       ensureLiveSyncServer: () =>
         liveSyncHost?.ensureServer() ?? Promise.resolve({ needsServer: false, ready: false }),
     });
+    // 내 API 키(BYOK) — 키는 userData/byok 에 OS 암호화로만 두고, 화면으로 돌려주지 않는다(ADR-143).
+    //   ★우리 앱 창의 최상위 화면에서 온 요청만 받는다.
+    apiKeyHandlers = registerApiKeyHandlers({
+      vault: createApiKeyVault({
+        dir: path.join(app.getPath('userData'), 'byok'),
+        encryptionAvailable: byokEncryptionAvailable,
+        encrypt: (plain) => safeStorage.encryptString(plain),
+        decrypt: (cipher) => safeStorage.decryptString(cipher),
+        warn: (m) => console.warn(m),
+      }),
+      client: createApiKeyClient({
+        fetch: (url, init) => fetch(url, init),
+        userAgent: `ssampin/${app.getVersion()}`,
+        log: (m) => console.warn(m),
+      }),
+      isTrustedSender: (event) => {
+        const frame = event.senderFrame;
+        if (frame === null || frame.parent !== null) return false;
+        if (!getAllAppWindows().some((win) => win.webContents.id === event.sender.id)) return false;
+        if (isAppRendererUrl(frame.url)) return true;
+        // 주소는 남기지 않는다(쿼리에 무엇이 있을지 모른다). 진단용 한 줄만.
+        console.warn('[apiKey] 쌤핀 화면이 아닌 곳의 요청을 거절했습니다');
+        return false;
+      },
+      openExternal: (url) => shell.openExternal(url),
+      handle: (channel, fn) => ipcMain.handle(channel, fn),
+      // 방금 붙여 넣은 키가 클립보드에 남아 있으면 비운다(윈도우 클립보드 기록·다른 앱).
+      clearClipboardIfHolds: (key) => {
+        try {
+          if (clipboard.readText().trim() === key) clipboard.clear();
+        } catch {
+          /* 클립보드를 못 읽어도 저장은 이미 끝났다 */
+        }
+      },
+    });
     // 글로벌 퀵애드 단축키 IPC
     ipcMain.handle('shortcuts:sync', (_event, config: ShortcutSyncConfig) => {
       return applyGlobalShortcuts(config);
@@ -6500,6 +6577,8 @@ app.on('before-quit', () => {
   //   비동기로 죽이면 will-quit 의 liveSyncHost.stop()(control.json 삭제)이 먼저 끝나
   //   남은 브릿지가 "앱이 없다"고 보고 파일을 직접 쓸 수 있다.
   cancelAllOwnAiRunsSync();
+  // 내 API 키 요청도 끊는다 — 닫힌 앱의 요청에 선생님 요금이 나가지 않게.
+  apiKeyHandlers?.cancelAll();
   // 협업 보드 활성 세션이 있으면 동기 저장 (Design §3.2-bis)
   endActiveBoardSessionSync();
   // 실시간 담벼락 dirty WallBoard 동기 저장 (Design §3.3)

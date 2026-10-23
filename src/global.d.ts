@@ -285,6 +285,38 @@ interface OwnAiElectronAPI {
   onWriteProposal: (handler: (payload: unknown) => void) => () => void;
 }
 
+type ApiKeyElectronStatus = import('./domain/entities/ApiKeyProvider').ApiKeyStatusSnapshot;
+/**
+ * 내 API 키(BYOK, ADR-143). ★키를 **넣는** 통로만 있다 — 꺼내는 통로는 없다.
+ * preload 의 `apiKey` 와 모양이 같아야 한다. 서비스·모델 값은 main 이 다시 검사한다.
+ */
+interface ApiKeyElectronAPI {
+  status: () => Promise<ApiKeyElectronStatus>;
+  save: (
+    service: import('./domain/entities/ApiKeyProvider').ApiKeyServiceId,
+    key: string,
+  ) => Promise<import('./domain/entities/ApiKeyProvider').ApiKeySaveResult>;
+  remove: (
+    service: import('./domain/entities/ApiKeyProvider').ApiKeyServiceId,
+  ) => Promise<ApiKeyElectronStatus>;
+  models: (
+    service: import('./domain/entities/ApiKeyProvider').ApiKeyServiceId,
+    force?: boolean,
+  ) => Promise<import('./domain/entities/ApiKeyProvider').ApiKeyModelsResult>;
+  setActive: (
+    service: import('./domain/entities/ApiKeyProvider').ApiKeyServiceId,
+    model: string,
+  ) => Promise<ApiKeyElectronStatus>;
+  /** 키 받는 곳을 기본 브라우저로 연다. 주소는 main 의 표에서 꺼낸다. */
+  openKeyPage: (
+    service: import('./domain/entities/ApiKeyProvider').ApiKeyServiceId,
+  ) => Promise<boolean>;
+  chat: (
+    payload: import('./domain/entities/ApiKeyProvider').ApiKeyChatPayload,
+  ) => Promise<import('./domain/entities/ApiKeyProvider').ApiKeyChatResult>;
+  cancel: (requestId: string) => Promise<boolean>;
+}
+
 interface ElectronAPI {
   readData: (filename: string) => Promise<string | null>;
   coolMessenger: CoolMessengerElectronAPI;
@@ -301,6 +333,8 @@ interface ElectronAPI {
   aiBridge: AiBridgeElectronAPI;
   /** 데스크톱 앱에서만. 옛 preload 에는 없을 수 있어 선택 속성으로 둔다 — 없으면 화면이 그 사실을 말한다. */
   ownAi?: OwnAiElectronAPI;
+  /** 데스크톱 앱에서만 존재한다. 브라우저 모드에서는 키를 둘 곳이 없어 없다. */
+  apiKey?: ApiKeyElectronAPI;
   setAlwaysOnTop: (flag: boolean) => Promise<void>;
   /** 본문 창이 숨거나 없어지기 직전 신호(ADR-139). 진행 중인 타이머를 팝업으로 옮긴다. */
   onBeforeHide?: (callback: (requestId: string) => void) => () => void;

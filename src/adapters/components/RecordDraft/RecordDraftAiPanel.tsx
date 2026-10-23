@@ -43,7 +43,9 @@ import {
   type DraftRunPhase,
 } from '@adapters/stores/useRecordAiRunStore';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
-import { OWN_AI_PROVIDER_LABELS } from '@domain/entities/OwnAiProvider';
+import { AI_RUN_PROVIDER_LABELS, type AiRunProviderId } from '@domain/entities/ApiKeyProvider';
+import { useApiKeyStatusStore } from '@adapters/stores/useApiKeyStatusStore';
+import { ApiKeyModelSelect } from '@adapters/components/Assist/ApiKeyModelSelect';
 import { useOwnAiModelCatalog } from '@adapters/hooks/useOwnAiModelCatalog';
 import {
   buildNarrativeRemarkPack,
@@ -74,7 +76,7 @@ import {
 } from '@domain/rules/narrativeParagraphs';
 import type { OwnAiErrorKind } from '@domain/entities/OwnAiProvider';
 import { judgeNonDraftReply } from '@domain/rules/nonDraftReply';
-import { shortModelLabel } from '@adapters/components/Assist/answererLabels';
+import { runModelLabel } from '@adapters/components/Assist/answererLabels';
 import { askOnce, runApi } from '@adapters/components/RecordDraft/ownAiRun';
 import type { KeywordGroup, MaskMapping } from '@domain/privacy/types';
 import { restoreModelText } from '@domain/rules/redactOutbound';
@@ -419,6 +421,12 @@ export function RecordDraftAiPanel({
     setOwnAiModel(p, model);
     void window.electronAPI?.ownAi?.setModel?.(p, model);
   };
+  /** 내 API 키로 쓸 때의 모델 — 금고(main)가 고른 값. 설정·AI 패널과 같은 값이다. */
+  const apiKeyModel = useApiKeyStatusStore((s) => s.snapshot?.active?.model ?? '');
+  const modelOf = useCallback(
+    (p: AiRunProviderId): string => (p === 'apikey' ? apiKeyModel : ownAiModels[p]),
+    [apiKeyModel, ownAiModels],
+  );
 
   /** 실제로 쓸 공급자 — 고른 것이 연결돼 있어야 한다. 아니면 연결된 첫 번째. */
   const runProvider = useMemo(() => {
@@ -568,7 +576,7 @@ export function RecordDraftAiPanel({
       const merged = [base, extra].filter((x) => x.length > 0).join('\n');
       const detail = recordDraftDetailForModel(
         runProvider,
-        runProvider ? ownAiModels[runProvider] : undefined,
+        runProvider ? modelOf(runProvider) : undefined,
       );
       // 구성용 판본 문지기 — 작성 방식용(`applyPromptVersionGate`)의 형제다.
       const gatedComposition =
@@ -627,7 +635,7 @@ export function RecordDraftAiPanel({
       area,
       level,
       runProvider,
-      ownAiModels,
+      modelOf,
     ],
   );
 
@@ -759,7 +767,7 @@ export function RecordDraftAiPanel({
               draftKey: versionKey,
               provider: runProvider,
               promptVersion,
-              ...(ownAiModels[runProvider] ? { model: ownAiModels[runProvider] } : {}),
+              ...(modelOf(runProvider) ? { model: modelOf(runProvider) } : {}),
               ...(pickedThread !== null && t.studentRef === target.studentRef
                 ? { threadId: pickedThread.id }
                 : {}),
@@ -837,7 +845,7 @@ export function RecordDraftAiPanel({
       installId,
       addVersion,
       draftKey,
-      ownAiModels,
+      modelOf,
       pickedThread,
       target.studentRef,
       onFocusStudent,
@@ -1199,9 +1207,9 @@ export function RecordDraftAiPanel({
           이 학생 초안 쓰기
         </button>
         <p className="rounded-lg bg-sp-card px-3 py-2 text-xs leading-relaxed text-sp-muted">
-          생기부 초안은 선생님 구독 AI(Claude Code·Codex)로만 만들 수 있어요. 설정 &gt; 실험실
-          기능에서 &ldquo;내 AI로 실행&rdquo;을 켜고, 설정 &gt; AI 연결에서 연결하면 이 단추가
-          켜집니다.
+          생기부 초안은 선생님 구독 AI(Claude Code·Codex)나 선생님 API 키로 만들 수 있어요. 설정
+          &gt; AI 연결에서 내 API 키를 넣거나, 실험실 기능의 &ldquo;내 AI로 실행&rdquo;을 켜고
+          구독을 연결하면 이 단추가 켜집니다.
         </p>
         {versions.length > 0 && (
           <p className="text-xs text-sp-muted">
@@ -1373,8 +1381,8 @@ export function RecordDraftAiPanel({
               className="inline-flex items-center gap-1 rounded-lg bg-sp-card px-2 py-1 text-xs text-sp-muted ring-1 ring-sp-border"
               data-testid="ai-setup-summary"
             >
-              {OWN_AI_PROVIDER_LABELS[runProvider]} ·{' '}
-              {shortModelLabel(runProvider, ownAiModels[runProvider])}
+              {AI_RUN_PROVIDER_LABELS[runProvider]} ·{' '}
+              {runModelLabel(runProvider, modelOf(runProvider))}
               <button
                 type="button"
                 onClick={() => setSetupOpen(true)}
@@ -1398,16 +1406,22 @@ export function RecordDraftAiPanel({
                       : 'bg-sp-card text-sp-muted hover:text-sp-text'
                   }`}
                 >
-                  {OWN_AI_PROVIDER_LABELS[p]}
+                  {AI_RUN_PROVIDER_LABELS[p]}
                 </button>
               ))}
             </span>
           ) : (
             <span className="rounded-lg bg-sp-card px-2 py-1 text-xs text-sp-muted ring-1 ring-sp-border">
-              {OWN_AI_PROVIDER_LABELS[runProvider]}
+              {AI_RUN_PROVIDER_LABELS[runProvider]}
             </span>
           )}
-          {(versions.length === 0 || setupOpen) && (
+          {(versions.length === 0 || setupOpen) && runProvider === 'apikey' && (
+            <label className="flex items-center gap-1">
+              <span className="sr-only">초안에 쓸 모델 고르기</span>
+              <ApiKeyModelSelect className="max-w-[12rem] rounded-lg border border-sp-border bg-sp-bg px-1 py-1 text-xs text-sp-text disabled:opacity-50" />
+            </label>
+          )}
+          {(versions.length === 0 || setupOpen) && runProvider !== 'apikey' && (
             <label className="flex items-center gap-1">
               <span className="sr-only">초안에 쓸 모델 고르기</span>
               <select
@@ -1567,7 +1581,7 @@ export function RecordDraftAiPanel({
             {phase.shrinking !== undefined
               ? `${phase.name} 초안이 ${phase.shrinking.fromBytes.toLocaleString()}B로 목표(${phase.shrinking.targetBytes.toLocaleString()}B)보다 길어서 자동으로 한 번 줄이고 있어요…`
               : `${phase.name} 초안을 쓰는 중이에요…`}
-            <span className="ml-1">({OWN_AI_PROVIDER_LABELS[runProvider]})</span>
+            <span className="ml-1">({AI_RUN_PROVIDER_LABELS[runProvider]})</span>
           </span>
           {/* [중단] — main 이 CLI 를 죽이고, 이 실행은 `cancelled` 로 끝나 "중단했어요"가 뜬다(R-6). */}
           <button
@@ -1625,9 +1639,9 @@ export function RecordDraftAiPanel({
             <span className="text-xs font-semibold text-sp-text">{viewName}: 미리보기</span>
             {/* 어느 AI·모델이 썼는지 남긴다. 결과가 마음에 안 들 때 무엇을 바꿔 볼지 알 수 있다. */}
             <span className="text-xs text-sp-muted">
-              · {OWN_AI_PROVIDER_LABELS[selected.provider]}
+              · {AI_RUN_PROVIDER_LABELS[selected.provider]}
               {/* 내부 이름(claude-sonnet-5)이 아니라 선택 상자와 같은 이름(Sonnet 5)으로(R-8). */}
-              {selected.model ? ` ${shortModelLabel(selected.provider, selected.model)}` : ''}
+              {selected.model ? ` ${runModelLabel(selected.provider, selected.model)}` : ''}
               {selected.excluded ? ` · ${selected.excluded}` : ''}
               {selected.appliedAt !== undefined ? ' · 반영됨' : ''}
             </span>

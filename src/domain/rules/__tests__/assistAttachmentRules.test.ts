@@ -19,6 +19,9 @@ describe('누가 첨부를 받을 수 있나 (ADR-090)', () => {
     expect(attachmentsAllowedFor('claude')).toBe(true);
     expect(attachmentsAllowedFor('codex')).toBe(true);
   });
+  it('내 API 키는 첫 판에서 받지 않는다(ADR-143) — 서비스마다 그림 지원이 달라 "보냈는데 안 봤다"가 생긴다', () => {
+    expect(attachmentsAllowedFor('apikey')).toBe(false);
+  });
 });
 
 describe('한 장 받을지 판정', () => {

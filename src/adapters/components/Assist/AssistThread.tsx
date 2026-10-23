@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 import type { AssistLocalOnly, AssistTurn } from '@adapters/stores/useAssistStore';
-import { answererLabel, shortModelLabel } from './answererLabels';
+import { answererLabel, runModelLabel } from './answererLabels';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import { toPlainAnswerText } from '@domain/rules/plainAnswerText';
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
@@ -635,7 +635,7 @@ export function AssistThread({
                 ? `${answererLabel('ssampin')}가 답했어요`
                 : `${answererLabel(turn.answeredBy.provider)}${
                     turn.answeredBy.model
-                      ? ` · ${shortModelLabel(turn.answeredBy.provider, turn.answeredBy.model)}`
+                      ? ` · ${runModelLabel(turn.answeredBy.provider, turn.answeredBy.model)}`
                       : ''
                   }`}
             </p>

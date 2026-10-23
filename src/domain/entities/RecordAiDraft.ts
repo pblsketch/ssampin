@@ -16,6 +16,7 @@
 import type { RecordArea } from './RecordDraft';
 import type { NarrativeParagraph } from '../rules/narrativeParagraphs';
 import type { RecordDraftStyleStamp } from './RecordWritingStyle';
+import type { AiRunProviderId } from './ApiKeyProvider';
 
 /** 어느 초안 칸의 판인가 — `RecordDraft` 의 upsert 키와 같은 축(area + studentRef + subject). */
 export interface RecordAiDraftKey {
@@ -30,7 +31,8 @@ export interface RecordAiDraft {
   readonly draftKey: RecordAiDraftKey;
   /** 어느 주제로 썼나(없으면 전체 근거). */
   readonly threadId?: string;
-  readonly provider: 'claude' | 'codex';
+  /** 누가 썼나 — 구독 CLI 또는 내 API 키(`apikey`, ADR-143). 키 자체는 없다 */
+  readonly provider: AiRunProviderId;
   readonly model?: string;
   /**
    * 이 초안을 만들 때 쓴 **작성 규정(1층 프롬프트)의 판본**. 서버가 배급하면서 함께 준다.

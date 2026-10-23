@@ -7,7 +7,7 @@ import {
   type RecordMapTargetMode,
 } from '@domain/entities/RecordMapProposal';
 import type { IRecordMapProposalRepository } from '@domain/repositories/IRecordMapProposalRepository';
-import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import type { AiRunProviderId } from '@domain/entities/ApiKeyProvider';
 import {
   recordMapContextKey,
   replaceRecordMapRun,
@@ -20,7 +20,7 @@ export interface CreateRecordMapRunInput {
   readonly targetContexts: readonly RecordMapStudentContext[];
   readonly reviewPace: RecordMapReviewPace;
   readonly scaffoldPolicy: RecordMapScaffoldPolicy;
-  readonly provider: OwnAiProviderId;
+  readonly provider: AiRunProviderId;
   readonly rebuildTopics?: boolean;
   readonly instruction?: string;
 }

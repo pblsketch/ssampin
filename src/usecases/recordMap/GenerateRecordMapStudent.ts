@@ -274,6 +274,11 @@ export class GenerateRecordMapStudent {
           'model-unavailable',
           'prompt-rate-limited-minute',
           'prompt-rate-limited-day',
+          'key-missing',
+          'key-invalid',
+          'key-no-credit',
+          'key-rate-limited',
+          'key-model-unavailable',
         ].includes(failureMessage ?? '')
           ? { lifecycle: 'paused' as const }
           : {}),

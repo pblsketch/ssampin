@@ -10,6 +10,22 @@
 import fs from 'fs';
 import path from 'path';
 
+/**
+ * 화면이 넘긴 데이터 파일 이름이 데이터 폴더 **안**을 가리키는지 확인한다.
+ *
+ * ★`../` 로 폴더 밖 아무 `*.json` 이나 읽고 쓰고 지울 수 있었다(ADR-143 보안 점검에서 발견 — 예:
+ *   `../byok/active` 로 내 API 키 금고의 "고른 모델" 파일을 덮어쓸 수 있었다). 하위 폴더 이름은 그대로
+ *   받는다 — 바깥으로 나가는 것만 막는다.
+ */
+export function isSafeDataFileName(dataDir: string, filename: unknown): filename is string {
+  if (typeof filename !== 'string' || filename.length === 0 || filename.length > 260) return false;
+  if (filename.includes('\0') || path.isAbsolute(filename)) return false;
+  const root = path.resolve(dataDir);
+  const target = path.resolve(root, `${filename}.json`);
+  const rel = path.relative(root, target);
+  return rel.length > 0 && !rel.startsWith('..') && !path.isAbsolute(rel);
+}
+
 export type DataFileWriteResult =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: 'verify' | 'write' };
@@ -19,6 +35,10 @@ export function writeDataFileAtomic(
   filename: string,
   data: string,
 ): DataFileWriteResult {
+  if (!isSafeDataFileName(dataDir, filename)) {
+    console.error('[data:write] 허용되지 않는 파일 이름');
+    return { ok: false, reason: 'write' };
+  }
   const filePath = path.join(dataDir, `${filename}.json`);
   const backupPath = path.join(dataDir, `${filename}.backup.json`);
   const tempPath = path.join(dataDir, `${filename}.tmp.json`);

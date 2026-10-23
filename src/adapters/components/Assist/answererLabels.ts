@@ -4,14 +4,24 @@
  * 헤더는 `AssistDock`, 배지는 `AssistThread` 에 있고 `AssistDock` 이 `AssistThread` 를
  * import 하므로, 둘 다 여기서 가져가야 순환 import 가 생기지 않는다.
  */
-import { OWN_AI_PROVIDER_LABELS, type OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import type { OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import {
+  AI_RUN_PROVIDER_LABELS,
+  shortApiKeyModelLabel,
+  type AiRunProviderId,
+} from '@domain/entities/ApiKeyProvider';
 import { OWN_AI_MODELS } from '@domain/rules/ownAiCliRules';
 
-/** 누가 답하는가 — 쌤핀 AI(무료·서버) 또는 선생님 구독 CLI. */
-export type Answerer = OwnAiProviderId | 'ssampin';
+/** 누가 답하는가 — 쌤핀 AI(서버), 선생님 구독 CLI, 또는 선생님 API 키. */
+export type Answerer = AiRunProviderId | 'ssampin';
 
 export function answererLabel(a: Answerer): string {
-  return a === 'ssampin' ? '쌤핀 AI' : OWN_AI_PROVIDER_LABELS[a];
+  return a === 'ssampin' ? '쌤핀 AI' : AI_RUN_PROVIDER_LABELS[a];
+}
+
+/** 배지에 쓸 모델 이름 — 구독 CLI 는 쌤핀 목록의 이름, API 키는 서비스가 준 id 를 줄여서. */
+export function runModelLabel(provider: AiRunProviderId, model: string): string {
+  return provider === 'apikey' ? shortApiKeyModelLabel(model) : shortModelLabel(provider, model);
 }
 
 /** "Sonnet — 빠름" → "Sonnet", "기본 (권장)" → "기본". 목록에 없는 값은 그대로 보여 준다. */

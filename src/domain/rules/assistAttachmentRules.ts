@@ -10,17 +10,20 @@ import {
   type AssistAttachmentPayload,
 } from '../entities/AssistAttachment';
 import type { OwnAiProviderId } from '../entities/OwnAiProvider';
+import type { AiRunProviderId } from '../entities/ApiKeyProvider';
 
 /**
  * 첨부를 붙일 수 있는가 = **"내 AI"(구독 CLI)로 답하는 동안만.**
  *
  * 쌤핀 AI(Solar) 는 중계 서버가 글만 받고, 사진 속 이름·얼굴은 별칭으로 가릴 수도 없다.
  * 그래서 Solar 를 고른 동안에는 버튼을 숨기고, 이미 붙인 것도 내려놓는다.
+ * ★내 API 키(ADR-143)도 첫 판에는 받지 않는다 — 서비스마다 그림 형식·모델 지원이 달라
+ *   "보냈는데 안 봤다"가 생긴다. 붙이는 단추 자체를 숨긴다.
  */
 export function attachmentsAllowedFor(
-  provider: OwnAiProviderId | 'ssampin',
+  provider: AiRunProviderId | 'ssampin',
 ): provider is OwnAiProviderId {
-  return provider !== 'ssampin';
+  return provider !== 'ssampin' && provider !== 'apikey';
 }
 
 export function isAssistAttachmentMediaType(value: string): value is AssistAttachmentMediaType {

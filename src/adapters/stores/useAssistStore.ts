@@ -23,6 +23,8 @@ import {
 } from '@domain/rules/redactOutbound';
 import { createMaskSession } from '@domain/privacy/maskEngine';
 import type { OwnAiErrorKind, OwnAiProviderId } from '@domain/entities/OwnAiProvider';
+import type { AiRunProviderId } from '@domain/entities/ApiKeyProvider';
+import { useApiKeyStatusStore } from './useApiKeyStatusStore';
 import { OWN_AI_ERROR_MESSAGES } from '@domain/rules/ownAiCliRules';
 import type { MaskMapping } from '@domain/privacy/types';
 import { findAssistTool } from '@domain/services/assistToolRegistry';
@@ -158,7 +160,7 @@ export interface AssistTurn {
 
 /** 배지에 쓸 "누가 답했나". 모델은 CLI 에 넘긴 값 그대로(빈 문자열 = CLI 기본값). */
 export interface AssistAnsweredBy {
-  readonly provider: OwnAiProviderId | 'ssampin';
+  readonly provider: AiRunProviderId | 'ssampin';
   readonly model: string;
 }
 
@@ -186,11 +188,12 @@ interface AssistState {
    *
    * - `ssampin` 쌤핀 AI(무료, 중계 서버) — 기본값
    * - `claude`·`codex` 선생님 본인 구독 CLI("내 AI로 실행")
+   * - `apikey` 선생님 본인 API 키(ADR-143). 어느 서비스·모델인지는 main 의 금고가 안다
    *
    * ★스토어는 이 값을 **기억만** 한다. 실제로 어느 통로로 물어보는지는 화면이 고른
    * 포트가 정한다(DI). 그래야 스토어가 infrastructure 를 import 하지 않는다.
    */
-  readonly provider: OwnAiProviderId | 'ssampin';
+  readonly provider: AiRunProviderId | 'ssampin';
   /** 공급자별로 고른 모델. 빈 문자열이면 CLI 기본값. */
   readonly ownAiModels: Readonly<Record<OwnAiProviderId, string>>;
   /** "내 AI" 첫 사용 고지문을 확인한 버전. 0 이면 아직 안 봤다. */
@@ -223,7 +226,7 @@ interface AssistActions {
   removeAttachment: (id: string) => void;
   clearAttachments: () => void;
   setEnabled: (value: boolean) => void;
-  setProvider: (value: OwnAiProviderId | 'ssampin') => void;
+  setProvider: (value: AiRunProviderId | 'ssampin') => void;
   setOwnAiEnabled: (value: boolean) => void;
   setOwnAiModel: (provider: OwnAiProviderId, model: string) => void;
   acknowledgeOwnAiNotice: () => void;
@@ -625,7 +628,12 @@ export const useAssistStore = create<AssistStore>()(
         const chosenProvider = get().provider;
         const answeredBy: AssistAnsweredBy = {
           provider: chosenProvider,
-          model: chosenProvider === 'ssampin' ? '' : get().ownAiModels[chosenProvider],
+          model:
+            chosenProvider === 'ssampin'
+              ? ''
+              : chosenProvider === 'apikey'
+                ? (useApiKeyStatusStore.getState().snapshot?.active?.model ?? '')
+                : get().ownAiModels[chosenProvider],
         };
         // ★이미지는 "내 AI"를 고른 질문에만 실린다(ADR-090). 그 외에는 상태에 남아 있어도
         //   싣지 않는다 — Solar 포트는 이미지가 오면 거절하므로, 여기서 안 실으면 조용히 빠진다.
