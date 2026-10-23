@@ -7,12 +7,11 @@
  *   npx tsx scripts/embed-docs.ts --file docs/user-guide.md  # 특정 파일만
  *
  * 환경변수:
- *   UPSTAGE_API_KEY           - 업스테이지 API 키
+ *   GOOGLE_API_KEY            - 제미나이 API 키 (임베딩)
  *   SUPABASE_URL              - Supabase 프로젝트 URL
  *   SUPABASE_SERVICE_ROLE_KEY - Supabase 서비스 역할 키
  *
- * 임베딩 모델: 업스테이지 embedding-passage (4096차원)
- * SDK: @google/genai
+ * 임베딩: 제미나이 gemini-embedding-2 (1536차원) — scripts/gemini-embedding.mjs (ADR-142)
  */
 
 import * as fs from 'fs';
@@ -40,6 +39,12 @@ function loadEnvFile(): void {
 }
 loadEnvFile();
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import {
+  EMBEDDING_DIMENSIONS,
+  GEMINI_EMBEDDING_MODEL,
+  embedPassages,
+  embedQuery,
+} from './gemini-embedding.mjs';
 
 // ── 타입 정의 ──────────────────────────────────────────────
 
@@ -73,15 +78,7 @@ interface EmbedTarget {
 
 // ── 상수 ──────────────────────────────────────────────────
 
-/**
- * ★질문용(embedding-query)과 문서용(embedding-passage)은 **다른 모델**이다.
- *   비대칭 검색용으로 짝지어 학습돼 있어, 한쪽으로 통일하면 검색이 조용히 나빠진다.
- */
-const PASSAGE_MODEL = 'embedding-passage';
-const QUERY_MODEL = 'embedding-query';
-const UPSTAGE_BASE_URL = process.env.UPSTAGE_BASE_URL ?? 'https://api.upstage.ai/v1';
 const MAX_CHARS_PER_CHUNK = 1500;
-const BATCH_SIZE = 100;
 const INSERT_BATCH = 50;
 const APP_VERSION = '1.7.6';
 
@@ -192,81 +189,22 @@ function parseFaqFile(faqFilePath: string): DocumentChunk[] {
 
 // ── 임베딩 생성 ───────────────────────────────────────────
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
- * 업스테이지 임베딩 호출 한 번.
- *
- * ★예전에는 구글 SDK → REST 폴백 2단이었는데, 2026-08-25 구글 키가 무효화되자
- *   두 경로가 **같은 키를 써서 같이 죽었다.** 폴백이 폴백 구실을 못 했다.
- *   지금은 경로가 하나뿐이니, 대신 실패를 숨기지 않고 그대로 올린다.
- * ★응답 순서를 믿지 않고 index 로 되돌린다 — 어긋나면 본문과 벡터가 어긋난 채
- *   "엉뚱한 문서가 검색되는" 형태로만 드러나 알아채기 어렵다.
+ * 문서 청크 배치 임베딩 (제미나이, 문서 형식 `title | text`).
+ * 실패를 숨기지 않고 그대로 올린다 — 폴백이 없는 단일 경로다.
  */
-async function embedBatch(texts: string[], apiKey: string, model: string): Promise<number[][]> {
-  const response = await fetch(`${UPSTAGE_BASE_URL}/embeddings`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({ model, input: texts }),
-  });
-
-  if (!response.ok) {
-    const errorBody = await response.text();
-
-    // Rate limit 시 재시도
-    if (response.status === 429) {
-      console.warn('  Rate limit 도달, 5초 후 재시도...');
-      await sleep(5000);
-      return embedBatch(texts, apiKey, model);
-    }
-
-    throw new Error(`업스테이지 임베딩 에러 (${response.status}): ${errorBody}`);
-  }
-
-  const data = (await response.json()) as {
-    data: Array<{ index: number; embedding: number[] }>;
-  };
-  const sorted = [...data.data].sort((a, b) => a.index - b.index);
-
-  if (sorted.length !== texts.length) {
-    throw new Error(`임베딩 ${texts.length}건 요청, ${sorted.length}건 응답 — 개수 불일치`);
-  }
-
-  return sorted.map((d) => d.embedding);
+async function generateEmbeddings(chunks: DocumentChunk[], apiKey: string): Promise<number[][]> {
+  return embedPassages(
+    chunks.map((chunk) => ({ title: chunk.metadata.title, text: chunk.content })),
+    apiKey,
+  );
 }
 
 /**
- * 문서 배치 임베딩 (embedding-passage, 4096차원)
- */
-async function generateEmbeddings(texts: string[], apiKey: string): Promise<number[][]> {
-  const allEmbeddings: number[][] = [];
-
-  for (let i = 0; i < texts.length; i += BATCH_SIZE) {
-    const batch = texts.slice(i, i + BATCH_SIZE);
-    console.log(`  임베딩 생성 중... (${i + 1}~${i + batch.length}/${texts.length})`);
-
-    allEmbeddings.push(...(await embedBatch(batch, apiKey, PASSAGE_MODEL)));
-
-    // Rate limit 방지: 배치 간 500ms 대기
-    if (i + BATCH_SIZE < texts.length) {
-      await sleep(500);
-    }
-  }
-
-  return allEmbeddings;
-}
-
-/**
- * 단일 텍스트 임베딩 (쿼리용, embedding-query)
+ * 단일 텍스트 임베딩 (질문 형식)
  */
 async function generateQueryEmbedding(text: string, apiKey: string): Promise<number[]> {
-  const [vector] = await embedBatch([text], apiKey, QUERY_MODEL);
-  return vector;
+  return embedQuery(text, apiKey);
 }
 
 // ── Supabase 저장 ─────────────────────────────────────────
@@ -328,7 +266,7 @@ function parseArgs(): CliArgs {
 
 async function main(): Promise<void> {
   // 환경변수 검증
-  const apiKey = process.env.UPSTAGE_API_KEY;
+  const apiKey = process.env.GOOGLE_API_KEY;
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -336,12 +274,12 @@ async function main(): Promise<void> {
 
   if (!args.dryRun && (!apiKey || !supabaseUrl || !supabaseKey)) {
     console.error('❌ 환경변수가 설정되지 않았습니다:');
-    console.error('  UPSTAGE_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
+    console.error('  GOOGLE_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
     process.exit(1);
   }
 
   console.log('🚀 쌤핀 문서 임베딩 시작');
-  console.log(`   모델: ${PASSAGE_MODEL} (4096차원)`);
+  console.log(`   모델: ${GEMINI_EMBEDDING_MODEL} (${EMBEDDING_DIMENSIONS}차원)`);
   if (args.dryRun) console.log('   모드: DRY RUN (임베딩 생성 없이 청크만 확인)');
   console.log('');
 
@@ -394,8 +332,7 @@ async function main(): Promise<void> {
       continue;
     }
 
-    const texts = chunks.map((c) => c.content);
-    const embeddings = await generateEmbeddings(texts, apiKey!);
+    const embeddings = await generateEmbeddings(chunks, apiKey!);
 
     await saveToSupabase(supabase!, chunks, embeddings, target.file);
     totalChunks += chunks.length;

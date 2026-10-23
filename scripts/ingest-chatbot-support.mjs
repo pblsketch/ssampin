@@ -1,14 +1,15 @@
 /** 한 건의 지원 문답만 갱신한다. node --env-file=.env scripts/ingest-chatbot-support.mjs */
 import { createClient } from '@supabase/supabase-js';
 import { TRANSCRIPT_SUPPORT_DOCUMENT } from './chatbot-support-qa.mjs';
+import { embedPassages } from './gemini-embedding.mjs';
 
 async function main() {
   if (process.argv.includes('--dry-run')) {
     console.log(JSON.stringify(TRANSCRIPT_SUPPORT_DOCUMENT, null, 2));
     return;
   }
-  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, UPSTAGE_API_KEY } = process.env;
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !UPSTAGE_API_KEY)
+  const { SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, GOOGLE_API_KEY } = process.env;
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !GOOGLE_API_KEY)
     throw new Error('필수 환경변수가 없습니다.');
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false },
@@ -20,27 +21,16 @@ async function main() {
     .eq('metadata->>source', source);
   if (readError) throw new Error('지원 문답 조회 실패');
   if (previous.length > 1) throw new Error('지원 문답이 중복되어 자동 갱신을 중단합니다.');
-  const response = await fetch(
-    `${process.env.UPSTAGE_BASE_URL ?? 'https://api.upstage.ai/v1'}/embeddings`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${UPSTAGE_API_KEY}` },
-      body: JSON.stringify({
-        model: 'embedding-passage',
-        input: [TRANSCRIPT_SUPPORT_DOCUMENT.content],
-      }),
-      signal: AbortSignal.timeout(30_000),
-    },
+  // 차원·형식 검사는 embedPassages 가 한다(1536, 유한수).
+  const [vector] = await embedPassages(
+    [
+      {
+        title: TRANSCRIPT_SUPPORT_DOCUMENT.metadata.title,
+        text: TRANSCRIPT_SUPPORT_DOCUMENT.content,
+      },
+    ],
+    GOOGLE_API_KEY,
   );
-  if (!response.ok) throw new Error(`문답 임베딩 실패: HTTP ${response.status}`);
-  const body = await response.json();
-  const vector = body.data?.[0]?.embedding;
-  if (
-    !Array.isArray(vector) ||
-    vector.length !== 4096 ||
-    vector.some((value) => !Number.isFinite(value))
-  )
-    throw new Error('문답 임베딩 형식이 올바르지 않습니다.');
   const row = { ...TRANSCRIPT_SUPPORT_DOCUMENT, embedding: JSON.stringify(vector) };
   const { error } = previous.length
     ? await supabase

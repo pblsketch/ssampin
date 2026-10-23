@@ -21,7 +21,7 @@ const koContent = {
   lang: 'ko',
   title: '개인정보처리방침',
   subtitle: '쌤핀 (SsamPin)',
-  lastUpdated: '최종 수정일: 2026년 9월 29일',
+  lastUpdated: '최종 수정일: 2026년 10월 24일',
   switchLang: 'View in English',
   switchHref: '?lang=en',
   sections: [
@@ -293,11 +293,12 @@ const koContent = {
               쌤핀의 Google Calendar·Tasks 동기화와 Drive 백업은 사용자의 PC에서 Google API와 직접
               통신합니다(과제 수합·온라인 교무실은 제3조). 또한 상담 예약·과제 수합·전자 서명·설문
               등 <strong>온라인 협업 기능</strong>을 사용할 때는, 그 기능 제공에 필요한 범위에서
-              일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 앱 내 AI 도우미나 쌤핀 AI에
-              질문하면 답변 생성을 위해 주식회사 업스테이지·Google LLC로 전송됩니다. 이는 제3자
-              제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>이며, 자세한 내용은 제11조에
-              따릅니다. 사용자가 직접 연결한 외부 AI 도구로 전달되는 경우는 제10조에 따릅니다.
-              제10조·제11조에 적힌 곳 외에 어떤 외부 서비스에도 데이터를 전달하지 않습니다.
+              일부 데이터가 클라우드 백엔드(Supabase)로 전송·저장됩니다. 앱 내 AI 도우미에 질문하면
+              답변 생성을 위해 Anthropic, PBC·Google LLC로, 쌤핀 AI에 질문하면 주식회사 업스테이지로
+              전송됩니다. 이는 제3자 제공이 아니라 기능 제공을 위한 <strong>처리위탁</strong>이며,
+              자세한 내용은 제11조에 따릅니다. 사용자가 직접 연결한 외부 AI 도구로 전달되는 경우는
+              제10조에 따릅니다. 제10조·제11조에 적힌 곳 외에 어떤 외부 서비스에도 데이터를 전달하지
+              않습니다.
             </li>
             <li>사용자 데이터를 광고주, 데이터 브로커 또는 정보 재판매자에게 이전하지 않습니다.</li>
             <li>
@@ -660,11 +661,11 @@ const koContent = {
             </li>
           </ul>
           <p>
-            <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라) · 주식회사 업스테이지(AI
-            도우미 및 쌤핀 AI 답변 생성) · Google LLC(AI 도우미 질문 검색 처리 및 예비 답변 생성).{' '}
-            <strong>위탁 목적:</strong> 위 협업 기능과 AI 도우미·쌤핀 AI 제공.{' '}
-            <strong>보관·삭제:</strong> 각 기능에서 자료를 삭제하거나 보관 기간(예: 실시간 링크
-            만료)이 지나면 삭제됩니다. AI 도우미 대화는 답변 품질 개선을 위해 보관되며 요청 시
+            <strong>위탁받는 자:</strong> Supabase Inc.(클라우드 인프라) · Anthropic, PBC(AI 도우미
+            답변 생성) · 주식회사 업스테이지(쌤핀 AI 답변 생성) · Google LLC(AI 도우미 질문 검색
+            처리 및 예비 답변 생성). <strong>위탁 목적:</strong> 위 협업 기능과 AI 도우미·쌤핀 AI
+            제공. <strong>보관·삭제:</strong> 각 기능에서 자료를 삭제하거나 보관 기간(예: 실시간
+            링크 만료)이 지나면 삭제됩니다. AI 도우미 대화는 답변 품질 개선을 위해 보관되며 요청 시
             삭제합니다. 전송 구간은 HTTPS(TLS)로 암호화됩니다.
           </p>
         </>
@@ -742,8 +743,12 @@ const koContent = {
               보관되므로, 그 시점에 국외로 이전됩니다.
             </li>
             <li>
-              <strong>주식회사 업스테이지</strong> (대한민국 법인) — AI 도우미 및{' '}
-              <strong>쌤핀 AI</strong>에 질문을 보낼 때의 답변 생성 (제11조).{' '}
+              <strong>Anthropic, PBC</strong> (미국) — AI 도우미에 질문을 보낼 때의 답변 생성
+              (제11조)
+            </li>
+            <li>
+              <strong>주식회사 업스테이지</strong> (대한민국 법인) — <strong>쌤핀 AI</strong>에
+              질문을 보낼 때의 답변 생성 (제11조).{' '}
               <strong>법인은 국내이지만 실제 처리 인프라는 국외입니다.</strong> 업스테이지는 자사
               개인정보처리방침(2026-06-01 기준)에 따라 입력된 대화 내용을 아래에 재위탁하므로, 이
               과정에서 정보가 국외로 이전될 수 있습니다.
@@ -875,7 +880,7 @@ const enContent = {
   lang: 'en',
   title: 'Privacy Policy',
   subtitle: 'SsamPin',
-  lastUpdated: 'Last updated: September 29, 2026',
+  lastUpdated: 'Last updated: October 24, 2026',
   switchLang: '한국어로 보기',
   switchHref: '?lang=ko',
   sections: [
@@ -1160,12 +1165,12 @@ const enContent = {
               Section 3). In addition, when you use <strong>online collaboration features</strong>{' '}
               (consultation booking, assignment collection, e-signature, surveys, etc.), some data
               is transmitted to and stored on a cloud backend (Supabase) as needed to provide those
-              features. When you ask the in-app AI assistant or Ssampin AI a question, it is sent to
-              Upstage Inc. and Google LLC to generate an answer. This is a{' '}
-              <strong>processing consignment</strong> for feature delivery, not third-party
-              provision; see Section 11 for details. Data passed to external AI tools you connect
-              yourself is covered by Section 10. No data is sent to external services other than
-              those listed in Sections 10 and 11.
+              features. When you ask the in-app AI assistant a question, it is sent to Anthropic,
+              PBC and Google LLC to generate an answer; questions to Ssampin AI are sent to Upstage
+              Inc. This is a <strong>processing consignment</strong> for feature delivery, not
+              third-party provision; see Section 11 for details. Data passed to external AI tools
+              you connect yourself is covered by Section 10. No data is sent to external services
+              other than those listed in Sections 10 and 11.
             </li>
             <li>
               We do not transfer user data to advertisers, data brokers, or information resellers.
@@ -1577,14 +1582,14 @@ const enContent = {
             </li>
           </ul>
           <p>
-            <strong>Consignees:</strong> Supabase Inc. (cloud infrastructure); Upstage Inc. (answer
-            generation for the AI assistant and for Ssampin AI); Google LLC (AI assistant question
-            retrieval and fallback answer generation). <strong>Purpose:</strong> providing the
-            collaboration features above, the AI assistant, and Ssampin AI.{' '}
-            <strong>Retention/Deletion:</strong> data is deleted when you remove it within each
-            feature or when its retention period (e.g., real-time link expiry) passes. AI assistant
-            conversations are retained to improve answer quality and are deleted on request. Data in
-            transit is encrypted via HTTPS (TLS).
+            <strong>Consignees:</strong> Supabase Inc. (cloud infrastructure); Anthropic, PBC
+            (answer generation for the AI assistant); Upstage Inc. (answer generation for Ssampin
+            AI); Google LLC (AI assistant question retrieval and fallback answer generation).{' '}
+            <strong>Purpose:</strong> providing the collaboration features above, the AI assistant,
+            and Ssampin AI. <strong>Retention/Deletion:</strong> data is deleted when you remove it
+            within each feature or when its retention period (e.g., real-time link expiry) passes.
+            AI assistant conversations are retained to improve answer quality and are deleted on
+            request. Data in transit is encrypted via HTTPS (TLS).
           </p>
         </>
       ),
@@ -1679,11 +1684,15 @@ const enContent = {
               servers, so it is transferred overseas at that point.
             </li>
             <li>
-              <strong>Upstage Inc.</strong> (a Korean company) — answer generation when you use the
-              AI assistant or <strong>Ssampin AI</strong> (Section 11). The company is Korean, but
-              its actual processing infrastructure is located abroad. Under its own privacy policy
-              (as of 2026-06-01), Upstage sub-consigns submitted conversations as follows, so
-              information may be transferred abroad in that process.
+              <strong>Anthropic, PBC</strong> (USA) — answer generation when you use the AI
+              assistant (Section 11)
+            </li>
+            <li>
+              <strong>Upstage Inc.</strong> (a Korean company) — answer generation when you use{' '}
+              <strong>Ssampin AI</strong> (Section 11). The company is Korean, but its actual
+              processing infrastructure is located abroad. Under its own privacy policy (as of
+              2026-06-01), Upstage sub-consigns submitted conversations as follows, so information
+              may be transferred abroad in that process.
               <ul>
                 <li>
                   System operation and data storage — Amazon Web Services, Microsoft Azure, Google

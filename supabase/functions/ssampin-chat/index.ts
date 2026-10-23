@@ -3,9 +3,10 @@
  *
  * 흐름: 질문 → 임베딩 → 벡터 검색 → LLM 답변 생성 → 에스컬레이션 판단
  *
- * 모델:
- *   임베딩: 업스테이지 embedding-query (4096차원) → _shared/embedding.ts
- *   답변: 업스테이지 Solar(기본 solar-pro3), 실패 시 Gemini 자동 폴백 → _shared/chatLlm.ts
+ * 모델 (2026-10-24 업스테이지에서 옮김, ADR-142):
+ *   임베딩: 제미나이 gemini-embedding-2 (1536차원) → _shared/embedding.ts
+ *           실패하면 글자 검색만으로 계속한다(축소 운영) — 키 하나에 챗봇 전체가 멎지 않게.
+ *   답변: Claude Haiku 5.5(WIF 인증), 실패 시 Gemini 자동 폴백 → _shared/chatLlm.ts
  */
 
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
@@ -213,14 +214,57 @@ async function generateHypotheticalAnswer(query: string): Promise<string> {
 }
 
 /**
- * 질문 임베딩 생성 — 업스테이지 embedding-query (4096차원).
+ * 질문 임베딩 생성 — 제미나이 gemini-embedding-2 (1536차원).
  *
- * ★예전에는 여기서 구글을 불렀는데, 2026-08-25 그 키가 무효화되자 **모든 질문이 500** 이
- *   됐다. 이 단계는 검색보다 앞이고 폴백이 없어서 키 하나가 기능 전체를 멈춘다.
- *   답변 생성이 이미 업스테이지라, 임베딩도 같은 공급자로 모아 관리할 키를 하나로 줄였다.
+ * ★이 단계가 검색보다 앞이라, 예전에는 여기서 던지면 **모든 질문이 500** 이 됐다
+ *   (2026-08-25 구글 키 무효화, 2026-10-14 업스테이지 키 정지 — 두 번 다 같은 모양).
+ *   이제 실패는 호출부가 잡아 글자 검색(searchDocumentsByText)으로 내려간다.
  */
 async function generateQueryEmbedding(query: string): Promise<number[]> {
   return await embedQuery(query);
+}
+
+/** 조사(은/는/이/가…)가 붙은 낱말에서 조사를 뗀 형태. 'simple' 전문 검색은 낱말을 통째로 비교한다. */
+const KOREAN_PARTICLE =
+  /(으로|에서|에게|까지|부터|처럼|이랑|하고|은|는|이|가|을|를|에|의|로|도|만|요)$/;
+
+/**
+ * 임베딩 없이 글자만으로 찾는 검색 — 임베딩 공급자가 죽었을 때의 축소 운영 경로.
+ *
+ * `fts` 칸('simple' 설정, GIN 색인)을 쓴다. 'simple' 은 한국어 조사를 떼지 못해
+ * "시간표는" 과 "시간표" 가 다른 낱말이 되므로, 원형과 조사를 뗀 형태를 함께 넣고
+ * 어느 하나만 맞아도 되게(or) 묶는다. 순위는 이어지는 LLM 재정렬이 매긴다.
+ */
+async function searchDocumentsByText(
+  supabase: SupabaseClient,
+  queryText: string,
+): Promise<MatchedDocument[]> {
+  const words = queryText
+    .split(/[\s,.?!·()"'“”‘’[\]{}:;/~]+/)
+    .map((word) => word.trim())
+    .filter((word) => word.length >= 2);
+  const terms = [...new Set(words.flatMap((word) => [word, word.replace(KOREAN_PARTICLE, '')]))]
+    .filter((term) => term.length >= 2)
+    .slice(0, 16);
+  if (terms.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from('ssampin_docs')
+    .select('id, content, metadata')
+    .textSearch('fts', terms.map((term) => `"${term.replace(/"/g, '')}"`).join(' or '), {
+      type: 'websearch',
+      config: 'simple',
+    })
+    .limit(12);
+
+  if (error) {
+    console.error('글자 검색 에러:', error);
+    return [];
+  }
+  return ((data ?? []) as Omit<MatchedDocument, 'similarity'>[]).map((doc) => ({
+    ...doc,
+    similarity: 0,
+  }));
 }
 
 /**
@@ -325,6 +369,10 @@ async function rerankDocuments(
       //
       // ★HyDE(가상 답변)는 범인이 아니었다 — 같은 실측에서 원본 100% 검색과
       // 원본40%+HyDE60% 검색 모두 정답이 1위였다. 그래서 손대지 않는다.
+      //
+      // ★Claude Haiku 5.5 는 temperature 를 받지 않는다 — 이 값은 Gemini 폴백에만 쓰이고,
+      // Claude 쪽은 생각하기를 꺼(reasoning 'minimal') 흔들림을 줄인다. 1위 탈락이
+      // 재발하는지는 27문항 시험(scripts/test-chatbot.ts)으로 본다.
       temperature: 0,
       maxOutputTokens: 50,
       reasoning: 'minimal',
@@ -354,7 +402,7 @@ async function rerankDocuments(
   }
 }
 
-/** 최종 답변 생성 (업스테이지 Solar → 실패 시 Gemini) */
+/** 최종 답변 생성 (Claude → 실패 시 Gemini) */
 async function generateAnswer(
   question: string,
   context: string,
@@ -580,24 +628,42 @@ serve(async (req: Request): Promise<Response> => {
     const queryCategory = classifyQuery(reformulatedQuery);
 
     // 5. HyDE: 가상 답변 생성 + 원본 쿼리 임베딩 (병렬 실행)
+    //    임베딩이 실패하면 null — 아래에서 글자 검색으로 내려간다(챗봇 전체를 멈추지 않는다).
     const [hydeAnswer, queryEmbedding] = await Promise.all([
       generateHypotheticalAnswer(reformulatedQuery),
-      generateQueryEmbedding(reformulatedQuery),
+      generateQueryEmbedding(reformulatedQuery).catch((error: unknown) => {
+        if (error instanceof EmbeddingNotConfiguredError) {
+          console.error('[chat] GOOGLE_API_KEY 미설정 — 글자 검색만 사용');
+        } else {
+          console.error('[chat] 질문 임베딩 실패 → 글자 검색만 사용:', error);
+        }
+        return null;
+      }),
     ]);
 
-    // HyDE 답변 임베딩 생성
-    const hydeEmbedding = await generateQueryEmbedding(hydeAnswer);
+    let rawDocs: MatchedDocument[];
+    if (queryEmbedding) {
+      // HyDE 답변 임베딩. 실패하면 원본 질문 임베딩만으로 검색한다.
+      const hydeEmbedding = await generateQueryEmbedding(hydeAnswer).catch((error: unknown) => {
+        console.error('[chat] HyDE 임베딩 실패 → 원본 질문 임베딩만 사용:', error);
+        return null;
+      });
 
-    // 원본 + HyDE 임베딩 평균으로 검색 (가중 평균: 원본 40%, HyDE 60%)
-    const combinedEmbedding = queryEmbedding.map((v, i) => v * 0.4 + hydeEmbedding[i] * 0.6);
+      // 원본 + HyDE 임베딩 평균으로 검색 (가중 평균: 원본 40%, HyDE 60%)
+      const combinedEmbedding = hydeEmbedding
+        ? queryEmbedding.map((v, i) => v * 0.4 + hydeEmbedding[i] * 0.6)
+        : queryEmbedding;
 
-    // 6. Hybrid 검색 (벡터 + 전문 검색 + 카테고리 필터)
-    const rawDocs = await searchDocuments(
-      supabase,
-      combinedEmbedding,
-      reformulatedQuery,
-      queryCategory,
-    );
+      // 6. Hybrid 검색 (벡터 + 전문 검색 + 카테고리 필터)
+      rawDocs = await searchDocuments(
+        supabase,
+        combinedEmbedding,
+        reformulatedQuery,
+        queryCategory,
+      );
+    } else {
+      rawDocs = await searchDocumentsByText(supabase, reformulatedQuery);
+    }
 
     // 7. LLM 리랭킹
     const matchedDocs = await rerankDocuments(reformulatedQuery, rawDocs);

@@ -98,10 +98,11 @@ serve(async (req: Request): Promise<Response> => {
           return jsonResponse({ error: 'documents 배열이 필요합니다' }, 400);
         }
 
-        // 문서용 모델(embedding-passage, 4096차원)로 배치 임베딩.
-        // ★질문 쪽(embedding-query)과 **모델이 다르다** — 섞으면 검색이 조용히 나빠진다.
-        const texts = body.documents.map((d) => d.content);
-        const vectors = await embedPassages(texts);
+        // 문서 형식(title | text)으로 배치 임베딩(제미나이, 1536차원).
+        // ★질문 쪽과 **형식이 다르다** — 섞으면 검색이 조용히 나빠진다(_shared/embedding.ts).
+        const vectors = await embedPassages(
+          body.documents.map((d) => ({ title: d.metadata?.title, text: d.content })),
+        );
 
         // DB에 삽입
         const rows = body.documents.map((doc, i) => ({
