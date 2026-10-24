@@ -488,6 +488,20 @@ const koContent = {
             도구로 직접 전달되며, 그 도구는 위 AI 브릿지로 앱 자료를 조회할 수 있습니다. 쌤핀 서버를
             거치지 않습니다.
           </p>
+          <p>
+            <strong>내 API 키로 연결</strong> — 사용자가 설정 &gt; AI 연결에서 자신의 API 키(Google
+            제미나이·OpenRouter·OpenCode)를 넣은 경우, 쌤핀 AI 창의 질문과 앱이 조회한 자료, 생기부
+            초안 작성 자료(학생 이름은 ［이름1］처럼 가림)가 내 컴퓨터에서 해당 서비스로 직접
+            전달됩니다. 쌤핀 서버를 거치지 않으며, 이용 요금은 키 주인인 사용자 계정에 청구됩니다.{' '}
+            <strong>
+              API 키는 내 컴퓨터에만 운영체제 암호화로 보관하며, 쌤핀 서버·백업 파일·Google Drive
+              동기화로 보내지 않습니다.
+            </strong>{' '}
+            OpenRouter는 사용자가 고른 모델의 제공사(Anthropic·OpenAI·Google)로, OpenCode는 자사
+            정책에 따라 모델 제공 사업자로 요청을 전달합니다. 쌤핀은 보낸 내용을 학습에 쓸 수 있는
+            무료 모델을 고르기 목록에서 빼지만, Google 제미나이의 무료 사용 등급은 Google 약관에
+            따라 보낸 내용이 서비스 개선에 쓰일 수 있습니다.
+          </p>
           <ul>
             <li>
               외부 AI에 보내기 전에{' '}
@@ -503,9 +517,12 @@ const koContent = {
               켜진 경우, 관찰 내용 원문(민감 정보 포함 가능)이 외부 AI로 전달될 수 있습니다.
             </li>
             <li>
-              연결한 외부 AI 도구(내 AI로 실행 포함)에 전달된 데이터에는{' '}
-              <strong>해당 제공자(Anthropic·OpenAI·Google 등)의 처리 정책</strong>이 적용됩니다.
-              쌤핀은 외부 AI 제공자의 데이터 처리에 관여하지 않습니다.
+              연결한 외부 AI 도구(내 AI로 실행·내 API 키 포함)에 전달된 데이터에는{' '}
+              <strong>
+                해당 제공자(Anthropic·OpenAI·Google·OpenRouter·OpenCode 등)의 처리 정책
+              </strong>
+              이 적용됩니다. 이는 사용자와 해당 제공자 사이의 이용이며 쌤핀의 처리위탁(제11조)이
+              아닙니다. 쌤핀은 외부 AI 제공자의 데이터 처리에 관여하지 않습니다.
             </li>
             <li>
               브릿지의 모든 접근은 로컬 감사 로그에 기록되며(원본 값은 기록하지 않음), 동의는 언제든
@@ -767,6 +784,11 @@ const koContent = {
           <p>
             이전되는 항목·목적·보유 및 이용 기간은 제1조·제2조·제4조·제11조에 따르며, 전송 구간은
             HTTPS(TLS)로 암호화됩니다. 근거: 개인정보 보호법 제28조의8(개인정보의 국외 이전).
+          </p>
+          <p>
+            사용자가 직접 연결한 구독·API 키(제10조)로 보내는 내용은 쌤핀이 위탁해 이전하는 것이
+            아니라 사용자가 해당 제공자에게 직접 보내는 것이며, 그 제공자(Anthropic·OpenAI·Google·
+            OpenRouter·OpenCode 등, 주로 미국)의 정책에 따라 국외에서 처리될 수 있습니다.
           </p>
         </>
       ),
@@ -1380,6 +1402,23 @@ const enContent = {
             passed directly from your computer to that tool, which can look up app data through the
             AI Bridge above. Nothing goes through SsamPin servers.
           </p>
+          <p>
+            <strong>Connect with my API key</strong> — if you enter your own API key (Google Gemini,
+            OpenRouter, or OpenCode) in Settings &gt; AI Connection, your questions in the Ssampin
+            AI panel, the app data it looks up, and the material for student-record drafts (with
+            student names masked as ［이름1］) are sent directly from your computer to that service.
+            Nothing goes through SsamPin servers, and usage fees are billed to your own account as
+            the key owner.{' '}
+            <strong>
+              Your API key is stored only on your computer with operating-system encryption and is
+              never sent to SsamPin servers, backup files, or Google Drive sync.
+            </strong>{' '}
+            OpenRouter forwards requests to the provider of the model you choose (Anthropic, OpenAI,
+            or Google), and OpenCode forwards them to model providers under its own policies.
+            SsamPin removes free models that may use submitted content for training from the model
+            list, but under Google&apos;s terms, content sent on the free tier of Google Gemini may
+            be used to improve its services.
+          </p>
           <ul>
             <li>
               Before being sent to an external AI, identifying information such as real names,
@@ -1397,9 +1436,14 @@ const enContent = {
               include sensitive information) may be sent to the external AI.
             </li>
             <li>
-              Data passed to a connected external AI tool (including Run with my AI) is subject to{' '}
-              <strong>that provider&apos;s policies (Anthropic, OpenAI, Google, etc.)</strong>.
-              SsamPin is not involved in the external AI provider&apos;s data processing.
+              Data passed to a connected external AI tool (including Run with my AI and your own API
+              key) is subject to{' '}
+              <strong>
+                that provider&apos;s policies (Anthropic, OpenAI, Google, OpenRouter, OpenCode,
+                etc.)
+              </strong>
+              . This is your own use of that provider, not processing consigned by SsamPin (Section
+              11). SsamPin is not involved in the external AI provider&apos;s data processing.
             </li>
             <li>
               All bridge access is recorded in a local audit log (raw values are not recorded), and
@@ -1709,6 +1753,12 @@ const enContent = {
             The items, purposes, and retention/use periods of the transferred data follow Sections
             1, 2, 4, and 11, and data in transit is encrypted via HTTPS (TLS). Basis: Article 28-8
             of the Personal Information Protection Act (overseas transfer of personal information).
+          </p>
+          <p>
+            Content you send through a subscription or API key that you connect yourself (Section
+            10) is not transferred by SsamPin under a consignment; you send it directly to that
+            provider, and it may be processed overseas under the policies of that provider
+            (Anthropic, OpenAI, Google, OpenRouter, OpenCode, etc., mostly in the USA).
           </p>
         </>
       ),
