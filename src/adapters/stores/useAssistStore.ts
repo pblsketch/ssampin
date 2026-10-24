@@ -899,6 +899,14 @@ export const useAssistStore = create<AssistStore>()(
         acknowledgedOwnAiNoticeVersion: state.acknowledgedOwnAiNoticeVersion,
         ownAiEnabled: state.ownAiEnabled,
       }),
+      // ★무료 쌤핀 AI(업스테이지 중계)는 끝났다(ADR-142 결정 7, v2.5.6). 예전에 켜 둔 값은 불러올 때 끈다 —
+      //   남겨 두면 답이 오지 않는 통로로 질문이 나가고("AI 가 잠시 응답하지 않아요"), 구독·키 실패 때
+      //   쌤핀 AI 로 넘기는 폴백도 살아 있게 된다. 패널은 구독·내 API 키가 연결된 선생님에게만 열린다.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(typeof persisted === 'object' && persisted !== null ? persisted : {}),
+        enabled: false,
+      }),
     },
   ),
 );

@@ -229,8 +229,8 @@ export function AssistDock({ onAsk, onRunProposal, onRunOne, roster }: Props) {
     if (provider === 'ssampin' && !solarEnabled) {
       setSendNotice(
         connectedProviders.length > 0
-          ? '쌤핀 AI가 꺼져 있어요. 위에서 답할 AI를 골라 주세요.'
-          : '쌤핀 AI가 꺼져 있고 연결된 AI도 없어요. 설정 > AI 연결에서 구독 AI나 내 API 키를 연결해 주세요.',
+          ? '위에서 답할 AI를 골라 주세요.'
+          : '연결된 AI가 없어요. 설정 > AI 연결에서 내 API 키를 넣거나 구독 AI를 연결해 주세요.',
       );
       return;
     }

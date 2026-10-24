@@ -62,7 +62,7 @@ describe('Solar 꺼짐 + 내 AI 켜짐', () => {
     render(<AssistDock onAsk={() => (asked += 1)} roster={[]} />);
     fireEvent.click(screen.getByRole('button', { name: '보내기' }));
     expect(asked).toBe(0);
-    expect(screen.getByRole('alert').textContent).toContain('쌤핀 AI가 꺼져 있고');
+    expect(screen.getByRole('alert').textContent).toContain('연결된 AI가 없어요');
   });
 });
 

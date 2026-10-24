@@ -158,7 +158,8 @@ export const OWN_AI_ERROR_MESSAGES: Readonly<
     draft: '고른 모델을 지금 구독으로는 쓸 수 없어요. 기본 모델로 바꿔 주세요.',
   },
   'usage-limit': {
-    panel: '구독 사용량 한도에 닿았어요. 쌤핀 AI 로 이어서 답할까요?',
+    panel:
+      '구독 사용량 한도에 닿았어요. 잠시 뒤 다시 시도하거나, 설정 > AI 연결에서 내 API 키로 바꿔 보세요.',
     draft: '구독 사용량 한도에 닿았어요. 잠시 뒤에 이어 할 수 있어요.',
   },
   'mcp-boot': {

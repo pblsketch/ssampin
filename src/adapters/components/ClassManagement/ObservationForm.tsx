@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { VoiceTypingButton } from '@adapters/components/common/VoiceTypingButton';
 import { useAssistStore } from '@adapters/stores/useAssistStore';
+import { useOwnAiReady } from '@adapters/stores/useOwnAiStatusStore';
 import {
   isSplitWorthwhile,
   requestObservationSplit,
@@ -96,8 +97,10 @@ export function ObservationForm({
   const [newCategoryInput, setNewCategoryInput] = useState('');
   const [newTagInput, setNewTagInput] = useState('');
   const [saving, setSaving] = useState(false);
-  // 쌤핀 AI 가 실험실에서 꺼져 있으면 "학생별로 나누기" 진입은 아예 그리지 않는다.
-  const assistEnabled = useAssistStore((s) => s.enabled);
+  // 쌤핀 AI 를 쓸 수 없으면(구독·내 API 키 모두 없음) "학생별로 나누기" 진입은 아예 그리지 않는다.
+  const solarEnabled = useAssistStore((s) => s.enabled);
+  const ownAiReady = useOwnAiReady();
+  const assistEnabled = solarEnabled || ownAiReady;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const prevStudentIdRef = useRef(studentId);
   const savingRef = useRef<string | null>(null);
