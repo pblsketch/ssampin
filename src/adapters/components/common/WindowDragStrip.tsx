@@ -27,7 +27,7 @@
  * 이 모드가 아닌 환경(macOS·리눅스·브라우저)에서는 아무것도 그리지 않는다.
  * 거기서는 원래 제목 표시줄이 그대로 있어서 띠를 두면 빈 공간만 생긴다.
  */
-import { useEffect, useState } from 'react';
+import { useWindowControlsOverlay } from '@adapters/hooks/useWindowControlsOverlay';
 
 export interface WindowDragStripProps {
   /**
@@ -37,33 +37,9 @@ export interface WindowDragStripProps {
   readonly surface?: boolean;
 }
 
-/** 창 조작 버튼이 화면 위에 떠 있는 모드인가 */
-function hasWindowControlsOverlay(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  const wco = (navigator as Navigator & { windowControlsOverlay?: { visible: boolean } })
-    .windowControlsOverlay;
-  return wco?.visible === true;
-}
-
 export function WindowDragStrip({ surface = false }: WindowDragStripProps = {}) {
-  const [visible, setVisible] = useState(hasWindowControlsOverlay);
-
-  useEffect(() => {
-    // 전체화면으로 바꾸면 창 버튼이 사라진다. 그때 띠도 같이 접어야 빈 줄이 남지 않는다.
-    const wco = (
-      navigator as Navigator & {
-        windowControlsOverlay?: {
-          visible: boolean;
-          addEventListener?: (type: string, cb: () => void) => void;
-          removeEventListener?: (type: string, cb: () => void) => void;
-        };
-      }
-    ).windowControlsOverlay;
-    if (!wco?.addEventListener) return;
-    const onChange = () => setVisible(wco.visible === true);
-    wco.addEventListener('geometrychange', onChange);
-    return () => wco.removeEventListener?.('geometrychange', onChange);
-  }, []);
+  // 전체화면으로 바꾸면 창 버튼이 사라진다. 그때 띠도 같이 접어야 빈 줄이 남지 않는다.
+  const visible = useWindowControlsOverlay();
 
   if (!visible) return null;
 

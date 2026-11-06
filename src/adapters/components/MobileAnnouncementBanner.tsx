@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import QRCode from 'qrcode';
 import { MOBILE_URL } from '@config/siteUrl';
+import { useWindowControlsOverlay } from '@adapters/hooks/useWindowControlsOverlay';
 const DISMISS_KEY = 'mobile-banner-dismissed';
 
 export function MobileAnnouncementBanner() {
+  const hasWindowControls = useWindowControlsOverlay();
   const [visible, setVisible] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState<string>('');
@@ -28,29 +30,63 @@ export function MobileAnnouncementBanner() {
 
   if (!visible) return null;
 
+  /*
+    창 맨 위에 놓이는 줄이라, 윈도우에서는 화면 위에 떠 있는 창 버튼(최소화·최대화·닫기)
+    바로 밑에 깔린다. 예전에는 [더 알아보기]·[✕]가 정확히 그 자리에 있어서 누르면 창이
+    최소화되거나 닫혔고, 배너를 끌 방법도 없었다(2026-11-06 교사 신고).
+
+    그래서 창 버튼이 떠 있을 때는 이 줄이 제목 표시줄 역할을 맡는다.
+    - 오른쪽에 창 버튼 폭만큼 자리를 비운다. 폭은 OS 가 알려 주는 값으로 계산하고,
+      값이 이상하게 와도 내용이 짜부라지지 않게 200px 로 묶는다.
+    - 줄을 잡아 창을 옮길 수 있게 하고, 단추는 그 영역에서 뺀다.
+    - 안내 창이 열려 있을 때는 끈다. 끌기 영역은 OS 가 따로 계산해서 화면 위에 덮인
+      안내 창의 클릭까지 가로챈다.
+  */
+  const titleRowStyle: React.CSSProperties | undefined = hasWindowControls
+    ? ({
+        minHeight: 'env(titlebar-area-height, 32px)',
+        paddingRight:
+          'calc(min(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw), 200px) + 0.75rem)',
+        WebkitAppRegion: showModal ? 'no-drag' : 'drag',
+      } as React.CSSProperties)
+    : undefined;
+  const noDrag = { WebkitAppRegion: 'no-drag' } as React.CSSProperties;
+
   return (
     <>
       {/* 배너 */}
-      <div className="bg-sp-accent text-white px-4 py-2.5 flex items-center justify-between gap-3 text-sm">
-        <div className="flex items-center gap-2">
-          <span className="text-base">📱</span>
-          <span>
+      <div
+        className="bg-sp-accent text-sp-accent-fg px-4 py-1.5 flex items-center justify-between gap-3 text-sm"
+        style={titleRowStyle}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="material-symbols-outlined text-icon-md shrink-0" aria-hidden>
+            smartphone
+          </span>
+          <span className="truncate">
             <strong>쌤핀 모바일</strong>이 출시됐어요! 교실에서도 시간표·출결·메모를 확인하세요
           </span>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
+            type="button"
             onClick={() => setShowModal(true)}
-            className="px-3 py-1 rounded-full bg-white/20 hover:bg-white/30 text-xs font-medium transition-colors"
+            style={noDrag}
+            className="px-3 py-0.5 rounded-full border border-current text-xs font-medium transition-colors hover:bg-sp-accent-fg hover:text-sp-accent"
           >
             더 알아보기
           </button>
           <button
+            type="button"
             onClick={dismiss}
-            className="p-1 hover:bg-white/20 rounded transition-colors text-white/70 hover:text-white"
+            style={noDrag}
+            className="p-1 rounded-lg opacity-70 hover:opacity-100 transition-opacity"
+            aria-label="모바일 안내 닫기"
             title="닫기"
           >
-            <span className="material-symbols-outlined text-icon-md">close</span>
+            <span className="material-symbols-outlined text-icon-md" aria-hidden>
+              close
+            </span>
           </button>
         </div>
       </div>
@@ -123,7 +159,7 @@ export function MobileAnnouncementBanner() {
 
             <button
               onClick={() => setShowModal(false)}
-              className="w-full py-3 rounded-xl bg-sp-accent text-white font-medium hover:bg-sp-accent/90 transition-colors"
+              className="w-full py-3 rounded-xl bg-sp-accent text-sp-accent-fg font-medium hover:opacity-90 transition-opacity"
             >
               닫기
             </button>
