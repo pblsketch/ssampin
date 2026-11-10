@@ -1,5 +1,11 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useSettingsStore } from '@adapters/stores/useSettingsStore';
+
+/** 달력 패널 크기 — 처음 위치를 잡을 때만 쓰는 어림값(그려진 뒤에는 실제 크기로 다시 잡는다). */
+const PANEL_WIDTH = 288;
+const PANEL_ESTIMATED_HEIGHT = 400;
+const PANEL_MARGIN = 4;
 
 interface DatePopoverProps {
   /** 시작일 (dueDate) */
@@ -81,6 +87,45 @@ export function DatePopover({
   const [open, setOpen] = useState(false);
   const [hasEndDate, setHasEndDate] = useState(!!endDate);
   const ref = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelPos, setPanelPos] = useState<{ top: number; left: number } | null>(null);
+
+  // 달력은 화면 맨 바깥(body)에 그리고 위치를 직접 잡는다. 예전처럼 누른 자리 안쪽에 그리면,
+  // 유리 효과가 켜졌을 때 묶음 카드마다 흐림(backdrop-filter)이 따로 층을 만들어 달력이
+  // **아래 묶음 카드 뒤로** 들어가 날짜를 누를 수 없었다(2026-09-28 신고).
+  const updatePanelPos = useCallback(() => {
+    const trigger = ref.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const panel = panelRef.current;
+    const width = panel?.offsetWidth ?? PANEL_WIDTH;
+    const height = panel?.offsetHeight ?? PANEL_ESTIMATED_HEIGHT;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    // 아래가 좁고 위가 더 넓으면 위로 뒤집는다.
+    const top =
+      spaceBelow >= height + PANEL_MARGIN || spaceBelow >= rect.top
+        ? rect.bottom + PANEL_MARGIN
+        : Math.max(PANEL_MARGIN, rect.top - height - PANEL_MARGIN);
+    const left = Math.max(
+      PANEL_MARGIN,
+      Math.min(rect.left, window.innerWidth - width - PANEL_MARGIN),
+    );
+    setPanelPos({ top, left });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPanelPos(null);
+      return;
+    }
+    updatePanelPos();
+    window.addEventListener('scroll', updatePanelPos, true);
+    window.addEventListener('resize', updatePanelPos);
+    return () => {
+      window.removeEventListener('scroll', updatePanelPos, true);
+      window.removeEventListener('resize', updatePanelPos);
+    };
+  }, [open, updatePanelPos]);
 
   const parsed = useMemo(
     () =>
@@ -100,9 +145,11 @@ export function DatePopover({
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      const target = e.target as Node;
+      if (ref.current?.contains(target)) return;
+      // 달력은 body 에 그려져 래퍼 밖에 있다 — 달력 안을 누른 것은 바깥 클릭이 아니다.
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -179,137 +226,145 @@ export function DatePopover({
         {children}
       </div>
 
-      {open && (
-        <div
-          data-sp-floating
-          className="absolute top-full left-0 mt-1 z-50 bg-sp-card rounded-xl shadow-xl ring-1 ring-sp-border p-4 w-72"
-        >
-          {/* 월 네비게이션 */}
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-bold text-sp-text">
-              {viewYear}년 {viewMonth + 1}월
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={handleToday}
-                className="text-xs text-sp-accent hover:bg-sp-accent/10 px-2 py-0.5 rounded transition-colors"
-              >
-                오늘
-              </button>
-              <button
-                type="button"
-                onClick={handlePrevMonth}
-                className="p-1 text-sp-muted hover:text-sp-text transition-colors"
-              >
-                <span className="material-symbols-outlined text-icon">chevron_left</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleNextMonth}
-                className="p-1 text-sp-muted hover:text-sp-text transition-colors"
-              >
-                <span className="material-symbols-outlined text-icon">chevron_right</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 요일 헤더 */}
-          <div className="grid grid-cols-7 gap-0.5 mb-1">
-            {dayNames.map((d) => (
-              <div key={d} className="text-center text-caption font-medium text-sp-muted py-1">
-                {d}
-              </div>
-            ))}
-          </div>
-
-          {/* 날짜 그리드 */}
-          <div className="grid grid-cols-7 gap-0.5">
-            {cells.map((cell, i) => {
-              const ymd = toYMD(cell.year, cell.month, cell.day);
-              const isToday = ymd === todayStr;
-              const isSelected = ymd === date;
-              const isEndSelected = ymd === endDate;
-              const isInRange = hasEndDate && date && endDate && ymd > date && ymd < endDate;
-
-              return (
+      {open &&
+        createPortal(
+          <div
+            ref={panelRef}
+            data-sp-floating
+            style={{
+              top: panelPos?.top ?? 0,
+              left: panelPos?.left ?? 0,
+              visibility: panelPos ? 'visible' : 'hidden',
+            }}
+            className="fixed z-[9999] bg-sp-card rounded-xl shadow-xl ring-1 ring-sp-border p-4 w-72"
+          >
+            {/* 월 네비게이션 */}
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-sm font-bold text-sp-text">
+                {viewYear}년 {viewMonth + 1}월
+              </span>
+              <div className="flex items-center gap-1">
                 <button
-                  key={i}
                   type="button"
-                  onClick={() => handleDayClick(cell)}
-                  className={`text-xs h-7 w-full rounded-md transition-colors ${
-                    !cell.isCurrentMonth ? 'text-sp-muted/40' : ''
-                  } ${
-                    isSelected || isEndSelected
-                      ? 'bg-sp-accent text-sp-accent-fg font-bold'
-                      : isToday
-                        ? 'bg-sp-accent/15 text-sp-accent font-bold'
-                        : isInRange
-                          ? 'bg-sp-accent/10 text-sp-accent'
-                          : cell.isCurrentMonth
-                            ? 'text-sp-text hover:bg-sp-surface'
-                            : 'hover:bg-sp-surface/50'
-                  }`}
+                  onClick={handleToday}
+                  className="text-xs text-sp-accent hover:bg-sp-accent/10 px-2 py-0.5 rounded transition-colors"
                 >
-                  {cell.day}
+                  오늘
                 </button>
-              );
-            })}
-          </div>
-
-          {/* 옵션 */}
-          <div className="mt-3 pt-3 border-t border-sp-border/50 space-y-2">
-            {/* 종료일 토글 */}
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-sp-muted">종료일</span>
-              <button
-                type="button"
-                onClick={() => handleEndDateToggle(!hasEndDate)}
-                className={`w-9 h-5 rounded-full transition-colors relative ${
-                  hasEndDate ? 'bg-sp-accent' : 'bg-sp-border'
-                }`}
-              >
-                <div
-                  className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                    hasEndDate ? 'translate-x-4' : 'translate-x-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-
-            {/* 기한 없음 (새 할 일 추가 시에만) */}
-            {onNoDueDateChange && (
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-sp-muted">기한 없음</span>
                 <button
                   type="button"
-                  onClick={() => {
-                    onNoDueDateChange(!noDueDate);
-                    setOpen(false);
-                  }}
+                  onClick={handlePrevMonth}
+                  className="p-1 text-sp-muted hover:text-sp-text transition-colors"
+                >
+                  <span className="material-symbols-outlined text-icon">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleNextMonth}
+                  className="p-1 text-sp-muted hover:text-sp-text transition-colors"
+                >
+                  <span className="material-symbols-outlined text-icon">chevron_right</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 요일 헤더 */}
+            <div className="grid grid-cols-7 gap-0.5 mb-1">
+              {dayNames.map((d) => (
+                <div key={d} className="text-center text-caption font-medium text-sp-muted py-1">
+                  {d}
+                </div>
+              ))}
+            </div>
+
+            {/* 날짜 그리드 */}
+            <div className="grid grid-cols-7 gap-0.5">
+              {cells.map((cell, i) => {
+                const ymd = toYMD(cell.year, cell.month, cell.day);
+                const isToday = ymd === todayStr;
+                const isSelected = ymd === date;
+                const isEndSelected = ymd === endDate;
+                const isInRange = hasEndDate && date && endDate && ymd > date && ymd < endDate;
+
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    onClick={() => handleDayClick(cell)}
+                    className={`text-xs h-7 w-full rounded-md transition-colors ${
+                      !cell.isCurrentMonth ? 'text-sp-muted/40' : ''
+                    } ${
+                      isSelected || isEndSelected
+                        ? 'bg-sp-accent text-sp-accent-fg font-bold'
+                        : isToday
+                          ? 'bg-sp-accent/15 text-sp-accent font-bold'
+                          : isInRange
+                            ? 'bg-sp-accent/10 text-sp-accent'
+                            : cell.isCurrentMonth
+                              ? 'text-sp-text hover:bg-sp-surface'
+                              : 'hover:bg-sp-surface/50'
+                    }`}
+                  >
+                    {cell.day}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* 옵션 */}
+            <div className="mt-3 pt-3 border-t border-sp-border/50 space-y-2">
+              {/* 종료일 토글 */}
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-sp-muted">종료일</span>
+                <button
+                  type="button"
+                  onClick={() => handleEndDateToggle(!hasEndDate)}
                   className={`w-9 h-5 rounded-full transition-colors relative ${
-                    noDueDate ? 'bg-sp-accent' : 'bg-sp-border'
+                    hasEndDate ? 'bg-sp-accent' : 'bg-sp-border'
                   }`}
                 >
                   <div
                     className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
-                      noDueDate ? 'translate-x-4' : 'translate-x-0.5'
+                      hasEndDate ? 'translate-x-4' : 'translate-x-0.5'
                     }`}
                   />
                 </button>
               </div>
-            )}
 
-            {/* 선택된 날짜 표시 */}
-            {date && !noDueDate && (
-              <div className="text-caption text-sp-muted text-center pt-1">
-                {date}
-                {hasEndDate && endDate ? ` → ${endDate}` : hasEndDate ? ' → (종료일 클릭)' : ''}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+              {/* 기한 없음 (새 할 일 추가 시에만) */}
+              {onNoDueDateChange && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-sp-muted">기한 없음</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNoDueDateChange(!noDueDate);
+                      setOpen(false);
+                    }}
+                    className={`w-9 h-5 rounded-full transition-colors relative ${
+                      noDueDate ? 'bg-sp-accent' : 'bg-sp-border'
+                    }`}
+                  >
+                    <div
+                      className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                        noDueDate ? 'translate-x-4' : 'translate-x-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+              )}
+
+              {/* 선택된 날짜 표시 */}
+              {date && !noDueDate && (
+                <div className="text-caption text-sp-muted text-center pt-1">
+                  {date}
+                  {hasEndDate && endDate ? ` → ${endDate}` : hasEndDate ? ' → (종료일 클릭)' : ''}
+                </div>
+              )}
+            </div>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import type { DriveSyncConflict } from '@domain/entities/DriveSyncState';
 import { Modal } from '@adapters/components/common/Modal';
+import { Notice } from '@adapters/components/common/Notice';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
 
 /** 동기화 파일명 → 한글 표시 매핑 */
@@ -33,9 +34,29 @@ interface Props {
   conflicts: DriveSyncConflict[];
   onResolve: (conflict: DriveSyncConflict, resolution: 'local' | 'remote') => void;
   onClose: () => void;
+  /** 해결이 실패했거나 최신 상태로 다시 확인했을 때의 안내. 없으면 아무것도 보이지 않는다. */
+  error?: string | null;
+  /** 지금 처리 중인 파일 — 그동안 모든 단추를 잠근다(두 번 눌러 생기는 엇갈림 방지). */
+  resolvingFilename?: string | null;
 }
 
-export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props) {
+/**
+ * 충돌 시각 표시. 시각을 알 수 없는 충돌(장부에 기준이 없는 파일 등)은 값이 날짜가 아니라
+ * 'unknown'·'content-mismatch' 같은 표식이라, 그대로 Date 에 넣으면 "Invalid Date"가 찍힌다.
+ */
+function formatConflictTime(value: string): string {
+  const time = new Date(value);
+  return Number.isNaN(time.getTime()) ? '시각 알 수 없음' : time.toLocaleString('ko-KR');
+}
+
+export function DriveSyncConflictModal({
+  conflicts,
+  onResolve,
+  onClose,
+  error = null,
+  resolvingFilename = null,
+}: Props) {
+  const busy = resolvingFilename !== null;
   // Phase 3: ModalCoordinator 큐 등록 (DRIVE_CONFLICT priority)
   const isHead = useRegisterModal('DRIVE_CONFLICT', conflicts.length > 0);
   return (
@@ -71,6 +92,13 @@ export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props)
           </button>
         </div>
 
+        {/* 해결 실패·다시 확인 안내 — 목록이 길어도 밀려나지 않게 스크롤 영역 밖에 둔다 */}
+        {error && (
+          <div role="alert" className="px-6 pt-4">
+            <Notice variant="warning">{error}</Notice>
+          </div>
+        )}
+
         {/* 충돌 목록 */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {conflicts.map((conflict) => (
@@ -91,13 +119,13 @@ export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props)
                 <div className="p-2 rounded bg-sp-bg">
                   <p className="text-sp-muted mb-1">이 기기 ({conflict.localDeviceName})</p>
                   <p className="text-sp-text font-medium">
-                    {new Date(conflict.localModified).toLocaleString('ko-KR')}
+                    {formatConflictTime(conflict.localModified)}
                   </p>
                 </div>
                 <div className="p-2 rounded bg-sp-bg">
                   <p className="text-sp-muted mb-1">클라우드 ({conflict.remoteDeviceName})</p>
                   <p className="text-sp-text font-medium">
-                    {new Date(conflict.remoteModified).toLocaleString('ko-KR')}
+                    {formatConflictTime(conflict.remoteModified)}
                   </p>
                 </div>
               </div>
@@ -106,14 +134,16 @@ export function DriveSyncConflictModal({ conflicts, onResolve, onClose }: Props)
                 <button
                   type="button"
                   onClick={() => onResolve(conflict, 'local')}
-                  className="flex-1 px-3 py-2 rounded-lg bg-sp-accent/10 text-sp-accent hover:bg-sp-accent/20 text-xs font-medium transition-colors"
+                  disabled={busy}
+                  className="flex-1 px-3 py-2 rounded-lg bg-sp-accent/10 text-sp-accent hover:bg-sp-accent/20 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  이 기기 유지
+                  {resolvingFilename === conflict.filename ? '처리 중…' : '이 기기 유지'}
                 </button>
                 <button
                   type="button"
                   onClick={() => onResolve(conflict, 'remote')}
-                  className="flex-1 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-xs font-medium transition-colors"
+                  disabled={busy}
+                  className="flex-1 px-3 py-2 rounded-lg bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   클라우드로 대체
                 </button>

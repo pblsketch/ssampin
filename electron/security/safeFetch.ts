@@ -360,6 +360,11 @@ export interface SafeFetchBytesResult {
   readonly contentDisposition: string | null;
   readonly finalUrl: string;
   readonly status: number;
+  /**
+   * 마지막 응답의 Set-Cookie 머리말 원문들(없으면 빈 배열). 이 계층은 쿠키를 저장하지 않는다 —
+   * 세션 쿠키가 필요한 호출부(컴시간)가 받아서 다음 요청의 extraHeaders 로 직접 실어 보낸다.
+   */
+  readonly setCookie: readonly string[];
 }
 
 /** 단일 hop — vetted dispatcher 로 method/body 를 보낸다. 리다이렉트는 호출자가 처리. */
@@ -380,6 +385,7 @@ async function fetchSingleHopBytes(
   contentType: string;
   contentDisposition: string | null;
   body: Uint8Array | null;
+  setCookie?: readonly string[];
 }> {
   // 호스트 화이트리스트 — DNS 조회/연결 전에 먼저 차단.
   if (opts.allowedHosts && opts.allowedHosts.length > 0) {
@@ -413,6 +419,7 @@ async function fetchSingleHopBytes(
     const contentType = response.headers.get('content-type') ?? '';
     const contentDisposition = response.headers.get('content-disposition');
     const location = response.headers.get('location');
+    const setCookie = response.headers.getSetCookie?.() ?? [];
 
     if (response.status >= 300 && response.status < 400) {
       return {
@@ -466,7 +473,14 @@ async function fetchSingleHopBytes(
       offset += slice.byteLength;
     }
 
-    return { status: response.status, location: null, contentType, contentDisposition, body: buf };
+    return {
+      status: response.status,
+      location: null,
+      contentType,
+      contentDisposition,
+      body: buf,
+      setCookie,
+    };
   } finally {
     clearTimeout(timer);
     dispatcher.close().catch(() => undefined);
@@ -561,6 +575,7 @@ export async function safeFetchBytes(
       contentDisposition: result.contentDisposition,
       finalUrl: currentUrl.toString(),
       status: result.status,
+      setCookie: result.setCookie ?? [],
     };
   }
 }

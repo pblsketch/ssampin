@@ -20,9 +20,15 @@ function toMealDateString(date: Date): string {
 export function DashboardMeal() {
   const { settings } = useSettingsStore();
   const {
-    todayLoading, todayError, loadTodayMeals,
-    manualLoaded, loadManualMeals, mealSource,
-    getMergedMealsForDate, getMergedTodayMeals,
+    todayLoading,
+    todayError,
+    loadTodayMeals,
+    manualLoaded,
+    loadManualMeals,
+    mealSource,
+    manualMeals,
+    getMergedMealsForDate,
+    getMergedTodayMeals,
     loadMealsForDate,
   } = useMealStore();
   // 급식 조회용 별도 학교가 설정되어 있으면 우선 사용
@@ -36,9 +42,7 @@ export function DashboardMeal() {
   const isViewingToday = viewDateStr === todayStr;
 
   // 표시할 급식 데이터 — 오늘: todayMeals 스토어, 기타: 캐시 기반 (캐시 없으면 빈 배열)
-  const displayMeals = isViewingToday
-    ? getMergedTodayMeals()
-    : getMergedMealsForDate(viewDateStr);
+  const displayMeals = isViewingToday ? getMergedTodayMeals() : getMergedMealsForDate(viewDateStr);
 
   // 자신의 colSpan 읽기 (가로 배열 판정용)
   const config = useDashboardConfig((s) => s.config);
@@ -64,7 +68,8 @@ export function DashboardMeal() {
   }, [viewDateStr, isViewingToday, atptCode, schoolCode, mealSource, loadMealsForDate]);
 
   const reloadMeal = useCallback(() => {
-    if (atptCode && schoolCode && mealSource !== 'manual') void loadTodayMeals(atptCode, schoolCode);
+    if (atptCode && schoolCode && mealSource !== 'manual')
+      void loadTodayMeals(atptCode, schoolCode);
   }, [atptCode, schoolCode, loadTodayMeals, mealSource]);
 
   useWidgetRefresh(reloadMeal, { intervalMs: 30 * 60 * 1000 });
@@ -82,15 +87,18 @@ export function DashboardMeal() {
     </div>
   );
 
-  // 학교 미설정 (수동 모드에서는 허용)
-  if (!schoolCode && mealSource !== 'manual') {
+  // 직접 입력한 급식이 하나라도 있는지. mealSource 는 저장되지 않는 화면 상태라 앱을 다시
+  // 켜거나 위젯 창(별도 창)에서는 늘 기본값이다. 그것만 보고 막으면 나이스에 없는 학교는
+  // 급식을 직접 입력해 두고도 "학교를 등록해주세요"만 본다(2026-10-06 신고).
+  const hasManualMeals = Object.values(manualMeals).some((list) => list.length > 0);
+
+  // 학교 미설정 (수동 모드이거나 직접 입력한 급식이 있으면 허용)
+  if (!schoolCode && mealSource !== 'manual' && !hasManualMeals) {
     return (
       <div className="rounded-xl bg-sp-card p-4 h-full flex flex-col">
         {renderHeader()}
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-sp-muted text-sm text-center">
-            설정에서 학교를 등록해주세요
-          </p>
+          <p className="text-sp-muted text-sm text-center">설정에서 학교를 등록해주세요</p>
         </div>
       </div>
     );
@@ -112,9 +120,7 @@ export function DashboardMeal() {
           </div>
         )}
 
-        {showError && (
-          <p className="text-red-400 text-sm text-center py-4">{todayError}</p>
-        )}
+        {showError && <p className="text-red-400 text-sm text-center py-4">{todayError}</p>}
 
         {isEmpty && (
           <div className="flex items-center justify-center py-8">
@@ -126,12 +132,22 @@ export function DashboardMeal() {
 
         {/* 넓은 카드(3~4칸): 가로 배열 / 좁은 카드(1~2칸): 세로 배열 */}
         {!showLoading && displayMeals.length > 0 && (
-          <div className={isWide
-            ? `grid gap-4 ${displayMeals.length >= 3 ? 'grid-cols-3' : displayMeals.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`
-            : 'space-y-3'
-          }>
+          <div
+            className={
+              isWide
+                ? `grid gap-4 ${displayMeals.length >= 3 ? 'grid-cols-3' : displayMeals.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`
+                : 'space-y-3'
+            }
+          >
             {displayMeals.map((meal, idx) => (
-              <div key={idx} className={isWide ? 'border-r border-sp-border last:border-r-0 pr-4 last:pr-0 space-y-2' : 'border-b border-sp-border last:border-b-0 pb-3 last:pb-0 space-y-2'}>
+              <div
+                key={idx}
+                className={
+                  isWide
+                    ? 'border-r border-sp-border last:border-r-0 pr-4 last:pr-0 space-y-2'
+                    : 'border-b border-sp-border last:border-b-0 pb-3 last:pb-0 space-y-2'
+                }
+              >
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-sp-accent uppercase tracking-wider">
                     {meal.mealType}

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import type { Todo, TodoPriority, TodoCategory, TodoStatus } from '@domain/entities/Todo';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { RECURRENCE_PRESETS } from '@domain/valueObjects/TodoRecurrence';
@@ -169,12 +170,20 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
     onClose,
   ]);
 
-  return (
+  // 화면 맨 바깥(body)에 그린다. 이 창은 표 보기의 카드 안에서 열리는데, 유리 효과가 켜져
+  // 있으면 그 카드의 흐림(backdrop-filter)이 fixed 의 기준 상자가 되어 창을 카드 안에 가두고,
+  // "카드 안의 카드는 배경을 지운다"는 규칙이 이 창의 배경까지 지워 글씨가 뒤 내용과 겹쳤다
+  // (2026-09-30 신고 — 표 보기에서 수정 창이 투명). 대화 상자 표시를 달아 불투명 면으로 만든다.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
       onClick={onClose}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="할 일 수정"
+        data-sp-overlay-surface
         className="bg-sp-card rounded-2xl ring-1 ring-sp-border shadow-2xl w-full max-w-md mx-4 p-5"
         onClick={(e) => e.stopPropagation()}
       >
@@ -445,6 +454,7 @@ export function TodoEditModal({ todo, categories, onUpdate, onClose }: TodoEditM
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

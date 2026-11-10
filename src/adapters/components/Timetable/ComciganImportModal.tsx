@@ -21,6 +21,7 @@ import {
 import type { DecodeAnomalyReport, ParsedComciganPeriodTimes } from '@domain/rules/comciganRules';
 import type { TeacherScheduleData } from '@domain/entities/Timetable';
 import type { ComciganTeacherFingerprint } from '@domain/entities/Settings';
+import { Notice } from '@adapters/components/common/Notice';
 
 interface ComciganImportModalProps {
   isOpen: boolean;
@@ -47,6 +48,9 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
   const [searchResults, setSearchResults] = useState<readonly ComciganSchool[]>([]);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
+  // 검색이 **실패**한 이유. 예전에는 실패도 "검색 결과가 없어요"로 보여, 컴시간 쪽이 바뀌어
+  // 아무 학교도 찾을 수 없을 때 선생님이 학교 이름만 계속 고쳐 봤다(2026-11-09 신고).
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedSchool, setSelectedSchool] = useState<ComciganSchool | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -86,6 +90,7 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
     if (!query) {
       setSearchResults([]);
       setSearched(false);
+      setSearchError(null);
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -96,10 +101,16 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
         .then((results) => {
           setSearchResults(results);
           setSearched(true);
+          setSearchError(null);
         })
-        .catch(() => {
+        .catch((e: unknown) => {
           setSearchResults([]);
           setSearched(true);
+          setSearchError(
+            e instanceof ComciganError
+              ? getComciganErrorMessage(e.errorType)
+              : getComciganErrorMessage('NETWORK_ERROR'),
+          );
         })
         .finally(() => setSearching(false));
     }, 300);
@@ -282,7 +293,12 @@ export function ComciganImportModal({ isOpen, onClose, onImport }: ComciganImpor
                 </div>
               )}
 
+              {!searching && searchError && schoolQuery.trim() !== '' && (
+                <Notice variant="danger">{searchError}</Notice>
+              )}
+
               {!searching &&
+                !searchError &&
                 searched &&
                 searchResults.length === 0 &&
                 schoolQuery.trim() !== '' && (

@@ -16,8 +16,13 @@ import {
 import { toBinaryDriveFilename } from './binaryDriveFilename';
 import { SyncIntegrityError } from './SyncIntegrityError';
 import {
+  CHECKPOINT_EVERY_UPLOADS,
+  SYNC_RUN_LEASE_EXPIRED_MESSAGE,
+  SYNC_RUN_LEASE_MS,
+  UNKNOWN_UPLOADER,
   buildDuplicateFileMessage,
   buildManifestMismatchMessage,
+  classifyUnledgeredFileAge,
 } from '@domain/rules/driveSyncRecovery';
 
 function defaultDriveFilename(logicalKey: string): string {
@@ -145,6 +150,8 @@ export class SyncToCloud {
     /** (S4.1) 아카이브 훅 2종 — 둘 다 주입될 때만 아카이브 업로드가 켜진다(데스크톱 전용). */
     private readonly getArchiveSyncFiles?: GetArchiveSyncFiles,
     private readonly readArchiveSyncFile?: ReadArchiveSyncFile,
+    /** 장부 밖 파일의 나이 판정에 쓰는 이 기기의 시계. 테스트에서 주입한다. */
+    private readonly now: () => number = () => Date.now(),
   ) {}
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncToCloudResult> {
@@ -271,6 +278,126 @@ export class SyncToCloud {
         manifestReconciled = true;
       }
     }
+    // ── 장부 중간 확정 ──
+    // 예전에는 파일을 전부 올린 뒤 맨 끝에서 한 번만 장부를 확정했다. 실행이 그 전에 끊기면
+    // (창 닫기·절전·다른 기기의 장부 선점) 올린 파일이 전부 장부 밖으로 남았고, 그 뒤 로컬이
+    // 바뀌면 모든 동기화가 무결성 정지로 영원히 멈췄다(2026-11-08 실측 — 다시 만들기가 101개를
+    // 올리고 장부 확정 전에 끊김). 그래서 정적 파일 뒤, 바이너리·아카이브 몇 개마다 확정한다.
+    // 기대값은 "이 실행이 마지막으로 확정한 장부"다. 판정 기준인 remoteManifest(실행 시작
+    // 스냅샷)는 바꾸지 않는다.
+    let committedRemoteManifest: DriveSyncManifest = remoteManifest;
+    let committedLedgerState: string | null = null;
+    let uploadsSinceCheckpoint = 0;
+    // 실행 임대(lease) — 장부를 마지막으로 확인한 시각. 간격이 SYNC_RUN_LEASE_MS 를 넘으면
+    // 절전 등으로 멈췄다가 깨어난 실행이다. 그 사이 다른 기기가 이 실행의 업로드를 버려진
+    // 것으로 보고 정리했을 수 있으니 확정하지 않는다.
+    let lastLedgerCheckMs = this.now();
+    const ledgerState = (): string =>
+      JSON.stringify([
+        nextRemoteFiles,
+        nextRemoteDeletions,
+        nextRemoteRestorations,
+        nextLocalFiles,
+        nextLocalDeletions,
+        nextLocalRestorations,
+      ]);
+    const commitManifest = async (): Promise<void> => {
+      const checkedAt = this.now();
+      const gap = checkedAt - lastLedgerCheckMs;
+      lastLedgerCheckMs = checkedAt;
+      // 이 실행에서 아직 확정한 적이 없으면 기존 no-op 계약(바뀐 게 없으면 쓰지 않음)을 따르고,
+      // 확정한 적이 있으면 그 뒤로 바뀐 것이 있을 때만 쓴다.
+      if (committedLedgerState === null) {
+        if (uploaded.length === 0 && !manifestReconciled) return;
+      } else if (ledgerState() === committedLedgerState) {
+        return;
+      }
+      if (gap > SYNC_RUN_LEASE_MS) throw new Error(SYNC_RUN_LEASE_EXPIRED_MESSAGE);
+      const now = new Date().toISOString();
+      // 살아 있는 객체를 넘기지 않는다 — 뒤이은 항목 처리가 고친 내용이 확정본에 섞이면 안 된다.
+      const nextRemoteManifest = JSON.parse(
+        JSON.stringify({
+          version: Math.max(2, remoteManifest.version),
+          lastSyncedAt: now,
+          deviceId: this.deviceId,
+          deviceName: this.deviceName,
+          files: nextRemoteFiles,
+          deletions: nextRemoteDeletions,
+          restorations: nextRemoteRestorations,
+        }),
+      ) as DriveSyncManifest;
+      const updated = await this.drivePort.updateSyncManifestIfUnchanged(
+        folder.id,
+        committedRemoteManifest,
+        nextRemoteManifest,
+      );
+      if (!updated) {
+        throw new Error(
+          '클라우드 동기화 장부가 다른 기기에서 변경되었습니다. 다시 동기화해 주세요.',
+        );
+      }
+      committedRemoteManifest = nextRemoteManifest;
+      await this.syncRepo.saveLocalManifest(
+        JSON.parse(
+          JSON.stringify({
+            version: Math.max(2, localManifest?.version ?? remoteManifest.version),
+            lastSyncedAt: now,
+            deviceId: this.deviceId,
+            deviceName: this.deviceName,
+            files: nextLocalFiles,
+            deletions: nextLocalDeletions,
+            restorations: nextLocalRestorations,
+          }),
+        ) as DriveSyncManifest,
+      );
+      committedLedgerState = ledgerState();
+      uploadsSinceCheckpoint = 0;
+    };
+    const checkpointIfDue = async (): Promise<void> => {
+      if (
+        uploadsSinceCheckpoint >= CHECKPOINT_EVERY_UPLOADS ||
+        this.now() - lastLedgerCheckMs > SYNC_RUN_LEASE_MS / 2
+      ) {
+        await commitManifest();
+      }
+    };
+    /** 버려진 업로드를 덮어쓴 직후 — 다음 확인 지점에서 곧바로 확정한다(덮은 채 끊기는 창을 줄인다). */
+    const checkpointSoon = (): void => {
+      uploadsSinceCheckpoint = Math.max(uploadsSinceCheckpoint, CHECKPOINT_EVERY_UPLOADS);
+    };
+    /**
+     * 버려진 업로드를 덮지 않고 원격 장부에 그대로 편입한 뒤 받기 판정에 넘긴다.
+     * 올린 기기가 이미 없을 수도 있어(그러면 이 파일이 유일한 사본이다) 덮어쓰지 않는다.
+     * 로컬 장부에는 넣지 않는다 — 이 기기는 아직 그 내용을 받지 않았다. 받기 쪽은 로컬 기준이
+     * 없으니 덮지 않고 충돌로 묻거나(일반 파일) 항목 단위로 합친다(기록·출결·관찰).
+     */
+    const adoptUnledgeredFile = (
+      key: string,
+      file: { readonly modifiedTime: string },
+      actualChecksum: string,
+      actualContent: string,
+      base: DriveSyncFileInfo | undefined,
+      driveFilename: string | undefined,
+    ): void => {
+      nextRemoteFiles[key] = {
+        ...(base ?? {}),
+        lastModified: file.modifiedTime,
+        checksum: actualChecksum,
+        size: new TextEncoder().encode(actualContent).length,
+        uploadedBy:
+          base?.uploadedBy && base.uploadedBy !== this.deviceId
+            ? base.uploadedBy
+            : UNKNOWN_UPLOADER,
+        ...(driveFilename ? { driveFilename } : {}),
+      };
+      manifestReconciled = true;
+      skipped.push(key);
+      deferred.push(key);
+      console.warn(
+        `[SyncToCloud]   ${key}: 버려진 장부 밖 파일(${file.modifiedTime})을 원격 장부에 편입 — 받기 판정 후 재업로드`,
+      );
+    };
+
     const isPendingRestoration = (key: string): boolean =>
       nextLocalRestorations[key] !== undefined && !nextLocalRestorations[key]?.completedAt;
     const completeRestoration = (key: string): void => {
@@ -418,27 +545,59 @@ export class SyncToCloud {
         }
       }
 
+      // 장부 밖 파일을 버려진 업로드로 보고 조건부로 덮어쓸 때 — 아래 "이미 같다" 판정들을
+      // 건너뛰고 업로드 단계로 곧장 보낸다(장부가 실제 파일을 설명하지 못하므로 그 판정은 틀린다).
+      let overwriteUnledgered = false;
+
       if (!remoteInfo && driveFile && !restoring) {
         const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
         const actualChecksum = await computeSyncChecksum(actualContent);
         if (actualChecksum !== checksum) {
-          throw new Error(buildManifestMismatchMessage(filename));
+          // 장부에 없는데 내용이 다르다 = 어느 기기도 확정하지 못한 업로드.
+          const age = classifyUnledgeredFileAge(driveFile.modifiedTime, this.now());
+          if (age === 'unknown') throw new Error(buildManifestMismatchMessage(filename));
+          if (age === 'recent') {
+            // 다른 기기가 지금 올리는 중일 수 있다 — 덮지 말고 이 파일만 다음 회차로 미룬다.
+            skipped.push(filename);
+            console.warn(
+              `[SyncToCloud]   ${filename}: 장부 밖 파일이 방금 올라옴 — 이번 회차 건너뜀`,
+            );
+            return;
+          }
+          if (!transitionGuardedKeys.has(filename)) {
+            adoptUnledgeredFile(
+              filename,
+              driveFile,
+              actualChecksum,
+              actualContent,
+              undefined,
+              undefined,
+            );
+            return;
+          }
+          // 전환 마커 키는 원래 원격 변경을 유예하지 않고 정화 업로드하는 키다(F8a) — 덮는다.
+          console.warn(
+            `[SyncToCloud]   ${filename}: 전환 마커 키의 버려진 장부 밖 파일 — 조건부 덮어쓰기`,
+          );
+          overwriteUnledgered = true;
+          checkpointSoon();
+        } else {
+          const reconciledEntry: DriveSyncFileInfo = {
+            lastModified: driveFile.modifiedTime,
+            checksum,
+            size: new TextEncoder().encode(actualContent).length,
+            ...(localInfo?.uploadedBy ? { uploadedBy: localInfo.uploadedBy } : {}),
+          };
+          nextRemoteFiles[filename] = reconciledEntry;
+          nextLocalFiles[filename] = reconciledEntry;
+          completeRestoration(filename);
+          manifestReconciled = true;
+          skipped.push(filename);
+          console.warn(
+            `[SyncToCloud]   ${filename}: 장부 없는 실제 파일이 현재 로컬과 동일 — 장부만 안전하게 편입`,
+          );
+          return;
         }
-        const reconciledEntry: DriveSyncFileInfo = {
-          lastModified: driveFile.modifiedTime,
-          checksum,
-          size: new TextEncoder().encode(actualContent).length,
-          ...(localInfo?.uploadedBy ? { uploadedBy: localInfo.uploadedBy } : {}),
-        };
-        nextRemoteFiles[filename] = reconciledEntry;
-        nextLocalFiles[filename] = reconciledEntry;
-        completeRestoration(filename);
-        manifestReconciled = true;
-        skipped.push(filename);
-        console.warn(
-          `[SyncToCloud]   ${filename}: 장부 없는 실제 파일이 현재 로컬과 동일 — 장부만 안전하게 편입`,
-        );
-        return;
       }
 
       if (
@@ -511,10 +670,51 @@ export class SyncToCloud {
             );
             return;
           } else {
-            throw new Error(buildManifestMismatchMessage(filename));
+            // 장부에 키는 있는데 실제 파일이 장부·로컬 장부·지금 로컬 어느 것과도 다르다
+            // = 확정본 위에 누군가 올리고 장부 확정 전에 끊긴 후속본.
+            const age = classifyUnledgeredFileAge(driveFile.modifiedTime, this.now());
+            if (age === 'unknown') throw new Error(buildManifestMismatchMessage(filename));
+            if (age === 'recent') {
+              skipped.push(filename);
+              console.warn(
+                `[SyncToCloud]   ${filename}: 장부와 다른 실제 파일이 방금 올라옴 — 이번 회차 건너뜀`,
+              );
+              return;
+            }
+            if (
+              localInfo?.checksum === remoteInfo.checksum ||
+              transitionGuardedKeys.has(filename)
+            ) {
+              // 이 기기는 확정본 위에 있다(로컬이 그대로면 확정본으로 되돌리는 것이고, 바뀌었으면
+              // 그 위의 변경이다). 버려진 후속본은 확정본을 바탕으로 한 것이라, 올린 기기는 그
+              // 내용을 로컬에 갖고 있고 장부 기준이 확정본이다 — 다음에 그 기기가 평소처럼 올린다.
+              // 장부는 확정본을 말하는데 실제 파일만 다른 상태는 다른 기기의 받기를 막으므로
+              // 그대로 두지 않는다. (전환 마커 키는 원래 정화 업로드하는 키다.)
+              console.warn(
+                `[SyncToCloud]   ${filename}: 버려진 후속본(${driveFile.modifiedTime}) — 조건부 덮어쓰기`,
+              );
+              overwriteUnledgered = true;
+              checkpointSoon();
+            } else {
+              // 이 기기가 아직 받지 않은 확정본이 있었다. 후속본은 그 확정본을 담고 있으므로
+              // 덮지 말고(다른 기기 변경을 지운다) 원격 장부에 그대로 편입한 뒤 받기 판정에 넘긴다.
+              adoptUnledgeredFile(
+                filename,
+                driveFile,
+                actualChecksum,
+                actualContent,
+                remoteInfo,
+                undefined,
+              );
+              return;
+            }
           }
         }
-        if (manifestChecksum === checksum && remoteInfo.checksum === checksum) {
+        if (
+          !overwriteUnledgered &&
+          manifestChecksum === checksum &&
+          remoteInfo.checksum === checksum
+        ) {
           const reconciledEntry: DriveSyncFileInfo = {
             ...remoteInfo,
             lastModified: driveFile.modifiedTime,
@@ -533,7 +733,7 @@ export class SyncToCloud {
       }
 
       // 로컬·원격·실제 파일이 같은 고정점이면 콘텐츠 다운로드 없이 건너뛴다.
-      if (manifestChecksum === checksum && remoteInfo && driveFile) {
+      if (!overwriteUnledgered && manifestChecksum === checksum && remoteInfo && driveFile) {
         skipped.push(filename);
         return;
       }
@@ -570,18 +770,26 @@ export class SyncToCloud {
 
     let index = 0;
     for (const filename of SYNC_FILES) {
+      await checkpointIfDue();
       index++;
       await uploadOne(filename, index);
     }
 
     // 동적 파일(예: note-body--{pageId}) 업로드 — 정적 루프와 동일 로직
     for (const filename of dynamicFiles) {
+      await checkpointIfDue();
       index++;
       await uploadOne(filename, index);
     }
 
+    // 중간 확정 ① — 정적·동적 파일은 몇십 초면 끝난다. 느린 사진 업로드 전에 확정해 두면
+    // 그 뒤에 끊겨도 선생님 자료 본체는 장부에 남는다.
+    await commitManifest();
+
     // 바이너리 동적 파일(예: obs-attachments/{id}.{ext}) 업로드 — base64 JSON 래퍼 경유
     for (const relPath of binaryFilesPreview) {
+      // 중간 확정 ② — 항목별 try 바깥에서 부른다. 확정 실패가 항목 실패로 삼켜지면 안 된다.
+      await checkpointIfDue();
       index++;
       onProgress?.({ current: index, total: grandTotal, filename: relPath });
 
@@ -640,27 +848,58 @@ export class SyncToCloud {
           continue;
         }
 
+        // 장부 밖 바이너리를 버려진 업로드로 보고 올릴 때 — 정적 파일과 같은 규칙(uploadOne 참조).
+        let overwriteUnledgered = false;
+
         if (!remoteInfo && driveFile && !restoring) {
           const actualContent = await this.drivePort.downloadSyncFile(driveFile.id);
           const actualChecksum = await computeSyncChecksum(actualContent);
           if (actualChecksum !== checksum) {
-            throw new SyncIntegrityError(buildManifestMismatchMessage(relPath));
+            const age = classifyUnledgeredFileAge(driveFile.modifiedTime, this.now());
+            if (age === 'unknown') {
+              throw new SyncIntegrityError(buildManifestMismatchMessage(relPath));
+            }
+            if (age === 'recent') {
+              skipped.push(relPath);
+              console.warn(
+                `[SyncToCloud]   ${relPath}: 장부 밖 바이너리가 방금 올라옴 — 이번 회차 건너뜀`,
+              );
+              continue;
+            }
+            if (!relPath.startsWith('student-photos/')) {
+              adoptUnledgeredFile(
+                relPath,
+                driveFile,
+                actualChecksum,
+                actualContent,
+                undefined,
+                currentDriveFilename !== defaultFilename ? currentDriveFilename : undefined,
+              );
+              continue;
+            }
+            // 사진은 아래 업로드 단계가 새 세대 파일(.rev-<checksum>)을 따로 만든다 — 버려진
+            // 파일을 덮지도 지우지도 않으므로 그대로 이 기기 사진을 올린다.
+            console.warn(
+              `[SyncToCloud]   ${relPath}: 버려진 장부 밖 사진(${driveFile.modifiedTime}) — 새 세대로 올림`,
+            );
+            overwriteUnledgered = true;
+          } else {
+            const reconciledEntry: DriveSyncFileInfo = {
+              lastModified: driveFile.modifiedTime,
+              checksum,
+              size: new TextEncoder().encode(actualContent).length,
+              ...(localInfo?.uploadedBy ? { uploadedBy: localInfo.uploadedBy } : {}),
+            };
+            nextRemoteFiles[relPath] = reconciledEntry;
+            nextLocalFiles[relPath] = reconciledEntry;
+            completeRestoration(relPath);
+            manifestReconciled = true;
+            skipped.push(relPath);
+            console.warn(
+              `[SyncToCloud]   ${relPath}: 장부 없는 실제 바이너리가 현재 로컬과 동일 — 장부만 안전하게 편입`,
+            );
+            continue;
           }
-          const reconciledEntry: DriveSyncFileInfo = {
-            lastModified: driveFile.modifiedTime,
-            checksum,
-            size: new TextEncoder().encode(actualContent).length,
-            ...(localInfo?.uploadedBy ? { uploadedBy: localInfo.uploadedBy } : {}),
-          };
-          nextRemoteFiles[relPath] = reconciledEntry;
-          nextLocalFiles[relPath] = reconciledEntry;
-          completeRestoration(relPath);
-          manifestReconciled = true;
-          skipped.push(relPath);
-          console.warn(
-            `[SyncToCloud]   ${relPath}: 장부 없는 실제 바이너리가 현재 로컬과 동일 — 장부만 안전하게 편입`,
-          );
-          continue;
         }
 
         if (!driveFile && (remoteInfo || localInfo) && !restoring) {
@@ -716,10 +955,45 @@ export class SyncToCloud {
               console.warn(`[SyncToCloud]   ${relPath}: 바이너리 업로드 부분 성공 — 장부만 복구`);
               continue;
             } else {
-              throw new SyncIntegrityError(buildManifestMismatchMessage(relPath));
+              const age = classifyUnledgeredFileAge(driveFile.modifiedTime, this.now());
+              if (age === 'unknown') {
+                throw new SyncIntegrityError(buildManifestMismatchMessage(relPath));
+              }
+              if (age === 'recent') {
+                skipped.push(relPath);
+                console.warn(
+                  `[SyncToCloud]   ${relPath}: 장부와 다른 실제 바이너리가 방금 올라옴 — 이번 회차 건너뜀`,
+                );
+                continue;
+              }
+              // 사진 파일명은 내용(체크섬)에 묶여 있다. 같은 이름에 다른 내용이면 손상이다 — 멈춘다.
+              if (relPath.startsWith('student-photos/')) {
+                throw new SyncIntegrityError(buildManifestMismatchMessage(relPath));
+              }
+              if (localInfo?.checksum === remoteInfo.checksum) {
+                console.warn(
+                  `[SyncToCloud]   ${relPath}: 버려진 바이너리 후속본(${driveFile.modifiedTime}) — 조건부 덮어쓰기`,
+                );
+                overwriteUnledgered = true;
+                checkpointSoon();
+              } else {
+                adoptUnledgeredFile(
+                  relPath,
+                  driveFile,
+                  actualChecksum,
+                  actualContent,
+                  remoteInfo,
+                  undefined,
+                );
+                continue;
+              }
             }
           }
-          if (manifestChecksum === checksum && remoteInfo.checksum === checksum) {
+          if (
+            !overwriteUnledgered &&
+            manifestChecksum === checksum &&
+            remoteInfo.checksum === checksum
+          ) {
             const reconciledEntry: DriveSyncFileInfo = {
               ...remoteInfo,
               lastModified: driveFile.modifiedTime,
@@ -734,7 +1008,7 @@ export class SyncToCloud {
           }
         }
 
-        if (manifestChecksum === checksum && remoteInfo && driveFile) {
+        if (!overwriteUnledgered && manifestChecksum === checksum && remoteInfo && driveFile) {
           skipped.push(relPath);
           continue;
         }
@@ -797,6 +1071,7 @@ export class SyncToCloud {
         nextLocalFiles[relPath] = entry;
         completeRestoration(relPath);
         uploaded.push(relPath);
+        uploadsSinceCheckpoint++;
       } catch (err) {
         // ⚠️ 무결성 위반은 **일부러 멈추는 안전장치**라 여기서 삼키면 안 된다.
         //    장부와 실제 파일이 다르거나 소유 기기를 확인할 수 없는 상태에서 계속 진행하면
@@ -815,9 +1090,14 @@ export class SyncToCloud {
     //  - 파일 단위 try/catch: 한 파일 실패가 라이브 동기화·다른 아카이브 파일을 막지 않고,
     //    실패분은 매니페스트에 기록되지 않아 **다음 동기화에서 이어서** 올라간다.
     //  - manifest.json은 학기별 맨 뒤(sortArchiveSyncKeysManifestLast) — 완결 표식.
+    // 중간 확정 ③ — 사진·첨부까지 확정한 뒤 아카이브로 넘어간다.
+    await commitManifest();
+
     const readArchiveSyncFile = this.readArchiveSyncFile;
     for (const key of archiveKeys) {
       if (!readArchiveSyncFile) break; // archiveKeys가 비어 있어 도달 불가 — 타입 좁히기용
+      // 중간 확정 ④
+      await checkpointIfDue();
       index++;
       onProgress?.({ current: index, total: grandTotal, filename: key });
 
@@ -888,46 +1168,14 @@ export class SyncToCloud {
       nextRemoteFiles[key] = entry;
       nextLocalFiles[key] = entry;
       uploaded.push(key);
+      uploadsSinceCheckpoint++;
     }
 
-    // 매니페스트 업데이트 — 실제 업로드가 있었을 때만.
+    // 최종 확정 — 실제 업로드·장부 정리가 있었을 때만(no-op 실행은 장부를 쓰지 않는다).
     // no-op 실행("변경 없음")이 매니페스트를 다시 쓰면 리모트 deviceId가 업로드하지 않은
     // 기기로 찍히고(다운로드의 "내가 올린 데이터" 스킵 오판) lastSyncedAt만 위조된다.
-    if (uploaded.length > 0 || manifestReconciled) {
-      const now = new Date().toISOString();
-      const nextRemoteManifest = {
-        version: Math.max(2, remoteManifest.version),
-        lastSyncedAt: now,
-        deviceId: this.deviceId,
-        deviceName: this.deviceName,
-        files: nextRemoteFiles,
-        deletions: nextRemoteDeletions,
-        restorations: nextRemoteRestorations,
-      } as const;
-      if (remoteManifest) {
-        const updated = await this.drivePort.updateSyncManifestIfUnchanged(
-          folder.id,
-          remoteManifest,
-          nextRemoteManifest,
-        );
-        if (!updated) {
-          throw new Error(
-            '클라우드 동기화 장부가 다른 기기에서 변경되었습니다. 다시 동기화해 주세요.',
-          );
-        }
-      } else {
-        await this.drivePort.updateSyncManifest(folder.id, nextRemoteManifest);
-      }
-      await this.syncRepo.saveLocalManifest({
-        version: Math.max(2, localManifest?.version ?? remoteManifest.version),
-        lastSyncedAt: now,
-        deviceId: this.deviceId,
-        deviceName: this.deviceName,
-        files: nextLocalFiles,
-        deletions: nextLocalDeletions,
-        restorations: nextLocalRestorations,
-      });
-    }
+    // 중간 확정이 이미 다 실었고 그 뒤 바뀐 게 없으면 commitManifest 가 쓰기를 건너뛴다.
+    await commitManifest();
 
     // 삭제 표식이 클라우드 장부에 확정된 뒤에만 실제 파일을 지운다. 실패해도 표식은 남아
     // 다음 동기화에서 재시도되며, 다른 기기는 이 파일을 다시 내려받거나 올리지 않는다.

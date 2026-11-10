@@ -44,6 +44,12 @@ function mergeKeepingIdentity(existing: SchoolEvent, incoming: SchoolEvent): Sch
 }
 
 /** 구글 → 쌤핀 역방향 동기화 유스케이스 */
+/**
+ * 받은 구글 일정을 해석하는 규칙의 판 번호. 올리면 캘린더마다 한 번 전체를 다시 받는다.
+ *  1 — 시각을 한국 시각으로 맞춤(캘린더 시간대가 한국이 아니면 9시간 어긋나던 문제, 2026-11).
+ */
+const REQUIRED_FULL_RESYNC_VERSION = 1;
+
 export class SyncFromGoogle {
   constructor(
     private readonly calendarPort: IGoogleCalendarPort,
@@ -77,14 +83,18 @@ export class SyncFromGoogle {
       }
     }
 
-    const syncTokens = await this.getAllSyncTokens();
+    // 캘린더별로 저장한 토큰·다시 받기 판 번호를 잃지 않도록 방금 저장된 상태를 다시 읽는다.
+    const latestState = await this.syncRepo.getSyncState();
     const hasErrors = errors.length > 0;
     await this.syncRepo.saveSyncState({
       status: hasErrors ? 'error' : 'synced',
       lastSyncedAt: new Date().toISOString(),
       lastError: hasErrors ? errors.join('; ') : undefined,
       pendingChanges: 0,
-      syncTokens,
+      syncTokens: latestState.syncTokens,
+      ...(latestState.fullResyncVersions
+        ? { fullResyncVersions: latestState.fullResyncVersions }
+        : {}),
     });
 
     if (hasErrors) {
@@ -96,6 +106,13 @@ export class SyncFromGoogle {
     const accessToken = await this.getAccessToken();
     const syncState = await this.syncRepo.getSyncState();
     let existingSyncToken = syncState.syncTokens[calendarId];
+
+    // 받은 일정을 해석하는 규칙이 바뀌었으면 한 번 전체를 다시 받는다. 바뀐 것만 받는
+    // 증분 동기화로는 이미 잘못 저장된 일정(9시간 어긋난 시각)이 고쳐지지 않는다.
+    const resyncedVersion = syncState.fullResyncVersions?.[calendarId] ?? 0;
+    if (existingSyncToken && resyncedVersion < REQUIRED_FULL_RESYNC_VERSION) {
+      existingSyncToken = undefined;
+    }
 
     // syncToken이 있지만 해당 캘린더의 로컬 이벤트가 없으면 → full sync 강제
     if (existingSyncToken) {
@@ -213,16 +230,15 @@ export class SyncFromGoogle {
         await this.syncRepo.saveSyncState({
           ...state,
           syncTokens: { ...state.syncTokens, [calendarId]: result.nextSyncToken },
+          fullResyncVersions: {
+            ...(state.fullResyncVersions ?? {}),
+            [calendarId]: REQUIRED_FULL_RESYNC_VERSION,
+          },
         });
       }
     } catch (err) {
       // execute()에서 개별 캘린더 에러를 수집하므로 re-throw
       throw err;
     }
-  }
-
-  private async getAllSyncTokens(): Promise<Record<string, string>> {
-    const state = await this.syncRepo.getSyncState();
-    return state.syncTokens;
   }
 }

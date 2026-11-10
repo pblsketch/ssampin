@@ -8,6 +8,7 @@ import { useGlobalShortcuts } from './useGlobalShortcuts';
 import { useToastStore } from '@adapters/components/common/Toast';
 
 const originalSettings = useSettingsStore.getState().settings;
+const originalSettingsLoaded = useSettingsStore.getState().loaded;
 const originalQuickAddState = useQuickAddStore.getState();
 const originalToastState = useToastStore.getState();
 
@@ -38,11 +39,15 @@ function keydown(
   return event;
 }
 
-beforeEach(() => setBindings({ 'sidePin:toggle': { combo: 'mod+alt+p', enabled: true } }));
+beforeEach(() => {
+  // 실제 앱처럼 설정을 다 읽은 상태에서 시작한다(읽기 전에는 단축키를 등록하지 않는다).
+  useSettingsStore.setState({ loaded: true });
+  setBindings({ 'sidePin:toggle': { combo: 'mod+alt+p', enabled: true } });
+});
 
 afterEach(() => {
   cleanup();
-  useSettingsStore.setState({ settings: originalSettings });
+  useSettingsStore.setState({ settings: originalSettings, loaded: originalSettingsLoaded });
   useQuickAddStore.setState(originalQuickAddState, true);
   useToastStore.setState(originalToastState, true);
   Reflect.deleteProperty(window, 'electronAPI');
@@ -168,6 +173,23 @@ describe('useGlobalShortcuts 옆핀 배선', () => {
     expect(payload.bindings.map((binding) => binding.id).sort()).toEqual(
       Object.keys(DEFAULT_SHORTCUTS.bindings).sort(),
     );
+  });
+
+  // 신고(2026-11-09): 단축키를 꺼 뒀는데도 창이 뜰 때마다 단축키 안내가 떴다. 설정을 읽기 전의
+  // 기본값(전역 단축키 켜짐)이 먼저 등록됐기 때문이다.
+  test('설정을 다 읽기 전에는 시스템 단축키를 등록하지 않는다', () => {
+    useSettingsStore.setState({ loaded: false });
+    const syncShortcuts = vi.fn().mockResolvedValue({ registered: [], failed: [] });
+    Object.defineProperty(window, 'electronAPI', {
+      configurable: true,
+      value: { syncShortcuts },
+    });
+
+    renderHook(() => useGlobalShortcuts());
+    expect(syncShortcuts).not.toHaveBeenCalled();
+
+    act(() => useSettingsStore.setState({ loaded: true }));
+    expect(syncShortcuts).toHaveBeenCalledTimes(1);
   });
 
   test('시스템 등록에 실패한 단축키가 있으면 사용자에게 알린다', async () => {

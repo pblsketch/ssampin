@@ -1,8 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
+  ABANDONED_UPLOAD_MIN_AGE_MS,
   CLOUD_REBUILD_HINT,
+  SYNC_RUN_LEASE_EXPIRED_MESSAGE,
   buildDuplicateFileMessage,
   buildManifestMismatchMessage,
+  classifyUnledgeredFileAge,
   isCloudRebuildRequiredError,
 } from './driveSyncRecovery';
 import { GOOGLE_AUTH_BLOCKED_MESSAGE } from './calendarSyncRules';
@@ -84,6 +87,8 @@ describe('isCloudRebuildRequiredError', () => {
         '이전 버전 기기가 동기화 중입니다. 잠시 후 다시 동기화해 주세요.',
       ),
     ).toBe(false);
+    // 절전 뒤 깨어난 실행이 스스로 멈춘 것 — 다시 동기화하면 풀린다.
+    expect(isCloudRebuildRequiredError(SYNC_RUN_LEASE_EXPIRED_MESSAGE)).toBe(false);
   });
 
   // ★★ 가장 위험한 거짓 양성.
@@ -125,5 +130,32 @@ describe('isCloudRebuildRequiredError', () => {
   it('표식 상수가 실제 문구에 들어 있다', () => {
     expect(buildManifestMismatchMessage('events')).toContain(CLOUD_REBUILD_HINT);
     expect(buildDuplicateFileMessage('events')).toContain(CLOUD_REBUILD_HINT);
+  });
+});
+
+describe('classifyUnledgeredFileAge', () => {
+  const modified = '2026-11-08T13:43:01.092Z';
+  const modifiedMs = Date.parse(modified);
+
+  it('기준 나이를 넘으면 버려진 업로드다', () => {
+    expect(classifyUnledgeredFileAge(modified, modifiedMs + ABANDONED_UPLOAD_MIN_AGE_MS + 1)).toBe(
+      'abandoned',
+    );
+  });
+
+  it('기준 나이와 같거나 어리면 다른 기기가 올리는 중일 수 있다', () => {
+    expect(classifyUnledgeredFileAge(modified, modifiedMs + ABANDONED_UPLOAD_MIN_AGE_MS)).toBe(
+      'recent',
+    );
+    expect(classifyUnledgeredFileAge(modified, modifiedMs + 5 * 60 * 1000)).toBe('recent');
+  });
+
+  it('미래 시각(시계 어긋남)은 어린 것으로 본다', () => {
+    expect(classifyUnledgeredFileAge(modified, modifiedMs - 60 * 60 * 1000)).toBe('recent');
+  });
+
+  it('수정 시각을 알 수 없으면 판정하지 않는다', () => {
+    expect(classifyUnledgeredFileAge('', modifiedMs)).toBe('unknown');
+    expect(classifyUnledgeredFileAge('not-a-date', modifiedMs)).toBe('unknown');
   });
 });

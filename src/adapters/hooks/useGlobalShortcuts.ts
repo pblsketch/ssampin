@@ -27,6 +27,7 @@ const COMMAND_TO_KIND: Record<string, QuickAddKind> = {
  */
 export function useGlobalShortcuts(): void {
   const settings = useSettingsStore((s) => s.settings);
+  const settingsLoaded = useSettingsStore((s) => s.loaded);
   const lastFiredAtRef = useRef<{ kind: QuickAddKind | null; at: number }>({ kind: null, at: 0 });
 
   const fire = (kind: QuickAddKind): void => {
@@ -111,6 +112,10 @@ export function useGlobalShortcuts(): void {
   useEffect(() => {
     const api = window.electronAPI;
     if (!api?.syncShortcuts) return;
+    // 설정을 읽기 전의 값은 기본값(전역 단축키 켜짐·기본 조합 10개)이다. 그걸 그대로 보내면
+    // 단축키를 꺼 둔 선생님도 창이 뜰 때마다 기본 조합이 잠깐 등록되고, 다른 프로그램이 그
+    // 조합을 쓰고 있으면 "단축키를 등록하지 못했습니다" 안내까지 뜬다(2026-11-09 신고).
+    if (!settingsLoaded) return;
     const sc = settings.shortcuts;
     if (!sc) return;
     const payload = {
@@ -137,5 +142,5 @@ export function useGlobalShortcuts(): void {
           .getState()
           .show('단축키 설정을 시스템에 반영하지 못했습니다. 잠시 후 다시 시도해주세요.', 'error');
       });
-  }, [settings.shortcuts]);
+  }, [settings.shortcuts, settingsLoaded]);
 }

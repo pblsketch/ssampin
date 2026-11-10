@@ -100,6 +100,10 @@ interface DriveSyncState {
   status: DriveSyncStatus;
   lastSyncedAt: string | null;
   conflicts: DriveSyncConflict[];
+  /** 충돌 창 안에 보여 줄 안내(해결 실패·다시 확인). 사이드바 오류(error)와 따로 둔다. */
+  conflictError: string | null;
+  /** 지금 처리 중인 충돌 파일 — 창이 단추를 잠그는 데 쓴다. */
+  resolvingConflict: string | null;
   error: string | null;
   progress: SyncProgress | null;
   lastSyncResult: SyncResult | null;
@@ -113,6 +117,8 @@ interface DriveSyncState {
   syncFromCloud: () => Promise<{ downloaded: string[]; conflicts: DriveSyncConflict[] }>;
   importSettingsFromCloud: () => Promise<ImportSettingsResult>;
   resolveConflict: (conflict: DriveSyncConflict, resolution: 'local' | 'remote') => Promise<void>;
+  /** 충돌 창을 닫는다. 충돌은 다음 동기화가 다시 찾아 준다. */
+  dismissConflicts: () => void;
   deleteCloudData: () => Promise<void>;
   /** 장부가 어긋난 클라우드를 지우고 이 기기 자료로 다시 올린다(사이드바 원클릭 복구). */
   rebuildCloudData: () => Promise<void>;
@@ -129,11 +135,15 @@ interface DriveSyncState {
 let _saveSyncTimer: ReturnType<typeof setTimeout> | null = null;
 /** 업로드 유예(deferred) 재시도 1회 가드 — pull-merge-push 무한루프 방지 */
 let _deferredRetrying = false;
+/** 충돌 해결 중복 실행 방지 — 상태(state)로 막으면 두 번 누른 호출이 같은 옛 상태를 본다. */
+let _resolvingConflict = false;
 
 export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
   status: 'idle',
   lastSyncedAt: null,
   conflicts: [],
+  conflictError: null,
+  resolvingConflict: null,
   error: null,
   progress: null,
   lastSyncResult: null,
@@ -347,7 +357,16 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         });
       } else {
         reportSyncRun('download', 'success', startedAt, { fileCount: result.downloaded.length });
-        set({ status: 'success', lastSyncedAt: now, progress: null, lastSyncResult: syncResult });
+        // 충돌이 더는 없으면 창에 남은 옛 충돌도 비운다. 남겨 두면 이미 풀린 충돌을 눌렀을 때
+        // 매번 "그 사이 바뀜"으로 실패해 아무 일도 안 일어나는 것처럼 보인다.
+        set({
+          status: 'success',
+          conflicts: [],
+          conflictError: null,
+          lastSyncedAt: now,
+          progress: null,
+          lastSyncResult: syncResult,
+        });
         setTimeout(() => {
           if (get().status === 'success') set({ status: 'idle' });
         }, 3000);
@@ -448,6 +467,9 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
   },
 
   resolveConflict: async (conflict, resolution) => {
+    if (_resolvingConflict) return;
+    _resolvingConflict = true;
+    set({ resolvingConflict: conflict.filename, conflictError: null });
     try {
       const { driveSyncRepository, getDriveSyncAdapter, authenticateGoogle, storage } =
         await import('@adapters/di/container');
@@ -489,10 +511,37 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       }
     } catch (err) {
       console.error('[DriveSync] resolveConflict error:', err);
-      set({
-        error: err instanceof Error ? err.message : '충돌 해결 중 오류가 발생했습니다.',
-      });
+      // ⚠️ 예전에는 여기서 error 만 적고 끝났다. 충돌 창은 그 값을 보여 주지 않아, 선생님에게는
+      //    "어느 단추를 눌러도 아무 일도 일어나지 않는" 화면이었다(2026-10-23 신고).
+      // instanceof 대신 name 으로 본다 — 유스케이스를 정적으로 끌어오지 않기 위해서다.
+      if (err instanceof Error && err.name === 'StaleSyncConflictError') {
+        // 고르는 사이 이 기기나 클라우드 자료가 바뀌었다(캘린더 동기화가 일정을 고쳐 쓰는 경우 등).
+        // 최신 상태로 다시 비교해 창의 선택지를 갱신한다.
+        _resolvingConflict = false;
+        set({ resolvingConflict: null });
+        await get().syncFromCloud();
+        if (get().conflicts.length > 0) {
+          set({
+            conflictError:
+              '고르는 사이에 자료가 바뀌어 최신 상태로 다시 확인했어요. 아래에서 다시 골라 주세요.',
+          });
+        }
+        return;
+      }
+      const message = err instanceof Error ? err.message : '충돌 해결 중 오류가 발생했습니다.';
+      set({ error: message, conflictError: `처리하지 못했어요. ${message}` });
+    } finally {
+      _resolvingConflict = false;
+      set({ resolvingConflict: null });
     }
+  },
+
+  dismissConflicts: () => {
+    set((s) => ({
+      conflicts: [],
+      conflictError: null,
+      status: s.status === 'conflict' ? 'idle' : s.status,
+    }));
   },
 
   deleteCloudData: async () => {

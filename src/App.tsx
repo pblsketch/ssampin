@@ -1312,6 +1312,8 @@ function MainApp() {
 
   // Google Drive 충돌 상태 구독
   const driveConflicts = useDriveSyncStore((s) => s.conflicts);
+  const driveConflictError = useDriveSyncStore((s) => s.conflictError);
+  const driveResolvingConflict = useDriveSyncStore((s) => s.resolvingConflict);
 
   // NEIS 시간표 자동 동기화 (앱 시작 시)
   useNeisAutoSync();
@@ -1488,7 +1490,9 @@ function MainApp() {
                     await reloadStores([conflict.filename]);
                   }
                 }}
-                onClose={() => useDriveSyncStore.getState().resetStatus()}
+                onClose={() => useDriveSyncStore.getState().dismissConflicts()}
+                error={driveConflictError}
+                resolvingFilename={driveResolvingConflict}
               />
             )}
             <FirstSyncConfirmModalContainer />

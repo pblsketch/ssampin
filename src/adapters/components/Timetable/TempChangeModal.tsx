@@ -181,17 +181,21 @@ export function TempChangeModal(props: TempChangeModalProps) {
     }
     if (isSwap) {
       createProps!.onSaveSwap({
+        // 반(교실)은 **수업을 따라간다.** A 자리에는 B 수업이 오므로 B 의 반이, B 자리에는 A 의
+        // 반이 들어가야 한다. 예전에는 각 자리가 자기 원래 반을 그대로 들고 있어, 같은 과목을
+        // 여러 반에서 가르치는 선생님은 교환해도 칸이 그대로였고 어느 반 수업인지 알 수 없었다
+        // (2026-09-16 신고 — "수업교환이라고만 뜨고 몇 반인지 안 보인다").
         slotA: {
           date: dateA,
           period: periodA,
           subject: swapSubjectA,
-          classroom: baseClassroomA || undefined,
+          classroom: createProps?.resolveBaseClassroom?.(dateB, periodB) || undefined,
         },
         slotB: {
           date: dateB,
           period: periodB,
           subject: swapSubjectB,
-          classroom: createProps?.resolveBaseClassroom?.(dateB, periodB) || undefined,
+          classroom: baseClassroomA || undefined,
         },
         reason: reason || '수업 교환',
         scope,

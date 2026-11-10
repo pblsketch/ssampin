@@ -149,6 +149,7 @@ import {
   WIDGET_FREE_MINIMUM_SIZE,
 } from './widgetLayout';
 import { initNativeDesktopDiag, diagLog, diagLogVerbose, diagWarn } from './nativeDesktopDiag';
+import { isAiBridgeLaunch } from './aiBridgeLaunchGuard';
 import { installCrashReporter, reportCrashEvidence } from './crashEvidence';
 import {
   issueWriteHandle,
@@ -6192,11 +6193,22 @@ if (process.platform === 'win32') {
   app.setAppUserModelId(APP_USER_MODEL_ID);
 }
 
-const gotTheLock = app.requestSingleInstanceLock();
-if (!gotTheLock) {
+// AI 연결(MCP 서버)용 실행이 환경변수 없이 일반 앱으로 떨어진 경우 — 창을 띄우지 않고 끝낸다.
+// 잠금을 요청하기 **전에** 끝내야 한다. 요청하면 이미 떠 있는 쌤핀에 second-instance 가 가서
+// 메인 창이 선생님 화면 위로 올라온다(aiBridgeLaunchGuard.ts 참조).
+const launchedAsAiBridge = isAiBridgeLaunch(process.argv);
+const gotTheLock = !launchedAsAiBridge && app.requestSingleInstanceLock();
+if (launchedAsAiBridge) {
+  console.error(
+    '[ai-bridge] ELECTRON_RUN_AS_NODE 없이 AI 연결 서버 명령으로 실행됨 — 창을 띄우지 않고 종료',
+  );
+  app.exit(1);
+} else if (!gotTheLock) {
   app.quit();
 } else {
   app.on('second-instance', (_event, argv) => {
+    // 옛 버전 실행 파일이 보낸 AI 연결용 실행 알림에도 창을 올리지 않는다.
+    if (isAiBridgeLaunch(argv)) return;
     const fileArg = argv.find((arg) => arg.endsWith('.ssampin'));
     const sharedContent =
       fileArg !== undefined && fs.existsSync(fileArg) ? fs.readFileSync(fileArg, 'utf-8') : null;

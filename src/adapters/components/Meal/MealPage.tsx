@@ -206,8 +206,11 @@ export function MealPage() {
     }
   };
 
-  // 학교 미설정이고 수동 모드도 아닌 경우
-  if (!schoolCode && mealSource !== 'manual') {
+  // 학교 미설정이고 수동 모드도 아니고 직접 입력한 급식도 없는 경우.
+  // mealSource 는 저장되지 않아 앱을 다시 켜면 기본값으로 돌아온다 — 직접 입력해 둔 급식이
+  // 있으면 이 안내 대신 급식표를 그대로 보여 준다(DashboardMeal 과 같은 기준).
+  const hasManualMeals = Object.values(manualMeals).some((list) => list.length > 0);
+  if (!schoolCode && mealSource !== 'manual' && !hasManualMeals) {
     return (
       <div className="-m-8 flex h-[calc(100%+4rem)] items-center justify-center flex-col gap-4">
         <span className="text-5xl">🍚</span>

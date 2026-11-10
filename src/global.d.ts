@@ -1097,6 +1097,8 @@ interface ElectronAPI {
   comcigan?: {
     fetchRaw: (
       path: string,
+      /** /st 페이지가 준 요청 토큰 — 메인이 `X-Hour-Token` 머리말로 실어 보낸다 */
+      hourToken?: string,
     ) => Promise<{ status: 'ok'; body: ArrayBuffer } | { status: 'error'; message: string }>;
   };
 

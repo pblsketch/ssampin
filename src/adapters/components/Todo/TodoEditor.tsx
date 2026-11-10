@@ -50,15 +50,23 @@ export function TodoEditor() {
     const text = inputText.trim();
     if (!text) return;
     setInputText('');
-    await addTodo(
-      text,
-      inputNoDueDate ? undefined : inputDueDate || undefined,
-      'none',
-      undefined,
-      undefined,
-      undefined,
-      inputNoDueDate ? undefined : inputStartDate,
-    );
+    try {
+      await addTodo(
+        text,
+        inputNoDueDate ? undefined : inputDueDate || undefined,
+        'none',
+        undefined,
+        undefined,
+        undefined,
+        inputNoDueDate ? undefined : inputStartDate,
+      );
+    } catch (err) {
+      // 저장하지 못했다. 예전에는 여기서 아무 말 없이 입력만 사라져 "입력해도 목록에 안 뜬다"로
+      // 보였다(2026-10-12·11-03 신고). 할 일 화면과 똑같이 글을 되돌리고 이유를 알린다.
+      setInputText((current) => (current === '' ? text : current));
+      reportTodoSaveFailure(err);
+      return;
+    }
     setInputStartDate(undefined);
     if (!inputNoDueDate) {
       setInputDueDate(toLocalDateString());

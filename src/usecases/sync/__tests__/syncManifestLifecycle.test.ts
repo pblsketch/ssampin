@@ -366,7 +366,10 @@ describe('SyncToCloud 매니페스트 라이프사이클', () => {
     expect(port.uploadSyncFileIfUnchanged).not.toHaveBeenCalled();
   });
 
-  it('장부에 없는 실제 바이너리 첨부는 자동 PATCH하지 않고 안전하게 중단한다', async () => {
+  // 2026-11 변경: 방금 올라온 장부 밖 파일은 다른 기기가 올리는 중일 수 있어 멈추지 않고 건너뛴다.
+  //   덮어쓰지 않는다는 안전 단언은 그대로다. 오래된(버려진) 경우는
+  //   syncCheckpointAndAbandonedUpload.test.ts 에서 다룬다.
+  it('방금 올라온 장부 밖 바이너리 첨부는 자동 PATCH하지 않고 그 항목만 건너뛴다', async () => {
     const relPath = 'obs-attachments/attachment-2.png';
     const driveKey = 'obs-attachments__attachment-2.png';
     const remoteContent = JSON.stringify({ __binaryBase64: 'CQkJ', __relPath: relPath });
@@ -377,14 +380,25 @@ describe('SyncToCloud 매니페스트 라이프사이클', () => {
     });
     const { repo, saveLocalManifest } = makeSyncRepo(manifest({}, 'current-device'));
 
-    await expect(
-      new SyncToCloud(storage, port, repo, 'current-device', '내 PC', undefined, async () => [
-        relPath,
-      ]).execute(),
-    ).rejects.toThrow(`클라우드 ${relPath} 파일과 동기화 장부가 일치하지 않습니다`);
+    const justAfterUpload = Date.parse('2026-07-21T03:05:00Z');
+    const result = await new SyncToCloud(
+      storage,
+      port,
+      repo,
+      'current-device',
+      '내 PC',
+      undefined,
+      async () => [relPath],
+      undefined,
+      undefined,
+      () => justAfterUpload,
+    ).execute();
 
+    expect(result.skipped).toContain(relPath);
+    expect(result.uploaded).not.toContain(relPath);
     expect(fileContents[driveKey]).toBe(remoteContent);
     expect(port.uploadSyncFile).not.toHaveBeenCalled();
+    expect(port.uploadSyncFileIfUnchanged).not.toHaveBeenCalled();
     expect(saveLocalManifest).not.toHaveBeenCalled();
   });
 
@@ -511,7 +525,7 @@ describe('SyncToCloud 매니페스트 라이프사이클', () => {
     expect(saveLocalManifest).not.toHaveBeenCalled();
   });
 
-  it('Drive 실제 파일 revision이 장부와 다르면 변경 없음으로 숨기거나 자동 덮어쓰지 않는다', async () => {
+  it('Drive 실제 파일 revision이 장부와 다르고 방금 바뀌었으면 변경 없음으로 숨기거나 자동 덮어쓰지 않는다', async () => {
     const localData = { items: [{ id: 'todo-1', text: '정상 PC 할 일' }] };
     const localContent = JSON.stringify(localData);
     const checksum = await computeSyncChecksum(localContent);
@@ -533,11 +547,23 @@ describe('SyncToCloud 매니페스트 라이프사이클', () => {
     fileModifiedTimes.todos = '2026-08-09T01:00:00Z';
     const { repo } = makeSyncRepo(local);
 
-    await expect(
-      new SyncToCloud(storage, port, repo, 'desktop-device', '정상 PC').execute(),
-    ).rejects.toThrow('클라우드 todos 파일과 동기화 장부가 일치하지 않습니다');
+    const result = await new SyncToCloud(
+      storage,
+      port,
+      repo,
+      'desktop-device',
+      '정상 PC',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      () => Date.parse('2026-08-09T01:05:00Z'),
+    ).execute();
+    expect(result.skipped).toContain('todos');
+    expect(result.uploaded).not.toContain('todos');
     expect(fileContents.todos).toBe(unexpectedRemoteContent);
     expect(port.uploadSyncFile).not.toHaveBeenCalled();
+    expect(port.uploadSyncFileIfUnchanged).not.toHaveBeenCalled();
   });
 
   it('같은 이름의 Drive 실제 파일이 둘 이상이면 첫 파일을 임의 선택하지 않고 중단한다', async () => {

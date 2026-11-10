@@ -18,6 +18,7 @@ import {
   periodTimesToSettingsPatch,
 } from '@domain/rules/comciganRules';
 import type { ClassScheduleData } from '@domain/entities/Timetable';
+import { Notice } from '@adapters/components/common/Notice';
 
 interface ComciganClassImportModalProps {
   isOpen: boolean;
@@ -43,6 +44,9 @@ export function ComciganClassImportModal({
   const [searchResults, setSearchResults] = useState<readonly ComciganSchool[]>([]);
   const [searching, setSearching] = useState(false);
   const [searched, setSearched] = useState(false);
+  // 검색이 **실패**한 이유. 예전에는 실패도 "검색 결과가 없어요"로 보여, 컴시간 쪽이 바뀌어
+  // 아무 학교도 찾을 수 없을 때 선생님이 학교 이름만 계속 고쳐 봤다(2026-11-09 신고).
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [selectedSchool, setSelectedSchool] = useState<ComciganSchool | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -84,6 +88,7 @@ export function ComciganClassImportModal({
     if (!query) {
       setSearchResults([]);
       setSearched(false);
+      setSearchError(null);
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -94,10 +99,16 @@ export function ComciganClassImportModal({
         .then((results) => {
           setSearchResults(results);
           setSearched(true);
+          setSearchError(null);
         })
-        .catch(() => {
+        .catch((e: unknown) => {
           setSearchResults([]);
           setSearched(true);
+          setSearchError(
+            e instanceof ComciganError
+              ? getComciganErrorMessage(e.errorType)
+              : getComciganErrorMessage('NETWORK_ERROR'),
+          );
         })
         .finally(() => setSearching(false));
     }, 300);
@@ -305,7 +316,12 @@ export function ComciganClassImportModal({
                 </div>
               )}
 
+              {!searching && searchError && schoolQuery.trim() !== '' && (
+                <Notice variant="danger">{searchError}</Notice>
+              )}
+
               {!searching &&
+                !searchError &&
                 searched &&
                 searchResults.length === 0 &&
                 schoolQuery.trim() !== '' && (

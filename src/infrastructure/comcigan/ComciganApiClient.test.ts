@@ -253,14 +253,14 @@ function bytesToBase64(bytes: Uint8Array): string {
 }
 
 /** 컴시간 enc2 형식으로 암호화한다(AES-256-CBC + HMAC-SHA256) */
-async function encryptEnc2(plain: string, keyHex = TEST_KEY_HEX): Promise<string> {
+async function encryptEnc2(plain: string, keyHex = TEST_KEY_HEX, prefix = 'enc2'): Promise<string> {
   const keyBytes = new Uint8Array(keyHex.match(/../g)!.map((h) => parseInt(h, 16)));
   const iv = crypto.getRandomValues(new Uint8Array(16));
   const aesKey = await crypto.subtle.importKey('raw', keyBytes, 'AES-CBC', false, ['encrypt']);
   const cipher = new Uint8Array(
     await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, aesKey, new TextEncoder().encode(plain)),
   );
-  const head = `enc2:${bytesToBase64(iv)}:${bytesToBase64(cipher)}`;
+  const head = `${prefix}:${bytesToBase64(iv)}:${bytesToBase64(cipher)}`;
   const macKey = await crypto.subtle.importKey(
     'raw',
     await crypto.subtle.digest('SHA-256', keyBytes),
@@ -406,5 +406,140 @@ describe('ComciganApiClient — 2026-11 암호화 형식', () => {
 
   it('접두사가 없는 응답은 평문으로 그대로 돌려준다', async () => {
     expect(await decryptComciganText('{"a":1}\0\0', null)).toBe('{"a":1}');
+  });
+});
+
+/* ── 2026-11-09 무렵 형식(실측 2026-11-10): 두 겹 난독화 · base64 검색 주소 · enc5 · 조각난 열쇠 · 요청 토큰 ──
+ *
+ * v2.5.8 을 낸 지 사흘 만에 컴시간이 다시 바꿔, 모든 사용자의 컴시간 불러오기·자동 동기화가
+ * "mainRoute 코드를 찾지 못했어요"로 멈췄다. 화면에는 "검색 결과가 없어요"·"컴시간에 연결하지
+ * 못했어요"로만 보였다(2026-11-09 신고 3건). 아래 픽스처는 실제 페이지에서 본 꼴을 그대로 흉내 낸다.
+ */
+
+const HOUR_TOKEN = '45DCA2C21A6D030AEB0E7E8AE08C5E6C7A48C5C48EA32E8CA4EE8CB44A6DF67B';
+
+/** 열쇠를 네 조각으로 나눠 `a[2]+a[1]+a[3]+a[0]` 순서로 다시 잇게 한다 */
+function splitKeyExpression(keyHex: string): string {
+  const quarter = keyHex.length / 4;
+  // 원래 순서 q0 q1 q2 q3 를 a[2]+a[1]+a[3]+a[0] 로 되살리려면 배열은 [q3, q1, q0, q2] 다.
+  const q = [0, 1, 2, 3].map((i) => keyHex.slice(i * quarter, (i + 1) * quarter));
+  const shuffled = [q[3], q[1], q[0], q[2]].map((part) => `'${part}'`).join(',');
+  return `CryptoJS.enc.Hex.parse((function(a){return a[2]+a[1]+a[3]+a[0];})([${shuffled}]))`;
+}
+
+/** 안쪽 층 — 요청 함수와 복호화 함수 */
+function innerScript(main: string, search: string): string {
+  return [
+    'function QAjaxSchool(sc, success) {',
+    `    return $.ajax({ url:'./${main}?'+encodeURIComponent(btoa('${search}l'+encodeURIComponent(sc)+'_enc5')),`,
+    "        headers:{'X-Hour-Token':window.__HourRequestToken || ''}, dataType:'text', success:success });}",
+    'function QAjaxTimetable(sc, sc2, da1, r, success) { var s7=sc+sc2;',
+    `    return $.ajax({ url:'./${main}?'+btoa(s7+'_'+da1+'_'+r+'_enc5'),`,
+    "        headers:{'X-Hour-Token':window.__HourRequestToken || ''}, dataType:'text', success:success });}",
+    `function HChange(data){ var key=${splitKeyExpression(TEST_KEY_HEX)}; }`,
+  ].join('\n');
+}
+
+/** 감춘 블록 하나(실행 함수 + 자료) — obfuscatedPage 와 같은 XOR 규칙 */
+function obfuscatedBlock(script: string, key: number): string {
+  let hex = '';
+  for (let i = 0; i < script.length; i++) {
+    hex += (script.charCodeAt(i) ^ ((key + i * 13) & 255)).toString(16).padStart(4, '0');
+  }
+  const runner =
+    "(function(a,k){var s='',i,j,b;for(i=0;i<a.length;i++){if(a[i][0]){s+=a[i][1];continue;}" +
+    'b=a[i][1];for(j=0;j<b.length;j+=4){s+=String.fromCharCode(parseInt(b.substr(j,4),16)^((k+(j/4)*13)&255));}}(0,eval)(s);})';
+  return `${runner}(${JSON.stringify([[0, hex]])},${key})`;
+}
+
+/** 바깥 층 — 화면 함수들 + 안쪽 층을 감춘 블록 */
+function nestedPage(main: string, search: string, route: string): string {
+  const outer = [
+    'function 학교명단_출력하기(학교명단){var r=Math.floor(학교명단[i][0]/6347)+2;}',
+    `function nal_change(){sc_data('${route}_',storage.sc,r,'0');}`,
+    `/* hour-ajax-obfuscated-v1 */${obfuscatedBlock(innerScript(main, search), 41)}`,
+    '원자료=Q자료(자료.자료166[학년][반][요일][교시]);일일자료=Q자료(자료.자료174[학년][반][요일][교시]);',
+    '성명=Q성명(자료.자료191[th]);과목명=Q과목명(자료.자료102[sb]);',
+  ].join('\n');
+  return [
+    '<html>',
+    `<script>window.__HourRequestToken='${HOUR_TOKEN}';</script>`,
+    `<script>/* hour-obfuscated-v2 */${obfuscatedBlock(outer, 83)}</script>`,
+    '</html>',
+  ].join('');
+}
+
+function nestedTransport(codes: readonly [string, string, string] = ['176147', '19164', '89614']) {
+  const requests: { path: string; hourToken: string | null | undefined }[] = [];
+  const [main, search, route] = codes;
+  return {
+    requests,
+    async fetchRaw(path: string, hourToken?: string | null): Promise<ArrayBuffer> {
+      requests.push({ path, hourToken });
+      if (path === '/st') return toBuf(encodeEucKrBytes(nestedPage(main, search, route)));
+      // 실제 서버처럼 토큰이 없으면 내용을 주지 않는다
+      if (hourToken !== HOUR_TOKEN) return utf8WithPadding('. ');
+      const searchPath = `/${main}?${encodeURIComponent(
+        btoa(`${search}l${encodeURIComponent('온양여자고')}_enc5`),
+      )}`;
+      if (path === searchPath) {
+        return utf8WithPadding(await encryptEnc2(NEW_SEARCH_JSON, TEST_KEY_HEX, 'enc5'));
+      }
+      if (path === `/${main}?${btoa(`${route}_77367_0_1_enc5`)}`) {
+        return utf8WithPadding(await encryptEnc2(NEW_TIMETABLE_JSON, TEST_KEY_HEX, 'enc5'));
+      }
+      return utf8WithPadding('. ');
+    },
+  };
+}
+
+describe('revealComciganScripts — 겹쳐 감춘 층', () => {
+  it('풀어낸 스크립트 안에 또 감춘 블록이 있으면 끝까지 풀고, 안쪽 층을 앞에 둔다', () => {
+    const inner = "function QAjaxSchool(){return './176147?';}";
+    const outer = `var outer=1;${obfuscatedBlock(inner, 41)}var tail=2;`;
+    const page = `<script>${obfuscatedBlock(outer, 83)}</script>`;
+
+    const revealed = revealComciganScripts(page);
+
+    expect(revealed.startsWith(inner)).toBe(true);
+    expect(revealed).toContain('var outer=1;');
+    expect(revealed).toContain('var tail=2;');
+  });
+});
+
+describe('ComciganApiClient — 2026-11-09 무렵 형식', () => {
+  it('학교 검색: 안쪽 층에서 주소를 읽고, UTF-8 검색어를 base64 로 감싸 토큰과 함께 요청한다', async () => {
+    const transport = nestedTransport();
+    const client = new ComciganApiClient(transport);
+
+    const schools = await client.searchSchools('온양여자고');
+
+    expect(schools).toEqual([{ regionName: '충남', name: '온양여자고등학교', code: 77367 }]);
+    expect(transport.requests[0]).toEqual({ path: '/st', hourToken: undefined });
+    expect(transport.requests[1]).toEqual({
+      path: `/176147?${encodeURIComponent(btoa(`19164l${encodeURIComponent('온양여자고')}_enc5`))}`,
+      hourToken: HOUR_TOKEN,
+    });
+  });
+
+  it('시간표: enc5 응답을 조각난 열쇠로 풀어 원자료·일일자료를 넘긴다', async () => {
+    const transport = nestedTransport();
+    const client = new ComciganApiClient(transport);
+
+    const data = await client.getSchoolData(77367);
+
+    expect(transport.requests[1]).toEqual({
+      path: `/176147?${btoa('89614_77367_0_1_enc5')}`,
+      hourToken: HOUR_TOKEN,
+    });
+    expect(data.schoolName).toBe('컴시간중');
+    expect(data.teachers).toEqual(['', '박지*']);
+    expect(data.baseGrid).toEqual([[], [[], [[], [2, 1001]]]]);
+    expect(data.dailyGrid).toEqual([[], [[], [[], [2, 1001]]]]);
+  });
+
+  it('표식 숫자가 또 바뀌어도(enc7) base64 로 풀린다 — enc1 만 16진수다', async () => {
+    const encrypted = await encryptEnc2('{"a":1}', TEST_KEY_HEX, 'enc7');
+    expect(await decryptComciganText(encrypted, TEST_KEY_HEX)).toBe('{"a":1}');
   });
 });

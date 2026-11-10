@@ -1,15 +1,21 @@
 /**
- * 컴시간 암호화 응답(enc1/enc2) 복호화 — Web Crypto API.
+ * 컴시간 암호화 응답(enc1/enc2/enc5…) 복호화 — Web Crypto API.
  *
- * 2026-11 부터 학교 검색·시간표 응답이 `enc2:{iv}:{암호문}:{인증값}` 꼴로 온다
- * (enc2 = base64, enc1 = 16진수). 컴시간 페이지의 `시간표자료_복호화`와 같은 규칙이다.
+ * 2026-11 부터 학교 검색·시간표 응답이 `enc5:{iv}:{암호문}:{인증값}` 꼴로 온다
+ * (enc1 = 16진수, 그 밖의 번호 = base64). 컴시간 페이지의 복호화 함수와 같은 규칙이다.
  *   - 열쇠: 페이지에 적힌 32바이트 16진수(AES-256-CBC, PKCS7)
- *   - 인증: HMAC-SHA256(열쇠 = SHA256(열쇠), 내용 = "enc2:{iv}:{암호문}")
+ *   - 인증: HMAC-SHA256(열쇠 = SHA256(열쇠), 내용 = "{표식}:{iv}:{암호문}")
  * 접두사가 없는 응답은 평문으로 그대로 돌려준다(페이지도 그렇게 처리한다).
  */
 import { ComciganError } from '@domain/entities/ComciganTimetable';
 
-const ENCRYPTED_PREFIX_REGEX = /^enc[12]:/;
+/**
+ * 암호화 표식. 컴시간은 표식 숫자를 바꿔 가며 쓴다(2026-11-06 enc2 → 11-09 무렵 enc5).
+ * 규칙은 그대로다: `enc1` 만 16진수이고 나머지 번호는 base64 다(페이지의 복호화 함수도
+ * "enc5 면 base64, 아니면 16진수"로 가른다). 번호를 못 박아 두면 숫자만 바뀌어도 전체가 멈춘다.
+ */
+const ENCRYPTED_PREFIX_REGEX = /^enc\d+:/;
+const HEX_ENCODED_PREFIX = 'enc1';
 
 function invalid(): ComciganError {
   return new ComciganError('SERVICE_CHANGED', '컴시간 응답을 해석하지 못했어요.');
@@ -59,7 +65,7 @@ export async function decryptComciganText(text: string, keyHex: string | null): 
   const parts = trimmed.split(':');
   if (parts.length !== 4) throw invalid();
   const [, ivText = '', cipherText = '', tagText = ''] = parts;
-  const decode = parts[0] === 'enc2' ? base64ToBytes : hexToBytes;
+  const decode = parts[0] === HEX_ENCODED_PREFIX ? hexToBytes : base64ToBytes;
   const iv = decode(ivText);
   const cipher = decode(cipherText);
   const tag = decode(tagText);

@@ -1694,8 +1694,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   comcigan: {
     fetchRaw: (
       path: string,
+      hourToken?: string,
     ): Promise<{ status: 'ok'; body: ArrayBuffer } | { status: 'error'; message: string }> =>
-      ipcRenderer.invoke('comcigan:fetch', { path }),
+      ipcRenderer.invoke('comcigan:fetch', { path, hourToken }),
   },
 
   // === 압핀 (appin, sgpap.com) — 학급/교사 시간표 불러오기 ===

@@ -16,6 +16,28 @@ function addDays(dateStr: string, days: number): string {
   return `${ry}-${rm}-${rd}`;
 }
 
+/** 쌤핀이 쓰는 시간대(Asia/Seoul)의 UTC 차이. 한국은 서머타임이 없어 고정값이다. */
+const SEOUL_OFFSET_MS = 9 * 60 * 60 * 1000;
+
+/**
+ * 구글이 준 시각(RFC 3339)을 한국 시각의 날짜·시각으로 바꾼다.
+ *
+ * 구글은 **캘린더에 설정된 시간대**로 시각을 돌려준다. 캘린더 시간대가 한국이 아니면
+ * (예: `2026-09-14T23:00:00Z`) 글자를 그대로 잘라 쓸 때 오전 8시 일정이 전날 밤 11시로
+ * 찍힌다(2026-09-15 신고 — 9시간 차이). 올릴 때는 늘 Asia/Seoul 로 올리므로(toGoogleEvent),
+ * 받을 때도 한국 시각으로 맞춘다. 이 기기의 시간대 설정에는 기대지 않는다.
+ */
+function toSeoulWallClock(dateTime: string): { date: string; time: string } {
+  const hasOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(dateTime);
+  const ms = hasOffset ? Date.parse(dateTime) : Number.NaN;
+  if (Number.isNaN(ms)) {
+    // 시간대 표기가 없으면 떠 있는 시각이다 — 적힌 그대로 쓴다.
+    return { date: dateTime.substring(0, 10), time: dateTime.substring(11, 16) };
+  }
+  const iso = new Date(ms + SEOUL_OFFSET_MS).toISOString();
+  return { date: iso.substring(0, 10), time: iso.substring(11, 16) };
+}
+
 /**
  * 쌤핀 이벤트를 구글 캘린더 이벤트 형태로 변환
  */
@@ -38,8 +60,8 @@ export function toGoogleEvent(event: SchoolEvent): Partial<GoogleCalendarEvent> 
   }
 
   // 시간이 있는 이벤트
-  const startTime = event.startTime || (event.time?.split(' - ')[0]) || '09:00';
-  const endTime = event.endTime || (event.time?.split(' - ')[1]) || '10:00';
+  const startTime = event.startTime || event.time?.split(' - ')[0] || '09:00';
+  const endTime = event.endTime || event.time?.split(' - ')[1] || '10:00';
 
   return {
     summary: event.title,
@@ -74,15 +96,14 @@ export function fromGoogleEvent(
       endDate = endStr !== date ? endStr : undefined;
     }
   } else {
-    // dateTime에서 날짜와 시간 추출
-    const startDt = gEvent.start.dateTime!;
-    const endDt = gEvent.end.dateTime!;
-    date = startDt.substring(0, 10);
-    startTime = startDt.substring(11, 16);
-    endTime = endDt.substring(11, 16);
+    // dateTime에서 날짜와 시간 추출 — 한국 시각으로 맞춘다(toSeoulWallClock 참조)
+    const start = toSeoulWallClock(gEvent.start.dateTime!);
+    const end = toSeoulWallClock(gEvent.end.dateTime!);
+    date = start.date;
+    startTime = start.time;
+    endTime = end.time;
     time = `${startTime} - ${endTime}`;
-    const endDateStr = endDt.substring(0, 10);
-    endDate = endDateStr !== date ? endDateStr : undefined;
+    endDate = end.date !== date ? end.date : undefined;
   }
 
   return {
@@ -109,17 +130,14 @@ export function fromGoogleEvent(
 /**
  * 충돌 감지: 로컬과 리모트 이벤트가 모두 수정되었는지 확인
  */
-export function detectConflict(
-  local: SchoolEvent,
-  remote: GoogleCalendarEvent,
-): boolean {
+export function detectConflict(local: SchoolEvent, remote: GoogleCalendarEvent): boolean {
   if (!remote.updated) return false;
   // 로컬이 마지막 동기화 이후 수정됨: isModified 플래그 또는 googleUpdatedAt 비교
-  const localUpdated = local.isModified || (
-    local.googleUpdatedAt && local.lastSyncedAt
+  const localUpdated =
+    local.isModified ||
+    (local.googleUpdatedAt && local.lastSyncedAt
       ? new Date(local.googleUpdatedAt).getTime() > new Date(local.lastSyncedAt).getTime()
-      : false
-  );
+      : false);
   // 리모트가 마지막 동기화 이후 수정됨
   const remoteUpdated = local.lastSyncedAt
     ? new Date(remote.updated).getTime() > new Date(local.lastSyncedAt).getTime()
@@ -171,5 +189,3 @@ export function isGoogleAuthBlockedError(message: string): boolean {
  */
 export const GOOGLE_AUTH_BLOCKED_MESSAGE =
   'Google 인증에 실패했습니다. 학교 Google 계정(@*.go.kr 등)은 관리자 정책으로 외부 앱 접근이 차단될 수 있어요. 설정 → Google 통합에서 연결을 해제한 뒤 개인 Gmail 계정으로 다시 연결해주세요.';
-
-

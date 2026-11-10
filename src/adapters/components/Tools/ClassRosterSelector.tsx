@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useClassRosterStore } from '@adapters/stores/useClassRosterStore';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { isStudentActive } from '@domain/rules/studentActivity';
@@ -36,6 +37,54 @@ export function ClassRosterSelector({
   const [editorText, setEditorText] = useState('');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [listPos, setListPos] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
+
+  // 반 목록은 화면 맨 바깥(body)에 그리고 위치를 직접 잡는다. 누른 자리 안쪽에 그리면 유리 효과가
+  // 켜졌을 때 이 카드의 층에 갇혀, 목록 아래쪽이 **아래 카드 뒤로** 들어가 누를 수 없었다
+  // (2026-09-29 신고 — 랜덤뽑기에서 반이 많으면 아래 목록을 고를 수 없음).
+  const updateListPos = useCallback(() => {
+    const trigger = dropdownRef.current;
+    if (!trigger) return;
+    const rect = trigger.getBoundingClientRect();
+    const margin = 4;
+    const maxListHeight = 224; // 예전 max-h-56 과 같은 높이
+    const spaceBelow = window.innerHeight - rect.bottom - margin * 2;
+    const spaceAbove = rect.top - margin * 2;
+    // 아래가 너무 좁고 위가 더 넓으면 위로 연다.
+    const openUp = spaceBelow < 120 && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(80, Math.min(maxListHeight, openUp ? spaceAbove : spaceBelow));
+    setListPos({
+      top: openUp ? rect.top - margin - maxHeight : rect.bottom + margin,
+      left: rect.left,
+      width: rect.width,
+      maxHeight,
+    });
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!isDropdownOpen) {
+      setListPos(null);
+      return;
+    }
+    updateListPos();
+    // 목록 안을 스크롤하는 것은 위치와 무관하다 — 그때마다 다시 그리지 않는다.
+    const onScroll = (e: Event) => {
+      if (listRef.current?.contains(e.target as Node)) return;
+      updateListPos();
+    };
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', updateListPos);
+    return () => {
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', updateListPos);
+    };
+  }, [isDropdownOpen, updateListPos]);
 
   useEffect(() => {
     if (!loaded) load();
@@ -46,6 +95,8 @@ export function ClassRosterSelector({
   useEffect(() => {
     if (!isDropdownOpen) return;
     const handleClick = (e: MouseEvent) => {
+      // 목록은 body 에 그려져 래퍼 밖에 있다 — 목록 안을 누른 것은 바깥 클릭이 아니다.
+      if (listRef.current?.contains(e.target as Node)) return;
       if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         setIsDropdownOpen(false);
       }
@@ -232,82 +283,94 @@ export function ClassRosterSelector({
             </span>
           </button>
 
-          {isDropdownOpen && (
-            <div
-              data-sp-floating
-              className="absolute top-full left-0 right-0 mt-1 bg-sp-card border border-sp-border rounded-xl shadow-2xl z-50 py-1 max-h-56 overflow-y-auto"
-            >
-              {selectableClasses.length === 0 && rosters.length === 0 ? (
-                <div className="px-3 py-3 text-xs text-sp-muted text-center">
-                  등록된 반이 없습니다
-                </div>
-              ) : (
-                <>
-                  {/* 수업반 섹션 */}
-                  {selectableClasses.length > 0 && (
-                    <>
-                      {rosters.length > 0 && (
-                        <div className="px-3 pt-2 pb-1 text-caption font-bold text-sp-muted/70 uppercase tracking-wider">
-                          📚 수업반
-                        </div>
-                      )}
-                      {selectableClasses.map((tc) => {
-                        const activeCount = tc.students.filter(isStudentActive).length;
-                        const tcRosterId = `${TC_PREFIX}${tc.id}`;
-                        return (
+          {isDropdownOpen &&
+            createPortal(
+              <div
+                ref={listRef}
+                data-sp-floating
+                style={{
+                  top: listPos?.top ?? 0,
+                  left: listPos?.left ?? 0,
+                  width: listPos?.width ?? 0,
+                  maxHeight: listPos?.maxHeight ?? 224,
+                  visibility: listPos ? 'visible' : 'hidden',
+                }}
+                className="fixed z-[9999] bg-sp-card border border-sp-border rounded-xl shadow-2xl py-1 overflow-y-auto"
+              >
+                {selectableClasses.length === 0 && rosters.length === 0 ? (
+                  <div className="px-3 py-3 text-xs text-sp-muted text-center">
+                    등록된 반이 없습니다
+                  </div>
+                ) : (
+                  <>
+                    {/* 수업반 섹션 */}
+                    {selectableClasses.length > 0 && (
+                      <>
+                        {rosters.length > 0 && (
+                          <div className="px-3 pt-2 pb-1 text-caption font-bold text-sp-muted/70 uppercase tracking-wider">
+                            📚 수업반
+                          </div>
+                        )}
+                        {selectableClasses.map((tc) => {
+                          const activeCount = tc.students.filter(isStudentActive).length;
+                          const tcRosterId = `${TC_PREFIX}${tc.id}`;
+                          return (
+                            <button
+                              key={tcRosterId}
+                              onClick={() => handleSelect(tcRosterId)}
+                              className={`w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left transition-colors ${
+                                tcRosterId === selectedRosterId ? 'bg-sp-accent/10' : ''
+                              }`}
+                            >
+                              <span className="text-sm text-sp-text truncate">
+                                {tc.name}
+                                {tc.subject && (
+                                  <span className="text-sp-muted"> · {tc.subject}</span>
+                                )}
+                              </span>
+                              <span className="text-caption text-sp-muted ml-2 shrink-0">
+                                {activeCount}명
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {/* 구분선 */}
+                    {selectableClasses.length > 0 && rosters.length > 0 && (
+                      <div className="mx-2 my-1 border-t border-sp-border/50" />
+                    )}
+
+                    {/* 사용자 명단 섹션 */}
+                    {rosters.length > 0 && (
+                      <>
+                        {selectableClasses.length > 0 && (
+                          <div className="px-3 pt-2 pb-1 text-caption font-bold text-sp-muted/70 uppercase tracking-wider">
+                            📝 사용자 명단
+                          </div>
+                        )}
+                        {rosters.map((roster) => (
                           <button
-                            key={tcRosterId}
-                            onClick={() => handleSelect(tcRosterId)}
+                            key={roster.id}
+                            onClick={() => handleSelect(roster.id)}
                             className={`w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left transition-colors ${
-                              tcRosterId === selectedRosterId ? 'bg-sp-accent/10' : ''
+                              roster.id === selectedRosterId ? 'bg-sp-accent/10' : ''
                             }`}
                           >
-                            <span className="text-sm text-sp-text truncate">
-                              {tc.name}
-                              {tc.subject && <span className="text-sp-muted"> · {tc.subject}</span>}
-                            </span>
+                            <span className="text-sm text-sp-text truncate">{roster.name}</span>
                             <span className="text-caption text-sp-muted ml-2 shrink-0">
-                              {activeCount}명
+                              {roster.studentNames.length}명
                             </span>
                           </button>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {/* 구분선 */}
-                  {selectableClasses.length > 0 && rosters.length > 0 && (
-                    <div className="mx-2 my-1 border-t border-sp-border/50" />
-                  )}
-
-                  {/* 사용자 명단 섹션 */}
-                  {rosters.length > 0 && (
-                    <>
-                      {selectableClasses.length > 0 && (
-                        <div className="px-3 pt-2 pb-1 text-caption font-bold text-sp-muted/70 uppercase tracking-wider">
-                          📝 사용자 명단
-                        </div>
-                      )}
-                      {rosters.map((roster) => (
-                        <button
-                          key={roster.id}
-                          onClick={() => handleSelect(roster.id)}
-                          className={`w-full flex items-center justify-between px-3 py-2 hover:bg-sp-text/5 text-left transition-colors ${
-                            roster.id === selectedRosterId ? 'bg-sp-accent/10' : ''
-                          }`}
-                        >
-                          <span className="text-sm text-sp-text truncate">{roster.name}</span>
-                          <span className="text-caption text-sp-muted ml-2 shrink-0">
-                            {roster.studentNames.length}명
-                          </span>
-                        </button>
-                      ))}
-                    </>
-                  )}
-                </>
-              )}
-            </div>
-          )}
+                        ))}
+                      </>
+                    )}
+                  </>
+                )}
+              </div>,
+              document.body,
+            )}
         </div>
 
         {/* Action buttons */}
