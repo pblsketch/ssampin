@@ -14,6 +14,7 @@
  */
 import type { AssistWriteProposal } from '@domain/entities/AssistWrite';
 import { particle } from '@domain/rules/koreanParticle';
+import { isSameAttendanceStudent } from '@domain/rules/attendanceStudentMatch';
 import type {
   AttendanceRecord,
   AttendanceStatus,
@@ -28,6 +29,7 @@ import type { TodoPriority } from '@domain/entities/Todo';
 
 /** 실행이 부르는 스토어 함수들. 전부 **이미 있던** 것이다 */
 export interface WriteDeps {
+  /** 스토어의 addTodo 는 새 할 일의 id 를 돌려준다 — 여기서는 쓰지 않는다 */
   readonly addTodo: (
     text: string,
     dueDate?: string,
@@ -35,7 +37,7 @@ export interface WriteDeps {
     category?: string,
     recurrence?: undefined,
     time?: string,
-  ) => Promise<void>;
+  ) => Promise<unknown>;
   readonly updateTodo: (
     id: string,
     changes: { text?: string; dueDate?: string; time?: string; priority?: TodoPriority },
@@ -609,13 +611,14 @@ export async function executeAssistWrite(
       };
       // ★같은 번호의 **다른 학생**을 함께 실어 보낸다(위 getDayAttendanceRecords 주석).
       //   안 그러면 부분 저장이 그 번호 엔트리를 통째로 갈아 끼워 옆 학생 출결이 사라진다.
-      const sameNumber = (a: StudentAttendance): boolean =>
-        a.grade === entry.grade && a.classNum === entry.classNum;
+      //   "같은 학생 칸"인지는 출결 공통 규칙(attendanceStudentMatch)의 판정 함수로 가른다.
       const dayNow = deps.getDayAttendanceRecords(classId, when);
       const byPeriod = new Map<number, readonly StudentAttendance[]>(
         periods.map((period) => {
           const now = dayNow.find((record) => record.period === period)?.students ?? [];
-          const others = now.filter((a) => a.number === studentNumber && !sameNumber(a));
+          const others = now.filter(
+            (a) => a.number === studentNumber && !isSameAttendanceStudent(a, entry),
+          );
           return [period, [...others, entry]] as const;
         }),
       );

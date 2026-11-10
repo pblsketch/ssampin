@@ -12,6 +12,8 @@ import { toLocalDateString } from '@shared/utils/localDate';
 import { getDayOfWeek } from '@domain/rules/periodRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { TodoEditor } from '@adapters/components/Todo/TodoEditor';
+import { TodoOverflowNote } from '@adapters/components/Todo/TodoOverflowNote';
+import { takeVisibleTodos } from '@adapters/components/Todo/todoOverflow';
 
 const MAX_VISIBLE = 20;
 
@@ -29,7 +31,7 @@ interface DashboardTodoProps {
 }
 
 export function DashboardTodo({ isCompactMode = true }: DashboardTodoProps) {
-  const { todos, load, toggleTodo } = useTodoStore();
+  const { todos, recentlyAddedIds, load, toggleTodo } = useTodoStore();
   const { teacherSchedule, classSchedule, load: loadSchedule } = useScheduleStore();
   const { events, load: loadEvents } = useEventsStore();
   const { settings } = useSettingsStore();
@@ -135,7 +137,10 @@ export function DashboardTodo({ isCompactMode = true }: DashboardTodoProps) {
     settings.periodTimes,
   ]);
 
-  const visible = sorted.slice(0, MAX_VISIBLE);
+  // 앞에서 MAX_VISIBLE 개만 그리되, 이 창에서 방금 추가한 할 일은 잘리는 자리여도 남긴다.
+  // 새 할 일은 정렬상 뒤에 놓여, 자르기만 하면 "입력했는데 안 생긴다"로 보인다
+  // (확장 편집기에서 추가하고 카드로 돌아왔을 때 포함).
+  const { visible, hiddenCount } = takeVisibleTodos(sorted, MAX_VISIBLE, recentlyAddedIds);
   const activeTodos = useMemo(() => filterActive(todos), [todos]);
   const completedCount = activeTodos.filter((t) => t.completed).length;
   const totalCount = activeTodos.length;
@@ -193,6 +198,8 @@ export function DashboardTodo({ isCompactMode = true }: DashboardTodoProps) {
           ))}
         </ul>
       )}
+      {/* 잘린 개수 — 길이 있는 창에서만 [할 일에서 모두 보기] 가 붙는다 */}
+      <TodoOverflowNote hiddenCount={hiddenCount} />
     </>
   );
 

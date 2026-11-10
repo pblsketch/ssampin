@@ -11,7 +11,7 @@
  *
  * widget-expanded-editors Plan v0.1 Phase 1A.
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTodoStore } from '@adapters/stores/useTodoStore';
 import { reportTodoSaveFailure } from '@adapters/stores/todoSaveFeedback';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -19,26 +19,38 @@ import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import { filterActive, sortTodos } from '@domain/rules/todoRules';
 import { PRIORITY_CONFIG } from '@domain/valueObjects/TodoPriority';
 import { DatePopover } from './components/DatePopover';
+import { TodoOverflowNote } from './TodoOverflowNote';
+import { takeVisibleTodos } from './todoOverflow';
 import { toLocalDateString } from '@shared/utils/localDate';
 
 const MAX_VISIBLE = 50;
 
 export function TodoEditor() {
-  const { todos, addTodo, toggleTodo, deleteTodo, updateTodo } = useTodoStore();
+  const { todos, recentlyAddedIds, addTodo, toggleTodo, deleteTodo, updateTodo } = useTodoStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputText, setInputText] = useState('');
   const [inputDueDate, setInputDueDate] = useState(() => toLocalDateString());
   const [inputStartDate, setInputStartDate] = useState<string | undefined>(undefined);
   const [inputNoDueDate, setInputNoDueDate] = useState(false);
+  // 여기서 방금 추가한 할 일 — 그 줄이 보이는 곳까지 목록을 옮긴다
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
 
   const sorted = useMemo<readonly Todo[]>(() => {
     const active = filterActive(todos);
     return sortTodos(active);
   }, [todos]);
 
-  const visible = sorted.slice(0, MAX_VISIBLE);
+  // 방금 추가한 할 일은 MAX_VISIBLE 밖이어도 남긴다(새 할 일은 정렬상 뒤에 놓인다).
+  const { visible, hiddenCount } = takeVisibleTodos(sorted, MAX_VISIBLE, recentlyAddedIds);
   const incomplete = visible.filter((t) => !t.completed);
   const completed = visible.filter((t) => t.completed);
+
+  // 방금 추가한 줄은 목록에 나중에 붙는다 — 붙는 순간에 받아야 하므로 콜백 ref 를 쓴다.
+  // (useRef + useEffect 로는 줄이 아직 없을 때 한 번 돌고 끝난다.)
+  const scrollToAddedRow = useCallback((node: HTMLLIElement | null) => {
+    if (!node || typeof node.scrollIntoView !== 'function') return;
+    node.scrollIntoView({ block: 'nearest' });
+  }, []);
 
   // 마운트 시 입력칸 자동 포커스 — WidgetModal의 focus trap 첫 노드와 일치
   useEffect(() => {
@@ -51,7 +63,7 @@ export function TodoEditor() {
     if (!text) return;
     setInputText('');
     try {
-      await addTodo(
+      const addedId = await addTodo(
         text,
         inputNoDueDate ? undefined : inputDueDate || undefined,
         'none',
@@ -60,6 +72,7 @@ export function TodoEditor() {
         undefined,
         inputNoDueDate ? undefined : inputStartDate,
       );
+      if (typeof addedId === 'string') setJustAddedId(addedId);
     } catch (err) {
       // 저장하지 못했다. 예전에는 여기서 아무 말 없이 입력만 사라져 "입력해도 목록에 안 뜬다"로
       // 보였다(2026-10-12·11-03 신고). 할 일 화면과 똑같이 글을 되돌리고 이유를 알린다.
@@ -166,6 +179,7 @@ export function TodoEditor() {
                   onToggle={toggleTodo}
                   onDelete={deleteTodo}
                   onUpdate={updateTodo}
+                  rowRef={todo.id === justAddedId ? scrollToAddedRow : undefined}
                 />
               ))}
             </ul>
@@ -196,6 +210,7 @@ export function TodoEditor() {
                 ))}
               </ul>
             )}
+            <TodoOverflowNote hiddenCount={hiddenCount} />
           </>
         )}
       </div>
@@ -213,9 +228,11 @@ interface EditorTodoItemProps {
     id: string,
     changes: Partial<Pick<Todo, 'text' | 'priority' | 'dueDate' | 'time'>>,
   ) => void;
+  /** 방금 추가한 줄에만 붙는다 — 줄이 붙는 순간 그 자리로 목록을 옮긴다 */
+  rowRef?: (node: HTMLLIElement | null) => void;
 }
 
-function EditorTodoItem({ todo, onToggle, onDelete, onUpdate }: EditorTodoItemProps) {
+function EditorTodoItem({ todo, onToggle, onDelete, onUpdate, rowRef }: EditorTodoItemProps) {
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(todo.text);
   const [editPriority, setEditPriority] = useState<TodoPriority>(todo.priority ?? 'none');
@@ -273,7 +290,10 @@ function EditorTodoItem({ todo, onToggle, onDelete, onUpdate }: EditorTodoItemPr
   };
 
   return (
-    <li className="rounded-lg border border-transparent hover:border-sp-border/30 hover:bg-sp-surface/30 transition-colors">
+    <li
+      ref={rowRef}
+      className="rounded-lg border border-transparent hover:border-sp-border/30 hover:bg-sp-surface/30 transition-colors"
+    >
       {/* 메인 행 */}
       <div className="flex items-center gap-2 px-2 py-1.5">
         {/* 체크박스 */}

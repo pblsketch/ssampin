@@ -74,15 +74,22 @@ export type MatrixState = Record<
   Record<number /* period */, LocalStudentAttendance | undefined>
 >;
 
-/** 저장된 레코드로부터 그리드 편집 초기 상태를 시드한다. */
+/**
+ * 저장된 레코드로부터 그리드 편집 초기 상태를 시드한다.
+ *
+ * `roster` 는 그 반 명단 **전체**다(번호만 저장된 옛 항목이 누구 것인지 가르는 기준).
+ * `students` 가 재적 학생만 거른 목록이면 반드시 함께 넘긴다. 생략하면 `students` 로 가른다
+ * (담임 그리드처럼 번호만 쓰는 화면).
+ */
 export function buildInitialMatrix(
   records: readonly AttendanceRecord[],
   classId: string,
   date: string,
   students: readonly { number: number; name: string; grade?: number; classNum?: number }[],
   periods: readonly number[],
+  roster?: readonly { number: number; grade?: number; classNum?: number }[],
 ): MatrixState {
-  const mapResult = buildAttendanceMatrix(records, classId, date, students, periods);
+  const mapResult = buildAttendanceMatrix(records, classId, date, students, periods, roster);
   const obj: MatrixState = {};
   for (const [key, periodMap] of mapResult) {
     obj[key] = {};

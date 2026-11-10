@@ -22,6 +22,7 @@ import { ATTENDANCE_BADGE, ATTENDANCE_LABEL } from '@adapters/presentation/atten
 import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { isSubjectMatch } from '@domain/rules/matchingRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { buildAttendanceRows } from '@domain/rules/attendanceStudentMatch';
 import { CalendarPicker } from '@adapters/components/common/CalendarPicker';
 import { resolvePreset, resolveClassroomPreset } from '@domain/valueObjects/SubjectColor';
 import { ObservationForm } from './ObservationForm';
@@ -210,20 +211,10 @@ export function ClassRecordInputView({
     (d: string, p: number) => {
       const existing = getAttendanceRecord(classId, d, p);
       if (existing) {
-        const map = new Map(existing.students.map((s) => [studentKey(s), s]));
-        setLocalAttendance(
-          students.map((s) => {
-            const prev = map.get(studentKey(s));
-            return {
-              number: s.number,
-              grade: s.grade,
-              classNum: s.classNum,
-              status: prev?.status ?? ('present' as AttendanceStatus),
-              reason: prev?.reason,
-              memo: prev?.memo,
-            };
-          }),
-        );
+        // 저장된 항목을 학생에 잇는 것은 공통 규칙에 맡긴다(출결 탭과 같은 함수) — 번호만
+        // 저장된 옛 항목도 그 번호가 명단에 한 명뿐이면 그 학생 줄에 뜨고, 저장하면
+        // 명단의 학년-반-번호 키로 다시 적힌다.
+        setLocalAttendance(buildAttendanceRows(students, cls?.students ?? [], existing.students));
       } else {
         setLocalAttendance(
           students.map((s) => ({
@@ -238,7 +229,7 @@ export function ClassRecordInputView({
       setAttendanceDirty(false);
       setSaveStatus('idle');
     },
-    [classId, students, getAttendanceRecord],
+    [classId, students, cls, getAttendanceRecord],
   );
 
   useEffect(() => {

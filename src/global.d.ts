@@ -330,6 +330,11 @@ interface ElectronAPI {
     nextData: string,
   ) => Promise<boolean>;
   removeData: (filename: string) => Promise<void>;
+  /**
+   * 이번 실행에서 원본·백업이 모두 깨져 격리·초기화된 상태 파일 이름들.
+   * 다시 만들 수 있는 상태 파일(`tasks-sync-state` 등)만 해당한다. 옛 preload 에는 없을 수 있다.
+   */
+  getQuarantinedDataFiles?: () => Promise<readonly string[]>;
   aiBridge: AiBridgeElectronAPI;
   /** 데스크톱 앱에서만. 옛 preload 에는 없을 수 있어 선택 속성으로 둔다 — 없으면 화면이 그 사실을 말한다. */
   ownAi?: OwnAiElectronAPI;

@@ -52,7 +52,14 @@ export function useTasksAutoSync() {
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
         if (!useTasksSyncStore.getState().isEnabled) return;
-        if (useTasksSyncStore.getState().isSyncing) return;
+        if (useTasksSyncStore.getState().isSyncing) {
+          // 동기화가 도는 중에 바뀐 할 일이다. 여기서 그냥 버리면 지금 도는 회차는 이 변경을
+          // 올리지 못하고(이미 읽은 뒤다), 다음 계기(주기·창 포커스)까지 구글에 안 올라간다.
+          // 예전에는 동기화 끝의 refresh 가 늘 배열을 갈아 끼워 우연히 다시 돌았다 — 그 고리를
+          // 끊었으므로(useTodoStore.refresh) 여기서 끝난 뒤로 미룬다.
+          debouncedSync();
+          return;
+        }
         if (isInQuotaCooldown()) return;
         void useTasksSyncStore.getState().syncNow();
       }, 2500);

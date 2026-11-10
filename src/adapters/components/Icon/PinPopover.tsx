@@ -9,6 +9,7 @@
  * 투명 Electron 창 위에 뜨므로 카드 밖은 완전 투명이어야 한다.
  */
 import { useRef, useState } from 'react';
+import { reportTodoSaveFailure } from '@adapters/stores/todoSaveFeedback';
 import type { PinTodayClass, PinDueTodoItem } from './pinPresence';
 import { PIN_NAME } from './pinName';
 
@@ -56,21 +57,33 @@ export function PinPopover({
   update,
 }: PinPopoverProps) {
   const [draft, setDraft] = useState('');
-  const [busy, setBusy] = useState(false);
+  // 저장하지 못했을 때 입력칸 아래에 띄우는 한 줄. 아이콘 창에는 토스트 표시기가 없어
+  // 토스트만으로는 선생님께 보이지 않는다.
+  const [saveFailed, setSaveFailed] = useState(false);
+  // 저장 중 다시 눌리는 것을 막는다. 상태(useState)로 막으면 갱신이 늦어 연달아 누른
+  // 두 번이 같은 옛 값을 보고 둘 다 통과한다 — ref 로 막는다.
+  const busyRef = useRef(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const dateLabel = `${now.getMonth() + 1}월 ${now.getDate()}일 (${DAY_LABEL[now.getDay()]})`;
 
   const submit = async () => {
     const text = draft.trim();
-    if (!text || busy) return;
-    setBusy(true);
+    if (!text || busyRef.current) return;
+    busyRef.current = true;
+    setSaveFailed(false);
     try {
       await onQuickAdd(text);
       setDraft('');
+    } catch (err) {
+      // 저장하지 못했다. 예전에는 받는 곳이 없어 아무 표시도 없었다(2026-11 조사).
+      // 글은 지우지 않고 그대로 두며(다시 Enter 로 재시도), 홈 편집기와 같은 방식으로 알린다.
+      setDraft((current) => (current === '' ? text : current));
+      setSaveFailed(true);
+      reportTodoSaveFailure(err);
     } finally {
-      setBusy(false);
+      busyRef.current = false;
       // 연속 입력 — 추가 직후 포커스를 되돌려 바로 다음 할 일을 칠 수 있게 (사용자 요청).
-      // input 을 disabled 로 잠그면 그 순간 포커스를 잃으므로 busy 는 내부 가드로만 쓴다.
+      // input 을 disabled 로 잠그면 그 순간 포커스를 잃으므로 저장 중 표시는 내부 가드로만 쓴다.
       inputRef.current?.focus();
     }
   };
@@ -234,12 +247,20 @@ export function PinPopover({
           <input
             ref={inputRef}
             value={draft}
-            onChange={(e) => setDraft(e.target.value)}
+            onChange={(e) => {
+              setDraft(e.target.value);
+              setSaveFailed(false);
+            }}
             placeholder="할 일 빠른 추가 · Enter (오늘 마감)"
             aria-label="할 일 빠른 추가"
             className="w-full bg-sp-bg border border-sp-border rounded-lg px-2.5 py-1.5 text-xs text-sp-text placeholder:text-sp-muted focus:outline-none focus:border-sp-accent"
           />
         </form>
+        {saveFailed && (
+          <p role="alert" className="mt-1 text-detail text-sp-error">
+            저장하지 못했어요. 쓴 글은 그대로 있으니 잠시 뒤 Enter 를 다시 눌러 주세요.
+          </p>
+        )}
       </div>
 
       {/* 푸터 — 창 열기 (고정) */}

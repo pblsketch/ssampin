@@ -135,7 +135,7 @@ export function DriveSyncConflictModal({
                   type="button"
                   onClick={() => onResolve(conflict, 'local')}
                   disabled={busy}
-                  className="flex-1 px-3 py-2 rounded-lg bg-sp-accent/10 text-sp-accent hover:bg-sp-accent/20 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-3 py-2 rounded-lg border border-sp-accent text-sp-accent enabled:hover:bg-sp-accent enabled:hover:text-sp-accent-fg text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {resolvingFilename === conflict.filename ? '처리 중…' : '이 기기 유지'}
                 </button>

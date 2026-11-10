@@ -24,6 +24,7 @@ import type {
 } from '@domain/rules/attendanceRules';
 import { buildPairGroups, adjustPairGroupsForRow } from '@domain/rules/seatingLayoutRules';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { createAttendanceRosterMatcher } from '@domain/rules/attendanceStudentMatch';
 import type { SubjectColorMap } from '@domain/valueObjects/SubjectColor';
 import { getSubjectArgb, getClassroomArgb } from '@domain/valueObjects/SubjectColor';
 import type { AttendanceRecord, AttendanceStatus } from '@domain/entities/Attendance';
@@ -1496,6 +1497,14 @@ export async function exportAttendanceToExcel(
     return a.number - b.number;
   });
 
+  // 출결 항목 → 명단 학생은 화면(통계·조회·입력)과 같은 공통 규칙으로 잇는다 — 번호만 저장된
+  // 옛 항목(AI 연결로 넣은 것)도 그 번호가 명단에 한 명뿐이면 그 학생으로 나온다.
+  // 명단은 걸러 내지 않은 전체를 넘긴다(번호가 유일한지 가르는 기준).
+  const attendanceMatcher = createAttendanceRosterMatcher(students);
+  const indexByRecord = new Map(
+    filtered.map((r) => [r, attendanceMatcher.indexByStudentKey(r.students)] as const),
+  );
+
   const sheetPrefix = className ? `${className} ` : '';
 
   const ws1 = workbook.addWorksheet(`${sheetPrefix}출결 현황`.slice(0, 31));
@@ -1540,8 +1549,8 @@ export async function exportAttendanceToExcel(
     for (const date of dates) {
       const dayRecords = filtered.filter((r) => r.date === date);
       const studentRecord = dayRecords
-        .flatMap((r) => [...r.students])
-        .find((s) => studentKey(s) === studentKey(student));
+        .map((r) => indexByRecord.get(r)?.get(studentKey(student)))
+        .find((s) => s !== undefined);
 
       if (studentRecord) {
         const label = ATTENDANCE_STATUS_LABEL[studentRecord.status];
@@ -1589,9 +1598,10 @@ export async function exportAttendanceToExcel(
   for (let i = 3; i <= 9; i++) ws2.getColumn(i).width = 10;
 
   for (const student of activeStudents) {
-    const allRecords = filtered
-      .flatMap((r) => [...r.students])
-      .filter((s) => studentKey(s) === studentKey(student));
+    const allRecords = filtered.flatMap((r) => {
+      const hit = indexByRecord.get(r)?.get(studentKey(student));
+      return hit === undefined ? [] : [hit];
+    });
 
     const total = allRecords.length;
     const stats: Record<AttendanceStatus, number> = {
@@ -1649,10 +1659,11 @@ export async function exportAttendanceToExcel(
   });
 
   for (const record of sortedRecords) {
-    for (const sa of record.students) {
+    // 못 이은 항목(key === null)도 행으로는 남긴다 — 이름만 비운다(기록을 떨어뜨리지 않는다).
+    for (const { entry: sa, key } of attendanceMatcher.resolveEntries(record.students)) {
       if (sa.status === 'present') continue;
 
-      const student = activeStudents.find((s) => studentKey(s) === studentKey(sa));
+      const student = key === null ? undefined : activeStudents.find((s) => studentKey(s) === key);
       const row = ws3.addRow([
         record.date,
         formatPeriodLabel(record.period, periodTimes),

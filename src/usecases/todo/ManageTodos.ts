@@ -232,6 +232,62 @@ export class ManageTodos {
   }
 
   /**
+   * 하위 할 일의 글을 고친다.
+   *
+   * 앞뒤 공백을 뗀 뒤 **빈 글이거나 원래 글과 같으면 저장하지 않는다** — 고친 것이 없는데
+   * 수정 시각과 구글 쓰기 예약만 바뀌면 동기화가 헛돈다.
+   * @returns 실제로 저장했으면 true
+   */
+  async updateSubTaskText(todoId: string, subTaskId: string, text: string): Promise<boolean> {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+
+    const data = await this.todoRepository.getTodos();
+    const todos = data?.todos ?? [];
+    const target = todos
+      .find((todo) => todo.id === todoId)
+      ?.subTasks?.find((st) => st.id === subTaskId);
+    if (!target || target.text === trimmed) return false;
+
+    const now = new Date().toISOString();
+    const updated = todos.map((todo) => {
+      if (todo.id !== todoId) return todo;
+      const subTasks = (todo.subTasks ?? []).map((st) =>
+        st.id === subTaskId ? { ...st, text: trimmed } : st,
+      );
+      return withSyncMeta({ ...todo, subTasks }, now);
+    });
+    await this.todoRepository.saveTodos({ todos: updated, categories: data?.categories });
+    return true;
+  }
+
+  /**
+   * 하위 할 일을 한 칸 위(-1)나 아래(1)로 옮긴다. 순서는 배열 순서 그대로다.
+   * 맨 끝에서 더 나가려 하면 아무것도 하지 않는다.
+   * @returns 실제로 저장했으면 true
+   */
+  async moveSubTask(todoId: string, subTaskId: string, direction: -1 | 1): Promise<boolean> {
+    const data = await this.todoRepository.getTodos();
+    const todos = data?.todos ?? [];
+    const current = todos.find((todo) => todo.id === todoId)?.subTasks ?? [];
+    const from = current.findIndex((st) => st.id === subTaskId);
+    const to = from + direction;
+    if (from === -1 || to < 0 || to >= current.length) return false;
+
+    const now = new Date().toISOString();
+    const updated = todos.map((todo) => {
+      if (todo.id !== todoId) return todo;
+      const subTasks = [...(todo.subTasks ?? [])];
+      const [moved] = subTasks.splice(from, 1);
+      if (moved === undefined) return todo;
+      subTasks.splice(to, 0, moved);
+      return withSyncMeta({ ...todo, subTasks }, now);
+    });
+    await this.todoRepository.saveTodos({ todos: updated, categories: data?.categories });
+    return true;
+  }
+
+  /**
    * 완료된 할 일 일괄 아카이브.
    * Google Tasks와 연동된 항목은 pendingRemoteOp:'delete' + pendingDeleteIds 반환 → 호출 측에서 원격 삭제 큐에 등록.
    */

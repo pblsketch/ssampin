@@ -130,6 +130,12 @@ interface TeachingClassState {
   ) => AttendanceRecord | undefined;
   /** 저장 성공 시 true, 쓰기 차단(읽기 오류 등)으로 아무것도 하지 않았으면 false. */
   saveAttendanceRecord: (record: AttendanceRecord) => Promise<boolean>;
+  /**
+   * 한 교시 기록에서 `record.students` 에 **든 학생만** 갱신한다(나머지 학생 보존).
+   * AI 연결(브릿지) 등록 경로 전용 — 화면 저장은 그 교시의 단일 기록자라 통째 교체
+   * (`saveAttendanceRecord`)를 쓴다. 반환 규칙은 `saveAttendanceRecord` 와 같다.
+   */
+  mergeAttendanceRecordStudents: (record: AttendanceRecord) => Promise<boolean>;
   getDayAttendance: (classId: string, date: string) => readonly AttendanceRecord[];
   saveDayAttendance: (
     classId: string,
@@ -804,6 +810,19 @@ export const useTeachingClassStore = create<TeachingClassState>((set, get) => {
       // fresh 스냅샷에서 수행된다(P6). in-memory 배열을 실어 보내면 동기화가 방금
       // 병합한 다른 기록을 낡은 스냅샷이 통째로 덮는다(2026-07 QA BLOCKER).
       const saved = await manageAttendance.upsertRecord(finalRecord);
+      set({ attendanceRecords: [...saved] });
+      return true;
+    },
+
+    mergeAttendanceRecordStudents: async (record) => {
+      if (!(await ensureWritable())) return false;
+      const cls = get().classes.find((c) => c.id === record.classId);
+      const finalRecord: AttendanceRecord = cls?.groupId
+        ? { ...record, groupId: cls.groupId }
+        : record;
+      // 든 학생만 갈아 끼우는 병합은 락 안 fresh 스냅샷에서 한다(P6) — 여기서 in-memory
+      // 기록과 합쳐 통째로 넘기면 그 사이 저장된 다른 학생 출결을 덮는다.
+      const saved = await manageAttendance.upsertRecordStudents(finalRecord);
       set({ attendanceRecords: [...saved] });
       return true;
     },

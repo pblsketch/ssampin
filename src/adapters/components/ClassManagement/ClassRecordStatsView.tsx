@@ -3,6 +3,7 @@ import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useObservationStore } from '@adapters/stores/useObservationStore';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { createAttendanceRosterMatcher } from '@domain/rules/attendanceStudentMatch';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { ATTENDANCE_TEXT } from '@adapters/presentation/attendanceStatusVariants';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
@@ -82,6 +83,12 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
     return [...cls.students].filter(isStudentActive).sort((a, b) => a.number - b.number);
   }, [cls]);
 
+  // 출결 항목 → 명단 학생. 명단은 걸러 내지 않은 전체를 넘긴다(번호가 유일한지 가르는 기준).
+  const attendanceMatcher = useMemo(
+    () => createAttendanceRosterMatcher(cls?.students ?? []),
+    [cls],
+  );
+
   const termStartIso = useCurrentTermStartIso();
   const dateRange = useMemo(() => {
     if (filter === 'custom') return { start: customStart, end: customEnd };
@@ -101,14 +108,15 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
         (!dateRange.end || r.date <= dateRange.end),
     );
     for (const record of filtered) {
-      for (const sa of record.students) {
-        const key = studentKey(sa);
+      // 항목을 학생에 잇는 것은 공통 규칙에 맡긴다 — 번호만 저장된 옛 항목(AI 연결로 넣은 것)도
+      // 그 번호가 명단에 한 명뿐이면 그 학생으로 센다. 키 문자열만 비교하면 조용히 빠진다.
+      for (const [key, sa] of attendanceMatcher.indexByStudentKey(record.students)) {
         const entry = stats.get(key);
         if (entry) entry[sa.status]++;
       }
     }
     return stats;
-  }, [attendanceRecords, classId, students, dateRange]);
+  }, [attendanceRecords, classId, students, dateRange, attendanceMatcher]);
 
   /* 특기사항 통계 */
   const obsStats = useMemo(() => {
@@ -193,22 +201,22 @@ export function ClassRecordStatsView({ classId }: ClassRecordStatsViewProps) {
     const sKey = studentKey(s);
     const records: DisplayRecord[] = [];
     for (const ar of filteredAttendance) {
-      for (const sa of ar.students) {
-        if (studentKey(sa) === sKey && sa.status === status) {
-          records.push(
-            mixedRecordToDisplay({
-              type: 'attendance',
-              date: ar.date,
-              studentKey: sKey,
-              studentName: s.name,
-              studentNumber: s.number,
-              status: sa.status,
-              period: ar.period,
-              reason: sa.reason,
-              memo: sa.memo,
-            }),
-          );
-        }
+      // 표의 숫자와 같은 규칙으로 찾는다 — 숫자는 3인데 상세는 2건이 되면 안 된다.
+      const sa = attendanceMatcher.indexByStudentKey(ar.students).get(sKey);
+      if (sa !== undefined && sa.status === status) {
+        records.push(
+          mixedRecordToDisplay({
+            type: 'attendance',
+            date: ar.date,
+            studentKey: sKey,
+            studentName: s.name,
+            studentNumber: s.number,
+            status: sa.status,
+            period: ar.period,
+            reason: sa.reason,
+            memo: sa.memo,
+          }),
+        );
       }
     }
     setDetail({ title: `${s.name} · ${label} ${records.length}건`, records });

@@ -15,10 +15,21 @@ interface TodoState {
   todos: readonly Todo[];
   categories: readonly TodoCategory[];
   loaded: boolean;
+  /**
+   * 이 창에서 방금 추가한 할 일 id(최근 것이 뒤, 최대 RECENTLY_ADDED_LIMIT 개).
+   * 홈 카드·확장 편집기는 목록을 앞에서 N개만 보여 주는데, 새 할 일은 정렬상 뒤에 놓여
+   * "입력했는데 안 생긴다"로 보였다. 잘라 낼 때 이 id 들은 빼고 자른다. 저장하지 않는다.
+   */
+  recentlyAddedIds: readonly string[];
 
   load: () => Promise<void>;
-  /** 강제 재로딩 — 동기화 후 UI 갱신용 */
+  /**
+   * 강제 재로딩 — 동기화 후 UI 갱신용.
+   * 읽어 온 내용이 지금과 같으면 `todos` 배열을 바꾸지 않는다(자동 동기화가 배열 교체를
+   * "할 일이 바뀌었다"로 읽어 다시 동기화하기 때문 — useTasksAutoSync).
+   */
   refresh: () => Promise<void>;
+  /** 새 할 일을 저장하고 그 id 를 돌려준다. 저장에 실패하면 던진다. */
   addTodo: (
     text: string,
     dueDate?: string,
@@ -27,7 +38,7 @@ interface TodoState {
     recurrence?: TodoRecurrence,
     time?: string,
     startDate?: string,
-  ) => Promise<void>;
+  ) => Promise<string>;
   toggleTodo: (id: string) => Promise<void>;
   deleteTodo: (id: string) => Promise<void>;
   updateTodo: (
@@ -56,6 +67,10 @@ interface TodoState {
   addSubTask: (todoId: string, text: string) => Promise<void>;
   toggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   deleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  /** 하위 할 일 글 고치기 — 빈 글·같은 글이면 저장하지 않는다 */
+  updateSubTaskText: (todoId: string, subTaskId: string, text: string) => Promise<void>;
+  /** 하위 할 일을 한 칸 위(-1)·아래(1)로 — 끝에서는 그대로 */
+  moveSubTask: (todoId: string, subTaskId: string, direction: -1 | 1) => Promise<void>;
 
   // 정렬
   reorderTodos: (todoIds: string[], groupKey: string) => Promise<void>;
@@ -87,6 +102,23 @@ async function enqueueRemoteDeletes(googleTaskIds: readonly string[]): Promise<v
   }
 }
 
+/** 방금 추가한 할 일로 기억해 둘 개수 — 여러 건을 한꺼번에 넣어도 목록이 한없이 길어지지 않게 */
+const RECENTLY_ADDED_LIMIT = 5;
+
+/**
+ * 내용 비교용 문자열 — 키 순서와 `undefined` 값에 흔들리지 않는다.
+ * 화면이 든 할 일과 파일에서 읽은 할 일은 값이 같아도 키 순서가 다를 수 있다.
+ */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) => {
+    if (v === null || typeof v !== 'object' || Array.isArray(v)) return v;
+    const source = v as Record<string, unknown>;
+    const ordered: Record<string, unknown> = {};
+    for (const key of Object.keys(source).sort()) ordered[key] = source[key];
+    return ordered;
+  });
+}
+
 export const useTodoStore = create<TodoState>((set, get) => {
   const manageTodos = new ManageTodos(todoRepository);
 
@@ -94,6 +126,7 @@ export const useTodoStore = create<TodoState>((set, get) => {
     todos: [],
     categories: [],
     loaded: false,
+    recentlyAddedIds: [],
 
     load: async () => {
       if (get().loaded) return;
@@ -126,7 +159,17 @@ export const useTodoStore = create<TodoState>((set, get) => {
           ...cat,
           icon: cat.icon || '📌',
         }));
-        set({ todos: migrated, categories });
+        // 내용이 같으면 배열을 그대로 둔다. 동기화는 끝날 때마다 refresh 를 부르는데, 매번 새
+        // 배열을 넣으면 자동 동기화(배열이 바뀌면 2.5초 뒤 동기화)가 그것을 변경으로 읽어
+        // 동기화 → refresh → 동기화가 끝없이 돌았다. 비교는 동기화가 끝날 때 한 번뿐이다.
+        const prev = get();
+        const sameTodos = canonicalJson(prev.todos) === canonicalJson(migrated);
+        const sameCategories = canonicalJson(prev.categories) === canonicalJson(categories);
+        if (sameTodos && sameCategories) return;
+        set({
+          todos: sameTodos ? prev.todos : migrated,
+          categories: sameCategories ? prev.categories : categories,
+        });
       } catch (err) {
         console.error('[Todo] refresh 오류:', err);
       }
@@ -149,7 +192,11 @@ export const useTodoStore = create<TodoState>((set, get) => {
         ...(startDate !== undefined ? { startDate } : {}),
       };
       await manageTodos.add(newTodo);
-      set((state) => ({ todos: [...state.todos, newTodo] }));
+      set((state) => ({
+        todos: [...state.todos, newTodo],
+        recentlyAddedIds: [...state.recentlyAddedIds, newTodo.id].slice(-RECENTLY_ADDED_LIMIT),
+      }));
+      return newTodo.id;
     },
 
     toggleTodo: async (id) => {
@@ -325,6 +372,72 @@ export const useTodoStore = create<TodoState>((set, get) => {
         }),
       }));
       await manageTodos.deleteSubTask(todoId, subTaskId);
+    },
+
+    updateSubTaskText: async (todoId, subTaskId, text) => {
+      // 유스케이스(ManageTodos.updateSubTaskText)와 **같은 판정** — 빈 글·같은 글이면
+      // 화면도 저장도 건드리지 않는다. 여기서 걸러야 수정 시각·구글 쓰기 예약이 헛돌지 않는다.
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const target = get()
+        .todos.find((todo) => todo.id === todoId)
+        ?.subTasks?.find((st) => st.id === subTaskId);
+      if (!target || target.text === trimmed) return;
+
+      const now = new Date().toISOString();
+      set((state) => ({
+        todos: state.todos.map((todo) => {
+          if (todo.id !== todoId) return todo;
+          const subTasks = (todo.subTasks ?? []).map((st) =>
+            st.id === subTaskId ? { ...st, text: trimmed } : st,
+          );
+          return {
+            ...todo,
+            subTasks,
+            updatedAt: now,
+            pendingRemoteOp: todo.archivedAt
+              ? todo.googleTaskId
+                ? ('delete' as const)
+                : undefined
+              : todo.googleTaskId
+                ? ('update' as const)
+                : ('create' as const),
+          };
+        }),
+      }));
+      await manageTodos.updateSubTaskText(todoId, subTaskId, trimmed);
+    },
+
+    moveSubTask: async (todoId, subTaskId, direction) => {
+      const current = get().todos.find((todo) => todo.id === todoId)?.subTasks ?? [];
+      const from = current.findIndex((st) => st.id === subTaskId);
+      const to = from + direction;
+      // 맨 끝에서 더 나가려 하면 아무것도 하지 않는다.
+      if (from === -1 || to < 0 || to >= current.length) return;
+
+      const now = new Date().toISOString();
+      set((state) => ({
+        todos: state.todos.map((todo) => {
+          if (todo.id !== todoId) return todo;
+          const subTasks = [...(todo.subTasks ?? [])];
+          const [moved] = subTasks.splice(from, 1);
+          if (moved === undefined) return todo;
+          subTasks.splice(to, 0, moved);
+          return {
+            ...todo,
+            subTasks,
+            updatedAt: now,
+            pendingRemoteOp: todo.archivedAt
+              ? todo.googleTaskId
+                ? ('delete' as const)
+                : undefined
+              : todo.googleTaskId
+                ? ('update' as const)
+                : ('create' as const),
+          };
+        }),
+      }));
+      await manageTodos.moveSubTask(todoId, subTaskId, direction);
     },
 
     reorderTodos: async (todoIds) => {

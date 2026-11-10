@@ -9,7 +9,7 @@ import { useSettingsStore } from '@adapters/stores/useSettingsStore';
 import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { useAnalytics } from '@adapters/hooks/useAnalytics';
 import { toLocalDateString } from '@shared/utils/localDate';
-import type { Todo as TodoType, TodoPriority, TodoCategory } from '@domain/entities/Todo';
+import type { Todo as TodoType, TodoPriority, TodoCategory, SubTask } from '@domain/entities/Todo';
 import type { TodoViewMode } from '@domain/entities/TodoSettings';
 import { DEFAULT_TODO_SETTINGS } from '@domain/entities/TodoSettings';
 import type { TodoSortMode } from '@domain/rules/todoRules';
@@ -179,6 +179,8 @@ export function Todo() {
     addSubTask,
     toggleSubTask,
     deleteSubTask,
+    updateSubTaskText,
+    moveSubTask,
     reorderTodos,
     archiveCompleted,
     restoreFromArchive,
@@ -1094,7 +1096,8 @@ export function Todo() {
                     <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-sp-accent/10 border border-sp-accent/20 text-xs text-sp-accent">
                       <span className="material-symbols-outlined text-sm">lightbulb</span>
                       <span>
-                        할 일을 더블클릭하면 내용, 날짜, 우선순위를 바로 수정할 수 있어요!
+                        할 일을 더블클릭하면 내용, 날짜, 우선순위를 바로 수정할 수 있어요! 하위 할
+                        일도 더블클릭으로 고칠 수 있어요.
                       </span>
                       <button
                         type="button"
@@ -1151,6 +1154,8 @@ export function Todo() {
                             onAddSubTask={addSubTask}
                             onToggleSubTask={toggleSubTask}
                             onDeleteSubTask={deleteSubTask}
+                            onUpdateSubTaskText={updateSubTaskText}
+                            onMoveSubTask={moveSubTask}
                             onReorder={reorderTodos}
                           />
                         );
@@ -1172,6 +1177,8 @@ export function Todo() {
                             onAddSubTask={addSubTask}
                             onToggleSubTask={toggleSubTask}
                             onDeleteSubTask={deleteSubTask}
+                            onUpdateSubTaskText={updateSubTaskText}
+                            onMoveSubTask={moveSubTask}
                             showDDay
                           />
                         ))}
@@ -1788,6 +1795,8 @@ interface TodoGroupProps {
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  onUpdateSubTaskText: (todoId: string, subTaskId: string, text: string) => Promise<void>;
+  onMoveSubTask: (todoId: string, subTaskId: string, direction: -1 | 1) => Promise<void>;
   onReorder: (todoIds: string[], groupKey: string) => Promise<void>;
 }
 
@@ -1806,6 +1815,8 @@ function TodoGroup({
   onAddSubTask,
   onToggleSubTask,
   onDeleteSubTask,
+  onUpdateSubTaskText,
+  onMoveSubTask,
   onReorder,
 }: TodoGroupProps) {
   // Split items into incomplete and completed
@@ -1884,6 +1895,8 @@ function TodoGroup({
                     onAddSubTask={onAddSubTask}
                     onToggleSubTask={onToggleSubTask}
                     onDeleteSubTask={onDeleteSubTask}
+                    onUpdateSubTaskText={onUpdateSubTaskText}
+                    onMoveSubTask={onMoveSubTask}
                   />
                 ))}
               </ul>
@@ -1921,6 +1934,8 @@ function TodoGroup({
                       onAddSubTask={onAddSubTask}
                       onToggleSubTask={onToggleSubTask}
                       onDeleteSubTask={onDeleteSubTask}
+                      onUpdateSubTaskText={onUpdateSubTaskText}
+                      onMoveSubTask={onMoveSubTask}
                     />
                   ))}
                 </ul>
@@ -1960,6 +1975,8 @@ interface SortableTodoItemProps {
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  onUpdateSubTaskText: (todoId: string, subTaskId: string, text: string) => Promise<void>;
+  onMoveSubTask: (todoId: string, subTaskId: string, direction: -1 | 1) => Promise<void>;
 }
 
 function SortableTodoItem(props: SortableTodoItemProps) {
@@ -2013,6 +2030,8 @@ interface TodoItemProps {
   onAddSubTask: (todoId: string, text: string) => Promise<void>;
   onToggleSubTask: (todoId: string, subTaskId: string) => Promise<void>;
   onDeleteSubTask: (todoId: string, subTaskId: string) => Promise<void>;
+  onUpdateSubTaskText: (todoId: string, subTaskId: string, text: string) => Promise<void>;
+  onMoveSubTask: (todoId: string, subTaskId: string, direction: -1 | 1) => Promise<void>;
   dragHandleProps?: DragHandleProps;
   showDDay?: boolean;
 }
@@ -2027,6 +2046,8 @@ function TodoItem({
   onAddSubTask,
   onToggleSubTask,
   onDeleteSubTask,
+  onUpdateSubTaskText,
+  onMoveSubTask,
   dragHandleProps,
   showDDay,
 }: TodoItemProps) {
@@ -2192,7 +2213,7 @@ function TodoItem({
         if (allOthersDone && !todo.completed) {
           // All subtasks will be completed - confirm auto-complete parent
           setTimeout(() => {
-            if (window.confirm('모든 서브태스크가 완료되었습니다. 상위 할 일도 완료 처리할까요?')) {
+            if (window.confirm('하위 할 일을 모두 끝냈어요. 상위 할 일도 완료로 바꿀까요?')) {
               void onToggle(todo.id);
             }
           }, 100);
@@ -2473,7 +2494,7 @@ function TodoItem({
                 ? 'opacity-100 text-sp-muted hover:text-sp-accent hover:bg-sp-accent/10'
                 : 'opacity-0'
             }`}
-            title="서브태스크 추가"
+            title="하위 할 일 추가"
           >
             <span className="material-symbols-outlined text-icon">add_task</span>
           </button>
@@ -2567,35 +2588,17 @@ function TodoItem({
       {/* Subtasks */}
       {subTaskTotal > 0 && (
         <ul className="border-t border-sp-border/30">
-          {subTasks.map((st) => (
-            <li
+          {subTasks.map((st, index) => (
+            <SubTaskRow
               key={st.id}
-              className="flex items-center gap-2 pl-8 pr-4 py-1.5 hover:bg-sp-surface/20 transition-colors group/sub"
-            >
-              <button
-                type="button"
-                className="cursor-pointer shrink-0 rounded focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none"
-                aria-label={st.completed ? '완료 취소' : '완료'}
-                aria-pressed={st.completed}
-                onClick={() => handleToggleSubTask(st.id)}
-              >
-                <Checkbox checked={st.completed} />
-              </button>
-              <span
-                className={`flex-1 text-xs leading-tight ${
-                  st.completed ? 'text-sp-muted line-through opacity-50' : 'text-sp-text/80'
-                }`}
-              >
-                {st.text}
-              </span>
-              <button
-                type="button"
-                onClick={() => void onDeleteSubTask(todo.id, st.id)}
-                className="p-0.5 rounded text-sp-error/60 hover:text-sp-error hover:bg-sp-error/10 opacity-0 group-hover/sub:opacity-100 transition-all"
-              >
-                <span className="material-symbols-outlined text-icon-sm">close</span>
-              </button>
-            </li>
+              subTask={st}
+              isFirst={index === 0}
+              isLast={index === subTaskTotal - 1}
+              onToggle={() => handleToggleSubTask(st.id)}
+              onDelete={() => void onDeleteSubTask(todo.id, st.id)}
+              onUpdateText={(text) => void onUpdateSubTaskText(todo.id, st.id, text)}
+              onMove={(direction) => void onMoveSubTask(todo.id, st.id, direction)}
+            />
           ))}
         </ul>
       )}
@@ -2611,7 +2614,7 @@ function TodoItem({
             value={subTaskText}
             onChange={(e) => setSubTaskText(e.target.value)}
             onKeyDown={handleSubTaskKeyDown}
-            placeholder="서브태스크 입력..."
+            placeholder="하위 할 일 입력..."
             autoFocus
             className="flex-1 bg-sp-surface text-sp-text text-xs px-2 py-1.5 rounded-lg border border-sp-border focus:border-sp-accent focus:outline-none transition-colors placeholder:text-sp-muted"
           />
@@ -2636,6 +2639,159 @@ function TodoItem({
         </div>
       )}
     </>
+  );
+}
+
+/* ─── SubTaskRow (하위 할 일 한 줄 — 제자리 수정·순서 바꾸기) ─── */
+
+interface SubTaskRowProps {
+  subTask: SubTask;
+  isFirst: boolean;
+  isLast: boolean;
+  onToggle: () => void;
+  onDelete: () => void;
+  onUpdateText: (text: string) => void;
+  onMove: (direction: -1 | 1) => void;
+}
+
+/** 줄에 마우스를 올리거나 줄 안에 키보드 초점이 있을 때만 보이는 작은 단추. */
+const SUB_TASK_ACTION_CLASS =
+  'p-1 rounded text-sp-muted transition-colors enabled:hover:text-sp-accent enabled:hover:bg-sp-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sp-accent disabled:opacity-30 disabled:cursor-not-allowed';
+
+/**
+ * 삭제 단추 — 같은 계열(크기·기본 글자색·초점 테두리)에 올렸을 때만 경고색 글자.
+ * `text-sp-error/60`·`bg-sp-error/10` 같은 투명도 수식은 이 저장소에서 규칙이 생기지 않아 쓰지 않는다.
+ */
+const SUB_TASK_DELETE_CLASS =
+  'p-1 rounded text-sp-muted transition-colors hover:text-sp-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sp-accent';
+
+function SubTaskRow({
+  subTask,
+  isFirst,
+  isLast,
+  onToggle,
+  onDelete,
+  onUpdateText,
+  onMove,
+}: SubTaskRowProps) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(subTask.text);
+  // Enter·Esc 로 끝낸 수정을 뒤따르는 blur 가 한 번 더 처리하지 않게 막는다.
+  // 상태 갱신은 비동기라 state 로는 못 막는다 — Esc 로 취소한 글이 blur 에서 저장돼 버린다.
+  const finishedRef = useRef(true);
+
+  // 부모 행과 같은 규칙: 완료한 항목은 고치지 않는다.
+  const startEdit = () => {
+    if (subTask.completed) return;
+    finishedRef.current = false;
+    setDraft(subTask.text);
+    setEditing(true);
+  };
+
+  const commit = () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    setEditing(false);
+    const trimmed = draft.trim();
+    // 빈 글이면 원래 글을 그대로 둔다. 같은 글이면 저장할 것이 없다.
+    if (trimmed && trimmed !== subTask.text) onUpdateText(trimmed);
+  };
+
+  const cancel = () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    setEditing(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      // 한글 조합 중의 Enter 는 글자를 확정하는 키다 — 저장으로 받으면 마지막 글자가 잘리거나 두 번 들어간다.
+      if (e.nativeEvent.isComposing) return;
+      e.preventDefault();
+      commit();
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      cancel();
+    }
+  };
+
+  return (
+    <li className="flex items-center gap-2 pl-8 pr-4 py-1.5 hover:bg-sp-surface/20 transition-colors group/sub">
+      <button
+        type="button"
+        className="cursor-pointer shrink-0 rounded focus-visible:ring-2 focus-visible:ring-sp-accent focus-visible:outline-none"
+        aria-label={subTask.completed ? '완료 취소' : '완료'}
+        aria-pressed={subTask.completed}
+        onClick={onToggle}
+      >
+        <Checkbox checked={subTask.completed} />
+      </button>
+      {editing ? (
+        <input
+          type="text"
+          aria-label="하위 할 일 내용"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={handleKeyDown}
+          onBlur={commit}
+          autoFocus
+          className="flex-1 min-w-0 bg-sp-surface text-sp-text text-xs px-2 py-1 rounded-lg border border-sp-accent focus:outline-none transition-colors"
+        />
+      ) : (
+        <span
+          className={`flex-1 text-xs leading-tight ${
+            subTask.completed ? 'text-sp-muted line-through opacity-50' : 'text-sp-text/80'
+          }`}
+          onDoubleClick={startEdit}
+        >
+          {subTask.text}
+        </span>
+      )}
+      {!editing && (
+        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover/sub:opacity-100 group-focus-within/sub:opacity-100 transition-opacity">
+          <button
+            type="button"
+            aria-label="하위 할 일 위로"
+            title="위로"
+            disabled={isFirst}
+            onClick={() => onMove(-1)}
+            className={SUB_TASK_ACTION_CLASS}
+          >
+            <span className="material-symbols-outlined text-icon-sm">arrow_upward</span>
+          </button>
+          <button
+            type="button"
+            aria-label="하위 할 일 아래로"
+            title="아래로"
+            disabled={isLast}
+            onClick={() => onMove(1)}
+            className={SUB_TASK_ACTION_CLASS}
+          >
+            <span className="material-symbols-outlined text-icon-sm">arrow_downward</span>
+          </button>
+          {!subTask.completed && (
+            <button
+              type="button"
+              aria-label="하위 할 일 수정"
+              title="클릭하여 수정"
+              onClick={startEdit}
+              className={SUB_TASK_ACTION_CLASS}
+            >
+              <span className="material-symbols-outlined text-icon-sm">edit</span>
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label="하위 할 일 삭제"
+            title="삭제"
+            onClick={onDelete}
+            className={SUB_TASK_DELETE_CLASS}
+          >
+            <span className="material-symbols-outlined text-icon-sm">close</span>
+          </button>
+        </div>
+      )}
+    </li>
   );
 }
 

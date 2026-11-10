@@ -3,6 +3,7 @@ import { useMobileTeachingClassStore } from '@mobile/stores/useMobileTeachingCla
 import { useMobileAttendanceStore } from '@mobile/stores/useMobileAttendanceStore';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { filterActive } from '@domain/rules/studentActivity';
+import { createAttendanceRosterMatcher } from '@domain/rules/attendanceStudentMatch';
 import type { AttendanceStatus } from '@domain/entities/Attendance';
 import { EmptyState } from '@mobile/components/common/EmptyState';
 import { useMobileCurrentTermStartIso } from '@mobile/hooks/useMobileCurrentTerm';
@@ -78,14 +79,17 @@ export function ClassAttendanceStatsView({ classId, className }: ClassAttendance
         (!dateRange.start || r.date >= dateRange.start) &&
         (!dateRange.end || r.date <= dateRange.end),
     );
+    // 항목 → 학생 잇기는 PC 와 같은 공통 규칙에 맡긴다 — 번호만 저장된 옛 항목(AI 연결로 넣은 것)도
+    // 그 번호가 명단에 한 명뿐이면 그 학생으로 센다. 명단은 걸러 내지 않은 전체를 넘긴다.
+    const matcher = createAttendanceRosterMatcher(cls?.students ?? []);
     for (const record of filtered) {
-      for (const sa of record.students) {
-        const entry = map.get(studentKey(sa));
+      for (const [key, sa] of matcher.indexByStudentKey(record.students)) {
+        const entry = map.get(key);
         if (entry) entry[sa.status]++;
       }
     }
     return map;
-  }, [records, classId, students, dateRange]);
+  }, [records, classId, students, dateRange, cls]);
 
   /* 학급 요약(연인원) — 출석을 제외한 이상 출결 4종 합산 */
   const summary = useMemo(() => {

@@ -29,6 +29,13 @@ export interface LiveSyncAttendanceInput {
   readonly date: string;
   readonly period: number;
   readonly students: readonly StudentAttendance[];
+  /**
+   * 그 교시 기록에 어떻게 반영하는가.
+   *  - `merge`(등록): **이번 호출에 든 학생만** 갈아 끼우고 나머지 학생 기록은 보존한다.
+   *    AI 가 학생별로 나눠 호출해도 앞 학생 기록이 지워지지 않는다(쌤핀 AI 경로와 같은 의미).
+   *  - `replace`(삭제): 그 교시 기록을 `students` 로 통째 바꾼다 — 삭제는 빈 배열로 비운다.
+   */
+  readonly mode: 'merge' | 'replace';
 }
 
 /** 담임 일일 출결 위임 입력 — 펼침(allDay→교시) 후 교시별 맵 + 대상 학생번호. */
@@ -160,7 +167,10 @@ export interface LiveSyncWriteDeps {
     readonly pageExists: (id: string) => boolean;
   };
   readonly attendance: {
-    /** 교과반 출결 (classId, date, period) 단건 upsert. delete 는 students:[] 로 비운다(출결 제거). */
+    /**
+     * 교과반 출결 (classId, date, period) 반영. `input.mode` 를 반드시 지킨다 —
+     * `merge` 는 든 학생만 갱신(나머지 보존), `replace` 는 통째 교체(delete 는 students:[] 로 비운다).
+     */
     readonly save: (input: LiveSyncAttendanceInput) => Promise<void>;
   };
   readonly homeroomAttendance: {
@@ -529,19 +539,44 @@ async function applyNotes(
   return ok(req.idempotencyKey);
 }
 
-/** raw 출결 학생 → StudentAttendance. 검증은 main validateApplyWrite 가 완료(방어적 캐스팅). */
-function toStudentAttendance(raw: Record<string, unknown>): StudentAttendance {
-  const s: { number: number; status: AttendanceStatus; reason?: AttendanceReason; memo?: string } =
-    {
-      number: raw['number'] as number,
-      status: raw['status'] as AttendanceStatus,
-    };
+/**
+ * raw 출결 학생 → StudentAttendance. 검증은 main validateApplyWrite 가 완료(방어적 캐스팅).
+ *
+ * ★`keepClassIdentity`(수업반): 정수인 학년·반을 그대로 싣는다. 수업반은 번호가 겹쳐서
+ *   (한 반에 "7번"이 여럿일 수 있다) 이 둘이 없으면 저장 키가 `"7"` 이 되고 명단 키
+ *   `"2-3-7"` 과 어긋나 통계에서 빠지고 조회에 "?" 로 뜬다 — 화면 저장과 같은 짝이어야 한다.
+ *   담임 출결은 번호가 안 겹치고 기존 기록이 번호만으로 이어지므로 싣지 않는다.
+ */
+function toStudentAttendance(
+  raw: Record<string, unknown>,
+  keepClassIdentity: boolean,
+): StudentAttendance {
+  const s: {
+    number: number;
+    status: AttendanceStatus;
+    grade?: number;
+    classNum?: number;
+    reason?: AttendanceReason;
+    memo?: string;
+  } = {
+    number: raw['number'] as number,
+    status: raw['status'] as AttendanceStatus,
+  };
+  if (keepClassIdentity) {
+    if (Number.isInteger(raw['grade'])) s.grade = raw['grade'] as number;
+    if (Number.isInteger(raw['classNum'])) s.classNum = raw['classNum'] as number;
+  }
   if (typeof raw['reason'] === 'string') s.reason = raw['reason'] as AttendanceReason;
   if (typeof raw['memo'] === 'string') s.memo = raw['memo'] as string;
   return s;
 }
 
-/** 교과반 출결 — create=upsert, delete=students 비우기(해당 교시 출결 제거). */
+/**
+ * 교과반 출결 — create=든 학생만 갱신(나머지 보존), delete=students 비우기(해당 교시 출결 제거).
+ *
+ * ★create 가 그 교시를 통째로 갈아 끼우면, AI 가 학생별로 나눠 호출할 때 마지막 호출만
+ *   남는다("일부만 보인다" 신고의 한 갈래). 그래서 등록은 `merge` 로 넘긴다.
+ */
 async function applyAttendance(
   req: LiveSyncWriteRequest,
   deps: LiveSyncWriteDeps,
@@ -561,15 +596,17 @@ async function applyAttendance(
     return bad('보관된 수업반이라 새로 기록할 수 없어요. 보관을 해제한 뒤 다시 시도해 주세요.');
   }
   const groupId = typeof d['groupId'] === 'string' ? d['groupId'] : undefined;
+  const isCreate = req.op === 'create';
   const students =
-    req.op === 'create' && Array.isArray(d['students'])
-      ? d['students'].map((s) => toStudentAttendance(s as Record<string, unknown>))
+    isCreate && Array.isArray(d['students'])
+      ? d['students'].map((s) => toStudentAttendance(s as Record<string, unknown>, true))
       : [];
   await deps.attendance.save({
     classId,
     date,
     period,
     students,
+    mode: isCreate ? 'merge' : 'replace',
     ...(groupId !== undefined ? { groupId } : {}),
   });
   return ok(req.idempotencyKey);
@@ -603,7 +640,10 @@ async function applyHomeroomAttendance(
     if (typeof number !== 'number') continue;
     studentNumbers.push(number);
     if (o['allDay'] !== undefined && o['allDay'] !== null) {
-      const base = toStudentAttendance({ ...(o['allDay'] as Record<string, unknown>), number });
+      const base = toStudentAttendance(
+        { ...(o['allDay'] as Record<string, unknown>), number },
+        false,
+      );
       for (const p of allDayPeriods) pushAt(p, base);
     } else if (Array.isArray(o['periods'])) {
       for (const pe of o['periods']) {
@@ -611,7 +651,7 @@ async function applyHomeroomAttendance(
         const peo = pe as Record<string, unknown>;
         const period = peo['period'];
         if (typeof period !== 'number') continue;
-        pushAt(period, toStudentAttendance({ ...peo, number }));
+        pushAt(period, toStudentAttendance({ ...peo, number }, false));
       }
     }
   }
@@ -783,6 +823,15 @@ const LIVE_SYNC_DISPATCH = {
   progress: applyProgress,
 } satisfies Record<WriteDomain, LiveSyncHandler>;
 
+/**
+ * 메시지를 그대로 돌려줘도 되는 오류 이름 — 이유와 해결법이 담긴 **의도된 거부**만 넣는다.
+ * 그 밖의 예외는 내부 사정이 새지 않게 500 과 고정 문구로 뭉갠다.
+ */
+const USER_FACING_ERROR_NAMES: ReadonlySet<string> = new Set([
+  'RecordDraftLimitError',
+  'AttendanceStudentAmbiguousError',
+]);
+
 /** 디스패치가 실제로 다루는 도메인 키 — 계약 정렬 메타테스트가 WRITE_DOMAINS 와 일치 검증. */
 export const LIVE_SYNC_DISPATCH_DOMAINS = Object.keys(LIVE_SYNC_DISPATCH) as readonly WriteDomain[];
 
@@ -816,8 +865,9 @@ export async function applyLiveSyncWrite(
   } catch (err) {
     // 한도 초과처럼 **이유가 분명한 거부**는 메시지를 실어 보낸다. 통째로 뭉개면 AI 도 교사도
     // 왜 저장이 안 됐는지 알 수 없다(US-006 "조용한 실패 금지").
+    // 번호가 겹치는 수업반에 학년·반 없이 온 출결도 같다 — 무엇을 더 보내야 하는지 알려 준다.
     const reason =
-      err instanceof Error && err.name === 'RecordDraftLimitError' ? err.message : null;
+      err instanceof Error && USER_FACING_ERROR_NAMES.has(err.name) ? err.message : null;
     result = reason
       ? { ok: false, status: 400, error: reason }
       : { ok: false, status: 500, error: '쓰기 적용 중 오류가 발생했습니다.' };

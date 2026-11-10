@@ -169,8 +169,9 @@ export function buildLiveSyncDeps(): Parameters<typeof applyLiveSyncWrite>[1] {
       const obs = useObservationStore.getState();
       return {
         todos: {
-          add: (text, opts) =>
-            todo.addTodo(
+          add: async (text, opts) => {
+            // addTodo 는 새 id 를 돌려준다 — 이 경로는 쓰지 않는다
+            await todo.addTodo(
               text,
               opts.dueDate,
               coercePriority(opts.priority),
@@ -178,7 +179,8 @@ export function buildLiveSyncDeps(): Parameters<typeof applyLiveSyncWrite>[1] {
               undefined,
               opts.time,
               opts.startDate,
-            ),
+            );
+          },
           update: (id, changes) => todo.updateTodo(id, changes as TodoChanges),
           delete: (id) => todo.deleteTodo(id),
           exists: (id) => todo.todos.some((t) => t.id === id),
@@ -300,11 +302,18 @@ export function buildLiveSyncDeps(): Parameters<typeof applyLiveSyncWrite>[1] {
           pageExists: (id) => ns.pagesMeta.some((p) => p.id === id),
         },
         attendance: {
-          // 교과반 출결 (classId, date, period) 단건 upsert — store 가 groupId 미러링 처리.
+          // 교과반 출결 (classId, date, period) 반영 — store 가 groupId 미러링 처리.
+          // 등록(merge)은 이번 호출에 든 학생만 갈아 끼우고 나머지 학생 기록을 보존한다 —
+          // 통째 교체로 받으면 AI 가 학생별로 나눠 호출할 때 마지막 호출만 남는다.
+          // 삭제(replace)는 그 교시를 빈 배열로 통째 비운다.
           // 쓰기가 차단되면 던진다 — applyLiveSyncWrite 가 500 으로 응답하고 멱등 예약을
           // 해제해 재시도가 열린다. 삼키면 "저장 완료"로 굳어 재시도까지 막힌다(ADR-027).
           save: async (input) => {
-            const saved = await tc.saveAttendanceRecord(input);
+            const { mode, ...record } = input;
+            const saved =
+              mode === 'merge'
+                ? await tc.mergeAttendanceRecordStudents(record)
+                : await tc.saveAttendanceRecord(record);
             if (!saved) throw new Error('출결 저장이 차단되어 기록하지 못했습니다.');
           },
         },

@@ -7,8 +7,30 @@ import type {
 import { attendanceRecordKey, ATTENDANCE_TOMBSTONE_TTL_MS } from '@domain/entities/Attendance';
 import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
 import { withDerivedTerm } from '@domain/rules/academicCalendar';
+import {
+  mergeAttendanceStudents,
+  resolveIncomingAttendanceStudents,
+} from '@domain/rules/attendanceStudentMatch';
 import { withFileLock } from '@usecases/shared/fileWriteLock';
 import { SYNC_FILE_KEYS } from '@usecases/sync/syncRegistry';
+
+/**
+ * 번호가 겹치는 수업반에 학년·반 없이 온 출결 — 누구 것인지 정할 수 없어 저장하지 않았다.
+ *
+ * `message` 는 보낸 쪽(AI 연결)에 그대로 돌려줄 한국어 안내다. live sync 는 오류를 `name` 으로
+ * 가려 400 으로 응답한다(`applyLiveSyncWrite` — `RecordDraftLimitError` 와 같은 방식).
+ */
+export class AttendanceStudentAmbiguousError extends Error {
+  readonly numbers: readonly number[];
+
+  constructor(numbers: readonly number[]) {
+    super(
+      `이 수업반에는 ${numbers.map((n) => `${n}번`).join(', ')} 학생이 여러 명이에요. 학년과 반을 함께 보내 주세요.`,
+    );
+    this.name = 'AttendanceStudentAmbiguousError';
+    this.numbers = numbers;
+  }
+}
 
 /** students 내용 비교용 정규화(순서 무관) — 순서만 바뀐 저장으로 updatedAt이 갱신되는 것을 줄인다 */
 function studentsFingerprint(students: readonly StudentAttendance[]): string {
@@ -133,6 +155,29 @@ export class ManageAttendance {
 
   /** 단건 upsert(그룹 키 지원) — 같은 키 레코드는 교체, 없으면 추가. */
   async upsertRecord(record: AttendanceRecord): Promise<readonly AttendanceRecord[]> {
+    return this.upsertRecordWith(record, 'replace');
+  }
+
+  /**
+   * 한 교시 기록에서 **이번에 든 학생만** 갱신한다 — 같은 키 레코드의 나머지 학생은 보존.
+   *
+   * AI 연결(브릿지)이 학생별로 나눠 호출해도 앞 학생 기록이 남게 하는 경로다. 통째 교체
+   * (`upsertRecord`)로 받으면 마지막 호출만 남는다. "같은 학생" 판정은 락 안 fresh 명단으로
+   * 한다(`mergeAttendanceStudents`) — 번호가 겹치는 수업반은 학년-반-번호로 가르고,
+   * 번호만 있던 옛 항목은 그 번호가 명단에 한 명뿐일 때 새 항목으로 바꾼다.
+   * 병합을 락 밖 in-memory 스냅샷으로 하면 동시 편집된 다른 학생 출결을 덮는다(P6).
+   *
+   * 학년·반 없이 온 항목은 그 번호가 명단에 한 명뿐이면 명단의 학년·반을 실어 저장하고,
+   * 둘 이상이면 `AttendanceStudentAmbiguousError` 를 던진다(아무것도 저장하지 않는다).
+   */
+  async upsertRecordStudents(record: AttendanceRecord): Promise<readonly AttendanceRecord[]> {
+    return this.upsertRecordWith(record, 'merge');
+  }
+
+  private async upsertRecordWith(
+    record: AttendanceRecord,
+    mode: 'replace' | 'merge',
+  ): Promise<readonly AttendanceRecord[]> {
     return withFileLock(SYNC_FILE_KEYS.attendance, async () => {
       const data = await this.repository.getAttendance();
       const records = data?.records ?? [];
@@ -155,6 +200,21 @@ export class ManageAttendance {
       const match = records.find((r) => ManageAttendance.matchesKey(r, finalRecord));
       if (match && match.classId !== finalRecord.classId) {
         finalRecord = { ...finalRecord, classId: match.classId };
+      }
+      if (mode === 'merge') {
+        // 명단은 요청이 가리킨 반(record.classId)의 fresh 목록 — 못 읽으면 빈 명단으로 두어
+        // 번호·학년·반이 모두 같은 항목만 같은 학생으로 본다(짐작으로 남의 칸을 덮지 않는다).
+        const classesData = await this.repository.getClasses();
+        const roster = classesData?.classes.find((c) => c.id === record.classId)?.students ?? [];
+        // 번호가 명단에 둘 이상인데 학년·반 없이 온 항목이 하나라도 있으면 **아무것도 저장하지
+        // 않고** 이유를 던진다 — 그대로 저장하면 "저장 완료"인데 어디에도 안 보이는 항목이 된다.
+        // 번호가 한 명뿐이면 명단의 학년·반을 실어 저장한다(번호만으로 남기지 않는다).
+        const incoming = resolveIncomingAttendanceStudents(finalRecord.students, roster);
+        if (!incoming.ok) throw new AttendanceStudentAmbiguousError(incoming.ambiguousNumbers);
+        finalRecord = {
+          ...finalRecord,
+          students: mergeAttendanceStudents(match?.students ?? [], incoming.students, roster),
+        };
       }
       const replaced: readonly AttendanceRecord[] = match
         ? records.map((r) => (ManageAttendance.matchesKey(r, finalRecord) ? finalRecord : r))

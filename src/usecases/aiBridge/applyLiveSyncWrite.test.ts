@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { applyLiveSyncWrite, type LiveSyncWriteDeps } from './applyLiveSyncWrite';
+import type { AttendanceData, StudentAttendance } from '@domain/entities/Attendance';
+import { studentKey } from '@domain/entities/TeachingClass';
+import type { ITeachingClassRepository } from '@domain/repositories/ITeachingClassRepository';
+import { createAttendanceRosterMatcher } from '@domain/rules/attendanceStudentMatch';
+import { ManageAttendance } from '@usecases/classManagement/ManageAttendance';
+import { resetFileWriteLocksForTest } from '@usecases/shared/fileWriteLock';
 
 let deps: LiveSyncWriteDeps;
 let calls: { fn: string; args: unknown[] }[];
@@ -860,8 +866,268 @@ describe('applyLiveSyncWrite — attendance(교과반)', () => {
       deps,
     );
     expect(r.ok).toBe(true);
-    const arg = calls[0]?.args[0] as { students: unknown[] };
+    const arg = calls[0]?.args[0] as { students: unknown[]; mode: string };
     expect(arg.students).toEqual([]);
+    // 삭제는 그 교시를 통째로 비운다(병합이면 아무것도 안 지워진다).
+    expect(arg.mode).toBe('replace');
+  });
+
+  it('수업반 출결은 학년·반을 보존한다 — 버리면 저장 키가 "7" 이 돼 명단 키 "2-3-7" 과 어긋난다', async () => {
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'attendance',
+        op: 'create',
+        idempotencyKey: 'a3',
+        data: {
+          classId: 'c-1',
+          date: '2026-06-02',
+          period: 3,
+          students: [
+            { number: 7, status: 'absent', reason: '질병', grade: 2, classNum: 3 },
+            // 학년·반이 없는 명단(담임 학급 등)은 번호만 온다 — 그대로 번호만 저장한다.
+            { number: 9, status: 'late' },
+          ],
+        },
+      },
+      deps,
+    );
+    expect(r).toEqual({ ok: true, ref: 'a3' });
+    const arg = calls[0]?.args[0] as { students: StudentAttendance[]; mode: string };
+    expect(arg.students).toEqual([
+      { number: 7, status: 'absent', reason: '질병', grade: 2, classNum: 3 },
+      { number: 9, status: 'late' },
+    ]);
+    expect(studentKey(arg.students[0]!)).toBe('2-3-7');
+    // 등록은 "이번에 든 학생만 갱신"으로 넘긴다.
+    expect(arg.mode).toBe('merge');
+  });
+});
+
+/**
+ * 실제 저장 경로(ManageAttendance + 가짜 저장소)에 이어 붙인 검증.
+ * 훅(useAiBridgeLiveSync)의 `attendance.save` 는 `mode` 에 따라 store 의 병합/교체 액션을
+ * 고르고, 두 액션은 각각 `upsertRecordStudents`/`upsertRecord` 로 내려간다 — 여기서 그 배선을 그대로 흉내 낸다.
+ */
+describe('applyLiveSyncWrite — attendance(교과반) 저장 결과', () => {
+  /** 여러 학급에서 모인 수업반 — 2번이 둘, 7번은 한 명. */
+  const roster = [
+    { number: 2, name: '도유산', grade: 2, classNum: 1 },
+    { number: 2, name: '민서율', grade: 2, classNum: 3 },
+    { number: 7, name: '한지후', grade: 2, classNum: 3 },
+  ];
+
+  class FakeAttendanceRepo {
+    data: AttendanceData | null = null;
+    async getAttendance(): Promise<AttendanceData | null> {
+      return this.data ? (JSON.parse(JSON.stringify(this.data)) as AttendanceData) : null;
+    }
+    async saveAttendance(data: AttendanceData): Promise<void> {
+      this.data = data;
+    }
+    async getClasses(): Promise<{ classes: { id: string; students: typeof roster }[] }> {
+      return { classes: [{ id: 'tc-1', students: roster }] };
+    }
+  }
+
+  let repo: FakeAttendanceRepo;
+
+  beforeEach(() => {
+    resetFileWriteLocksForTest();
+    repo = new FakeAttendanceRepo();
+    const manage = new ManageAttendance(repo as unknown as ITeachingClassRepository);
+    deps = {
+      ...deps,
+      attendance: {
+        save: async (input) => {
+          const { mode, ...record } = input;
+          if (mode === 'merge') await manage.upsertRecordStudents(record);
+          else await manage.upsertRecord(record);
+        },
+      },
+    };
+  });
+
+  const write = (
+    idempotencyKey: string,
+    students: readonly Record<string, unknown>[],
+    period = 3,
+  ) =>
+    applyLiveSyncWrite(
+      {
+        domain: 'attendance',
+        op: 'create',
+        idempotencyKey,
+        data: { classId: 'tc-1', date: '2026-11-02', period, students },
+      },
+      deps,
+    );
+
+  const savedStudents = (period = 3): readonly StudentAttendance[] =>
+    repo.data?.records.find((r) => r.classId === 'tc-1' && r.period === period)?.students ?? [];
+
+  it('같은 교시에 학생별로 나눠 써도 앞 학생 기록이 남는다', async () => {
+    // AI 가 학생마다 따로 호출한다 — 통째 교체였다면 마지막 호출(7번)만 남는다.
+    const first = await write('s1', [{ number: 2, status: 'absent', grade: 2, classNum: 1 }]);
+    const second = await write('s2', [{ number: 2, status: 'late', grade: 2, classNum: 3 }]);
+    const third = await write('s3', [{ number: 7, status: 'earlyLeave', grade: 2, classNum: 3 }]);
+    expect([first.ok, second.ok, third.ok]).toEqual([true, true, true]);
+
+    expect(savedStudents().map((s) => [studentKey(s), s.status])).toEqual([
+      ['2-1-2', 'absent'],
+      ['2-3-2', 'late'],
+      ['2-3-7', 'earlyLeave'],
+    ]);
+  });
+
+  it('같은 학생을 다시 쓰면 그 학생만 바뀐다 — 한 학생이 두 줄이 되지 않는다', async () => {
+    await write('s1', [
+      { number: 2, status: 'absent', grade: 2, classNum: 1 },
+      { number: 7, status: 'absent', grade: 2, classNum: 3 },
+    ]);
+    await write('s2', [{ number: 7, status: 'late', reason: '질병', grade: 2, classNum: 3 }]);
+
+    expect(savedStudents()).toEqual([
+      { number: 2, status: 'absent', grade: 2, classNum: 1 },
+      { number: 7, status: 'late', reason: '질병', grade: 2, classNum: 3 },
+    ]);
+  });
+
+  it('★회귀: 저장된 항목의 studentKey 가 명단 키와 같다 — 통계·조회가 그 학생으로 찾는다', async () => {
+    await write('s1', [
+      { number: 2, status: 'absent', grade: 2, classNum: 3 },
+      { number: 7, status: 'late', grade: 2, classNum: 3 },
+    ]);
+
+    const rosterKeys = new Set(roster.map((s) => studentKey(s)));
+    const saved = savedStudents();
+    expect(saved).toHaveLength(2);
+    for (const entry of saved) expect(rosterKeys.has(studentKey(entry))).toBe(true);
+
+    // 화면이 쓰는 읽기 규칙으로도 그 학생에게 붙는다.
+    const byStudent = createAttendanceRosterMatcher(roster).indexByStudentKey(saved);
+    expect(byStudent.get('2-3-2')?.status).toBe('absent');
+    expect(byStudent.get('2-3-7')?.status).toBe('late');
+    expect(byStudent.has('2-1-2')).toBe(false);
+  });
+
+  it('번호만 저장돼 있던 옛 항목은 새로 쓴 항목으로 바뀐다(나란히 남지 않는다)', async () => {
+    repo.data = {
+      records: [
+        {
+          classId: 'tc-1',
+          date: '2026-11-02',
+          period: 3,
+          // 고치기 전 버전이 남긴 모양: 7번은 번호만, 2번은 누구인지 알 수 없다.
+          students: [
+            { number: 7, status: 'absent' },
+            { number: 2, status: 'absent' },
+          ],
+        },
+      ],
+    };
+
+    await write('s1', [{ number: 7, status: 'late', grade: 2, classNum: 3 }]);
+
+    expect(savedStudents()).toEqual([
+      // 2번은 명단에 둘이라 누구 것인지 못 정한다 → 건드리지 않고 그대로 둔다.
+      { number: 2, status: 'absent' },
+      { number: 7, status: 'late', grade: 2, classNum: 3 },
+    ]);
+  });
+
+  it('번호가 겹치는 반에 학년·반 없이 오면 저장하지 않고 이유를 돌려준다', async () => {
+    await write('s0', [{ number: 7, status: 'absent', grade: 2, classNum: 3 }]);
+    const before = JSON.stringify(repo.data);
+
+    // 2번은 명단에 둘이다. 같이 온 7번(정할 수 있는 학생)도 저장하지 않는다 — 호출 전체를 거부한다.
+    const r = await write('s1', [
+      { number: 7, status: 'late', grade: 2, classNum: 3 },
+      { number: 2, status: 'absent' },
+    ]);
+
+    expect(r).toEqual({
+      ok: false,
+      status: 400,
+      error: '이 수업반에는 2번 학생이 여러 명이에요. 학년과 반을 함께 보내 주세요.',
+    });
+    expect(JSON.stringify(repo.data)).toBe(before);
+    expect(savedStudents()).toEqual([{ number: 7, status: 'absent', grade: 2, classNum: 3 }]);
+
+    // 학년만 있고 반이 없어도 누구인지 못 정한다
+    const gradeOnly = await write('s2', [{ number: 2, status: 'absent', grade: 2 }]);
+    expect(gradeOnly.ok).toBe(false);
+    expect(JSON.stringify(repo.data)).toBe(before);
+
+    // 안내대로 학년·반을 함께 보내면 저장된다
+    const retry = await write('s3', [{ number: 2, status: 'absent', grade: 2, classNum: 1 }]);
+    expect(retry.ok).toBe(true);
+    expect(savedStudents().map((s) => [studentKey(s), s.status])).toEqual([
+      ['2-3-7', 'absent'],
+      ['2-1-2', 'absent'],
+    ]);
+  });
+
+  it('번호가 한 명뿐이면 명단의 학년·반으로 채워 저장한다', async () => {
+    const r = await write('s1', [{ number: 7, status: 'late', reason: '질병' }]);
+
+    expect(r.ok).toBe(true);
+    // 번호만으로 남기지 않는다 — 저장 키가 명단 키("2-3-7")와 같다
+    expect(savedStudents()).toEqual([
+      { number: 7, status: 'late', reason: '질병', grade: 2, classNum: 3 },
+    ]);
+  });
+
+  it('grade 가 null 이면 없는 것으로 본다', async () => {
+    // 번호가 한 명뿐인 7번: null 은 "모름"이다 → 명단의 학년·반으로 채워 저장한다
+    const unique = await write('s1', [{ number: 7, status: 'late', grade: null, classNum: null }]);
+    expect(unique.ok).toBe(true);
+    expect(savedStudents()).toEqual([{ number: 7, status: 'late', grade: 2, classNum: 3 }]);
+
+    // 번호가 겹치는 2번: null 도 "학년·반 없이 온 것"이라 이유와 함께 거부한다
+    const before = JSON.stringify(repo.data);
+    const ambiguous = await write('s2', [
+      { number: 2, status: 'absent', grade: null, classNum: null },
+    ]);
+    expect(ambiguous).toEqual({
+      ok: false,
+      status: 400,
+      error: '이 수업반에는 2번 학생이 여러 명이에요. 학년과 반을 함께 보내 주세요.',
+    });
+    expect(JSON.stringify(repo.data)).toBe(before);
+  });
+
+  it('명단에 없는 번호는 받은 그대로 저장한다(기존 동작 유지)', async () => {
+    const r = await write('s1', [{ number: 30, status: 'absent' }]);
+
+    expect(r.ok).toBe(true);
+    expect(savedStudents()).toEqual([{ number: 30, status: 'absent' }]);
+  });
+
+  it('다른 교시 기록은 건드리지 않는다', async () => {
+    await write('p3', [{ number: 7, status: 'absent', grade: 2, classNum: 3 }], 3);
+    await write('p4', [{ number: 7, status: 'late', grade: 2, classNum: 3 }], 4);
+
+    expect(savedStudents(3)).toEqual([{ number: 7, status: 'absent', grade: 2, classNum: 3 }]);
+    expect(savedStudents(4)).toEqual([{ number: 7, status: 'late', grade: 2, classNum: 3 }]);
+  });
+
+  it('삭제는 그 교시를 통째로 비운다', async () => {
+    await write('s1', [
+      { number: 2, status: 'absent', grade: 2, classNum: 1 },
+      { number: 7, status: 'late', grade: 2, classNum: 3 },
+    ]);
+    const r = await applyLiveSyncWrite(
+      {
+        domain: 'attendance',
+        op: 'delete',
+        idempotencyKey: 'd1',
+        data: { classId: 'tc-1', date: '2026-11-02', period: 3 },
+      },
+      deps,
+    );
+
+    expect(r.ok).toBe(true);
+    expect(savedStudents()).toEqual([]);
   });
 });
 
@@ -940,6 +1206,34 @@ describe('applyLiveSyncWrite — homeroomAttendance(담임)', () => {
     expect(arg.recordsByPeriod.get(1)).toEqual([
       { number: 7, status: 'absent', reason: '인정', memo: '현장체험학습' },
     ]);
+  });
+
+  it('담임 출결은 학년·반을 싣지 않는다 — 담임 기록은 번호만으로 이어진다', async () => {
+    await applyLiveSyncWrite(
+      {
+        domain: 'homeroomAttendance',
+        op: 'create',
+        idempotencyKey: 'h4',
+        data: {
+          date: '2026-06-09',
+          students: [
+            { number: 5, periods: [{ period: 2, status: 'late', grade: 3, classNum: 5 }] },
+            { number: 6, allDay: { status: 'absent', grade: 3, classNum: 5 } },
+          ],
+        },
+      },
+      deps,
+    );
+    const arg = calls[0]?.args[0] as {
+      recordsByPeriod: Map<number, StudentAttendance[]>;
+    };
+    expect(arg.recordsByPeriod.get(2)).toEqual([
+      { number: 5, status: 'late' },
+      { number: 6, status: 'absent' },
+    ]);
+    for (const entry of arg.recordsByPeriod.get(2) ?? []) {
+      expect(studentKey(entry)).toBe(String(entry.number));
+    }
   });
 });
 

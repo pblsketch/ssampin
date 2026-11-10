@@ -385,6 +385,17 @@ function checkAttendanceStudentFields(s: unknown, requireNumber: boolean): strin
   ) {
     return `students.memo 는 최대 ${MEMO_ATT_MAX}자 문자열이어야 합니다.`;
   }
+  // 학년·반은 번호가 겹치는 수업반에서 학생을 가르는 값이다(없어도 된다).
+  // 있는데 정수가 아니면 저장 키가 깨져 그 학생 출결이 화면에서 사라지므로 거부한다.
+  // `null` 은 "없음"으로 본다 — AI 가 모르는 값을 null 로 채워 보내는 일이 흔하다. 번호가 겹쳐
+  // 학년·반이 꼭 필요한 반인지는 명단을 아는 저장 단계(ManageAttendance)가 가려 이유를 돌려준다.
+  for (const field of ['grade', 'classNum'] as const) {
+    const value = o[field];
+    if (value == null) continue;
+    if (typeof value !== 'number' || !Number.isInteger(value)) {
+      return `students.${field} 는 정수여야 합니다.`;
+    }
+  }
   return null;
 }
 

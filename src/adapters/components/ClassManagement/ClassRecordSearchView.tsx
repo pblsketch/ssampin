@@ -9,7 +9,8 @@ import { isStudentActive } from '@domain/rules/studentActivity';
 import type { AttendanceStatus, AttendanceReason } from '@domain/entities/Attendance';
 import { ATTENDANCE_REASONS } from '@domain/entities/Attendance';
 import { DEFAULT_OBSERVATION_TAGS } from '@domain/entities/Observation';
-import { mergeSingleStudentAttendance } from './shared/inlineAttendanceEdit';
+import { createAttendanceRosterMatcher } from '@domain/rules/attendanceStudentMatch';
+import { findStudentAttendance, mergeSingleStudentAttendance } from './shared/inlineAttendanceEdit';
 import {
   mapMixedRecordsToFlatRows,
   type MixedExcelRow,
@@ -146,6 +147,12 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     return m;
   }, [cls]);
 
+  // 출결 항목 → 명단 학생. 명단은 걸러 내지 않은 전체를 넘긴다(번호가 유일한지 가르는 기준).
+  const attendanceMatcher = useMemo(
+    () => createAttendanceRosterMatcher(cls?.students ?? []),
+    [cls],
+  );
+
   const allTags = useMemo(() => [...DEFAULT_OBSERVATION_TAGS, ...customTags], [customTags]);
 
   /* 통합 레코드 생성 */
@@ -156,9 +163,12 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     if (categoryFilter !== 'observation') {
       for (const ar of attendanceRecords) {
         if (ar.classId !== classId) continue;
-        for (const sa of ar.students) {
+        // 항목을 학생에 잇는 것은 공통 규칙에 맡긴다 — 번호만 저장된 옛 항목(AI 연결로 넣은 것)도
+        // 그 번호가 명단에 한 명뿐이면 그 학생 이름으로 뜬다. 못 정한 항목은 숨기지 않고
+        // 지금처럼 "?" 로 보여 준다(기록이 사라진 것처럼 보이면 안 된다).
+        for (const { entry: sa, key } of attendanceMatcher.resolveEntries(ar.students)) {
           if (sa.status === 'present') continue;
-          const sKey = studentKey(sa);
+          const sKey = key ?? studentKey(sa);
           const info = studentNameMap.get(sKey);
           records.push({
             type: 'attendance',
@@ -194,7 +204,14 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
     }
 
     return records.sort((a, b) => b.date.localeCompare(a.date));
-  }, [attendanceRecords, observationRecords, classId, categoryFilter, studentNameMap]);
+  }, [
+    attendanceRecords,
+    observationRecords,
+    classId,
+    categoryFilter,
+    studentNameMap,
+    attendanceMatcher,
+  ]);
 
   /* 기간 필터 계산 */
   const termStartIso = useCurrentTermStartIso();
@@ -383,8 +400,11 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
         showToast('원본 출결 기록을 찾을 수 없습니다', 'error');
         return;
       }
+      // 명단(전체) — 번호만 저장된 옛 항목을 띄울 때와 같은 규칙으로 찾아 그 자리에서 고친다.
+      // 저장된 키 문자열만 비교하면 그런 항목은 못 찾아 편집이 조용히 헛돈다.
+      const roster = store.classes.find((c) => c.id === classId)?.students ?? [];
       // 되돌리기용 스냅샷(편집 전 값)
-      const target = existing.students.find((sa) => studentKey(sa) === r.studentKey);
+      const target = findStudentAttendance(existing, r.studentKey, roster);
       const snapshot = target
         ? { status: target.status, reason: target.reason, memo: target.memo }
         : null;
@@ -398,7 +418,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
             };
       try {
         await store.saveAttendanceRecord(
-          mergeSingleStudentAttendance(existing, r.studentKey, patch),
+          mergeSingleStudentAttendance(existing, r.studentKey, patch, roster),
         );
         setEditingAttKey(null);
         setAttSaving(false);
@@ -416,7 +436,7 @@ export function ClassRecordSearchView({ classId }: ClassRecordSearchViewProps) {
                   void useTeachingClassStore
                     .getState()
                     .saveAttendanceRecord(
-                      mergeSingleStudentAttendance(cur, r.studentKey, snapshot),
+                      mergeSingleStudentAttendance(cur, r.studentKey, snapshot, roster),
                     );
                 },
               }

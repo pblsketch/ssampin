@@ -116,7 +116,7 @@ import {
   deleteArchive,
   importArchive,
 } from './archiveManager';
-import { isCorruptShortDataFile } from './dataFileRules';
+import { readDataFileWithRecovery } from './dataFileRead';
 import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
 import {
   findBestWorkAreaForBounds,
@@ -158,7 +158,12 @@ import {
   peekOpenPath,
 } from './security/dialogHandles';
 import { safeFetchText } from './security/safeFetch';
-import { isSafeDataFileName, writeDataFileAtomic } from './dataFileWrite';
+import {
+  dataFilePaths,
+  isSafeDataFileName,
+  replaceFileDurably,
+  writeDataFileAtomic,
+} from './dataFileWrite';
 
 declare const __dirname: string;
 
@@ -3675,57 +3680,20 @@ function registerIpcHandlers(): void {
     });
   });
 
-  // data:read — userData/data/{filename}.json 읽기 (손상 감지 + 백업 복구)
+  /** 이번 실행에서 깨져서 격리한 상태 파일 이름(메모리에만 둔다 — 앱을 다시 켜면 비워진다). */
+  const quarantinedDataFiles = new Set<string>();
+
+  // data:read — userData/data/{filename}.json 읽기 (손상 감지 + 백업 복구).
+  // 원본·백업이 모두 깨졌으면 오류를 던진다(null 로 위장하지 않는다). 허용 목록의 "다시 만들 수
+  // 있는 상태 파일"만 깨진 파일을 격리하고 null 을 돌려준다 — 규칙은 dataFileRead.ts·dataFileRules.ts.
   ipcMain.handle('data:read', (_event, filename: string): string | null => {
-    const dataDir = getDataDir();
-    // ★데이터 폴더 밖(`../`)은 읽지 않는다(ADR-143 보안 점검).
-    if (!isSafeDataFileName(dataDir, filename))
-      throw new Error('[data:read] 허용되지 않는 파일 이름');
-    const filePath = path.join(dataDir, `${filename}.json`);
-    const backupPath = path.join(dataDir, `${filename}.backup.json`);
-
-    // 원본 읽기 시도
-    try {
-      if (fs.existsSync(filePath)) {
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        // F7a: 5바이트 미만이라도 유효한 빈 구조값(`[]`·`{}`)은 정상 — 손상 오탐이
-        // .backup.json에서 옛 데이터를 부활시키던 것을 제거(학년도 전환 빈 값 리셋의 전제).
-        if (isCorruptShortDataFile(raw)) {
-          throw new Error('파일이 비어있음');
-        }
-        JSON.parse(raw); // JSON 유효성 검증
-        return raw;
-      }
-    } catch {
-      console.warn(`[data:read] 원본 손상 감지: ${filename}, 백업에서 복구 시도`);
-      // 백업에서 복구
-      try {
-        if (fs.existsSync(backupPath)) {
-          const backup = fs.readFileSync(backupPath, 'utf-8');
-          JSON.parse(backup); // 백업도 유효한지 검증
-          fs.writeFileSync(filePath, backup, 'utf-8');
-          console.log(`[data:read] 백업에서 복구 성공: ${filename}`);
-          return backup;
-        }
-      } catch {
-        console.error(`[data:read] 백업 복구도 실패: ${filename}`);
-      }
-    }
-
-    // 파일이 존재하는데 여기까지 왔다면 원본·백업 모두 복구 실패다 — null("파일 없음")로
-    // 위장하지 않고 오류를 던진다. null을 받은 렌더러 저장 경로는 빈 파일로 오인해
-    // 기존 데이터를 편집분만으로 덮어쓴다(QA2 H3). null은 파일 부재만 의미한다.
-    let stillExists = true;
-    try {
-      stillExists = fs.existsSync(filePath);
-    } catch {
-      stillExists = true;
-    }
-    if (stillExists) {
-      throw new Error(`[data:read] ${filename} 파일 손상 — 원본·백업 복구 실패`);
-    }
-    return null;
+    const result = readDataFileWithRecovery(getDataDir(), filename);
+    if (result.quarantined) quarantinedDataFiles.add(filename);
+    return result.raw;
   });
+
+  // 이번 실행에서 격리·초기화된 상태 파일 이름들. 화면이 "연동이 꺼졌어요"를 알리는 데 쓴다.
+  ipcMain.handle('data:quarantined', (): string[] => [...quarantinedDataFiles]);
 
   // data:write — JSON 파일 쓰기 (백업 + atomic write + 검증). 성공 여부를 돌려준다:
   // 실패를 삼키면 렌더러가 저장된 줄 알고 화면만 갱신해 입력한 내용이 조용히 사라진다.
@@ -3759,8 +3727,6 @@ function registerIpcHandlers(): void {
       const dataDir = getDataDir();
       if (!isSafeDataFileName(dataDir, filename)) return false;
       const filePath = path.join(dataDir, `${filename}.json`);
-      const backupPath = path.join(dataDir, `${filename}.backup.json`);
-      const tempPath = path.join(dataDir, `${filename}.tmp.json`);
       const existing = fs.existsSync(filePath) ? fs.readFileSync(filePath, 'utf-8') : null;
 
       try {
@@ -3772,15 +3738,14 @@ function registerIpcHandlers(): void {
         return false;
       }
 
-      if (existing !== null && existing.length > 10) {
-        fs.writeFileSync(backupPath, existing, 'utf-8');
+      // data:write 와 같은 길로 쓴다(온전한 원본만 백업 + 임시 파일 + fsync + 교체 재시도).
+      // false 는 "그 사이 내용이 바뀌었다"는 뜻이므로, 쓰기 실패는 예전처럼 오류로 알린다.
+      const result = writeDataFileAtomic(dataDir, filename, nextData);
+      if (!result.ok) {
+        throw new Error(
+          `[data:writeIfUnchanged] ${filename} ${result.reason === 'verify' ? '쓰기 검증 실패' : '쓰기 실패'}`,
+        );
       }
-      fs.writeFileSync(tempPath, nextData, 'utf-8');
-      if (fs.readFileSync(tempPath, 'utf-8') !== nextData) {
-        fs.unlinkSync(tempPath);
-        throw new Error(`[data:writeIfUnchanged] ${filename} 쓰기 검증 실패`);
-      }
-      fs.renameSync(tempPath, filePath);
       broadcastToAllWindows('data:changed', filename, _event.sender.id);
 
       if (filename === 'settings' && !process.env['VITE_DEV_SERVER_URL']) {
@@ -3797,8 +3762,9 @@ function registerIpcHandlers(): void {
     const filePath = path.join(dataDir, `${filename}.json`);
     const backupPath = path.join(dataDir, `${filename}.backup.json`);
     const tempPath = path.join(dataDir, `${filename}.tmp.json`);
+    const backupTempPath = path.join(dataDir, `${filename}.backup.tmp.json`);
 
-    for (const targetPath of [filePath, backupPath, tempPath]) {
+    for (const targetPath of [filePath, backupPath, tempPath, backupTempPath]) {
       try {
         if (fs.existsSync(targetPath)) {
           fs.unlinkSync(targetPath);
@@ -6135,19 +6101,22 @@ function createStartupBackups(): void {
     // 스냅샷 폴더 생성 실패 시 1세대 백업만 진행
   }
 
+  // 백업·스냅샷도 저장과 같은 길(임시 파일 + fsync + 내용 검증 + 교체)로 쓴다 — 제자리에 덮어쓰다
+  // 전원이 끊기면 마지막 정상 백업이 반쯤 쓰인 파일로 바뀐다. 실패하면 기존 백업은 그대로 남는다.
   for (const filename of criticalFiles) {
-    const filePath = path.join(dataDir, `${filename}.json`);
-    const backupPath = path.join(dataDir, `${filename}.backup.json`);
+    const { filePath, backupPath, backupTempPath } = dataFilePaths(dataDir, filename);
     try {
       if (fs.existsSync(filePath)) {
         const raw = fs.readFileSync(filePath, 'utf-8');
         if (raw.length > 10) {
           JSON.parse(raw); // 유효한 JSON인지 확인
-          fs.writeFileSync(backupPath, raw, 'utf-8');
+          // 개별 파일 실패는 무시(결과를 보지 않는다 — 실패해도 아래 스냅샷은 시도한다)
+          replaceFileDurably(backupPath, backupTempPath, raw);
           if (snapshotReady) {
             const snapshotPath = path.join(snapshotDir, `${filename}.${today}.json`);
             if (!fs.existsSync(snapshotPath)) {
-              fs.writeFileSync(snapshotPath, raw, 'utf-8');
+              const snapshotTempPath = path.join(snapshotDir, `${filename}.${today}.tmp.json`);
+              replaceFileDurably(snapshotPath, snapshotTempPath, raw);
             }
           }
         }

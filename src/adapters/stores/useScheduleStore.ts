@@ -14,6 +14,7 @@ import {
   mergeOverridesIntoClassSchedule,
   filterOverridesInRange,
   dedupeOverridesKeepLatest,
+  removeOverrideWithPair,
 } from '@domain/rules/timetableRules';
 import {
   reconcileComciganWeeklyOverrides,
@@ -125,6 +126,11 @@ interface ScheduleState {
     patch: Partial<Omit<TimetableOverride, 'id' | 'date' | 'period' | 'createdAt'>>,
   ) => Promise<void>;
   deleteOverride: (id: string) => Promise<void>;
+  /**
+   * 변동을 지우되 수업 교체라면 짝까지 **한 번의 저장으로** 함께 지운다.
+   * 짝이 없는 변동이면 그 1건만 지운다. 지운 항목의 id 를 돌려준다.
+   */
+  deleteOverrideWithPair: (id: string) => Promise<{ removedIds: readonly string[] }>;
   /**
    * 컴시간 이번 주 변동 자동 등록. 그 주의 컴시간발 항목 전체를 새 결과로 교체하고,
    * 지난 주 이전 컴시간발 항목을 정리한다. 사용자가 직접 만든 변동이 있는 칸은 건너뛴다.
@@ -363,6 +369,14 @@ export const useScheduleStore = create<ScheduleState>((set, get) => {
       const newOverrides = get().overrides.filter((o) => o.id !== id);
       set({ overrides: newOverrides });
       await scheduleRepository.saveTimetableOverrides({ overrides: newOverrides });
+    },
+
+    deleteOverrideWithPair: async (id) => {
+      const { overrides: next, removedIds } = removeOverrideWithPair(get().overrides, id);
+      if (removedIds.length === 0) return { removedIds };
+      set({ overrides: next });
+      await scheduleRepository.saveTimetableOverrides({ overrides: next });
+      return { removedIds };
     },
 
     applyComciganWeeklyOverrides: async (weekMonday, drafts) => {

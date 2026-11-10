@@ -108,6 +108,46 @@ async function persistState(state: PersistedState): Promise<void> {
   await storage.write<PersistedState>(STORAGE_KEY, state);
 }
 
+/**
+ * 손상 안내는 실행당 한 번만 띄운다. `initialize` 는 개발 모드(StrictMode)에서 두 번 불리고
+ * 두 호출이 같은 순간에 돌 수 있어, 상태(state)가 아니라 모듈 변수로 막는다.
+ */
+let stateResetNoticeShown = false;
+
+/**
+ * 연동 상태 파일이 이번 실행에서 깨져 격리·초기화됐으면 한 번 알린다.
+ *
+ * 상태 파일이 깨지면 메인 프로세스가 깨진 파일을 옆으로 치우고 "없음"을 돌려준다
+ * (`electron/dataFileRead.ts`). 그대로 두면 연동이 **알림 없이 꺼진 채** 남는다 — 할 일 자체는
+ * `todos` 에 그대로 있고, 선생님이 설정에서 다시 켜기만 하면 된다.
+ */
+async function notifyIfStateFileWasReset(): Promise<void> {
+  if (stateResetNoticeShown) return;
+  let quarantined: readonly string[] = [];
+  try {
+    const api = typeof window === 'undefined' ? undefined : window.electronAPI;
+    quarantined = (await api?.getQuarantinedDataFiles?.()) ?? [];
+  } catch {
+    return; // 알 수 없으면 알리지 않는다
+  }
+  if (!quarantined.includes(STORAGE_KEY)) return;
+  if (stateResetNoticeShown) return; // 기다리는 사이 다른 호출이 먼저 알렸다
+  stateResetNoticeShown = true;
+  try {
+    const { useToastStore } = await import('@adapters/components/common/Toast');
+    useToastStore
+      .getState()
+      .show(
+        '구글 할 일 연동 설정을 읽지 못해 연동이 꺼졌어요. 할 일은 그대로예요. 설정에서 다시 켜 주세요.',
+        'info',
+        undefined,
+        8000,
+      );
+  } catch {
+    // 토스트 표시 실패는 무시
+  }
+}
+
 // syncNow 동시 실행 방지 뮤텍스
 let tasksSyncPromise: Promise<void> | null = null;
 
@@ -653,6 +693,11 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
           if (!todo.googleTaskId) continue;
           if (todo.pendingRemoteOp) continue; // 사용자가 변경 중인 항목 보호 (PUSH가 fallback create로 처리)
           if (remoteIds.has(todo.googleTaskId)) continue;
+          // "이 목록에 없다 = 구글에서 지웠다"는 **이 목록에 연결된 할 일**에만 성립한다.
+          // 다른 목록(또는 어느 목록인지 모르는)에 연결된 할 일은 이 목록 응답에 없는 것이 당연하다 —
+          // 지우면 목록을 바꿔 고른 순간(연동 정보가 초기화된 뒤 포함) 옛 목록의 할 일이 쌤핀에서 사라진다.
+          // 그대로 둔다: 쌤핀에서 고치면 올리기 단계가 404 → 새로 생성으로 이 목록에 옮긴다.
+          if (todo.googleTaskListId !== taskListId) continue;
 
           if (todo.archivedAt) {
             // archive record는 보존, 연동만 해제
@@ -847,7 +892,11 @@ export const useTasksSyncStore = create<TasksSyncState>((set, get) => ({
     try {
       const { storage } = await import('@adapters/di/container');
       const saved = await storage.read<PersistedState>(STORAGE_KEY);
-      if (!saved) return;
+      if (!saved) {
+        // 저장된 설정이 없다 = 꺼진 상태로 시작. 파일이 깨져서 비워진 경우라면 그 사실을 알린다.
+        await notifyIfStateFileWasReset();
+        return;
+      }
 
       // 만료된 쿨다운은 복원하지 않음 (재실행 시 즉시 sync 재개)
       const cooldownUntil = saved.quotaCooldownUntil ?? null;

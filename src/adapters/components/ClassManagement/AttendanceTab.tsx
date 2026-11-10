@@ -12,6 +12,7 @@ import { ATTENDANCE_BADGE, ATTENDANCE_LABEL } from '@adapters/presentation/atten
 import { PERIOD_MORNING, PERIOD_CLOSING, formatPeriodShort } from '@domain/entities/Attendance';
 import { studentKey } from '@domain/entities/TeachingClass';
 import { isStudentActive } from '@domain/rules/studentActivity';
+import { buildAttendanceRows } from '@domain/rules/attendanceStudentMatch';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { exportAttendanceToExcel } from '@infrastructure/export';
 import { useToastStore } from '@adapters/components/common/Toast';
@@ -217,20 +218,10 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
     (d: string, p: number) => {
       const existing = getAttendanceRecord(classId, d, p);
       if (existing) {
-        const map = new Map(existing.students.map((s) => [studentKey(s), s]));
-        setLocalStudents(
-          students.map((s) => {
-            const saved = map.get(studentKey(s));
-            return {
-              number: s.number,
-              grade: s.grade,
-              classNum: s.classNum,
-              status: saved?.status ?? 'present',
-              reason: saved?.reason,
-              memo: saved?.memo,
-            };
-          }),
-        );
+        // 저장된 항목을 학생에 잇는 것은 공통 규칙에 맡긴다 — 번호만 저장된 옛 항목(AI 연결로
+        // 넣은 것)도 그 번호가 명단에 한 명뿐이면 그 학생 줄에 뜬다. 줄에는 명단의 학년·반이
+        // 실리므로 여기서 저장하면 학년-반-번호 키로 다시 적힌다(옛 항목과 나란히 남지 않는다).
+        setLocalStudents(buildAttendanceRows(students, cls?.students ?? [], existing.students));
         setHasExistingRecord(true);
       } else {
         setLocalStudents(
@@ -247,7 +238,7 @@ export function AttendanceTab({ classId }: AttendanceTabProps) {
       setHasModified(false);
       setSaveStatus('idle');
     },
-    [classId, students, getAttendanceRecord],
+    [classId, students, cls, getAttendanceRecord],
   );
 
   useMemo(() => {

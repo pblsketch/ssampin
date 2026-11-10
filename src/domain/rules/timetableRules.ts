@@ -207,3 +207,52 @@ export function dedupeOverridesKeepLatest(
     .sort((a, b) => a.index - b.index)
     .map((w) => w.override);
 }
+
+// ---------------------------------------------------------------------------
+// 수업 교체 짝(pairId) — 순수 함수들
+// ---------------------------------------------------------------------------
+
+/**
+ * 수업 교체의 짝(같은 pairId 를 가진 다른 변동)을 찾는다.
+ * pairId 가 없거나 짝이 이미 지워졌으면 null.
+ */
+export function findSwapPartner(
+  overrides: readonly TimetableOverride[],
+  target: Pick<TimetableOverride, 'id' | 'pairId'>,
+): TimetableOverride | null {
+  if (!target.pairId) return null;
+  return overrides.find((o) => o.pairId === target.pairId && o.id !== target.id) ?? null;
+}
+
+/**
+ * "짝이 지워진 교체"(반쪽) 판정 — pairId 는 있는데 짝을 찾을 수 없는 변동.
+ * 컴시간 자동 변동처럼 pairId 가 없는 항목은 반쪽이 아니다(처음부터 짝이 없다).
+ */
+export function isOrphanedSwapHalf(
+  overrides: readonly TimetableOverride[],
+  target: Pick<TimetableOverride, 'id' | 'pairId'>,
+): boolean {
+  if (!target.pairId) return false;
+  return findSwapPartner(overrides, target) === null;
+}
+
+/**
+ * 변동 1건을 지우되, 수업 교체라면 짝까지 함께 지운 배열을 돌려준다.
+ * 한쪽만 지우면 짝이 "반쪽 교체"로 남아 시간표가 한 칸만 바뀐 채 굳기 때문에
+ * 호출 측이 이 결과를 **한 번에** 저장하도록 배열 하나로 돌려준다.
+ */
+export function removeOverrideWithPair(
+  overrides: readonly TimetableOverride[],
+  id: string,
+): { overrides: readonly TimetableOverride[]; removedIds: readonly string[] } {
+  const target = overrides.find((o) => o.id === id);
+  if (!target) return { overrides, removedIds: [] };
+  const pairId = target.pairId;
+  const removedIds = overrides
+    .filter((o) => o.id === id || (pairId ? o.pairId === pairId : false))
+    .map((o) => o.id);
+  return {
+    overrides: overrides.filter((o) => !removedIds.includes(o.id)),
+    removedIds,
+  };
+}

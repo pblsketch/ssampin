@@ -1,7 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { mergeSingleStudentAttendance } from '../../shared/inlineAttendanceEdit';
+import {
+  findStudentAttendance,
+  mergeSingleStudentAttendance,
+} from '../../shared/inlineAttendanceEdit';
 import type { AttendanceRecord } from '@domain/entities/Attendance';
+import { studentKey } from '@domain/entities/TeachingClass';
 
 /**
  * Phase D2 (record-viewing-unification) — 수업 조회 출결 인라인 편집.
@@ -68,6 +72,87 @@ describe('mergeSingleStudentAttendance — 단일 학생 안전 갱신 (D2 hard 
     expect(next.students[0]).toBe(base.students[0]);
     expect(next.students[1]).toBe(base.students[1]);
     expect(next.students[2]).toBe(base.students[2]);
+  });
+});
+
+/**
+ * 번호만 저장된 옛 항목(AI 연결로 넣은 것) — 조회 화면은 그 항목을 명단 학생의 키로 띄운다.
+ * 편집도 같은 규칙으로 찾아야 한다. 저장된 키 문자열("7")만 비교하면 화면 키("2-3-7")와
+ * 어긋나 편집이 아무 일도 안 하고 "저장했습니다"가 뜬다.
+ */
+describe('mergeSingleStudentAttendance — 번호만 저장된 옛 항목 편집', () => {
+  const roster = [
+    { number: 2, grade: 2, classNum: 1 },
+    { number: 2, grade: 2, classNum: 3 },
+    { number: 7, grade: 2, classNum: 3 },
+  ];
+  const legacy: AttendanceRecord = {
+    classId: 'tc-1',
+    date: '2026-11-02',
+    period: 3,
+    students: [
+      { number: 7, status: 'absent' },
+      { number: 2, status: 'late', grade: 2, classNum: 1 },
+    ],
+  };
+
+  it('화면이 띄운 키(학년-반-번호)로 옛 항목을 찾아 그 자리에서 고친다', () => {
+    const next = mergeSingleStudentAttendance(
+      legacy,
+      '2-3-7',
+      { status: 'late', reason: '질병' },
+      roster,
+    );
+
+    // 새 줄을 만들지 않는다 — 길이·순서 그대로, 한 학생이 두 줄이 되지 않는다.
+    expect(next.students).toHaveLength(2);
+    expect(next.students[0]).toEqual({
+      number: 7,
+      grade: 2,
+      classNum: 3,
+      status: 'late',
+      reason: '질병',
+      memo: undefined,
+    });
+    // 고친 뒤에는 명단 키로 저장된다.
+    expect(studentKey(next.students[0]!)).toBe('2-3-7');
+    // 다른 학생은 참조 그대로.
+    expect(next.students[1]).toBe(legacy.students[1]);
+  });
+
+  it('되돌리기 스냅샷도 같은 규칙으로 찾는다', () => {
+    expect(findStudentAttendance(legacy, '2-3-7', roster)?.status).toBe('absent');
+    // 명단을 안 넘기면 저장된 키로만 찾는다(예전 동작).
+    expect(findStudentAttendance(legacy, '2-3-7')).toBeUndefined();
+    expect(findStudentAttendance(legacy, '7')?.status).toBe('absent');
+  });
+
+  it('고친 뒤 되돌려도 같은 항목에 적용된다 — 줄이 늘지 않는다', () => {
+    const edited = mergeSingleStudentAttendance(legacy, '2-3-7', { status: 'late' }, roster);
+    const undone = mergeSingleStudentAttendance(edited, '2-3-7', { status: 'absent' }, roster);
+
+    expect(undone.students).toHaveLength(2);
+    expect(undone.students[0]?.status).toBe('absent');
+    expect(studentKey(undone.students[0]!)).toBe('2-3-7');
+  });
+
+  it('번호가 겹쳐 누구인지 못 정한 항목은 저장된 키("2")로만 고칠 수 있다', () => {
+    const ambiguous: AttendanceRecord = {
+      ...legacy,
+      students: [{ number: 2, status: 'absent' }],
+    };
+
+    // 두 2번 학생 어느 쪽 키로도 이 항목을 건드리지 않는다.
+    expect(
+      mergeSingleStudentAttendance(ambiguous, '2-1-2', { status: 'late' }, roster).students[0],
+    ).toBe(ambiguous.students[0]);
+    expect(
+      mergeSingleStudentAttendance(ambiguous, '2-3-2', { status: 'late' }, roster).students[0],
+    ).toBe(ambiguous.students[0]);
+    // 조회 화면은 이 항목을 저장된 키("2")로 띄운다 — 그 키로는 고쳐진다.
+    const next = mergeSingleStudentAttendance(ambiguous, '2', { status: 'late' }, roster);
+    expect(next.students[0]?.status).toBe('late');
+    expect(next.students[0]?.grade).toBeUndefined();
   });
 });
 

@@ -11,6 +11,8 @@ import type {
 import { Drawer } from '@adapters/components/common/Drawer';
 import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import { IconButton } from '@adapters/components/common/IconButton';
+import { findSwapPartner, isOrphanedSwapHalf } from '@domain/rules/timetableRules';
+import { deleteOverrideConfirmingPair } from './swapPairDeletion';
 
 type FilterMode = 'week' | 'month' | 'all' | 'past';
 
@@ -87,7 +89,7 @@ export function TimetableOverridesPanel({
   onAddNew,
   onEdit,
 }: TimetableOverridesPanelProps) {
-  const { overrides, deleteOverride, classSchedule, teacherSchedule } = useScheduleStore();
+  const { overrides, classSchedule, teacherSchedule } = useScheduleStore();
   const { settings } = useSettingsStore();
   const [filter, setFilter] = useState<FilterMode>('month');
 
@@ -141,27 +143,12 @@ export function TimetableOverridesPanel({
     };
   };
 
-  /** swap 페어의 짝을 찾기 */
-  const findPair = (o: TimetableOverride): TimetableOverride | null => {
-    if (!o.pairId) return null;
-    return overrides.find((x) => x.pairId === o.pairId && x.id !== o.id) ?? null;
-  };
-
+  // 짝 확인 문구와 짝 삭제는 시간표 칸 우클릭과 같은 함수를 쓴다(swapPairDeletion).
+  // 짝이 살아 있으면 짝까지 한 번의 저장으로 지우고, 짝이 없으면(반쪽 포함) 그 1건만 지운다.
   const handleDelete = async (o: TimetableOverride) => {
-    const pair = findPair(o);
-    if (pair) {
-      if (
-        !window.confirm(
-          '이 수업은 다른 교시와 짝을 이룬 교체입니다.\n짝까지 함께 삭제하시겠습니까?',
-        )
-      )
-        return;
-      await deleteOverride(pair.id);
-      await deleteOverride(o.id);
-    } else {
-      if (!window.confirm('이 변동을 삭제하시겠습니까?')) return;
-      await deleteOverride(o.id);
-    }
+    await deleteOverrideConfirmingPair(o.id, {
+      singleConfirmMessage: '이 변동을 삭제하시겠습니까?',
+    });
   };
 
   return (
@@ -234,7 +221,8 @@ export function TimetableOverridesPanel({
                 const kind = inferKind(o);
                 const meta = KIND_META[kind];
                 const base = getBaseInfo(o);
-                const pair = findPair(o);
+                const pair = findSwapPartner(overrides, o);
+                const orphanedSwap = isOrphanedSwapHalf(overrides, o);
                 const afterLabel = o.subject || '자습/공강';
                 const effectiveScope: TimetableOverrideScope = o.scope ?? 'both';
                 const scopeMeta = SCOPE_META[effectiveScope];
@@ -259,6 +247,18 @@ export function TimetableOverridesPanel({
                           <span className="material-symbols-outlined text-detail">{meta.icon}</span>
                           {meta.label}
                         </span>
+                        {orphanedSwap && (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-caption font-bold rounded border border-sp-warning text-sp-text"
+                            title="맞바꾼 상대 교시의 변동이 지워져 이 교시만 남았어요. 일반 변동처럼 수정하거나 지울 수 있어요."
+                          >
+                            {/* 색은 테두리와 아이콘에만 — 10px 글자는 본문색이어야 밝은 테마에서도 읽힌다 */}
+                            <span className="material-symbols-outlined text-detail text-sp-warning">
+                              link_off
+                            </span>
+                            짝이 지워진 교체
+                          </span>
+                        )}
                         <span
                           className={`inline-flex items-center px-1.5 py-0.5 text-caption font-bold rounded border ${scopeMeta.color}`}
                           title={`적용 범위: ${scopeMeta.label}`}

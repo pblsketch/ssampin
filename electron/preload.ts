@@ -51,6 +51,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   ): Promise<boolean> =>
     ipcRenderer.invoke('data:writeIfUnchanged', filename, expectedData, nextData),
   removeData: (filename: string): Promise<void> => ipcRenderer.invoke('data:remove', filename),
+  /** 이번 실행에서 깨져서 격리·초기화된 상태 파일 이름들(없으면 빈 배열). */
+  getQuarantinedDataFiles: (): Promise<string[]> => ipcRenderer.invoke('data:quarantined'),
   // AI 브릿지 — 외부 AI(Claude/Codex/Antigravity) 연결
   /**
    * "내 AI로 실행" — 선생님 본인 구독 CLI(Claude Code·Codex).

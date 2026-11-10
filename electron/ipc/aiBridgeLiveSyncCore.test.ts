@@ -789,6 +789,43 @@ describe('validateApplyWrite', () => {
     ).toBe(false); // date 형식 위반
   });
 
+  it('attendance: grade·classNum 이 정수가 아니면 거부한다 (없으면 통과)', () => {
+    const base = { domain: 'attendance', op: 'create', idempotencyKey: 'k' } as const;
+    const withStudent = (student: Record<string, unknown>) =>
+      validateApplyWrite({
+        ...base,
+        data: { classId: 'c1', date: '2026-06-02', period: 3, students: [student] },
+      });
+    // 번호가 겹치는 수업반 — 학년·반이 함께 온다
+    expect(withStudent({ number: 7, status: 'absent', grade: 2, classNum: 3 }).ok).toBe(true);
+    // 학년·반이 없는 명단(담임 학급 등)은 그대로 통과
+    expect(withStudent({ number: 7, status: 'absent' }).ok).toBe(true);
+    // 있는데 정수가 아니면 저장 키가 깨진다 → 거부
+    expect(withStudent({ number: 7, status: 'absent', grade: '2', classNum: 3 }).ok).toBe(false);
+    expect(withStudent({ number: 7, status: 'absent', grade: 2, classNum: 3.5 }).ok).toBe(false);
+    const rejected = withStudent({ number: 7, status: 'absent', grade: 2, classNum: '3' });
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) expect(rejected.reason).toBe('students.classNum 는 정수여야 합니다.');
+  });
+
+  it('attendance: grade 가 null 이면 없는 것으로 본다', () => {
+    const withStudent = (student: Record<string, unknown>) =>
+      validateApplyWrite({
+        domain: 'attendance',
+        op: 'create',
+        idempotencyKey: 'k',
+        data: { classId: 'c1', date: '2026-06-02', period: 3, students: [student] },
+      });
+    // AI 는 모르는 값을 null 로 채워 보내곤 한다 — 형식 오류로 막지 않는다.
+    // (번호가 겹쳐 학년·반이 꼭 필요한 반인지는 명단을 아는 저장 단계가 가려 이유를 돌려준다.)
+    expect(withStudent({ number: 7, status: 'absent', grade: null, classNum: null }).ok).toBe(true);
+    expect(withStudent({ number: 7, status: 'absent', grade: null, classNum: 3 }).ok).toBe(true);
+    expect(withStudent({ number: 7, status: 'absent', grade: 2, classNum: null }).ok).toBe(true);
+    // null 이 아닌 잘못된 값은 여전히 거부한다
+    expect(withStudent({ number: 7, status: 'absent', grade: '', classNum: 3 }).ok).toBe(false);
+    expect(withStudent({ number: 7, status: 'absent', grade: 0.5, classNum: null }).ok).toBe(false);
+  });
+
   it('attendance: 현재 학년도 밖 날짜는 확인 요청 후 확인값이 있으면 허용', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-06-24T00:00:00+09:00'));

@@ -55,6 +55,8 @@ import type { ComciganTeacherFingerprint } from '@domain/entities/Settings';
 import { TimetableEditor } from './TimetableEditor';
 import { TempChangeModal } from './TempChangeModal';
 import { TimetableOverridesPanel } from './TimetableOverridesPanel';
+import { deleteOverrideConfirmingPair } from './swapPairDeletion';
+import { findSwapPartner } from '@domain/rules/timetableRules';
 import { InlineColorPalette } from './InlineColorPalette';
 import { NeisImportModal } from './NeisImportModal';
 import { ComciganImportModal } from './ComciganImportModal';
@@ -316,6 +318,12 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
   const [editTarget, setEditTarget] = useState<TimetableOverride | null>(null);
   /** 드로어 "+ 변동 추가"에서 열리는 모달 (slotEditable=true) */
   const [addFromPanelOpen, setAddFromPanelOpen] = useState(false);
+
+  // 칸 우클릭 삭제 — 수업 교체의 한쪽이면 서랍과 같은 문구로 묻고 짝까지 지운다.
+  // 짝이 없는 변동(일반·컴시간 자동·이미 생긴 반쪽)은 예전처럼 확인 없이 그 1건만 지운다.
+  const handleCellDeleteOverride = useCallback((id: string) => {
+    void deleteOverrideConfirmingPair(id);
+  }, []);
 
   // 미래 변동 개수 (뱃지용)
   const futureOverrideCount = useMemo(() => {
@@ -1300,7 +1308,7 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
                             classroom,
                           })
                         }
-                        onDeleteOverride={(id) => void deleteOverride(id)}
+                        onDeleteOverride={handleCellDeleteOverride}
                         openPalette={openPalette}
                         onOpenPalette={setOpenPalette}
                         onClosePalette={closePalette}
@@ -1448,11 +1456,12 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
         />
       )}
 
-      {/* 변동 시간표 수정 모달 — 날짜·교시 포함 전체 편집 */}
+      {/* 변동 시간표 수정 모달 — 날짜·교시 포함 전체 편집 (수업 교체 쌍은 날짜·교시 잠금) */}
       {editTarget && (
         <TempChangeModal
           mode="edit"
           initialOverride={editTarget}
+          swapPartner={findSwapPartner(overrides, editTarget)}
           date={editTarget.date}
           period={editTarget.period}
           currentSubject={editTarget.subject}
@@ -1474,7 +1483,11 @@ export function TimetablePage({ initialIntent = null, onIntentConsumed }: Timeta
           }}
           onSaveEdit={async (oldId, input) => {
             const old = overrides.find((o) => o.id === oldId);
-            const slotChanged = !old || old.date !== input.date || old.period !== input.period;
+            // 수업 교체 쌍은 슬롯을 옮기지 않는다 — 옮기면 옛 항목이 지워지고 pairId 없는
+            // 새 항목이 생겨 짝이 끊긴다. 수정 창이 날짜·교시를 잠그지만 여기서도 한 번 더 막는다.
+            const pairedSwap = old ? findSwapPartner(overrides, old) !== null : false;
+            const slotChanged =
+              !pairedSwap && (!old || old.date !== input.date || old.period !== input.period);
             if (slotChanged) {
               // 슬롯(날짜/교시) 변경: 이전 항목 삭제 후 새 슬롯에 upsert
               await deleteOverride(oldId);

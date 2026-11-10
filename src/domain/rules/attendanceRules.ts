@@ -10,6 +10,7 @@ import {
 } from '@domain/entities/Attendance';
 import type { AttendancePeriodEntry } from '@domain/entities/StudentRecord';
 import { studentKey } from '@domain/entities/TeachingClass';
+import { createAttendanceRosterMatcher } from '@domain/rules/attendanceStudentMatch';
 
 /**
  * 출결 상태를 순환 순서에 따라 다음 상태로 반환한다.
@@ -28,8 +29,12 @@ export function cycleStatus(current: AttendanceStatus): AttendanceStatus {
  * @param records  - 전체 또는 필터된 AttendanceRecord 배열 (classId·date 이미 필터 후 전달 가능)
  * @param classId  - 대상 학급 ID
  * @param date     - 조회 날짜 (YYYY-MM-DD)
- * @param students - 대상 학생 목록 (number, grade?, classNum? 포함)
+ * @param students - 표에 그릴 학생 목록 (number, grade?, classNum? 포함) — 보통 재적 학생만
  * @param periods  - 조회할 교시 목록 (예: [1,2,3,4,5,6,7,8])
+ * @param roster   - 그 반 명단 **전체**(전출·휴학 등 지금은 수업을 안 듣는 학생 포함).
+ *                   번호만 저장된 옛 항목이 누구 것인지 가르는 기준이다. 생략하면 `students`.
+ *                   ★`students` 를 걸러서 넘긴다면 반드시 걸러 내지 않은 명단을 함께 넘길 것 —
+ *                   전출 학생과 번호가 같은 재적 학생에게 옛 항목이 붙고, 저장하면 그 짐작이 굳는다.
  * @returns Map<studentKey, Map<period, StudentAttendance | undefined>>
  */
 export function buildAttendanceMatrix(
@@ -38,15 +43,21 @@ export function buildAttendanceMatrix(
   date: string,
   students: readonly { number: number; grade?: number; classNum?: number }[],
   periods: readonly number[],
+  roster: readonly { number: number; grade?: number; classNum?: number }[] = students,
 ): Map<string, Map<number, StudentAttendance | undefined>> {
   // (classId, date) 필터링
   const dayRecords = records.filter((r) => r.classId === classId && r.date === date);
 
-  // period → students 조회 맵 구성
-  const periodMap = new Map<number, readonly StudentAttendance[]>();
+  // 항목 → 학생 잇기는 공통 규칙에 맡긴다(attendanceStudentMatch) — 학년·반까지 맞는 항목이
+  // 먼저고, 번호만 저장된 옛 항목은 그 번호가 **명단 전체**(`roster`)에 한 명뿐일 때만 그
+  // 학생으로 본다. 이 그리드는 저장할 때 하루를 통째로 다시 쓰므로, 여기서 못 이으면 그 항목이 지워진다.
+  const matcher = createAttendanceRosterMatcher(roster);
+
+  // period → (학생 키 → 항목) 조회 맵 구성
+  const periodMap = new Map<number, Map<string, StudentAttendance>>();
   for (const record of dayRecords) {
     // 같은 period가 중복이면 마지막 값 사용
-    periodMap.set(record.period, record.students);
+    periodMap.set(record.period, matcher.indexByStudentKey(record.students));
   }
 
   const matrix = new Map<string, Map<number, StudentAttendance | undefined>>();
@@ -56,20 +67,8 @@ export function buildAttendanceMatrix(
     const periodRow = new Map<number, StudentAttendance | undefined>();
 
     for (const period of periods) {
-      const periodStudents = periodMap.get(period);
-      if (periodStudents == null) {
-        // 해당 교시 레코드 자체가 없음
-        periodRow.set(period, undefined);
-      } else {
-        // 같은 번호+학년+반의 학생 찾기
-        const found = periodStudents.find(
-          (s) =>
-            s.number === student.number &&
-            (student.grade == null || s.grade === student.grade) &&
-            (student.classNum == null || s.classNum === student.classNum),
-        );
-        periodRow.set(period, found);
-      }
+      // 해당 교시 레코드 자체가 없으면 undefined
+      periodRow.set(period, periodMap.get(period)?.get(key));
     }
 
     matrix.set(key, periodRow);

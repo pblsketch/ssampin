@@ -33,6 +33,12 @@ interface PopoverState {
 export interface AttendanceMatrixCoreProps {
   /** 학생 목록 (이미 정렬된 배열로 전달할 것) */
   students: readonly MatrixStudent[];
+  /**
+   * 그 반 명단 **전체**(전출 등 지금은 수업을 안 듣는 학생 포함). 번호만 저장된 옛 항목이
+   * 누구 것인지 가르는 기준이다. `students` 가 재적 학생만 거른 목록이면 반드시 넘긴다 —
+   * 안 넘기면 전출 학생과 번호가 같은 재적 학생에게 옛 항목이 붙고, 저장하면 그 짐작이 굳는다.
+   */
+  roster?: readonly { number: number; grade?: number; classNum?: number }[];
   /** 출결 데이터를 조회할 학급 ID (buildAttendanceMatrix 내부용) */
   classId: string;
   date: string;
@@ -56,6 +62,7 @@ export interface AttendanceMatrixCoreProps {
 
 export function AttendanceMatrixCore({
   students,
+  roster,
   classId,
   date,
   onDateChange,
@@ -84,14 +91,14 @@ export function AttendanceMatrixCore({
   /* 날짜/classId/students 변경 시 매트릭스 재구성 */
   useEffect(() => {
     const records = loadDayRecords(date);
-    const initial = buildInitialMatrix(records, classId, date, students, PERIODS);
+    const initial = buildInitialMatrix(records, classId, date, students, PERIODS, roster);
     setMatrix(initial);
     setDirty(false);
     setSaveStatus('idle');
     setPopover(null);
     // PERIODS는 원시 배열이므로 직렬화로 의존성 비교
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, date, loadDayRecords, students, PERIODS.join(',')]);
+  }, [classId, date, loadDayRecords, students, roster, PERIODS.join(',')]);
 
   /* 팝오버 외부 클릭 / ESC 닫기 */
   useEffect(() => {
@@ -196,13 +203,13 @@ export function AttendanceMatrixCore({
   /* ── 변경 초기화 ── */
   const handleReset = useCallback(() => {
     const records = loadDayRecords(date);
-    const initial = buildInitialMatrix(records, classId, date, students, PERIODS);
+    const initial = buildInitialMatrix(records, classId, date, students, PERIODS, roster);
     setMatrix(initial);
     setDirty(false);
     setSaveStatus('idle');
     setPopover(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [classId, date, loadDayRecords, students, PERIODS.join(',')]);
+  }, [classId, date, loadDayRecords, students, roster, PERIODS.join(',')]);
 
   /* ── 저장 ── */
   const handleSave = useCallback(async () => {

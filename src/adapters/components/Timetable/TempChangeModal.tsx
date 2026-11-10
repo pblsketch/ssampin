@@ -5,6 +5,8 @@ import type {
   TimetableOverrideScope,
 } from '@domain/entities/Timetable';
 import { Modal } from '@adapters/components/common/Modal';
+import { Notice } from '@adapters/components/common/Notice';
+import { getDayOfWeekFull } from '@domain/valueObjects/DayOfWeek';
 import { resolvePeriodLabel } from '@domain/rules/periodLabel';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 
@@ -69,6 +71,12 @@ interface TempChangeModalCreateProps extends TempChangeModalBaseProps {
 interface TempChangeModalEditProps extends TempChangeModalBaseProps {
   mode: 'edit';
   initialOverride: TimetableOverride;
+  /**
+   * 수업 교체의 한쪽을 열었을 때 그 짝(맞바꾼 상대 교시). 짝이 살아 있으면 날짜·교시를 잠근다 —
+   * 한쪽만 옮기면 짝이 끊겨 "반쪽 교체"가 남기 때문이다. 짝이 없으면(일반 변동·이미 생긴 반쪽)
+   * 주지 않거나 null.
+   */
+  swapPartner?: { readonly date: string; readonly period: number } | null;
   /** 편집 모드에서도 날짜/교시 변경 가능. 슬롯 자체가 바뀌면 내부적으로 delete+add 처리. */
   maxPeriods?: number;
   resolveBaseSubject?: (date: string, period: number) => string;
@@ -82,12 +90,23 @@ function formatDotted(dateStr: string): string {
   return dateStr.replace(/-/g, '.');
 }
 
+/** 'YYYY-MM-DD' → '11월 12일(목)'. 짝이 다른 주에 있을 수 있어 요일만이 아니라 날짜까지 보인다. */
+function formatMonthDayWithWeekday(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return `${d.getMonth() + 1}월 ${d.getDate()}일(${getDayOfWeekFull(d)})`;
+}
+
 export function TempChangeModal(props: TempChangeModalProps) {
   const isEdit = props.mode === 'edit';
   const isCreate = !isEdit;
-  // create에서 slotEditable 또는 edit에서는 언제나 슬롯 편집 가능
+  // 수업 교체의 한쪽을 수정할 때는 날짜·교시를 잠근다. 한쪽만 옮기면 옛 항목이 지워지고
+  // pairId 없는 새 항목이 생겨 짝이 끊긴다(반쪽 교체). 과목·교실·사유만 고친다.
+  const swapPartner = isEdit ? ((props as TempChangeModalEditProps).swapPartner ?? null) : null;
+  // create에서 slotEditable 또는 edit(교체 쌍 제외)에서는 슬롯 편집 가능
   const slotEditable =
-    isEdit || (isCreate && (props as TempChangeModalCreateProps).slotEditable === true);
+    (isEdit && swapPartner === null) ||
+    (isCreate && (props as TempChangeModalCreateProps).slotEditable === true);
 
   // 변동 유형 (create 전용)
   const [kind, setKind] = useState<TimetableOverrideKind>(
@@ -166,9 +185,11 @@ export function TempChangeModal(props: TempChangeModalProps) {
 
   const handleSubmit = () => {
     if (isEdit) {
+      // 교체 쌍은 화면에서 잠겼더라도 저장 값까지 원래 날짜·교시로 못 박는다.
+      const lockedSlot = swapPartner !== null ? editProps!.initialOverride : null;
       editProps!.onSaveEdit(editProps!.initialOverride.id, {
-        date: dateA,
-        period: periodA,
+        date: lockedSlot ? lockedSlot.date : dateA,
+        period: lockedSlot ? lockedSlot.period : periodA,
         subject,
         classroom: classroom || undefined,
         reason: reason || undefined,
@@ -309,6 +330,14 @@ export function TempChangeModal(props: TempChangeModalProps) {
                 ))}
               </div>
             </>
+          )}
+
+          {swapPartner && (
+            <Notice variant="info" className="mb-3">
+              {formatMonthDayWithWeekday(swapPartner.date)}{' '}
+              {resolvePeriodLabel(swapPartner.period, periodTimes)} 수업과 맞바꾼 교체예요.
+              날짜·교시를 옮기려면 교체를 지우고 다시 등록해 주세요.
+            </Notice>
           )}
 
           {/* ============ 슬롯 A ============ */}

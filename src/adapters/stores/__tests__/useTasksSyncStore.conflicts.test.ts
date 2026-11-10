@@ -652,3 +652,85 @@ describe('syncNow — 검토에서 나온 경로', () => {
     expect(mocks.listTasks).toHaveBeenCalledTimes(1); // 가져오기 한 번뿐
   });
 });
+
+/**
+ * "이 목록 응답에 없다 = 구글에서 지웠다"는 이 목록에 연결된 할 일에만 성립한다.
+ * 연동 정보가 초기화된 뒤(또는 연동을 껐다 켜며) 다른 목록을 고르면, 옛 목록에 연결된 할 일은
+ * 새 목록 응답에 없는 것이 당연하다 — 그걸 삭제로 보면 쌤핀의 할 일이 통째로 사라진다.
+ */
+describe('syncNow — 구글에 없는 할 일을 지우는 범위', () => {
+  it('다른 목록에 묶인 할 일은 구글에 없어도 지우지 않는다', async () => {
+    seed(
+      [
+        todo({
+          id: 'old-1',
+          text: '옛 목록 할 일',
+          googleTaskId: 'old-g1',
+          googleTaskListId: 'old-list',
+        }),
+        todo({
+          id: 'old-archived',
+          text: '옛 목록 보관본',
+          googleTaskId: 'old-g2',
+          googleTaskListId: 'old-list',
+          archivedAt: T0,
+        }),
+        todo({
+          id: 'no-list',
+          text: '목록을 모르는 할 일',
+          googleTaskId: 'g-x',
+          googleTaskListId: undefined,
+        }),
+      ],
+      [], // 지금 고른 목록에는 아무것도 없다
+    );
+
+    await runSync();
+
+    expect(storedTodos.map((t) => t.id).sort()).toEqual(['no-list', 'old-1', 'old-archived']);
+    // 연결 정보도 건드리지 않는다(보관본을 "구글에서 지워짐"으로 표시하지 않는다)
+    expect(found('old-1')).toMatchObject({ googleTaskId: 'old-g1', googleTaskListId: 'old-list' });
+    expect(found('old-archived').googleTaskId).toBe('old-g2');
+    expect(found('old-archived').remoteDeletedAt).toBeUndefined();
+    expect(found('no-list').googleTaskId).toBe('g-x');
+    // 구글에 쓰지도 않는다
+    expect(mocks.createTask).not.toHaveBeenCalled();
+    expect(mocks.updateTask).not.toHaveBeenCalled();
+    expect(mocks.deleteTask).not.toHaveBeenCalled();
+  });
+
+  it('지금 목록에 묶인 할 일이 구글에 없으면 기존대로 지운다(보관본은 연결만 끊는다)', async () => {
+    seed(
+      [
+        todo({ id: 'gone', googleTaskId: 'g1' }),
+        todo({ id: 'gone-archived', googleTaskId: 'g2', archivedAt: T0 }),
+        todo({ id: 'alive', googleTaskId: 'g3', text: '같은 제목' }),
+      ],
+      [remoteTask({ id: 'g3', title: '같은 제목', updated: T0 })],
+    );
+
+    await runSync();
+
+    expect(storedTodos.map((t) => t.id).sort()).toEqual(['alive', 'gone-archived']);
+    expect(found('gone-archived').googleTaskId).toBeUndefined();
+    expect(found('gone-archived').remoteDeletedAt).toBeDefined();
+  });
+
+  it('옛 목록의 할 일을 쌤핀에서 고치면 지금 목록에 새로 만들어 옮긴다(기존 정책)', async () => {
+    seed([
+      todo({ id: 'old-1', googleTaskId: 'old-g1', googleTaskListId: 'old-list' }),
+      todo({
+        id: 'old-2',
+        text: '고친 할 일',
+        googleTaskId: 'old-g2',
+        googleTaskListId: 'old-list',
+        pendingRemoteOp: 'update',
+      }),
+    ]);
+
+    await runSync();
+
+    expect(found('old-2')).toMatchObject({ googleTaskId: 'new-1', googleTaskListId: LIST });
+    expect(found('old-1')).toMatchObject({ googleTaskId: 'old-g1', googleTaskListId: 'old-list' });
+  });
+});

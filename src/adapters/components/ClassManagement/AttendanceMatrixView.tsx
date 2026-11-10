@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState } from 'react';
 import type { StudentAttendance } from '@domain/entities/Attendance';
+import type { TeachingClassStudent } from '@domain/entities/TeachingClass';
 import { useTeachingClassStore } from '@adapters/stores/useTeachingClassStore';
 import { useScheduleStore } from '@adapters/stores/useScheduleStore';
 import { getDayOfWeek } from '@domain/rules/periodRules';
@@ -7,6 +8,9 @@ import { isStudentActive } from '@domain/rules/studentActivity';
 import { AttendanceMatrixCore } from './shared/AttendanceMatrixCore';
 
 const MATRIX_MULTI_DATE_GUIDE_KEY = 'ssampin:attendance-matrix-multi-date-guide-dismissed';
+
+/** 반을 못 찾았을 때의 빈 명단 — 렌더마다 새 배열을 만들면 출결표가 매번 다시 시드된다. */
+const EMPTY_ROSTER: readonly TeachingClassStudent[] = [];
 
 export interface AttendanceMatrixViewProps {
   classId: string;
@@ -25,6 +29,13 @@ export function AttendanceMatrixView({ classId, date, onDateChange }: Attendance
   }, [loadSchedule]);
 
   const cls = useMemo(() => classes.find((c) => c.id === classId), [classes, classId]);
+
+  /**
+   * 명단 **전체**(전출·휴학 포함) — 번호만 저장된 옛 출결 항목이 누구 것인지 가르는 기준.
+   * 표에 그리는 행(`sortedStudents`)만 재적 학생으로 거른다. 걸러 낸 목록으로 가르면 전출 학생과
+   * 번호가 같은 재적 학생에게 옛 항목이 붙고, 저장하면 그 학생의 학년·반 키로 굳는다.
+   */
+  const roster = cls?.students ?? EMPTY_ROSTER;
 
   const sortedStudents = useMemo(() => {
     const raw = (cls?.students ?? []).filter(isStudentActive);
@@ -126,6 +137,7 @@ export function AttendanceMatrixView({ classId, date, onDateChange }: Attendance
       )}
       <AttendanceMatrixCore
         students={matrixStudents}
+        roster={roster}
         classId={classId}
         date={date}
         onDateChange={onDateChange}
