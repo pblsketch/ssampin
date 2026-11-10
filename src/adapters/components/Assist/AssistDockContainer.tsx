@@ -745,6 +745,11 @@ function writeDeps(): WriteDeps {
     // ★출결은 스토어 함수를 **그대로** 부른다. 화면에서 저장할 때 지나는 길과 같은 길이다.
     upsertStudentAttendance: (params) =>
       useTeachingClassStore.getState().upsertStudentAttendanceEntries(params),
+    // 교시를 밝힌 출결 — AI 연결 등록과 같은 한 교시 병합. 저장이 막히면(false) null.
+    mergeStudentAttendance: async (record) => {
+      const ok = await useTeachingClassStore.getState().mergeAttendanceRecordStudents(record);
+      return ok ? useTeachingClassStore.getState().attendanceRecords : null;
+    },
     // ★[실행] 순간의 최신 출결을 본다 — 같은 번호의 다른 학생을 지키기 위해서다.
     getDayAttendanceRecords: (classId, date) =>
       useTeachingClassStore.getState().getDayAttendance(classId, date),
@@ -1089,6 +1094,9 @@ export function AssistDockContainer() {
         period: r.period,
         students: r.students.map((st) => ({
           number: st.number,
+          // ★미리보기가 "이 칸이 대상 학생 것인가"를 저장과 같은 규칙으로 가르는 값.
+          ...(st.grade === undefined ? {} : { grade: st.grade }),
+          ...(st.classNum === undefined ? {} : { classNum: st.classNum }),
           status: st.status,
           ...(st.reason === undefined ? {} : { reason: st.reason }),
           ...(st.memo === undefined ? {} : { memo: st.memo }),

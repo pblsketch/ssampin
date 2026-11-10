@@ -9,7 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { isWriteProposal, type AssistWriteProposal } from '@domain/entities/AssistWrite';
-import type { StudentAttendance } from '@domain/entities/Attendance';
+import type { AttendanceRecord, StudentAttendance } from '@domain/entities/Attendance';
 import { buildWriteProposal } from '@usecases/assist/writes/buildWriteProposal';
 import type { WriteSources } from '@usecases/assist/writes/writeSources';
 import { executeAssistWrite } from '../executeAssistWrite';
@@ -80,10 +80,36 @@ function spyDeps(options?: {
 }): {
   deps: WriteDeps;
   upserts: UpsertCall[];
+  merges: AttendanceRecord[];
   bridges: BridgeCall[];
 } {
   const upserts: UpsertCall[] = [];
+  const merges: AttendanceRecord[] = [];
   const bridges: BridgeCall[] = [];
+
+  // 진짜 스토어처럼 **저장된 전체 목록**을 돌려준다. 다른 교시가 이미 들어 있는
+  // 상황을 만들어, 미러가 하루치 전부를 보는지 확인할 수 있게 한다.
+  const savedFrom = (
+    classId: string,
+    date: string,
+    byPeriod: Iterable<readonly [number, readonly StudentAttendance[]]>,
+  ): AttendanceRecord[] => {
+    const saved: AttendanceRecord[] = [...byPeriod].map(([period, students]) => ({
+      classId,
+      date,
+      period,
+      students,
+    }));
+    if (options?.otherStudentOnPeriod !== undefined) {
+      saved.push({
+        classId,
+        date,
+        period: options.otherStudentOnPeriod,
+        students: [{ number: 1, status: 'late' }],
+      });
+    }
+    return saved;
+  };
 
   const deps = {
     getDayAttendanceRecords: () => options?.existingDay ?? [],
@@ -91,24 +117,12 @@ function spyDeps(options?: {
       upserts.push(params);
       // 저장이 막힌 상태 — 스토어는 예외가 아니라 null 로 알린다.
       if (options?.blocked) return null;
-
-      // 진짜 스토어처럼 **저장된 전체 목록**을 돌려준다. 다른 교시가 이미 들어 있는
-      // 상황을 만들어, 미러가 하루치 전부를 보는지 확인할 수 있게 한다.
-      const saved = [...params.recordsByPeriod].map(([period, students]) => ({
-        classId: params.classId,
-        date: params.date,
-        period,
-        students,
-      }));
-      if (options?.otherStudentOnPeriod !== undefined) {
-        saved.push({
-          classId: params.classId,
-          date: params.date,
-          period: options.otherStudentOnPeriod,
-          students: [{ number: 1, status: 'late' }] as readonly StudentAttendance[],
-        });
-      }
-      return saved;
+      return savedFrom(params.classId, params.date, params.recordsByPeriod);
+    },
+    mergeStudentAttendance: async (record: AttendanceRecord) => {
+      merges.push(record);
+      if (options?.blocked) return null;
+      return savedFrom(record.classId, record.date, [[record.period, record.students]]);
     },
     bridgeHomeroomAttendance: async (params: BridgeCall) => {
       bridges.push(params);
@@ -116,7 +130,7 @@ function spyDeps(options?: {
     homeroomStudents: () => SRC.roster.homeroom,
   } as unknown as WriteDeps;
 
-  return { deps, upserts, bridges };
+  return { deps, upserts, merges, bridges };
 }
 
 /** 제안까지만. 거절이면 그 사유를 던져 테스트가 이유를 보여 주게 한다. */
@@ -261,22 +275,20 @@ describe('★번호가 겹치는 수업반 — 누구인지 잃지 않는다 (20
   });
 
   it('★저장되는 칸에 학년·반이 들어간다 — 이게 없어서 "?" 로 떴다', async () => {
-    const { deps, upserts } = spyDeps();
+    const { deps, merges } = spyDeps();
     await executeAssistWrite(
       propose({ student: '구예찬', status: '결석', className: '1-7', period: 2 }),
       deps,
     );
 
-    expect(upserts[0]!.recordsByPeriod.get(2)).toEqual([
-      { number: 2, status: 'absent', grade: 1, classNum: 2 },
-    ]);
+    expect(merges[0]!.students).toEqual([{ number: 2, status: 'absent', grade: 1, classNum: 2 }]);
   });
 
   it('담임 학급은 학년·반이 없어도 그대로다 — 번호가 겹치지 않는다', async () => {
-    const { deps, upserts } = spyDeps();
+    const { deps, merges } = spyDeps();
     await executeAssistWrite(propose({ student: '15번', status: '결석', period: 3 }), deps);
 
-    expect(upserts[0]!.recordsByPeriod.get(3)).toEqual([{ number: 15, status: 'absent' }]);
+    expect(merges[0]!.students).toEqual([{ number: 15, status: 'absent' }]);
   });
 });
 
@@ -352,13 +364,15 @@ describe('★번호가 겹치면 고르지 않고 여쭙는다 (오너 결정 20
 
 describe('★같은 번호 옆 학생의 출결이 지워지지 않는다', () => {
   /**
-   * 부분 저장은 **번호만으로** 대상을 가른다 — "2번을 저장한다"고 하면 그 교시의 2번
-   * 엔트리를 전부 지우고 새것을 넣는다. 수업반에는 2번이 여럿이라 옆 학생이 사라진다.
-   * 그래서 저장 전에 같은 번호의 다른 학생을 읽어 **함께 실어 보낸다.**
+   * 교시를 밝힌 출결은 **한 교시 병합**으로 적는다 — 그 교시에서 이 학생 칸만 갈아 끼우고
+   * 나머지 학생(같은 번호의 다른 학생 포함)과 다른 교시는 유스케이스가 락 안에서 지킨다.
+   * 실제 저장 결과는 assistWriteAttendanceOtherPeriods.test.ts 가 진짜 스토어로 확인한다.
+   * 여기서는 실행기가 **이 학생 하나만** 실어 보내는지(옆 학생을 낡은 화면 값으로 덮지
+   * 않는지)를 본다.
    */
-  it('같은 교시에 있던 다른 2번(도유산)이 함께 실려 살아남는다', async () => {
+  it('같은 교시에 다른 2번(도유산)이 있어도 이 학생 칸만 보낸다', async () => {
     const 도유산: StudentAttendance = { number: 2, status: 'late', grade: 1, classNum: 5 };
-    const { deps, upserts } = spyDeps({
+    const { deps, upserts, merges } = spyDeps({
       existingDay: [{ period: 2, students: [도유산] }],
     });
 
@@ -367,43 +381,25 @@ describe('★같은 번호 옆 학생의 출결이 지워지지 않는다', () =
       deps,
     );
 
-    expect(upserts[0]!.recordsByPeriod.get(2)).toEqual([
-      도유산,
-      { number: 2, status: 'absent', grade: 1, classNum: 2 },
+    expect(upserts).toEqual([]);
+    expect(merges).toEqual([
+      {
+        classId: 'c2',
+        date: '2026-08-25',
+        period: 2,
+        students: [{ number: 2, status: 'absent', grade: 1, classNum: 2 }],
+      },
     ]);
   });
 
-  it('★같은 학생이 이미 있던 것은 겹쳐 넣지 않는다 — 한 사람이 두 줄이 되면 안 된다', async () => {
-    const 구예찬옛것: StudentAttendance = { number: 2, status: 'late', grade: 1, classNum: 2 };
-    const { deps, upserts } = spyDeps({
-      existingDay: [{ period: 2, students: [구예찬옛것] }],
-    });
+  it('★교시를 안 밝힌 하루 전체는 그 학생의 하루를 바꾸는 부분 저장으로 간다', async () => {
+    const { deps, upserts, merges } = spyDeps();
 
-    await executeAssistWrite(
-      propose({ student: '구예찬', status: '결석', className: '1-7', period: 2 }),
-      deps,
-    );
+    await executeAssistWrite(propose({ student: '15번', status: '결석' }), deps);
 
-    expect(upserts[0]!.recordsByPeriod.get(2)).toEqual([
-      { number: 2, status: 'absent', grade: 1, classNum: 2 },
-    ]);
-  });
-
-  it('다른 번호는 애초에 건드리지 않는다 — 부분 저장이 알아서 지킨다', async () => {
-    const { deps, upserts } = spyDeps({
-      existingDay: [
-        { period: 2, students: [{ number: 5, status: 'late', grade: 1, classNum: 2 }] },
-      ],
-    });
-
-    await executeAssistWrite(
-      propose({ student: '구예찬', status: '결석', className: '1-7', period: 2 }),
-      deps,
-    );
-
-    expect(upserts[0]!.recordsByPeriod.get(2)).toEqual([
-      { number: 2, status: 'absent', grade: 1, classNum: 2 },
-    ]);
+    expect(merges).toEqual([]);
+    expect([...upserts[0]!.studentNumbers]).toEqual([15]);
+    expect([...upserts[0]!.recordsByPeriod.keys()]).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 9]);
   });
 });
 
@@ -557,24 +553,87 @@ describe('★이미 적혀 있는 것을 덮어쓸 때 — 조용히 덮지 않�
     if (!isWriteProposal(outcome)) throw new Error('제안이어야 한다');
     expect(outcome.fields.some((f) => f.label === '지금')).toBe(false);
   });
+
+  describe('번호가 겹치는 수업반 — "지금" 값도 저장과 같은 학생 판정(학년-반-번호)으로 본다', () => {
+    /** 1-7 수업반 2교시에 같은 2번인 **도유산(1-5-2)** 만 결석으로 적혀 있다 */
+    const OTHER_TWO: WriteSources = {
+      ...SRC,
+      attendance: [
+        {
+          classId: 'c2',
+          date: '2026-08-25',
+          period: 2,
+          students: [{ number: 2, grade: 1, classNum: 5, status: 'absent' }],
+        },
+      ],
+    };
+
+    it('번호가 겹치는 수업반에서 다른 학생의 값이 같아도 대상 학생에게 적는다', () => {
+      // 예전에는 번호만 봐서 "구예찬 학생은 이미 결석"이라며 아무것도 적지 않았다.
+      const outcome = proposeOn(OTHER_TWO, {
+        student: '구예찬',
+        status: '결석',
+        className: '1-7',
+        period: 2,
+      });
+      if (!isWriteProposal(outcome)) throw new Error(`제안이어야 한다: ${outcome.reason}`);
+      expect(outcome.values.studentClassNum).toBe(2);
+    });
+
+    it("'지금' 줄에 다른 학생의 값을 보이지 않는다", () => {
+      const outcome = proposeOn(OTHER_TWO, {
+        student: '구예찬',
+        status: '지각',
+        className: '1-7',
+        period: 2,
+      });
+      if (!isWriteProposal(outcome)) throw new Error(`제안이어야 한다: ${outcome.reason}`);
+      expect(outcome.fields.some((f) => f.label === '지금')).toBe(false);
+
+      // 대상 학생 본인 칸은 그대로 보인다.
+      const own = proposeOn(OTHER_TWO, {
+        student: '도유산',
+        status: '지각',
+        className: '1-7',
+        period: 2,
+      });
+      if (!isWriteProposal(own)) throw new Error(`제안이어야 한다: ${own.reason}`);
+      expect(own.fields.find((f) => f.label === '지금')?.value).toBe('결석');
+    });
+
+    it('담임 미리보기는 그대로다 — 번호만 적힌 칸을 그 번호 학생 것으로 본다', () => {
+      const shown = proposeOn(WRITTEN, { student: '15번', status: '지각', period: 3 });
+      if (!isWriteProposal(shown)) throw new Error(`제안이어야 한다: ${shown.reason}`);
+      expect(shown.fields.find((f) => f.label === '지금')?.value).toBe('결석 (질병)');
+
+      const same = proposeOn(WRITTEN, {
+        student: '15번',
+        status: '결석',
+        period: 3,
+        reason: '질병',
+      });
+      expect(isWriteProposal(same)).toBe(false);
+    });
+  });
 });
 
 describe('★실행 — 기존 스토어 함수를 그대로 부른다', () => {
-  it('출결부에 부분 갱신으로 넘긴다(그 학생·그 교시만)', async () => {
-    const { deps, upserts } = spyDeps();
+  it('출결부에 한 교시 병합으로 넘긴다(그 학생·그 교시만)', async () => {
+    const { deps, upserts, merges } = spyDeps();
     const result = await executeAssistWrite(
       propose({ student: '15번', status: '결석', period: 3, reason: '질병', memo: '감기' }),
       deps,
     );
 
     expect(result.ok).toBe(true);
-    expect(upserts).toHaveLength(1);
-    expect(upserts[0]!.classId).toBe('3-2');
-    expect(upserts[0]!.date).toBe('2026-08-25');
-    expect([...upserts[0]!.studentNumbers]).toEqual([15]);
-    expect([...upserts[0]!.recordsByPeriod.keys()]).toEqual([3]);
-    expect(upserts[0]!.recordsByPeriod.get(3)).toEqual([
-      { number: 15, status: 'absent', reason: '질병', memo: '감기' },
+    expect(upserts).toEqual([]);
+    expect(merges).toEqual([
+      {
+        classId: '3-2',
+        date: '2026-08-25',
+        period: 3,
+        students: [{ number: 15, status: 'absent', reason: '질병', memo: '감기' }],
+      },
     ]);
   });
 
@@ -597,13 +656,13 @@ describe('★실행 — 기존 스토어 함수를 그대로 부른다', () => {
   });
 
   it('교과 수업반은 학생 기록 미러를 하지 않는다 — 담임 출결이 아니다', async () => {
-    const { deps, upserts, bridges } = spyDeps();
+    const { deps, merges, bridges } = spyDeps();
     await executeAssistWrite(
       propose({ student: '7번', status: '결석', className: '2학년 5반', period: 2 }),
       deps,
     );
 
-    expect(upserts[0]!.classId).toBe('c1');
+    expect(merges[0]!.classId).toBe('c1');
     expect(bridges).toEqual([]);
   });
 

@@ -144,6 +144,19 @@ export interface WriteDeps {
     recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
   }) => Promise<readonly AttendanceRecord[] | null>;
   /**
+   * 출결 — **한 교시**에서 든 학생 칸만 갈아 끼운다(나머지 학생·다른 교시는 그대로).
+   * AI 연결(브릿지) 등록이 쓰는 병합과 같은 길이다(`ManageAttendance.upsertRecordStudents`).
+   *
+   * ★교시를 밝힌 출결은 이것으로 적는다. 위 `upsertStudentAttendance` 는 대상 번호를 그날
+   * **전 교시**에서 지우고 넘긴 교시만 다시 넣어, 3교시만 적어도 그 학생의 다른 교시와
+   * (번호가 겹치는 수업반에서는) 같은 번호 다른 학생의 다른 교시가 사라졌다(2026-11-11 확인).
+   *
+   * 반환 = 저장된 전체 출결 레코드. 저장이 막히면 `null`.
+   */
+  readonly mergeStudentAttendance: (
+    record: AttendanceRecord,
+  ) => Promise<readonly AttendanceRecord[] | null>;
+  /**
    * 담임 출결은 **학생 기록에도 같은 사실이 있어야 한다.** 출결부에만 적고 말면
    * 기록 조회 화면에서는 그 결석이 없는 것으로 보인다(피드백 #147 B-4 의 반대 방향).
    * 화면에서 저장할 때도 늘 이 두 걸음을 함께 밟는다(AttendanceMode.tsx).
@@ -609,26 +622,50 @@ export async function executeAssistWrite(
           : { reason: str(proposal, 'reason') as AttendanceReason }),
         ...(str(proposal, 'memo') === undefined ? {} : { memo: str(proposal, 'memo')! }),
       };
-      // ★같은 번호의 **다른 학생**을 함께 실어 보낸다(위 getDayAttendanceRecords 주석).
-      //   안 그러면 부분 저장이 그 번호 엔트리를 통째로 갈아 끼워 옆 학생 출결이 사라진다.
-      //   "같은 학생 칸"인지는 출결 공통 규칙(attendanceStudentMatch)의 판정 함수로 가른다.
-      const dayNow = deps.getDayAttendanceRecords(classId, when);
-      const byPeriod = new Map<number, readonly StudentAttendance[]>(
-        periods.map((period) => {
-          const now = dayNow.find((record) => record.period === period)?.students ?? [];
-          const others = now.filter(
-            (a) => a.number === studentNumber && !isSameAttendanceStudent(a, entry),
-          );
-          return [period, [...others, entry]] as const;
-        }),
-      );
-
-      const saved = await deps.upsertStudentAttendance({
-        classId,
-        date: when,
-        studentNumbers: new Set([studentNumber]),
-        recordsByPeriod: byPeriod,
-      });
+      let saved: readonly AttendanceRecord[] | null = null;
+      if (proposal.values.allDay === true) {
+        // 교시를 안 밝힌 담임 학급의 "하루 전체" — 그 학생의 그날을 새 하루로 갈아 끼운다
+        // (부분 저장이 그 번호를 전 교시에서 지운 뒤 넣는다). 담임 학급은 번호가 안 겹친다.
+        // ★같은 번호의 **다른 학생**을 함께 실어 보낸다(위 getDayAttendanceRecords 주석).
+        //   "같은 학생 칸"인지는 출결 공통 규칙(attendanceStudentMatch)의 판정 함수로 가른다.
+        const dayNow = deps.getDayAttendanceRecords(classId, when);
+        const byPeriod = new Map<number, readonly StudentAttendance[]>(
+          periods.map((period) => {
+            const now = dayNow.find((record) => record.period === period)?.students ?? [];
+            const others = now.filter(
+              (a) => a.number === studentNumber && !isSameAttendanceStudent(a, entry),
+            );
+            return [period, [...others, entry]] as const;
+          }),
+        );
+        saved = await deps.upsertStudentAttendance({
+          classId,
+          date: when,
+          studentNumbers: new Set([studentNumber]),
+          recordsByPeriod: byPeriod,
+        });
+      } else {
+        // ★교시를 밝혔으면 **그 교시의 그 학생 칸만** 바꾼다(도구 설명의 약속).
+        //   같은 학생인지는 락 안 최신 명단으로 학년-반-번호를 보고 가른다.
+        try {
+          for (const period of periods) {
+            saved = await deps.mergeStudentAttendance({
+              classId,
+              date: when,
+              period,
+              students: [entry],
+            });
+            if (saved === null) break;
+          }
+        } catch (error) {
+          // 번호가 겹치는데 누구인지 못 정했다 — 아무것도 저장하지 않았다
+          // (ManageAttendance 의 AttendanceStudentAmbiguousError, applyLiveSyncWrite 와 같은 판별).
+          if (error instanceof Error && error.name === 'AttendanceStudentAmbiguousError') {
+            return { ok: false, message: error.message };
+          }
+          throw error;
+        }
+      }
       // ★null = 저장이 막혔다. 조용히 성공 문구를 내면 선생님은 적힌 줄 안다.
       if (saved === null) {
         return {

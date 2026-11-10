@@ -147,6 +147,9 @@ export interface WriteSources {
     readonly period: number;
     readonly students: readonly {
       readonly number: number;
+      /** 번호가 겹치는 수업반에서 이 칸이 누구 것인지 가르는 값(저장과 같은 판정) */
+      readonly grade?: number;
+      readonly classNum?: number;
       readonly status: AttendanceStatus;
       readonly reason?: AttendanceReason;
       readonly memo?: string;

@@ -19,6 +19,8 @@ import {
   formatPeriodLabel,
 } from '@domain/entities/Attendance';
 import { computeAutoPeriods } from '@domain/rules/attendanceRules';
+import { createAttendanceRosterMatcher } from '@domain/rules/attendanceStudentMatch';
+import { studentKey } from '@domain/entities/TeachingClass';
 import { classAlias, findClassNameInQuestion, isHomeroomWord } from '@domain/rules/classNameAlias';
 import {
   DEFAULT_OBSERVATION_CATEGORIES,
@@ -218,13 +220,24 @@ function findRoster(
  * ★그룹 반(같은 교실의 여러 과목)은 물리 반 id 로만 찾으면 다른 과목 명의로 저장된
  * 공유 기록을 놓친다(2026-07 QA2 B2). 그 판정의 정본이 `findAttendanceRecordForClass`
  * 라 여기서 규칙을 다시 만들지 않고 그대로 부른다.
+ *
+ * ★"그 칸이 이 학생 것인가"도 **저장과 같은 규칙**(attendanceStudentMatch 의 명단 판정,
+ * 학년-반-번호)으로 가른다. 예전에는 번호만 봐서, 번호가 겹치는 수업반에서 같은 번호
+ * 다른 학생의 값이 "지금" 줄에 뜨고, 그 값이 같으면 "이미 ~로 돼 있어요"로 아무것도
+ * 적지 않았다(2026-11-11 확인).
+ * 번호가 겹치는데 대상의 학년·반이 없으면 누구 칸인지 정할 수 없다 — 값을 지어내지 않고
+ * 비워 둔다(저장 단계가 그때 실패를 알린다).
  */
 function currentEntry(
   src: WriteSources,
-  cls: { readonly classId: string; readonly groupId?: string },
+  cls: {
+    readonly classId: string;
+    readonly groupId?: string;
+    readonly students: readonly Target[];
+  },
   date: string,
   period: number,
-  studentNumber: number,
+  target: Target,
 ): WriteSources['attendance'][number]['students'][number] | undefined {
   const record = findAttendanceRecordForClass(
     src.attendance,
@@ -232,7 +245,13 @@ function currentEntry(
     date,
     period,
   );
-  return record?.students.find((entry) => entry.number === studentNumber);
+  if (record == null) return undefined;
+  const sameNumber = cls.students.filter((s) => s.number === target.number).length;
+  if (sameNumber > 1 && (target.grade == null || target.classNum == null)) return undefined;
+  const want = studentKey(target);
+  return createAttendanceRosterMatcher(cls.students)
+    .resolveEntries(record.students)
+    .find((item) => item.key === want)?.entry;
 }
 
 /** 여러 교시의 현재 상태를 한 줄로 요약한다. 교시마다 다르면 그 사실을 말한다. */
@@ -348,7 +367,7 @@ export function proposeSetAttendance(
 
   // ★지금 그 칸에 무엇이 적혀 있는지 본다. 미리보기가 이걸 감추면 선생님은 "빈 칸에
   //   적는다"고 믿으며 [실행]을 누르는데 실제로는 이미 있던 결석이 지각으로 바뀐다.
-  const before = periods.map((p) => currentEntry(src, cls, when, p, target.item.number));
+  const before = periods.map((p) => currentEntry(src, cls, when, p, target.item));
 
   // ★이미 똑같으면 쓰지 않는다. 같은 값을 다시 저장해도 결과는 같지만, 저장 시각이
   //   갱신되며 기기 간 동기화가 헛돌고 선생님은 무언가 바뀐 줄 안다.
@@ -405,6 +424,9 @@ export function proposeSetAttendance(
       // `AssistWriteValues` 는 한 칸에 문자열·숫자·참거짓만 담는다(배열을 담지 않는 것이
       // 22종을 한 모양으로 유지해 온 이유다). 교시 목록은 쉼표로 붙여 보내고 실행기가 푼다.
       periods: periods.join(','),
+      // 교시를 안 밝힌 담임 학급의 "하루 전체" — 실행기는 이때만 그 학생의 하루를 통째로
+      // 바꾸고, 교시를 밝혔으면 그 교시의 그 학생 칸만 바꾼다(executeAssistWrite).
+      ...(period === undefined ? { allDay: true } : {}),
       studentNumber: target.item.number,
       // ★번호가 겹치는 수업반에서 누구인지 가르는 값. 없으면 조회 화면이 "?" 로 띄운다.
       ...(target.item.grade === undefined ? {} : { studentGrade: target.item.grade }),

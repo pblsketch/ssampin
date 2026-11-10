@@ -171,6 +171,11 @@ function fakeDeps(): { deps: WriteDeps; calls: string[]; renamed: string[] } {
         students,
       }));
     },
+    // 교시를 밝힌 출결 — 한 교시 병합. 저장된 전체 목록을 돌려준다.
+    mergeStudentAttendance: async (record: { classId: string; date: string; period: number }) => {
+      calls.push('mergeStudentAttendance');
+      return [record];
+    },
     bridgeHomeroomAttendance: track('bridgeHomeroomAttendance'),
     homeroomStudents: () => SRC.roster.homeroom,
     addObservation: async () => {
@@ -245,7 +250,7 @@ describe('★도구 25종이 각자 제 스토어 함수를 부른다', () => {
     [
       'set_attendance',
       { student: '15번', status: '결석', period: 3 },
-      ['upsertStudentAttendance', 'bridgeHomeroomAttendance'],
+      ['mergeStudentAttendance', 'bridgeHomeroomAttendance'],
     ],
     [
       'add_observation',
