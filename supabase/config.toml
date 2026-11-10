@@ -183,3 +183,8 @@ verify_jwt = true
 
 [functions.survey-teacher]
 verify_jwt = true
+
+# 서명 이미지 보관기간 만료 정리 (081). pg_cron 이 pg_net 으로 매일 부른다.
+# 게이트웨이 JWT 대신 함수 안에서 `x-sig-cleanup-secret` 을 시크릿 SIG_CLEANUP_SECRET 과 비교한다.
+[functions.sig-cleanup-expired]
+verify_jwt = false
