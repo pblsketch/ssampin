@@ -16,6 +16,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { quarantineFileName } from './dataFileRules';
 
 /**
  * 화면이 넘긴 데이터 파일 이름이 데이터 폴더 **안**을 가리키는지 확인한다.
@@ -117,9 +118,15 @@ let fsyncUnsupportedLogged = false;
  * `sidePinDeviceState.ts` 의 writeFileAtomic). fsync 자체를 지원하지 않는 저장소(일부 네트워크 폴더
  * 등)에서만 예전처럼 fsync 없이 진행한다 — 여기서 실패로 돌리면 그 PC 는 아무것도 저장하지 못한다.
  * 그 밖의 fsync 오류는 그대로 던진다(호출 쪽이 임시 파일을 지우고 저장 실패로 돌린다).
+ *
+ * `flag` 를 `'wx'` 로 주면 이미 있는 파일을 덮지 않는다(손상 파일 격리 사본 — `dataFileRead.ts`).
  */
-function writeFileSynced(targetPath: string, data: string): void {
-  const handle = fs.openSync(targetPath, 'w');
+export function writeFileSynced(
+  targetPath: string,
+  data: string | Buffer,
+  flag: 'w' | 'wx' = 'w',
+): void {
+  const handle = fs.openSync(targetPath, flag);
   try {
     fs.writeFileSync(handle, data, 'utf-8');
     try {
@@ -245,4 +252,31 @@ function removeQuietly(p: string): void {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * 깨진 파일을 **복사로** 옆에 남긴다(`<이름>.corrupt-<시각>`). 원래 파일은 그대로 둔다 —
+ * 옮긴 직후 전원이 꺼지면 원본이 "없음"이 되어 빈 자료로 시작하기 때문이다.
+ * 바이트 그대로 복사하고 디스크에 내려 쓴 뒤(fsync) 다시 읽어 같은지 확인한다. 실패하면 예외.
+ */
+export function copyFileAside(source: string, now: Date): string {
+  const name = quarantineFileName(path.basename(source), now);
+  const target = path.join(path.dirname(source), name);
+  const bytes = fs.readFileSync(source);
+  try {
+    writeFileSynced(target, bytes, 'wx');
+    if (!fs.readFileSync(target).equals(bytes)) {
+      throw Object.assign(new Error('격리 사본 검증 실패'), { code: 'EVERIFY' });
+    }
+  } catch (err) {
+    if (fileErrorCode(err) !== 'EEXIST') {
+      try {
+        fs.unlinkSync(target);
+      } catch {
+        /* ignore */
+      }
+    }
+    throw err;
+  }
+  return name;
 }

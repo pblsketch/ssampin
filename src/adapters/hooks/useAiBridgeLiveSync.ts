@@ -16,6 +16,7 @@ import {
 } from '@usecases/aiBridge/applyLiveSyncWrite';
 import type { Todo, TodoPriority } from '@domain/entities/Todo';
 import type { SchoolEvent } from '@domain/entities/SchoolEvent';
+import type { StudentAttendance } from '@domain/entities/Attendance';
 import type { ProgressStatus } from '@domain/entities/CurriculumProgress';
 import type { NotePageBody } from '@domain/entities/NotePage';
 import { MEMO_COLORS, type MemoColor } from '@domain/valueObjects/MemoColor';
@@ -331,23 +332,57 @@ export function buildLiveSyncDeps(): Parameters<typeof applyLiveSyncWrite>[1] {
             //     기존에는 in-memory getDayAttendance로 병합한 하루치를 통째 교체했는데,
             //     그 스냅샷이 낡으면 동시 편집된 다른 학생 출결을 덮는다(2026-07 QA F3).
             //     보존·병합은 usecase가 락 안 fresh 스냅샷에서 수행한다(P6).
-            // 쓰기 차단이면 null — 여기서 던져야 아래 (2) 기록부 미러가 실행되지 않는다.
+            // 쓰기 차단이면 던진다 — 여기서 던져야 아래 (2) 기록부 미러가 실행되지 않는다.
             // 삼키면 원본 출결부 없이 사본만 생기고(이중 장부 역방향 어긋남) 멱등키까지
             // 완료 처리돼 재시도가 봉쇄된다(ADR-027).
-            const savedEntries = await tc.upsertStudentAttendanceEntries({
-              classId: className,
-              date: input.date,
-              studentNumbers: target,
-              recordsByPeriod: input.recordsByPeriod,
-            });
-            if (savedEntries === null) {
-              throw new Error('출결부 저장이 차단되어 담임 출결을 기록하지 못했습니다.');
+            const blocked = '출결부 저장이 차단되어 담임 출결을 기록하지 못했습니다.';
+            const allDay = new Set(input.allDayNumbers);
+            // (1a) allDay(하루 전체) 학생 — 그날을 통째로 바꾼다(부분 저장이 그 번호를 전 교시
+            //      에서 지운 뒤 넣는다).
+            if (allDay.size > 0) {
+              const dayOfAllDay = new Map<number, StudentAttendance[]>();
+              for (const [period, list] of input.recordsByPeriod) {
+                const hits = list.filter((sa) => allDay.has(sa.number));
+                if (hits.length > 0) dayOfAllDay.set(period, hits);
+              }
+              const savedEntries = await tc.upsertStudentAttendanceEntries({
+                classId: className,
+                date: input.date,
+                studentNumbers: allDay,
+                recordsByPeriod: dayOfAllDay,
+              });
+              if (savedEntries === null) throw new Error(blocked);
+            }
+            // (1b) periods("특정 교시만") 학생 — 든 교시의 그 학생 칸만 바꾼다. 위 부분 저장으로
+            //      보내면 그 학생의 **다른 교시**가 지워졌다(2026-11-11 확인, 쌤핀 AI 와 같은 결함).
+            //      담임 학급은 번호가 겹치지 않아 번호로 같은 학생을 가른다.
+            for (const [period, list] of input.recordsByPeriod) {
+              const hits = list.filter((sa) => !allDay.has(sa.number));
+              if (hits.length === 0) continue;
+              const ok = await tc.mergeAttendanceRecordStudents({
+                classId: className,
+                date: input.date,
+                period,
+                students: hits,
+              });
+              if (!ok) throw new Error(blocked);
             }
             // (2) 기록부(student-records) 미러 — subcategory 자동계산 + att-{id}-{date}.
+            //     ★사본은 그 학생의 **하루 전체**로 다시 쓰인다 — 이번에 든 교시만 넘기면 나머지
+            //     교시가 사본에서 사라진다. 그래서 저장된 그날 출결을 다시 모아 넘긴다.
+            const dayByPeriod = new Map<number, StudentAttendance[]>();
+            for (const record of useTeachingClassStore
+              .getState()
+              .getDayAttendance(className, input.date)) {
+              dayByPeriod.set(record.period, [
+                ...(dayByPeriod.get(record.period) ?? []),
+                ...record.students,
+              ]);
+            }
             await sr.bridgeHomeroomDayAttendance({
               className,
               date: input.date,
-              recordsByPeriod: input.recordsByPeriod,
+              recordsByPeriod: dayByPeriod,
               students,
             });
           },

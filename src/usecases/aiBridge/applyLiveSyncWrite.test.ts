@@ -1226,14 +1226,57 @@ describe('applyLiveSyncWrite — homeroomAttendance(담임)', () => {
     );
     const arg = calls[0]?.args[0] as {
       recordsByPeriod: Map<number, StudentAttendance[]>;
+      allDayNumbers: number[];
     };
     expect(arg.recordsByPeriod.get(2)).toEqual([
       { number: 5, status: 'late' },
       { number: 6, status: 'absent' },
     ]);
+    // 하루 전체로 온 학생만 표시한다 — 저장 쪽이 이 학생만 그날을 통째로 바꾼다.
+    expect(arg.allDayNumbers).toEqual([6]);
     for (const entry of arg.recordsByPeriod.get(2) ?? []) {
       expect(studentKey(entry)).toBe(String(entry.number));
     }
+  });
+});
+
+describe('applyLiveSyncWrite — homeroomAttendance 입력 검증(저장 전 거부)', () => {
+  const send = (students: unknown[]) =>
+    applyLiveSyncWrite(
+      {
+        domain: 'homeroomAttendance',
+        op: 'create',
+        idempotencyKey: 'hv',
+        data: { date: '2026-06-09', students },
+      },
+      deps,
+    );
+
+  it('periods 가 비었거나 번호만 오면 저장하지 않고 고칠 방법을 알려 준다', async () => {
+    for (const student of [{ number: 5, periods: [] }, { number: 5 }]) {
+      calls.length = 0;
+      const r = await send([student]);
+      expect(r).toMatchObject({ ok: false, status: 400 });
+      expect(r.error).toContain('periods 에 교시를 하나 이상 넣거나 allDay');
+      expect(calls.some((c) => c.fn === 'homeroomAttendance.save')).toBe(false);
+    }
+  });
+
+  it('같은 학생에 allDay 와 periods 를 함께 보내면 거부한다', async () => {
+    const r = await send([
+      { number: 5, allDay: { status: 'absent' }, periods: [{ period: 2, status: 'late' }] },
+    ]);
+    expect(r).toMatchObject({ ok: false, status: 400 });
+    expect(calls.some((c) => c.fn === 'homeroomAttendance.save')).toBe(false);
+  });
+
+  it('같은 학생을 두 번 보내면(한 번은 allDay, 한 번은 periods) 거부한다', async () => {
+    const r = await send([
+      { number: 5, allDay: { status: 'absent' } },
+      { number: 5, periods: [{ period: 2, status: 'late' }] },
+    ]);
+    expect(r).toMatchObject({ ok: false, status: 400 });
+    expect(calls.some((c) => c.fn === 'homeroomAttendance.save')).toBe(false);
   });
 });
 

@@ -335,6 +335,21 @@ interface ElectronAPI {
    * 다시 만들 수 있는 상태 파일(`tasks-sync-state` 등)만 해당한다. 옛 preload 에는 없을 수 있다.
    */
   getQuarantinedDataFiles?: () => Promise<readonly string[]>;
+  /**
+   * 원본·백업이 모두 깨져 시작 스냅샷으로 되돌린 자료의 기록(ADR-148). 메인 프로세스가 준 값이라
+   * 모양을 믿지 않고 `restoredDataGateway` 가 걸러 쓴다. 옛 preload 에는 없을 수 있다.
+   */
+  getRestoredDataFiles?: () => Promise<readonly unknown[]>;
+  markRestoredDataNotified?: (ids: readonly string[]) => Promise<void>;
+  /** reason 'year-transition': 학년도 전환 표시가 걸린 키라 복원 보호 없이 올렸다(ADR-148). */
+  markRestoredDataSyncResolved?: (
+    files: readonly string[],
+    reason?: 'year-transition',
+  ) => Promise<void>;
+  /** 메인 창 화면이 복원 알림을 받을 준비가 됐다(보이고 알릴 것이 있으면 `onDataRestored` 가 불린다). */
+  readyForRestoredDataNotice?: () => Promise<void>;
+  /** 알릴 복원이 있고 메인 창이 보인다는 신호(메인 창에만 온다). 해제 함수를 돌려준다. */
+  onDataRestored?: (callback: () => void) => () => void;
   aiBridge: AiBridgeElectronAPI;
   /** 데스크톱 앱에서만. 옛 preload 에는 없을 수 있어 선택 속성으로 둔다 — 없으면 화면이 그 사실을 말한다. */
   ownAi?: OwnAiElectronAPI;

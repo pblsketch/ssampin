@@ -6,7 +6,7 @@ import type {
   CounselingMethod,
   AttendancePeriodEntry,
 } from '@domain/entities/StudentRecord';
-import { formatPeriodLabel } from '@domain/entities/Attendance';
+import { formatPeriodLabel, type StudentAttendance } from '@domain/entities/Attendance';
 import type { PeriodTime } from '@domain/valueObjects/PeriodTime';
 import { reassignConflictingNumbers } from '@domain/rules/studentNumberRules';
 import {
@@ -71,14 +71,24 @@ const SUBCATEGORY_STATUS_MAP: Record<string, AttendancePeriodEntry['status']> = 
 /**
  * 출결 기록 편집 시작 시 교시 행 상태의 초기값을 계산한다.
  * - record.attendancePeriods 가 있으면 그대로 사용
- * - 없으면(레거시) subcategory 문자열을 파싱해 1행을 만든다 (period=1 기본값)
+ * - 없으면(레거시) 출결부에 실제로 있는 그 학생의 그날 교시(`ledgerPeriods`)를 쓴다
+ * - 그것도 없으면 subcategory 문자열을 파싱해 1행을 만든다 (period=1 기본값)
+ *
+ * ★저장은 이 목록으로 그 학생의 하루를 통째로 바꾼다. 교시 목록이 없는 사본(모바일이 출결부를
+ *   못 읽고 만든 것)에 1교시 한 줄을 지어내면, 저장할 때 실제 조회·다른 교시 기록이 지워졌다.
  */
-export function initEditAttendancePeriods(record: {
-  readonly subcategory: string;
-  readonly attendancePeriods?: readonly AttendancePeriodEntry[];
-}): AttendancePeriodEntry[] {
+export function initEditAttendancePeriods(
+  record: {
+    readonly subcategory: string;
+    readonly attendancePeriods?: readonly AttendancePeriodEntry[];
+  },
+  ledgerPeriods: readonly AttendancePeriodEntry[] = [],
+): AttendancePeriodEntry[] {
   if (record.attendancePeriods && record.attendancePeriods.length > 0) {
     return [...record.attendancePeriods];
+  }
+  if (ledgerPeriods.length > 0) {
+    return [...ledgerPeriods].sort((a, b) => a.period - b.period);
   }
   // 레거시 파싱: "결석 (질병)" | "지각"
   const match = record.subcategory.match(/^(.+?)(?:\s*\((.+)\))?$/);
@@ -92,6 +102,32 @@ export function initEditAttendancePeriods(record: {
       ...(reason ? { reason } : {}),
     },
   ];
+}
+
+/**
+ * 출결부의 그날 기록에서 한 학생(번호)의 이상 출결 교시만 뽑는다 — 출석은 뺀다
+ * (학생 기록 사본의 교시 목록과 같은 모양). 담임 학급은 번호가 겹치지 않는다.
+ */
+export function ledgerAttendancePeriodsOf(
+  dayRecords: readonly {
+    readonly period: number;
+    readonly students: readonly StudentAttendance[];
+  }[],
+  studentNumber: number,
+): AttendancePeriodEntry[] {
+  const result: AttendancePeriodEntry[] = [];
+  for (const record of dayRecords) {
+    if (result.some((entry) => entry.period === record.period)) continue;
+    const hit = record.students.find((s) => s.number === studentNumber);
+    if (!hit || hit.status === 'present') continue;
+    result.push({
+      period: record.period,
+      status: hit.status,
+      ...(hit.reason ? { reason: hit.reason } : {}),
+      ...(hit.memo ? { memo: hit.memo } : {}),
+    });
+  }
+  return result.sort((a, b) => a.period - b.period);
 }
 
 /* ──────────────────────── 출석번호 정리 ──────────────────────── */

@@ -2,33 +2,7 @@ import type { DriveSyncConflict } from '@domain/entities/DriveSyncState';
 import { Modal } from '@adapters/components/common/Modal';
 import { Notice } from '@adapters/components/common/Notice';
 import { useRegisterModal } from '@adapters/hooks/useRegisterModal';
-
-/** 동기화 파일명 → 한글 표시 매핑 */
-const FILE_LABELS: Record<string, string> = {
-  settings: '설정',
-  'class-schedule': '학급 시간표',
-  'teacher-schedule': '교사 시간표',
-  students: '학생 명렬표',
-  seating: '좌석배치',
-  events: '일정',
-  memos: '메모',
-  todos: '할 일',
-  'student-records': '담임 메모장',
-  bookmarks: '북마크',
-  surveys: '설문/체크리스트',
-  'seat-constraints': '좌석 제약조건',
-  'teaching-classes': '수업 반',
-  dday: 'D-Day',
-  'curriculum-progress': '수업 진도',
-  attendance: '출석',
-  consultations: '상담 예약',
-  // 노트 (note-cloud-sync PDCA)
-  'note-notebooks': '노트북 목록',
-  'note-sections': '노트 섹션',
-  'note-pages-meta': '노트 페이지 목록',
-  // 동적 키(note-body--{pageId})는 본 매핑에 포함되지 않으며, line 70의 fallback으로
-  // pageId가 그대로 표시된다. 페이지 제목 표시는 후속 UX 개선 항목.
-};
+import { dataFileLabel } from '@domain/rules/dataFileLabels';
 
 interface Props {
   conflicts: DriveSyncConflict[];
@@ -111,7 +85,7 @@ export function DriveSyncConflictModal({
                   description
                 </span>
                 <span className="text-sm font-bold text-sp-text">
-                  {FILE_LABELS[conflict.filename] ?? conflict.filename}
+                  {dataFileLabel(conflict.filename) ?? conflict.filename}
                 </span>
               </div>
 
@@ -121,6 +95,7 @@ export function DriveSyncConflictModal({
                   <p className="text-sp-text font-medium">
                     {formatConflictTime(conflict.localModified)}
                   </p>
+                  {conflict.localNote && <p className="mt-1 text-sp-muted">{conflict.localNote}</p>}
                 </div>
                 <div className="p-2 rounded bg-sp-bg">
                   <p className="text-sp-muted mb-1">클라우드 ({conflict.remoteDeviceName})</p>

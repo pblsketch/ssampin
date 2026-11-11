@@ -117,6 +117,13 @@ import {
   importArchive,
 } from './archiveManager';
 import { readDataFileWithRecovery } from './dataFileRead';
+import { createRestoreRegistry } from './dataRestoreLog';
+import {
+  ADDED_STARTUP_SNAPSHOT_FILES,
+  STARTUP_SNAPSHOT_FILES,
+  createStartupSnapshots,
+  pruneStartupSnapshots,
+} from './startupSnapshots';
 import { createDesktopWidgetManager, type DesktopWidgetManager } from './desktopWidgetManager';
 import {
   findBestWorkAreaForBounds,
@@ -158,12 +165,7 @@ import {
   peekOpenPath,
 } from './security/dialogHandles';
 import { safeFetchText } from './security/safeFetch';
-import {
-  dataFilePaths,
-  isSafeDataFileName,
-  replaceFileDurably,
-  writeDataFileAtomic,
-} from './dataFileWrite';
+import { isSafeDataFileName, writeDataFileAtomic } from './dataFileWrite';
 
 declare const __dirname: string;
 
@@ -173,6 +175,34 @@ registerMiniAppScheme();
 
 let mainWindow: BrowserWindow | null = null;
 let widgetWindow: BrowserWindow | null = null;
+
+/** 시작 스냅샷으로 되돌린 자료의 기록 창구(디스크 `backups/restore-log` + 이번 실행분, ADR-148). */
+const restoreRegistry = createRestoreRegistry(() => getDataDir());
+
+/**
+ * 아직 알리지 않은 복원이 있고 메인 창이 **보이면** 메인 창에 알릴 차례라고 신호한다.
+ * 창이 숨은 채 시작하면(위젯·옆핀 모드) 보이는 순간(`show`·`restore`)에 다시 부른다.
+ * 알림 문구·중복 방지(`notified`)는 화면이 맡는다(`useRestoredDataNotice`).
+ */
+function pokeMainWindowAboutRestores(): void {
+  // 최소화된 창도 "보이지 않음"이다 — 토스트가 아무도 모르게 지나가고 "알렸음"이 된다. `restore` 때 다시 부른다.
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    !mainWindow.isVisible() ||
+    mainWindow.isMinimized()
+  ) {
+    return;
+  }
+  let pending = false;
+  try {
+    pending = restoreRegistry.list().some((entry) => !entry.notified);
+  } catch {
+    return; // 기록을 읽지 못하면 알리지 않는다(동기화는 따로 멈춘다)
+  }
+  if (!pending) return;
+  mainWindow.webContents.send('data:restored');
+}
 let liveSyncHost: LiveSyncHost | null = null;
 let apiKeyHandlers: { cancelAll: () => void } | null = null;
 
@@ -2664,6 +2694,10 @@ function createWindow(): void {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
+  // ADR-148 — 숨은 채 시작한 메인 창이 처음 보일 때 아직 알리지 않은 복원을 알린다.
+  mainWindow.on('show', pokeMainWindowAboutRestores);
+  mainWindow.on('restore', pokeMainWindowAboutRestores);
+
   mainWindow.on('close', (e) => {
     if (!isQuitting) {
       const opts = readSettingsWidgetOptions();
@@ -3682,6 +3716,8 @@ function registerIpcHandlers(): void {
 
   /** 이번 실행에서 깨져서 격리한 상태 파일 이름(메모리에만 둔다 — 앱을 다시 켜면 비워진다). */
   const quarantinedDataFiles = new Set<string>();
+  const isStringArray = (value: unknown): value is string[] =>
+    Array.isArray(value) && value.length <= 200 && value.every((v) => typeof v === 'string');
 
   // data:read — userData/data/{filename}.json 읽기 (손상 감지 + 백업 복구).
   // 원본·백업이 모두 깨졌으면 오류를 던진다(null 로 위장하지 않는다). 허용 목록의 "다시 만들 수
@@ -3689,11 +3725,40 @@ function registerIpcHandlers(): void {
   ipcMain.handle('data:read', (_event, filename: string): string | null => {
     const result = readDataFileWithRecovery(getDataDir(), filename);
     if (result.quarantined) quarantinedDataFiles.add(filename);
+    if (result.restored) {
+      // 원본·백업이 모두 깨져 시작 스냅샷으로 되돌렸다(ADR-148). 다른 창에 data:changed 는 보내지
+      // 않는다 — 내용은 이 읽기의 결과로 이미 전달됐다. 메인 창에만 "알릴 복원이 있다"고 알린다
+      // (위젯 창이 먼저 읽어 복원한 경우에도 메인 창이 알리게).
+      restoreRegistry.add(result.restored);
+      pokeMainWindowAboutRestores();
+    }
     return result.raw;
   });
 
   // 이번 실행에서 격리·초기화된 상태 파일 이름들. 화면이 "연동이 꺼졌어요"를 알리는 데 쓴다.
   ipcMain.handle('data:quarantined', (): string[] => [...quarantinedDataFiles]);
+
+  // 시작 스냅샷으로 되돌린 자료의 기록(ADR-148). 화면이 알림·동기화 보호에 쓴다.
+  ipcMain.handle('data:restored-list', () => restoreRegistry.list());
+  // 메인 창 화면이 준비됐다 — 보이고 알릴 것이 있으면 곧바로 신호한다.
+  ipcMain.handle('data:restored-ready', (): void => pokeMainWindowAboutRestores());
+  ipcMain.handle('data:restored-mark-notified', (_event, ids: unknown): void => {
+    if (!isStringArray(ids)) return;
+    const picked = new Set(ids);
+    restoreRegistry.mark((entry) => picked.has(entry.id), 'notified');
+  });
+  ipcMain.handle(
+    'data:restored-mark-sync-resolved',
+    (_event, files: unknown, reason: unknown): void => {
+      if (!isStringArray(files)) return;
+      const picked = new Set(files);
+      restoreRegistry.mark(
+        (entry) => picked.has(entry.file),
+        'syncResolved',
+        reason === 'year-transition' ? 'year-transition' : undefined,
+      );
+    },
+  );
 
   // data:write — JSON 파일 쓰기 (백업 + atomic write + 검증). 성공 여부를 돌려준다:
   // 실패를 삼키면 렌더러가 저장된 줄 알고 화면만 갱신해 입력한 내용이 조용히 사라진다.
@@ -6065,78 +6130,46 @@ function registerIpcHandlers(): void {
   });
 }
 
-/** 앱 시작 시 중요 데이터 파일 백업 생성 */
+/**
+ * 앱 시작 시 중요 데이터 파일 백업 생성 — 규칙은 `startupSnapshots.ts`.
+ *
+ * 날짜별 시작 스냅샷(`backups/startup/<파일>.<YYYY-MM-DD>.json`)은 그날 첫 실행 때만 찍는다
+ * (first-write-wins). `.backup.json` 1세대 슬롯은 저장·재시작마다 덮여서 사고 뒤 다시 켜면 마지막
+ * 정상본까지 지워지기 때문이다. 이 스냅샷은 원본·백업이 모두 깨졌을 때의 복원 원천이다(ADR-148).
+ * 정리는 파일마다 최근 7개를 남기고 그보다 오래된 것만 14일 기준으로 지운다.
+ */
 function createStartupBackups(): void {
   const dataDir = getDataDir();
-  const criticalFiles = [
-    'attendance',
-    'teaching-classes',
-    'curriculum-progress',
-    'settings',
-    'memos',
-    'todos',
-    'events',
-    // 2026-07-13 동기화 유실 신고 후속: 학생 기록(커스텀 카테고리 포함)·수업 기록도
-    // 시작 시 백업 대상에 포함 — 저장마다 덮이는 .backup.json 1세대 외 복구 지점 확보
-    'student-records',
-    'observations',
-  ];
+  const now = new Date();
+  createStartupSnapshots(dataDir, STARTUP_SNAPSHOT_FILES, now);
+  pruneStartupSnapshots(dataDir, now.getTime());
+}
 
-  // 날짜별 시작 스냅샷 — {filename}.backup.json 1세대 슬롯은 저장·재시작마다 덮여서
-  // 사고(파일 통째 교체) 후 앱을 다시 켜면 마지막 정상본까지 지워진다.
-  // 하루 한 번 첫 실행 때만 기록(first-write-wins): 오전 정상 백업 후 데이터가 오염된 채
-  // 같은 날 재시작해도 그날의 정상 스냅샷이 보존된다. 날짜는 로컬(KST) 기준. 14일 경과분은 정리.
-  const snapshotDir = path.join(dataDir, 'backups', 'startup');
-  const nowDate = new Date();
-  const today = [
-    nowDate.getFullYear(),
-    String(nowDate.getMonth() + 1).padStart(2, '0'),
-    String(nowDate.getDate()).padStart(2, '0'),
-  ].join('-');
-  let snapshotReady = false;
-  try {
-    fs.mkdirSync(snapshotDir, { recursive: true });
-    snapshotReady = true;
-  } catch {
-    // 스냅샷 폴더 생성 실패 시 1세대 백업만 진행
-  }
+/** 창을 띄운 뒤 더한 자료의 스냅샷을 찍기까지 기다리는 시간과, 파일 사이 간격(ms). */
+const ADDED_SNAPSHOT_START_DELAY_MS = 10_000;
+const ADDED_SNAPSHOT_GAP_MS = 200;
 
-  // 백업·스냅샷도 저장과 같은 길(임시 파일 + fsync + 내용 검증 + 교체)로 쓴다 — 제자리에 덮어쓰다
-  // 전원이 끊기면 마지막 정상 백업이 반쯤 쓰인 파일로 바뀐다. 실패하면 기존 백업은 그대로 남는다.
-  for (const filename of criticalFiles) {
-    const { filePath, backupPath, backupTempPath } = dataFilePaths(dataDir, filename);
+/**
+ * ADR-148 에서 더한 자료(학생 명렬·과제·시간표·자리·상담·생기부 초안·근거 등)의 시작 스냅샷.
+ *
+ * 창을 띄우기 **전에** 찍으면 그날 첫 실행이 USB 외장 SSD 실측으로 0.1~0.3초(바쁠 때 1초 가까이)
+ * 늦어져서, 창을 띄운 뒤 한 파일씩 띄엄띄엄 찍는다(메인 프로세스를 한 번에 오래 붙잡지 않게).
+ * 스냅샷만 찍는다 — 이 자료들의 `.backup.json` 은 저장할 때마다 이미 새로 쓰인다.
+ */
+function scheduleAddedStartupSnapshots(): void {
+  const files = [...ADDED_STARTUP_SNAPSHOT_FILES];
+  const now = new Date();
+  const next = (): void => {
+    const filename = files.shift();
+    if (filename === undefined) return;
     try {
-      if (fs.existsSync(filePath)) {
-        const raw = fs.readFileSync(filePath, 'utf-8');
-        if (raw.length > 10) {
-          JSON.parse(raw); // 유효한 JSON인지 확인
-          // 개별 파일 실패는 무시(결과를 보지 않는다 — 실패해도 아래 스냅샷은 시도한다)
-          replaceFileDurably(backupPath, backupTempPath, raw);
-          if (snapshotReady) {
-            const snapshotPath = path.join(snapshotDir, `${filename}.${today}.json`);
-            if (!fs.existsSync(snapshotPath)) {
-              const snapshotTempPath = path.join(snapshotDir, `${filename}.${today}.tmp.json`);
-              replaceFileDurably(snapshotPath, snapshotTempPath, raw);
-            }
-          }
-        }
-      }
+      createStartupSnapshots(getDataDir(), [filename], now, { refreshBackup: false });
     } catch {
       // 개별 파일 실패는 무시
     }
-  }
-
-  if (snapshotReady) {
-    try {
-      const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
-      for (const entry of fs.readdirSync(snapshotDir)) {
-        const entryPath = path.join(snapshotDir, entry);
-        if (fs.statSync(entryPath).mtimeMs < cutoff) fs.unlinkSync(entryPath);
-      }
-    } catch {
-      // 오래된 스냅샷 정리 실패는 무시
-    }
-  }
+    setTimeout(next, ADDED_SNAPSHOT_GAP_MS);
+  };
+  setTimeout(next, ADDED_SNAPSHOT_START_DELAY_MS);
 }
 
 // 크래시 증거 수집은 **가장 먼저** 붙인다 — app ready 이후에 붙이면 그 전에 난 크래시를
@@ -6236,6 +6269,7 @@ if (launchedAsAiBridge) {
       crashDumpDir,
     );
     createStartupBackups();
+    scheduleAddedStartupSnapshots();
     checkInstallation();
     registerIpcHandlers();
     registerSecureStorageHandlers();

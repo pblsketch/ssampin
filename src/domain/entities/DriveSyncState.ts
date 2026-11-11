@@ -68,4 +68,9 @@ export interface DriveSyncConflict {
   readonly baselineChecksum?: string | null;
   readonly localChecksum?: string | null;
   readonly remoteChecksum?: string;
+  /**
+   * '동기화 충돌' 창의 "이 기기" 시각 아래에 보일 안내 한 줄. 시작 스냅샷으로 되돌린 자료의 충돌에만 넣는다(ADR-148).
+   * 없으면 아무것도 보이지 않는다(기존 충돌).
+   */
+  readonly localNote?: string;
 }

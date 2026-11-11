@@ -10,6 +10,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import type { DriveSyncConflict } from '@domain/entities/DriveSyncState';
 import { DriveSyncConflictModal } from './DriveSyncConflictModal';
+import { RESTORED_CONFLICT_NOTE } from '@domain/rules/restoredDataNotice';
 
 const conflict: DriveSyncConflict = {
   filename: 'events',
@@ -77,5 +78,30 @@ describe('DriveSyncConflictModal', () => {
     fireEvent.click(busy);
     fireEvent.click(other);
     expect(onResolve).not.toHaveBeenCalled();
+  });
+
+  it('시작 스냅샷으로 되돌린 자료의 충돌은 이 기기 시각 아래 안내 한 줄을 보이고, 기존 충돌은 그대로다', () => {
+    const note = RESTORED_CONFLICT_NOTE;
+    const restored: DriveSyncConflict = {
+      ...conflict,
+      filename: 'student-records',
+      localModified: '2026-11-10T04:41:00.000Z',
+      localNote: note,
+    };
+    render(
+      <DriveSyncConflictModal
+        conflicts={[restored, conflict]}
+        onResolve={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    // 이름은 충돌 창과 복원 알림이 함께 쓰는 표에서 온다
+    expect(screen.getByText('담임 메모장')).toBeTruthy();
+    expect(screen.getByText('일정')).toBeTruthy();
+    const shown = screen.getAllByText(note);
+    expect(shown).toHaveLength(1);
+    expect(shown[0]?.className).toContain('text-sp-muted');
+    expect(shown[0]?.className).not.toMatch(/bg-/);
   });
 });

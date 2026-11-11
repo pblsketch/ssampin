@@ -45,6 +45,11 @@ export interface LiveSyncHomeroomAttendanceInput {
   readonly recordsByPeriod: ReadonlyMap<number, readonly StudentAttendance[]>;
   /** 이번 쓰기 대상 학생 번호(담임 명단에서 이 학생만 갱신, 나머지 보존). */
   readonly studentNumbers: readonly number[];
+  /**
+   * 그중 `allDay`(하루 전체)로 온 학생 번호 — 이 학생만 그날을 통째로 바꾼다.
+   * 나머지(`periods`, "특정 교시만")는 든 교시의 그 학생 칸만 바꾸고 다른 교시는 그대로 둔다.
+   */
+  readonly allDayNumbers: readonly number[];
 }
 
 /** 생기부 초안 upsert 입력(store 액션 주입용 — 식별·내부 메타 제외, 안전 필드만). */
@@ -628,6 +633,7 @@ async function applyHomeroomAttendance(
   const allDayPeriods = [0, ...Array.from({ length: Math.max(0, n) }, (_, i) => i + 1), 9];
   const recordsByPeriod = new Map<number, StudentAttendance[]>();
   const studentNumbers: number[] = [];
+  const allDayNumbers: number[] = [];
   const pushAt = (period: number, sa: StudentAttendance): void => {
     const arr = recordsByPeriod.get(period);
     if (arr) arr.push(sa);
@@ -638,12 +644,29 @@ async function applyHomeroomAttendance(
     const o = raw as Record<string, unknown>;
     const number = o['number'];
     if (typeof number !== 'number') continue;
+    // ★아무것도 저장하기 전에 거른다. 교시 없이 번호만 오면 예전엔 그날 기록이 지워졌고,
+    //   교시 단위 저장으로 바뀐 뒤에는 아무 일 없이 "성공"이 된다 — 둘 다 보낸 쪽의 뜻이 아니다.
+    //   allDay 와 periods 를 함께(또는 같은 학생을 두 번) 보내면 한 교시에 두 줄이 생긴다.
+    const hasAllDay = o['allDay'] !== undefined && o['allDay'] !== null;
+    const rawPeriods = o['periods'];
+    if (studentNumbers.includes(number)) {
+      return bad(`${number}번 학생이 두 번 들어 있습니다. 한 학생은 한 번만 보내세요.`);
+    }
+    if (hasAllDay && rawPeriods !== undefined && rawPeriods !== null) {
+      return bad(`${number}번 학생: allDay 와 periods 는 함께 쓸 수 없습니다. 하나만 보내세요.`);
+    }
+    if (!hasAllDay && !(Array.isArray(rawPeriods) && rawPeriods.length > 0)) {
+      return bad(
+        `${number}번 학생의 출결이 비어 있습니다. periods 에 교시를 하나 이상 넣거나 allDay 를 쓰세요.`,
+      );
+    }
     studentNumbers.push(number);
-    if (o['allDay'] !== undefined && o['allDay'] !== null) {
+    if (hasAllDay) {
       const base = toStudentAttendance(
         { ...(o['allDay'] as Record<string, unknown>), number },
         false,
       );
+      allDayNumbers.push(number);
       for (const p of allDayPeriods) pushAt(p, base);
     } else if (Array.isArray(o['periods'])) {
       for (const pe of o['periods']) {
@@ -655,7 +678,7 @@ async function applyHomeroomAttendance(
       }
     }
   }
-  await deps.homeroomAttendance.save({ date, recordsByPeriod, studentNumbers });
+  await deps.homeroomAttendance.save({ date, recordsByPeriod, studentNumbers, allDayNumbers });
   return ok(req.idempotencyKey);
 }
 

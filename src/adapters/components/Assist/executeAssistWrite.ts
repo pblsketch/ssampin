@@ -661,7 +661,18 @@ export async function executeAssistWrite(
           // 번호가 겹치는데 누구인지 못 정했다 — 아무것도 저장하지 않았다
           // (ManageAttendance 의 AttendanceStudentAmbiguousError, applyLiveSyncWrite 와 같은 판별).
           if (error instanceof Error && error.name === 'AttendanceStudentAmbiguousError') {
-            return { ok: false, message: error.message };
+            // ★이 문구는 선생님이 읽는다(제안 카드의 실패 문구). 오류 본문은 AI 연결에서 AI 에게
+            //   돌려주는 말("학년과 반을 함께 보내 주세요")이라 여기서는 쓰지 않는다.
+            const raw = (error as { numbers?: unknown }).numbers;
+            const numbers = Array.isArray(raw)
+              ? raw.filter((n): n is number => typeof n === 'number')
+              : [];
+            const which =
+              numbers.length > 0 ? numbers.map((n) => `${n}번`).join(', ') : '같은 번호';
+            return {
+              ok: false,
+              message: `이 수업반에는 ${which} 학생이 여러 명이라 누구인지 정하지 못해 적지 않았어요. 학년과 반을 함께 말해 주세요(예: 2학년 3반 ${numbers[0] ?? 7}번).`,
+            };
           }
           throw error;
         }

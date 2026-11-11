@@ -53,6 +53,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   removeData: (filename: string): Promise<void> => ipcRenderer.invoke('data:remove', filename),
   /** 이번 실행에서 깨져서 격리·초기화된 상태 파일 이름들(없으면 빈 배열). */
   getQuarantinedDataFiles: (): Promise<string[]> => ipcRenderer.invoke('data:quarantined'),
+  /** 원본·백업이 모두 깨져 시작 스냅샷으로 되돌린 자료의 기록(ADR-148). */
+  getRestoredDataFiles: (): Promise<unknown[]> => ipcRenderer.invoke('data:restored-list'),
+  markRestoredDataNotified: (ids: readonly string[]): Promise<void> =>
+    ipcRenderer.invoke('data:restored-mark-notified', [...ids]),
+  markRestoredDataSyncResolved: (
+    files: readonly string[],
+    reason?: 'year-transition',
+  ): Promise<void> => ipcRenderer.invoke('data:restored-mark-sync-resolved', [...files], reason),
+  /** 메인 창 화면이 복원 알림을 받을 준비가 됐다(보이고 알릴 것이 있으면 `data:restored` 가 온다). */
+  readyForRestoredDataNotice: (): Promise<void> => ipcRenderer.invoke('data:restored-ready'),
+  /** 알릴 복원이 있고 메인 창이 보인다는 신호(메인 창에만 온다). */
+  onDataRestored: (callback: () => void): (() => void) => {
+    const handler = (): void => callback();
+    ipcRenderer.on('data:restored', handler);
+    return (): void => {
+      ipcRenderer.removeListener('data:restored', handler);
+    };
+  },
   // AI 브릿지 — 외부 AI(Claude/Codex/Antigravity) 연결
   /**
    * "내 AI로 실행" — 선생님 본인 구독 CLI(Claude Code·Codex).

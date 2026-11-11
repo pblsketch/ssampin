@@ -42,6 +42,8 @@ import {
 import { SYNC_FILE_KEYS } from './syncRegistry';
 import { base64ToUint8, uint8ToBase64 } from './binaryBase64';
 import { classifySyncThreeWay } from './syncThreeWay';
+import { loadRestoredDataHolds, type GetRestoredDataHolds } from './restoredDataHold';
+import { RESTORED_CONFLICT_NOTE } from '@domain/rules/restoredDataNotice';
 
 async function computeBinarySyncChecksum(
   relPath: string,
@@ -675,6 +677,17 @@ export interface SyncFromCloudResult {
   readonly downloaded: string[];
   readonly conflicts: DriveSyncConflict[];
   readonly skipped: string[];
+  /**
+   * 시작 스냅샷으로 되돌린 자료 중 이번에 클라우드와 맞춰진 것(ADR-148) — 내용이 같아졌거나(받기·병합
+   * 포함) 클라우드에 사본이 아예 없다. 호출부가 복원 기록을 "맞춰짐"으로 바꾼다. 충돌로 올린 것은 빠진다.
+   */
+  readonly restoredResolved?: string[];
+  /**
+   * 되돌린 자료 중 학년도 전환 표시가 걸린 키 — 전환 보호는 "이 기기가 새 학년도 기준"이라는 뜻이라
+   * 복원 보호로 막지 않는다(막으면 받기는 전환 때문에, 올리기는 복원 때문에 건너뛰어 영영 막힌다).
+   * 호출부가 복원 기록에 그 사유로 정리한다.
+   */
+  readonly restoredReleasedForYearTransition?: string[];
 }
 
 /**
@@ -721,6 +734,8 @@ export class SyncFromCloud {
     private readonly importArchiveTerm?: ImportArchiveTermFiles,
     /** 활성 충돌을 갱신하는 호출에서는 장부 부재/손상을 성공(no-op)으로 처리하지 않는다. */
     private readonly requireRemoteManifest = false,
+    /** 시작 스냅샷으로 되돌려 아직 클라우드와 맞춰지지 않은 자료(ADR-148). 미주입 = 없음. */
+    private readonly getRestoredDataHolds?: GetRestoredDataHolds,
   ) {}
 
   /**
@@ -952,6 +967,8 @@ export class SyncFromCloud {
         /* 해제 실패는 비치명 — 다음 동기화에서 같은 판정으로 재시도된다 */
       }
     };
+    // ADR-148 — 복원 기록을 읽을 수 있는지 아무것도 받기 전에 확인한다. 못 읽으면 이번 받기를 멈춘다.
+    await loadRestoredDataHolds(this.getRestoredDataHolds);
     const folder = await this.drivePort.getOrCreateSyncFolder();
     const remoteManifest = await this.drivePort.getSyncManifest(folder.id);
     if (!remoteManifest) {
@@ -959,7 +976,9 @@ export class SyncFromCloud {
         throw new Error('활성 충돌을 갱신하는 동안 클라우드 동기화 장부를 읽지 못했습니다.');
       }
       console.log('[SyncFromCloud] ❌ 리모트 매니페스트 없음 → 전체 스킵');
-      return { downloaded: [], conflicts: [], skipped: [...SYNC_FILES] };
+      // ★되돌린 자료의 보호를 여기서 풀지 않는다 — 장부가 **깨졌을 때도** null 이 온다(DriveSyncAdapter).
+      // 풀기는 올리기의 "원격 장부 항목도 실제 파일도 없음"에만 맡긴다(ADR-148).
+      return { downloaded: [], conflicts: [], skipped: [...SYNC_FILES], restoredResolved: [] };
     }
 
     console.log(
@@ -1153,6 +1172,30 @@ export class SyncFromCloud {
           const localContent = JSON.stringify(localData);
           const actualChecksum = await computeSyncChecksum(localContent);
           if (actualChecksum !== localInfo.checksum) {
+            // ADR-148 — 시작 스냅샷으로 되돌린 자료는 "안 올린 로컬 변경"이 아니다. 그날 처음 켰을 때의
+            // 옛 상태라, 건너뛰면 이어지는 올리기가 클라우드의 더 새 사본을 덮는다. 덮지 말고 묻는다.
+            // 목록은 읽기 **뒤에** 묻는다(이 읽기가 바로 그 복원을 일으켰을 수 있다).
+            const restoredHold = (await loadRestoredDataHolds(this.getRestoredDataHolds)).get(
+              filename,
+            );
+            if (restoredHold) {
+              conflicts.push({
+                filename,
+                localModified: restoredHold.restoredStateAt,
+                localNote: RESTORED_CONFLICT_NOTE,
+                remoteModified: remoteInfo.lastModified,
+                localDeviceName: this.deviceName,
+                remoteDeviceName: remoteManifest.deviceName,
+                kind: 'json',
+                baselineChecksum: localInfo.checksum,
+                localChecksum: actualChecksum,
+                remoteChecksum: remoteInfo.checksum,
+              });
+              console.log(
+                `[SyncFromCloud]   ${filename}: 🔶 CONFLICT (시작 스냅샷으로 되돌린 자료 — 클라우드 사본과 다름)`,
+              );
+              continue;
+            }
             // "장부와 다름"에는 성격이 정반대인 두 상태가 겹쳐 있다 — 반드시 갈라야 한다.
             //
             //  (a) 아직 안 올린 로컬 변경 = **정상 상태**. 리모트 체크섬 == 내 장부 체크섬이므로
@@ -2055,9 +2098,57 @@ export class SyncFromCloud {
       await this.syncRepo.saveLocalManifest(newLocalManifest);
     }
 
+    const { resolved: restoredResolved, yearTransition: restoredReleasedForYearTransition } =
+      await this.collectResolvedRestores(
+        remoteManifest,
+        remoteFiles,
+        updatedFiles,
+        conflicts,
+        new Set((await loadRemovedMarker())?.keys ?? []),
+      );
+
     console.log(
       `[SyncFromCloud] ✅ 완료 | downloaded=${downloaded.length} conflicts=${conflicts.length} skipped=${skipped.length} | downloaded=[${downloaded.join(', ')}]`,
     );
-    return { downloaded, conflicts, skipped };
+    return {
+      downloaded,
+      conflicts,
+      skipped,
+      restoredResolved,
+      restoredReleasedForYearTransition,
+    };
+  }
+
+  /**
+   * ADR-148 — 되돌린 자료 중 이번 받기로 클라우드와 맞춰진 것. 충돌로 올린 것은 빼고,
+   * (a) 클라우드에 장부 항목도 실제 파일도 없거나 (b) 지금 로컬 내용이 이번에 확정한 장부(받기·병합·
+   * 일치 포함)와 같으면 "맞춰짐"이다. 그 밖에는 그대로 둔다(올리기가 계속 건너뛴다).
+   */
+  private async collectResolvedRestores(
+    remoteManifest: DriveSyncManifest,
+    remoteFiles: readonly { readonly name: string }[],
+    updatedFiles: Readonly<Record<string, DriveSyncFileInfo>>,
+    conflicts: readonly DriveSyncConflict[],
+    transitionGuardedKeys: ReadonlySet<string>,
+  ): Promise<{ resolved: string[]; yearTransition: string[] }> {
+    const holds = await loadRestoredDataHolds(this.getRestoredDataHolds);
+    const resolved: string[] = [];
+    const yearTransition: string[] = [];
+    for (const key of holds.keys()) {
+      if (conflicts.some((c) => c.filename === key)) continue;
+      if (transitionGuardedKeys.has(key)) {
+        yearTransition.push(key);
+        continue;
+      }
+      if (!remoteManifest.files[key]) {
+        if (!remoteFiles.some((file) => file.name === `${key}.json`)) resolved.push(key);
+        continue;
+      }
+      const expected = updatedFiles[key]?.checksum;
+      if (expected !== undefined && (await this.readStoredChecksum(key)) === expected) {
+        resolved.push(key);
+      }
+    }
+    return { resolved, yearTransition };
   }
 }

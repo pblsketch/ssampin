@@ -173,6 +173,7 @@ import { MainToolPopupHost } from '@adapters/components/Tools/popup/MainToolPopu
 import { useToolPopupStore } from '@adapters/stores/useToolPopupStore';
 import { getToolPopupBridge } from '@adapters/components/Tools/popup/toolPopupBridge';
 import { recoverRecordMapApplicationsAtStartup } from '@adapters/di/container';
+import { useRestoredDataNotice } from '@adapters/hooks/useRestoredDataNotice';
 
 function isWidgetMode(): boolean {
   const params = new URLSearchParams(window.location.search);
@@ -1109,6 +1110,9 @@ function MainApp() {
 
   // AI 브릿지 live-sync 쓰기 수신(메인 창) — 외부 AI 의 일정·할일 쓰기를 store 액션으로 적용
   useAiBridgeLiveSync();
+
+  // 원본·백업이 모두 깨져 시작 스냅샷으로 되돌린 자료를 메인 창이 보일 때 한 번 알린다(ADR-148)
+  useRestoredDataNotice();
 
   // 위젯 내 도구 클릭 / 앱 내 안내 배너 → 해당 페이지로 네비게이션.
   // 'settings#archive' 같은 fragment 형식도 지원한다(onNavigateToPage와 동일 규칙 —

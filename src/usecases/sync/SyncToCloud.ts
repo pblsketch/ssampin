@@ -24,6 +24,7 @@ import {
   buildManifestMismatchMessage,
   classifyUnledgeredFileAge,
 } from '@domain/rules/driveSyncRecovery';
+import { loadRestoredDataHolds, type GetRestoredDataHolds } from './restoredDataHold';
 
 function defaultDriveFilename(logicalKey: string): string {
   return `${logicalKey.replace(/\//g, '__')}.json`;
@@ -127,6 +128,13 @@ export interface SyncToCloudResult {
    * 이제는 그 항목만 건너뛰므로, 실패가 조용히 사라지지 않도록 개수를 밖으로 드러낸다.
    */
   readonly binaryFailures: string[];
+  /**
+   * 시작 스냅샷으로 되돌린 자료 중 이번에 클라우드와 맞춰진 것(내용 같음·클라우드 사본 없음, ADR-148).
+   * 호출부가 복원 기록을 "맞춰짐"으로 바꾼다. 맞춰지지 않은 복원 자료는 올리지 않고 `skipped` 에 넣는다.
+   */
+  readonly restoredResolved?: string[];
+  /** 되돌린 자료 중 학년도 전환 표시가 걸려 복원 보호 없이 평소대로 올린 키(ADR-148). */
+  readonly restoredReleasedForYearTransition?: string[];
 }
 
 export interface SyncProgress {
@@ -152,6 +160,8 @@ export class SyncToCloud {
     private readonly readArchiveSyncFile?: ReadArchiveSyncFile,
     /** 장부 밖 파일의 나이 판정에 쓰는 이 기기의 시계. 테스트에서 주입한다. */
     private readonly now: () => number = () => Date.now(),
+    /** 시작 스냅샷으로 되돌려 아직 클라우드와 맞춰지지 않은 자료(ADR-148). 미주입 = 없음. */
+    private readonly getRestoredDataHolds?: GetRestoredDataHolds,
   ) {}
 
   async execute(onProgress?: (progress: SyncProgress) => void): Promise<SyncToCloudResult> {
@@ -172,6 +182,11 @@ export class SyncToCloud {
     const deferred: string[] = [];
     /** 항목별 try/catch 로 건너뛴 바이너리 — 다음 동기화에서 자연히 재시도된다 */
     const binaryFailures: string[] = [];
+    const restoredResolved: string[] = [];
+    const restoredReleasedForYearTransition: string[] = [];
+    // ADR-148 — 복원 기록을 읽을 수 있는지 아무것도 올리기 전에 확인한다. 못 읽으면 여기서 멈춘다
+    // (파일마다 묻는 중간에 멈추면 몇 개는 이미 올라간 채 장부 확정 없이 끝난다).
+    await loadRestoredDataHolds(this.getRestoredDataHolds);
     let manifestReconciled = false;
     const total = SYNC_FILES.length;
 
@@ -513,6 +528,30 @@ export class SyncToCloud {
       const remoteChecksum = remoteInfo?.checksum;
       const driveFilename = `${filename}.json`;
       const driveFile = findUniqueRemoteFile(filename, driveFilename);
+
+      // ADR-148 — 시작 스냅샷으로 되돌린 자료는 클라우드의 더 새 사본을 덮지 않는다.
+      // 목록은 읽기 **뒤에** 묻는다: 이번 읽기가 바로 그 복원을 일으켰을 수 있다(처음 읽는 자료).
+      const restoredHold = (await loadRestoredDataHolds(this.getRestoredDataHolds)).get(filename);
+      if (restoredHold) {
+        if (transitionGuardedKeys.has(filename)) {
+          // 학년도 전환 표시가 걸린 키는 "이 기기가 새 학년도 기준"이다. 받기는 전환 때문에 이 키를
+          // 건너뛰므로, 여기서도 막으면 영영 막힌다 — 복원 보호를 걸지 않고 평소(정화 업로드)대로 둔다.
+          restoredReleasedForYearTransition.push(filename);
+        } else if (remoteChecksum === checksum || (!remoteInfo && !driveFile)) {
+          // 클라우드와 내용이 같거나 클라우드에 장부 항목도 실제 파일도 없다 — 덮을 것이 없다.
+          restoredResolved.push(filename);
+        } else if (remoteInfo) {
+          // 받기에서 '동기화 충돌' 창으로 묻는다. 유예(deferred)에 넣지 않는다 — 넣으면
+          // 받기→올리기 재시도가 같은 판정을 되풀이한다.
+          skipped.push(filename);
+          console.log(
+            `[SyncToCloud]   ${filename}: SKIP (시작 스냅샷으로 되돌린 자료 — 클라우드와 맞출 때까지 올리지 않음)`,
+          );
+          return;
+        }
+        // 장부에 없는 실제 파일만 있다: 아래 기존 길이 덮지 않고 편입하거나(내용이 다르면) 장부만
+        // 맞춘다(같으면).
+      }
 
       if (remoteInfo && !localInfo && !transitionGuardedKeys.has(filename) && !restoring) {
         skipped.push(filename);
@@ -1206,6 +1245,13 @@ export class SyncToCloud {
     console.log(
       `[SyncToCloud] ✅ 완료 | uploaded=${uploaded.length} skipped=${skipped.length} deferred=${deferred.length} | uploaded=[${uploaded.join(', ')}]`,
     );
-    return { uploaded, skipped, deferred, binaryFailures };
+    return {
+      uploaded,
+      skipped,
+      deferred,
+      binaryFailures,
+      restoredResolved,
+      restoredReleasedForYearTransition,
+    };
   }
 }

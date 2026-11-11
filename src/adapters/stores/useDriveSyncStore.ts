@@ -184,6 +184,10 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       const archiveSync = await import('@adapters/repositories/archiveSyncGateway');
       const archiveEnabled = archiveSync.hasArchiveSync();
 
+      // ADR-148 — 시작 스냅샷으로 되돌린 자료는 클라우드와 맞출 때까지 올리지 않는다.
+      // 저장할 때마다 도는 자동 올리기(triggerSaveSync)도 이 경로라 함께 막힌다.
+      const restoredData = await import('@adapters/repositories/restoredDataGateway');
+
       const useCase = new SyncToCloud(
         storage,
         drivePort,
@@ -194,9 +198,16 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         getBinaryDynamicSyncFiles,
         archiveEnabled ? archiveSync.listArchiveSyncFiles : undefined,
         archiveEnabled ? archiveSync.readArchiveSyncFileBytes : undefined,
+        undefined,
+        restoredData.getRestoredDataHolds,
       );
 
       const result = await useCase.execute((p) => set({ progress: p }));
+      await restoredData.markRestoredDataSyncResolved(result.restoredResolved ?? []);
+      await restoredData.markRestoredDataSyncResolved(
+        result.restoredReleasedForYearTransition ?? [],
+        'year-transition',
+      );
       const now = new Date().toISOString();
       set({
         status: 'success',
@@ -305,6 +316,7 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
       // (S4.1) 아카이브 훅 — 데스크톱(archive IPC 존재)에서만 주입. 미주입=기존 동작 그대로.
       const archiveSync = await import('@adapters/repositories/archiveSyncGateway');
       const archiveEnabled = archiveSync.hasArchiveSync();
+      const restoredData = await import('@adapters/repositories/restoredDataGateway');
 
       const useCase = new SyncFromCloud(
         storage,
@@ -327,9 +339,17 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         },
         archiveEnabled ? archiveSync.listLocalArchiveTerms : undefined,
         archiveEnabled ? archiveSync.importArchiveTermFiles : undefined,
+        undefined,
+        // ADR-148 — 시작 스냅샷으로 되돌린 자료는 클라우드 사본과 다르면 '동기화 충돌'로 묻는다.
+        restoredData.getRestoredDataHolds,
       );
 
       const result = await useCase.execute((p) => set({ progress: p }));
+      await restoredData.markRestoredDataSyncResolved(result.restoredResolved ?? []);
+      await restoredData.markRestoredDataSyncResolved(
+        result.restoredReleasedForYearTransition ?? [],
+        'year-transition',
+      );
       const now = new Date().toISOString();
 
       // 다운로드된 파일에 해당하는 스토어들을 리로드
@@ -490,6 +510,10 @@ export const useDriveSyncStore = create<DriveSyncState>((set, get) => ({
         settings.teacherName || conflict.localDeviceName,
       );
       await resolver.execute(conflict, resolution);
+      // ADR-148 — 되돌린 자료의 충돌이 어느 쪽으로든 풀렸다. 이제 평소처럼 동기화한다.
+      const { markRestoredDataSyncResolved } =
+        await import('@adapters/repositories/restoredDataGateway');
+      await markRestoredDataSyncResolved([conflict.filename]);
 
       if (resolution === 'remote') {
         const { reloadStores } = await import('@adapters/hooks/useDriveSync');

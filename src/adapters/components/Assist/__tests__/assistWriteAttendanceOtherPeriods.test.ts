@@ -365,3 +365,57 @@ describe('(c) 담임 학급 — 교시를 밝히면 그 교시만 바뀐다', ()
     expect(saved(HOMEROOM, 0)).toEqual([{ number: 15, status: 'late' }]);
   });
 });
+
+describe('(d) 누구인지 못 정하면 적지 않고 선생님이 읽을 말로 알린다', () => {
+  it('제안 뒤 명단에 학년·반이 생겨 7번이 둘이 되면 저장하지 않고 선생님에게 하는 말로 알린다', async () => {
+    // 제안을 만들 때의 명단에는 학년·반이 없었고(7번 한 명), 실행 순간의 명단에는 7번이 둘이다.
+    const NOGRADE: TeachingClass = {
+      ...MIXED,
+      id: 'tc-nograde',
+      name: '방과후 국어',
+      students: [{ number: 7, name: '가람' }],
+    };
+    const FRESH: TeachingClass = {
+      ...NOGRADE,
+      students: [
+        { number: 7, name: '가람', grade: 2, classNum: 3 },
+        { number: 7, name: '나은', grade: 2, classNum: 4 },
+      ],
+    };
+    shared.classes = [MIXED, FRESH];
+    useTeachingClassStore.setState({ classes: [MIXED, FRESH] });
+    const src: WriteSources = {
+      ...SRC,
+      roster: {
+        ...SRC.roster,
+        teaching: [
+          ...SRC.roster.teaching,
+          {
+            classId: NOGRADE.id,
+            className: NOGRADE.name,
+            students: NOGRADE.students.map((s) => ({
+              number: s.number,
+              name: s.name,
+              key: String(s.number),
+            })),
+          },
+        ],
+      },
+      classes: [...SRC.classes, { id: NOGRADE.id, name: NOGRADE.name }],
+    };
+    const outcome = buildWriteProposal(
+      'set_attendance',
+      JSON.stringify({ student: '가람', status: '지각', className: NOGRADE.name, period: 3 }),
+      src,
+    );
+    if (!isWriteProposal(outcome)) throw new Error(`제안이 아니다: ${outcome.reason}`);
+
+    const result = await executeAssistWrite(outcome, realDeps());
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toBe(
+      '이 수업반에는 7번 학생이 여러 명이라 누구인지 정하지 못해 적지 않았어요. 학년과 반을 함께 말해 주세요(예: 2학년 3반 7번).',
+    );
+    expect(shared.attendance.filter((r) => r.classId === NOGRADE.id)).toEqual([]);
+  });
+});
